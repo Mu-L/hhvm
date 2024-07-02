@@ -112,7 +112,6 @@ let is_internal_visible env target =
       ~env
       ~current:(Env.get_current_module env)
       ~target:(Some target)
-      Pos_or_decl.none (* only called from autocompleteService *)
   with
   | `Yes -> None
   | `Disjoint (current, target) ->
@@ -132,7 +131,6 @@ let check_internal_access ~in_signature env target pos decl_pos =
         ~env
         ~current:(Env.get_current_module env)
         ~target
-        decl_pos
     with
     | `Yes when in_signature && not (Env.get_internal env) ->
       Some (Module_hint { pos; decl_pos })
@@ -155,17 +153,24 @@ let check_internal_access ~in_signature env target pos decl_pos =
   in
   Option.map ~f:Typing_error.modules module_err_opt
 
-let check_public_access env use_pos def_pos target =
+let check_public_access
+    ~ignore_package_errors
+    env
+    use_pos
+    def_pos
+    target_module
+    target_package_override =
   match
-    Typing_modules.can_access_public
+    Typing_packages.can_access_public
       ~env
-      ~current:(Env.get_current_module env)
-      ~target
+      ~current_module:(Env.get_current_module env)
+      ~target_module
+      ~target_package_override
       def_pos
   with
   | `Yes -> None
   | `PackageNotSatisfied
-      Typing_modules.
+      Typing_packages.
         {
           current_module_pos_or_filename = `ModulePos current_module_pos;
           current_package_pos;
@@ -181,32 +186,35 @@ let check_public_access env use_pos def_pos target =
               module_pos = current_module_pos;
               package_pos = current_package_pos;
               current_module_opt = Env.get_current_module env;
-              target_module_opt = target;
+              target_module_opt = target_module;
               current_package_opt = current_package_name;
               target_package_opt = target_package_name;
             }))
   | `PackageNotSatisfied
-      Typing_modules.
+      Typing_packages.
         {
           current_module_pos_or_filename = `FileName current_filename;
           current_package_pos;
           current_package_name;
           target_package_name;
         } ->
-    Some
-      (Typing_error.package
-         (Cross_pkg_access
-            {
-              pos = use_pos;
-              decl_pos = def_pos;
-              current_filename;
-              target_filename = Pos_or_decl.filename def_pos;
-              package_pos = current_package_pos;
-              current_package_opt = current_package_name;
-              target_package_opt = target_package_name;
-            }))
+    if ignore_package_errors then
+      None
+    else
+      Some
+        (Typing_error.package
+           (Cross_pkg_access
+              {
+                pos = use_pos;
+                decl_pos = def_pos;
+                current_filename;
+                target_filename = Pos_or_decl.filename def_pos;
+                package_pos = current_package_pos;
+                current_package_opt = current_package_name;
+                target_package_opt = target_package_name;
+              }))
   | `PackageSoftIncludes
-      Typing_modules.
+      Typing_packages.
         {
           current_module_pos_or_filename = `ModulePos current_module_pos;
           current_package_pos;
@@ -222,32 +230,35 @@ let check_public_access env use_pos def_pos target =
               module_pos = current_module_pos;
               package_pos = current_package_pos;
               current_module_opt = Env.get_current_module env;
-              target_module_opt = target;
+              target_module_opt = target_module;
               current_package_opt = current_package_name;
               target_package_opt = target_package_name;
             }))
   | `PackageSoftIncludes
-      Typing_modules.
+      Typing_packages.
         {
           current_module_pos_or_filename = `FileName current_filename;
           current_package_pos;
           current_package_name;
           target_package_name;
         } ->
-    Some
-      (Typing_error.package
-         (Soft_included_access
-            {
-              pos = use_pos;
-              decl_pos = def_pos;
-              current_filename;
-              target_filename = Pos_or_decl.filename def_pos;
-              package_pos = current_package_pos;
-              current_package_opt = current_package_name;
-              target_package_opt = target_package_name;
-            }))
+    if ignore_package_errors then
+      None
+    else
+      Some
+        (Typing_error.package
+           (Soft_included_access
+              {
+                pos = use_pos;
+                decl_pos = def_pos;
+                current_filename;
+                target_filename = Pos_or_decl.filename def_pos;
+                package_pos = current_package_pos;
+                current_package_opt = current_package_name;
+                target_package_opt = target_package_name;
+              }))
 
-let is_visible_for_obj ~is_method env vis =
+let is_visible_for_obj ~is_method ~is_receiver_interface env vis =
   let member_ty =
     if is_method then
       "method"
@@ -261,9 +272,13 @@ let is_visible_for_obj ~is_method env vis =
     | None -> Some ("You cannot access this " ^ member_ty)
     | Some self_id -> is_private_visible ~is_static:false env x self_id)
   | Vprotected x ->
-    (match Env.get_self_id env with
-    | None -> Some ("You cannot access this " ^ member_ty)
-    | Some self_id -> is_protected_visible env x self_id)
+    if is_receiver_interface then
+      Some "You cannot invoke a protected method on an interface"
+    else (
+      match Env.get_self_id env with
+      | None -> Some ("You cannot access this " ^ member_ty)
+      | Some self_id -> is_protected_visible env x self_id
+    )
   | Vinternal m -> is_internal_visible env m
 
 (* The only permitted way to access an LSB property is via
@@ -323,17 +338,30 @@ let is_visible_for_class ~is_method env (vis, lsb) cid cty =
     | Vinternal m -> is_internal_visible env m
 
 let is_visible_for_top_level
-    ~in_signature env is_internal target_module pos decl_pos =
+    ~in_signature
+    ~ignore_package_errors
+    env
+    is_internal
+    target_module
+    target_package_override
+    pos
+    decl_pos =
   if is_internal then
     check_internal_access ~in_signature env target_module pos decl_pos
   else
-    check_public_access env pos decl_pos target_module
+    check_public_access
+      ~ignore_package_errors
+      env
+      pos
+      decl_pos
+      target_module
+      target_package_override
 
 let is_visible ~is_method env (vis, lsb) cid class_ =
   let msg_opt =
     match cid with
     | Some cid -> is_visible_for_class ~is_method env (vis, lsb) cid class_
-    | None -> is_visible_for_obj ~is_method env vis
+    | None -> is_visible_for_obj ~is_method ~is_receiver_interface:false env vis
   in
   Option.is_none msg_opt
 
@@ -345,17 +373,28 @@ let visibility_error p msg (p_vis, vis) =
     @@ Primary.Visibility
          { pos = p; msg; decl_pos = p_vis; reason_msg = msg_vis })
 
-let check_obj_access ~is_method ~use_pos ~def_pos env vis =
-  Option.map (is_visible_for_obj ~is_method env vis) ~f:(fun msg ->
-      visibility_error use_pos msg (def_pos, vis))
+let check_obj_access ~is_method ~is_receiver_interface ~use_pos ~def_pos env vis
+    =
+  Option.map
+    (is_visible_for_obj ~is_method ~is_receiver_interface env vis)
+    ~f:(fun msg -> visibility_error use_pos msg (def_pos, vis))
 
 let check_top_level_access
-    ~in_signature ~use_pos ~def_pos env is_internal target_module =
-  is_visible_for_top_level
+    ~ignore_package_errors
     ~in_signature
+    ~use_pos
+    ~def_pos
     env
     is_internal
     target_module
+    target_package_override =
+  is_visible_for_top_level
+    ~in_signature
+    ~ignore_package_errors
+    env
+    is_internal
+    target_module
+    target_package_override
     use_pos
     def_pos
 
@@ -411,7 +450,7 @@ let check_cross_package ~use_pos ~def_pos env (cross_package : string option) =
         Env.get_package_for_file env current_file
     in
     let target_pkg = Env.get_package_by_name env target in
-    (match Typing_modules.get_package_violation env current_pkg target_pkg with
+    (match Typing_packages.get_package_violation env current_pkg target_pkg with
     | Some _ ->
       Some
         (Typing_error.modules

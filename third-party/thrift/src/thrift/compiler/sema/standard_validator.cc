@@ -390,6 +390,22 @@ void validate_field_names_uniqueness(
   }
 }
 
+// @thrift.ExceptionMessage annotation is only valid in exceptions.
+// This validator checks if the node that contains any field
+// with that annotation is an exception definiton.
+void validate_exception_message_annotation_is_only_in_exceptions(
+    diagnostic_context& ctx, const t_structured& node) {
+  for (const auto& f : node.fields()) {
+    if (f.find_structured_annotation_or_null(kExceptionMessageUri)) {
+      ctx.check(
+          node.is_exception(),
+          f,
+          "@thrift.ExceptionMessage annotation is only allowed in exception definitions. '{}' is not an exception.",
+          node.name());
+    }
+  }
+}
+
 // Checks the attributes of fields in a union.
 void validate_union_field_attributes(
     diagnostic_context& ctx, const t_union& node) {
@@ -1282,6 +1298,25 @@ void validate_cursor_serialization_adapter_in_container(
   }
 }
 
+// TODO (T191018859): forbid as field type too
+void forbid_exception_as_method_type(
+    diagnostic_context& ctx, const t_function& node) {
+  ctx.check(
+      !node.return_type()->get_true_type()->is_exception(),
+      "Exceptions cannot be used as function return types");
+  for (const auto& field : node.params().fields()) {
+    ctx.check(
+        !field.type()->get_true_type()->is_exception(),
+        "Exceptions cannot be used as function arguments");
+  }
+}
+void forbid_exception_as_const_type(
+    diagnostic_context& ctx, const t_const& node) {
+  ctx.check(
+      !node.type()->get_true_type()->is_exception(),
+      "Exceptions cannot be used as const types");
+}
+
 } // namespace
 
 ast_validator standard_validator() {
@@ -1301,6 +1336,9 @@ ast_validator standard_validator() {
       &validate_compatibility_with_lazy_field);
   validator.add_structured_definition_visitor(
       &validate_reserved_ids_structured);
+  validator.add_structured_definition_visitor(
+      &validate_exception_message_annotation_is_only_in_exceptions);
+
   validator.add_union_visitor(&validate_union_field_attributes);
   validator.add_exception_visitor(&validate_exception_message_annotation);
   validator.add_field_visitor(&validate_field_id);
@@ -1350,6 +1388,8 @@ ast_validator standard_validator() {
       &validate_cursor_serialization_adapter_on_function);
   validator.add_container_visitor(
       &validate_cursor_serialization_adapter_in_container);
+  validator.add_function_visitor(&forbid_exception_as_method_type);
+  validator.add_const_visitor(&forbid_exception_as_const_type);
 
   add_explicit_include_validators(validator);
 

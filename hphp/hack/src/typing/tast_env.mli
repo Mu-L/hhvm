@@ -25,6 +25,8 @@ val print_decl_ty : ?msg:bool -> env -> Typing_defs.decl_ty -> string
 val print_error_ty :
   ?ignore_dynamic:bool -> env -> Typing_defs.locl_ty -> string
 
+val print_hint : env -> Aast.hint -> string
+
 (** Return a string representation of the given type using Hack-like syntax,
     formatted with limited width and line breaks, including additional
     information from the {!SymbolOccurrence.t} and (if provided)
@@ -237,6 +239,9 @@ val is_sub_type_for_union : env -> Tast.ty -> Tast.ty -> bool
 
 (** Simplify unions in a type. *)
 val simplify_unions : env -> Tast.ty -> env * Tast.ty
+
+(** Simplify intersections in a type. *)
+val simplify_intersections : env -> Tast.ty -> env * Tast.ty
 
 (** Union a list of types. *)
 val union_list : env -> Typing_reason.t -> Tast.ty list -> env * Tast.ty

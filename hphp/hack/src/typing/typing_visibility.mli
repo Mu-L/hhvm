@@ -22,6 +22,7 @@ val check_class_access :
 
 val check_obj_access :
   is_method:bool ->
+  is_receiver_interface:bool ->
   use_pos:Pos.t ->
   def_pos:Pos_or_decl.t ->
   env ->
@@ -29,11 +30,13 @@ val check_obj_access :
   Typing_error.t option
 
 val check_top_level_access :
+  ignore_package_errors:bool ->
   in_signature:bool ->
   use_pos:Pos.t ->
   def_pos:Pos_or_decl.t ->
   env ->
   bool ->
+  string option ->
   string option ->
   Typing_error.t option
 

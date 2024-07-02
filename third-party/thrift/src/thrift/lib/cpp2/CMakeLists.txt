@@ -288,6 +288,7 @@ add_library(
   server/ThriftServer.cpp
   server/ThriftServerConfig.cpp
   server/TMConcurrencyController.cpp
+  server/metrics/MetricCollector.cpp
   server/peeking/TLSHelper.cpp
   transport/core/RequestStateMachine.cpp
   transport/core/RpcMetadataUtil.cpp
@@ -342,6 +343,7 @@ add_dependencies(
 target_link_libraries(
   thriftcpp2
   PUBLIC
+    fmt::fmt
     thrift
     rpcmetadata
     thriftannotation

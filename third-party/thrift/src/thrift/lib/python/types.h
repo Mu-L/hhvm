@@ -70,6 +70,17 @@ inline T convInt(V v) {
   LOG(FATAL) << "int out of range";
 }
 
+/**
+ * Creates a new "union tuple" initialized for an empty union.
+ *
+ * The returned tuple has 2 items:
+ *  1. The enum value of the field that is currently set for this union, or
+ *     the special "empty" (with value 0) if the union is empty.
+ *  2. The value of the current field for this enum, or Py_None if the union
+ *     is empty.
+ *
+ * The tuple returned by this function always has values `(0, Py_None)`.
+ */
 PyObject* createUnionTuple();
 
 /***
@@ -138,9 +149,9 @@ PyObject* createMutableStructTupleWithDefaultValues(
  * Sets the "isset" flag of the `index`-th field of the given struct tuple
  * `object` to the given `value`.
  *
- * @param object Pointer to a "struct tuple" (see `createStructTuple() above).
- *        This is assumed to be a `PyTupleObject`, whose memory holds the
- *        elements (starting with the "isset" bytearray) after a header
+ * @param objectPtr Pointer to a "struct tuple" (see `createStructTuple()
+ *        above). This is assumed to be a `PyTupleObject`, whose memory holds
+ *        the elements (starting with the "isset" bytearray) after a header
  *        consisting of `PyVarObject`. The memory immediately after the
  *        `sizeof(PyVarObject)` bytes is expected to correspond to a
  *        `PyBytesObject` that holds the isset flags bytearray (see above).
@@ -151,7 +162,7 @@ PyObject* createMutableStructTupleWithDefaultValues(
  * @throws if unable to read a bytearray from the expected isset flags bytearray
  *         (see `object` param documentation above).
  */
-void setStructIsset(void* object, int16_t index, bool value);
+void setStructIsset(void* objectPtr, int16_t index, bool value);
 
 /*
  * Returns a new "struct tuple" with all its elements set to `None`
@@ -367,43 +378,53 @@ extern const detail::TypeInfo binaryTypeInfo;
 extern const detail::TypeInfo iobufTypeInfo;
 
 detail::OptionalThriftValue getStruct(
-    const void* object, const detail::TypeInfo& /* typeInfo */);
-inline void* setContainer(void* object) {
-  if (!setPyObject(object, UniquePyObjectPtr{PyTuple_New(0)})) {
+    const void* objectPtr, const detail::TypeInfo& /* typeInfo */);
+
+inline void* setContainer(void* objectPtr) {
+  if (!setPyObject(objectPtr, UniquePyObjectPtr{PyTuple_New(0)})) {
     THRIFT_PY3_CHECK_ERROR();
   }
-  return object;
+  return objectPtr;
 }
 
-inline void* setFrozenSet(void* object) {
-  if (!setPyObject(object, UniquePyObjectPtr{PyFrozenSet_New(nullptr)})) {
+inline void* setFrozenSet(void* objectPtr) {
+  if (!setPyObject(objectPtr, UniquePyObjectPtr{PyFrozenSet_New(nullptr)})) {
     THRIFT_PY3_CHECK_ERROR();
   }
-  return object;
+  return objectPtr;
 }
 
 /**
  * Sets the Python object pointed to by `object` to an empty Python `list`
  * (Releases a strong reference to the previous object, if there was one).
  *
- * @param object A double pointer to a `PyObject` (i.e., `PyObject**`).
+ * @param objectPtr A double pointer to a `PyObject` (i.e., `PyObject**`).
  *
  * @return The newly set Python object pointer that points to an empty Python
  * `list`.
  */
-inline void* setList(void* object) {
-  if (!setPyObject(object, UniquePyObjectPtr{PyList_New(0)})) {
+inline void* setList(void* objectPtr) {
+  if (!setPyObject(objectPtr, UniquePyObjectPtr{PyList_New(0)})) {
     THRIFT_PY3_CHECK_ERROR();
   }
-  return object;
+  return objectPtr;
 }
 
-// Sets the Python object pointed to by `object` to an empty Python `set`
-inline void* setMutableSet(void* object) {
-  if (!setPyObject(object, UniquePyObjectPtr{PySet_New(nullptr)})) {
+// Sets the Python object pointed to by `objectPtr` to an empty Python `set`
+inline void* setMutableSet(void* objectPtr) {
+  if (!setPyObject(objectPtr, UniquePyObjectPtr{PySet_New(nullptr)})) {
     THRIFT_PY3_CHECK_ERROR();
   }
-  return object;
+  return objectPtr;
+}
+
+// Sets the Python object pointed to by `objectPtr` to an empty Python
+// `dictionary`
+inline void* setMutableMap(void* objectPtr) {
+  if (!setPyObject(objectPtr, UniquePyObjectPtr{PyDict_New()})) {
+    THRIFT_PY3_CHECK_ERROR();
+  }
+  return objectPtr;
 }
 
 class ListTypeInfo {
@@ -416,7 +437,7 @@ class ListTypeInfo {
 
   static void read(
       const void* context,
-      void* object,
+      void* objectPtr,
       std::uint32_t listSize,
       void (*reader)(const void* /*context*/, void* /*val*/));
   static size_t write(
@@ -467,7 +488,7 @@ class MutableListTypeInfo {
 
   static void read(
       const void* context,
-      void* object,
+      void* objectPtr,
       std::uint32_t listSize,
       void (*reader)(const void* /*context*/, void* /*val*/));
 
@@ -515,7 +536,7 @@ class SetTypeInfoTemplate {
 
   static void read(
       const void* context,
-      void* object,
+      void* objectPtr,
       std::uint32_t setSize,
       void (*reader)(const void* /*context*/, void* /*val*/));
 
@@ -555,7 +576,7 @@ class SetTypeInfoTemplate {
 template <typename T>
 void SetTypeInfoTemplate<T>::read(
     const void* context,
-    void* object,
+    void* objectPtr,
     std::uint32_t setSize,
     void (*reader)(const void* /*context*/, void* /*val*/)) {
   UniquePyObjectPtr set{T::create(nullptr)};
@@ -570,7 +591,7 @@ void SetTypeInfoTemplate<T>::read(
     }
     Py_DECREF(elem);
   }
-  setPyObject(object, std::move(set));
+  setPyObject(objectPtr, std::move(set));
 }
 
 template <typename T>
@@ -674,7 +695,7 @@ class MapTypeInfo {
 
   static void read(
       const void* context,
-      void* object,
+      void* objectPtr,
       std::uint32_t mapSize,
       void (*keyReader)(const void* context, void* key),
       void (*valueReader)(const void* context, void* val));
@@ -714,6 +735,99 @@ class MapTypeInfo {
  private:
   const detail::MapFieldExt ext_;
   const detail::TypeInfo typeinfo_;
+};
+
+class MutableMapTypeInfo {
+ public:
+  static std::uint32_t size(const void* object) {
+    return folly::to<std::uint32_t>(
+        PyDict_Size(const_cast<PyObject*>(toPyObject(object))));
+  }
+
+  static void clear(void* objectPtr) { setMutableMap(objectPtr); }
+
+  /**
+   * Deserializes a dict (with `mapSize` key/value pairs) into `objectPtr`.
+   *
+   * The function pointer arguments (`keyReader` and `valueReader`) are expected
+   * to take two (type-erased, i.e. `void*`) arguments:
+   *   1. The given `context`
+   *   2. A pointer to a `PyObject*`, that should be set by the function to the
+   *      (next) key and value, respectively.
+   *
+   * @param context Will be passed to every call to `keyReader` and
+   *        `valueReader`.
+   * @param objectPtr Pointer to a `PyObject*`, that will be set to a new
+   *        `PyDict` instance containing `mapSize` elements whose keys and
+   *        values are obtained by calling the given `*Reader` functions.
+   */
+  static void read(
+      const void* context,
+      void* objectPtr,
+      std::uint32_t mapSize,
+      void (*keyReader)(const void* context, void* key),
+      void (*valueReader)(const void* context, void* val));
+
+  /**
+   * Serializes the dict given in `object`.
+   *
+   * The `writer` function will be called for every item in the dict pointed by
+   * the given `object`. It is expected to take the arguments described below,
+   * and return the number of bytes written:
+   *   1. The given `context`
+   *   2 & 3. `PyObject**` pointing to the next key and value from dict,
+   * respectively.
+   *
+   * @param context Passed to `writer` on every call.
+   * @param object Input `PyObject*`, holds the `PyDict` to serialize.
+   *
+   * @return Total number of bytes written.
+   */
+  static size_t write(
+      const void* context,
+      const void* object,
+      bool protocolSortKeys,
+      size_t (*writer)(
+          const void* context, const void* keyElem, const void* valueElem));
+
+  /**
+   * Deserializes a single key, value pair (using the given function pointers)
+   * and adds it to the given dict.
+   *
+   * See `read()` for the expectations on `keyReader` and `valueReader`.
+   *
+   * @param context Passed to `keyReader` and `valueReader` on every call.
+   * @param objectPtr Pointer to a `PyObject*` that holds a dict, to which the
+   *        new key/value pair will be added.
+   */
+  static void consumeElem(
+      const void* context,
+      void* object,
+      void (*keyReader)(const void* /*context*/, void* /*val*/),
+      void (*valueReader)(const void* /*context*/, void* /*val*/));
+
+  explicit MutableMapTypeInfo(
+      const detail::TypeInfo* keyInfo, const detail::TypeInfo* valInfo)
+      : tableBasedSerializerMapFieldExt_{
+            /* .keyInfo */ keyInfo,
+            /* .valInfo */ valInfo,
+            /* .size */ size,
+            /* .clear */ clear,
+            /* .consumeElem */ consumeElem,
+            /* .readSet */ read,
+            /* .writeSet */ write,
+        },
+        tableBasedSerializerTypeinfo_{
+            protocol::TType::T_MAP,
+            getStruct,
+            reinterpret_cast<detail::VoidFuncPtr>(setMutableMap),
+            &tableBasedSerializerMapFieldExt_,
+        } {}
+  const detail::TypeInfo* get() const { return &tableBasedSerializerTypeinfo_; }
+
+ private:
+  const detail::MapFieldExt tableBasedSerializerMapFieldExt_;
+  const detail::TypeInfo tableBasedSerializerTypeinfo_;
 };
 
 using FieldValueMap = std::unordered_map<int16_t, PyObject*>;

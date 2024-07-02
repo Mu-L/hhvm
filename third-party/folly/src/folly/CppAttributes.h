@@ -104,7 +104,7 @@
  *  class Empty {};
  *
  *  class NonEmpty1 {
- *    FOLLY_ATTR_NO_UNIQUE_ADDRESS Empty e;
+ *    [[FOLLY_ATTR_NO_UNIQUE_ADDRESS]] Empty e;
  *    int f;
  *  };
  *
@@ -117,7 +117,7 @@
  *  sizeof(NonEmpty2); // must be > sizeof(int)
  */
 #if FOLLY_HAS_CPP_ATTRIBUTE(no_unique_address)
-#define FOLLY_ATTR_NO_UNIQUE_ADDRESS [[no_unique_address]]
+#define FOLLY_ATTR_NO_UNIQUE_ADDRESS no_unique_address
 #else
 #define FOLLY_ATTR_NO_UNIQUE_ADDRESS
 #endif

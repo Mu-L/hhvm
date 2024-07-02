@@ -6,6 +6,7 @@
  *
  *)
 
+open Hh_prelude
 open Linting_visitors
 
 let untyped_linters =
@@ -17,35 +18,37 @@ let untyped_linters =
   ]
   @ Linting_service.untyped_linters
 
-let typed_linters =
+let typed_linters tcopt =
+  let warning_handlers =
+    List.filter_map Tast_check.warning_checks ~f:(fun (module M) ->
+        if not @@ Typing_warning_utils.code_is_enabled tcopt M.error_code then
+          Some (M.handler ~as_lint:true)
+        else
+          None)
+  in
   [
-    Linter_equality_check.handler;
-    Linter_disjoint_types.handler;
-    Is_check.handler ~as_lint:true;
     Linter_switch_check.handler;
     Linter_missing_override_attribute.handler;
-    Sketchy_null_check.handler ~as_lint:true;
-    Linter_truthiness_test.handler;
     Linter_redundant_generics.handler;
     Linter_class_overrides_trait.handler;
     Linter_expr_tree_types.handler;
     Linter_nullsafe_not_needed.handler;
-    Linter_duplicate_properties.handler;
     Linter_loose_unsafe_cast.handler;
     Linter_redundant_cast.handler;
-    Linter_xhp_attr_value.handler;
     Linter_pointless_booleans.handler;
     Linter_comparing_booleans.handler;
     Linter_unconditional_recursion.handler;
     Linter_branches_return_same_value.handler;
     Linter_internal_class.handler;
     Linter_async_lambda.handler;
-    Linter_cast_non_primitive.handler;
   ]
+  @ warning_handlers
   @ Linting_service.typed_linters
 
 let lint_tast ctx (tast : Tast.program) =
-  (Tast_visitor.iter_with typed_linters)#go ctx tast;
+  (Tast_visitor.iter_with (typed_linters (Provider_context.get_tcopt ctx)))#go
+    ctx
+    tast;
   Linting_service.lint_tast ctx tast
 
 (* Most lint rules are easier to write against the named AST. However, some
@@ -68,7 +71,7 @@ let parse_and_lint fn content ctx =
 
 let lint_nast tcopt fn pr =
   Linting_visitors.reset ();
-  List.iter (fun go -> go tcopt fn pr) untyped_linters;
+  List.iter untyped_linters ~f:(fun go -> go tcopt fn pr);
 
   (* Run Nast visitors *)
   body_visitor_invoker#on_file () tcopt fn pr;

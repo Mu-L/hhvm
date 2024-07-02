@@ -98,6 +98,7 @@ type class_elt = {
 type fun_elt = {
   fe_deprecated: string option;
   fe_module: Ast_defs.id option;
+  fe_package_override: string option;
   fe_internal: bool;  (** Top-level functions have limited visibilities *)
   fe_type: decl_ty;
   fe_pos: Pos_or_decl.t;
@@ -228,6 +229,7 @@ type typedef_type = {
   td_attributes: user_attribute list;
   td_internal: bool;
   td_docs_url: string option;
+  td_package_override: string option;
 }
 [@@deriving eq, show]
 
@@ -507,6 +509,7 @@ let is_union_or_inter_type (ty : locl_ty) =
   | Tclass _
   | Tunapplied_alias _
   | Tvec_or_dict _
+  | Tlabel _
   | Taccess _ ->
     false
 
@@ -603,6 +606,7 @@ let rec is_denotable ty =
   | Tany _
   | Tvar _
   | Tdependent _
+  | Tlabel _
   | Tunapplied_alias _ ->
     false
 

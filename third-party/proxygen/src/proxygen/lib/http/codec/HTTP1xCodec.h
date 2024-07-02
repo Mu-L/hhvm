@@ -8,6 +8,7 @@
 
 #pragma once
 
+#include <list>
 #include <proxygen/lib/http/HTTPMessage.h>
 #include <proxygen/lib/http/codec/HTTPCodec.h>
 #include <proxygen/lib/http/codec/TransportDirection.h>
@@ -132,9 +133,9 @@ class HTTP1xCodec : public HTTPCodec {
   }
 
   /**
-   * @returns true if the codec supports the given NPN protocol.
+   * @returns true if the codec supports the given ALPN protocol.
    */
-  static bool supportsNextProtocol(const std::string& npn);
+  static bool supportsNextProtocol(folly::StringPiece alpn);
 
  private:
   /** Simple state model used to track the parsing of HTTP headers */

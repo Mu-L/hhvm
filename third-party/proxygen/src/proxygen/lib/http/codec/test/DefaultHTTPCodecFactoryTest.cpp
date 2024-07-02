@@ -17,7 +17,7 @@
 using namespace proxygen;
 
 TEST(DefaultHTTPCodecFactoryTest, GetCodec) {
-  DefaultHTTPCodecFactory factory(false);
+  DefaultHTTPCodecFactory factory;
 
   auto codec = factory.getCodec(
       http2::kProtocolString, TransportDirection::UPSTREAM, true);
@@ -28,22 +28,36 @@ TEST(DefaultHTTPCodecFactoryTest, GetCodec) {
   HTTP1xCodec* http1xCodec = dynamic_cast<HTTP1xCodec*>(codec.get());
   EXPECT_NE(http1xCodec, nullptr);
 
+  codec = factory.getCodec("http/1.1\n", TransportDirection::UPSTREAM, true);
+  http1xCodec = dynamic_cast<HTTP1xCodec*>(codec.get());
+  EXPECT_NE(http1xCodec, nullptr);
+
+  std::string trailingNulStr("http/1.1");
+  trailingNulStr.push_back('\0');
+  EXPECT_EQ(trailingNulStr.size(), 9);
+  codec = factory.getCodec(trailingNulStr, TransportDirection::UPSTREAM, true);
+  http1xCodec = dynamic_cast<HTTP1xCodec*>(codec.get());
+  EXPECT_NE(http1xCodec, nullptr);
+
   codec = factory.getCodec("", TransportDirection::UPSTREAM, true);
   http1xCodec = dynamic_cast<HTTP1xCodec*>(codec.get());
   EXPECT_NE(http1xCodec, nullptr);
 
   codec = factory.getCodec("not/supported", TransportDirection::UPSTREAM, true);
-  http1xCodec = dynamic_cast<HTTP1xCodec*>(codec.get());
-  EXPECT_NE(http1xCodec, nullptr);
+  EXPECT_EQ(codec, nullptr);
 }
 
 class DefaultHTTPCodecFactoryValidationTest
     : public ::testing::TestWithParam<bool> {};
 
 TEST_P(DefaultHTTPCodecFactoryValidationTest, StrictValidation) {
-  DefaultHTTPCodecFactory factory(false);
+  DefaultHTTPCodecFactory factory;
   bool strict = GetParam();
-  factory.setStrictValidationFn([strict] { return strict; });
+  factory.setConfigFn([strict] {
+    HTTPCodecFactory::CodecConfig config;
+    config.strictValidation = strict;
+    return config;
+  });
 
   auto codec = factory.getCodec(
       http2::kProtocolString, TransportDirection::DOWNSTREAM, true);

@@ -8,15 +8,23 @@
 
 #pragma once
 
+#include <memory>
+
 #include <proxygen/lib/http/codec/HTTPCodecFactory.h>
 #include <proxygen/lib/services/AcceptorConfiguration.h>
 
 namespace proxygen {
 
+/**
+ * This factory is for an HTTP server to create codecs for new connections.
+ *
+ * Though this factory cannot modify the passed in accConfig, the owner can
+ * change parameters at runtime which affects new codecs.
+ */
 class HTTPDefaultSessionCodecFactory : public HTTPCodecFactory {
  public:
   explicit HTTPDefaultSessionCodecFactory(
-      const AcceptorConfiguration& accConfig);
+      std::shared_ptr<const AcceptorConfiguration> accConfig);
   ~HTTPDefaultSessionCodecFactory() override {
   }
 
@@ -28,8 +36,7 @@ class HTTPDefaultSessionCodecFactory : public HTTPCodecFactory {
                                       bool isTLS) override;
 
  protected:
-  const AcceptorConfiguration& accConfig_;
-  folly::Optional<bool> alwaysUseHTTP2_{};
+  std::shared_ptr<const AcceptorConfiguration> accConfig_;
 };
 
 } // namespace proxygen

@@ -28,7 +28,7 @@ module Make (Provider : Decl_enforceability.ShallowProvider) = struct
       sp_type
     else
       Pessimize.maybe_pessimise_type
-        ~reason:(Typing_reason.Rpessimised_prop (Typing_defs.get_pos sp_type))
+        ~reason:(Typing_reason.pessimised_prop (Typing_defs.get_pos sp_type))
         ~is_xhp_attr
         ~this_class
         ctx
@@ -47,6 +47,7 @@ module Make (Provider : Decl_enforceability.ShallowProvider) = struct
         Shallow_decl_defs.shallow_method) : Typing_defs.fun_elt =
     {
       Typing_defs.fe_module = None;
+      fe_package_override = None;
       fe_pos;
       fe_internal = false;
       fe_deprecated = sm_deprecated;
@@ -86,6 +87,7 @@ module Make (Provider : Decl_enforceability.ShallowProvider) = struct
     in
     {
       Typing_defs.fe_module = None;
+      fe_package_override = None;
       fe_pos = pos;
       fe_internal = false;
       fe_deprecated = None;

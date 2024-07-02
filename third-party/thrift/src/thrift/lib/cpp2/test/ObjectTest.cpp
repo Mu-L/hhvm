@@ -108,6 +108,14 @@ TEST(ObjectTest, TypeEnforced) {
   EXPECT_TRUE(value.get_boolValue());
 }
 
+TEST(ObjectTest, Empty) {
+  Value value;
+  value.emplace_object();
+  value.as_object().members().reset();
+  serializeValue<CompactProtocolWriter>(value);
+  serializeObject<CompactProtocolWriter>(value.as_object());
+}
+
 TEST(ObjectTest, Bool) {
   Value value = asValueStruct<type::bool_t>(20);
   ASSERT_EQ(value.getType(), Value::Type::boolValue);
@@ -766,7 +774,7 @@ void testParseObjectWithMask(bool testSerialize) {
   // obj{1: 3,
   //     2: {1: "foo"}
   //     3: {5: {1: "foo"},
-  //         6: true}3}
+  //         6: true}}
   foo[FieldId{1}].emplace_string("foo");
   bar[FieldId{5}].emplace_object(foo);
   bar[FieldId{6}].emplace_bool(true);
@@ -778,7 +786,7 @@ void testParseObjectWithMask(bool testSerialize) {
   Mask mask;
   auto& includes = mask.includes_ref().emplace();
   includes[2] = allMask();
-  includes[3].excludes_ref().emplace()[5] = allMask();
+  includes[3].includes_ref().emplace()[6] = allMask();
 
   // expected{2: {1: "foo"}
   //          3: {6: true}}

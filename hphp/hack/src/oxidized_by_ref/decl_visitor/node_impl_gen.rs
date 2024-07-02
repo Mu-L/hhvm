@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<02f16bebf8aebf73e10fc773019edb88>>
+// @generated SignedSource<<b4a83904b49f4cbd8889495a854579cd>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -223,6 +223,7 @@ impl<'a> Node<'a> for ShallowClass<'a> {
                 user_attributes: ref __binding_28,
                 enum_type: ref __binding_29,
                 docs_url: ref __binding_30,
+                package_override: ref __binding_31,
             } => {
                 {
                     __binding_0.accept(v)
@@ -314,7 +315,10 @@ impl<'a> Node<'a> for ShallowClass<'a> {
                 {
                     __binding_29.accept(v)
                 }
-                { __binding_30.accept(v) }
+                {
+                    __binding_30.accept(v)
+                }
+                { __binding_31.accept(v) }
             }
         }
     }
@@ -574,6 +578,24 @@ impl<'a> Node<'a> for FunType<'a> {
         }
     }
 }
+impl<'a> Node<'a> for TypePredicate<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_type_predicate(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TypePredicate::IsBool => {}
+            TypePredicate::IsInt => {}
+            TypePredicate::IsString => {}
+            TypePredicate::IsArraykey => {}
+            TypePredicate::IsFloat => {}
+            TypePredicate::IsNum => {}
+            TypePredicate::IsResource => {}
+            TypePredicate::IsNull => {}
+            TypePredicate::IsTupleOf(ref __binding_0) => __binding_0.accept(v),
+        }
+    }
+}
 impl<'a> Node<'a> for NegType<'a> {
     fn accept(&'a self, v: &mut dyn Visitor<'a>) {
         v.visit_neg_type(self)
@@ -649,6 +671,7 @@ impl<'a> Node<'a> for Ty_<'a> {
             Ty_::Tdependent(ref __binding_0) => __binding_0.accept(v),
             Ty_::Tclass(ref __binding_0) => __binding_0.accept(v),
             Ty_::Tneg(ref __binding_0) => __binding_0.accept(v),
+            Ty_::Tlabel(ref __binding_0) => __binding_0.accept(v),
         }
     }
 }
@@ -816,13 +839,14 @@ impl<'a> Node<'a> for FunElt<'a> {
             FunElt {
                 deprecated: ref __binding_0,
                 module: ref __binding_1,
-                internal: ref __binding_2,
-                type_: ref __binding_3,
-                pos: ref __binding_4,
-                php_std_lib: ref __binding_5,
-                support_dynamic_type: ref __binding_6,
-                no_auto_dynamic: ref __binding_7,
-                no_auto_likes: ref __binding_8,
+                package_override: ref __binding_2,
+                internal: ref __binding_3,
+                type_: ref __binding_4,
+                pos: ref __binding_5,
+                php_std_lib: ref __binding_6,
+                support_dynamic_type: ref __binding_7,
+                no_auto_dynamic: ref __binding_8,
+                no_auto_likes: ref __binding_9,
             } => {
                 {
                     __binding_0.accept(v)
@@ -848,7 +872,10 @@ impl<'a> Node<'a> for FunElt<'a> {
                 {
                     __binding_7.accept(v)
                 }
-                { __binding_8.accept(v) }
+                {
+                    __binding_8.accept(v)
+                }
+                { __binding_9.accept(v) }
             }
         }
     }
@@ -972,6 +999,7 @@ impl<'a> Node<'a> for TypedefType<'a> {
                 attributes: ref __binding_8,
                 internal: ref __binding_9,
                 docs_url: ref __binding_10,
+                package_override: ref __binding_11,
             } => {
                 {
                     __binding_0.accept(v)
@@ -1003,7 +1031,10 @@ impl<'a> Node<'a> for TypedefType<'a> {
                 {
                     __binding_9.accept(v)
                 }
-                { __binding_10.accept(v) }
+                {
+                    __binding_10.accept(v)
+                }
+                { __binding_11.accept(v) }
             }
         }
     }
@@ -1104,8 +1135,8 @@ impl<'a> Node<'a> for T_<'a> {
             T_::RnullsafeOp(ref __binding_0) => __binding_0.accept(v),
             T_::RtconstNoCstr(ref __binding_0) => __binding_0.accept(v),
             T_::Rpredicated(ref __binding_0) => __binding_0.accept(v),
-            T_::Ris(ref __binding_0) => __binding_0.accept(v),
-            T_::Ras(ref __binding_0) => __binding_0.accept(v),
+            T_::RisRefinement(ref __binding_0) => __binding_0.accept(v),
+            T_::RasRefinement(ref __binding_0) => __binding_0.accept(v),
             T_::Requal(ref __binding_0) => __binding_0.accept(v),
             T_::RvarrayOrDarrayKey(ref __binding_0) => __binding_0.accept(v),
             T_::RvecOrDictKey(ref __binding_0) => __binding_0.accept(v),
@@ -1114,7 +1145,7 @@ impl<'a> Node<'a> for T_<'a> {
             T_::RdynamicCall(ref __binding_0) => __binding_0.accept(v),
             T_::RdynamicConstruct(ref __binding_0) => __binding_0.accept(v),
             T_::RidxDict(ref __binding_0) => __binding_0.accept(v),
-            T_::RsetElement(ref __binding_0) => __binding_0.accept(v),
+            T_::RidxSetElement(ref __binding_0) => __binding_0.accept(v),
             T_::RmissingOptionalField(ref __binding_0) => __binding_0.accept(v),
             T_::RunsetField(ref __binding_0) => __binding_0.accept(v),
             T_::RcontravariantGeneric(ref __binding_0) => __binding_0.accept(v),
@@ -1311,23 +1342,6 @@ impl<'a> Node<'a> for ClassConstKind {
         match self {
             ClassConstKind::CCAbstract(ref __binding_0) => __binding_0.accept(v),
             ClassConstKind::CCConcrete => {}
-        }
-    }
-}
-impl<'a> Node<'a> for TypePredicate {
-    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
-        v.visit_type_predicate(self)
-    }
-    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
-        match self {
-            TypePredicate::IsBool => {}
-            TypePredicate::IsInt => {}
-            TypePredicate::IsString => {}
-            TypePredicate::IsArraykey => {}
-            TypePredicate::IsFloat => {}
-            TypePredicate::IsNum => {}
-            TypePredicate::IsResource => {}
-            TypePredicate::IsNull => {}
         }
     }
 }

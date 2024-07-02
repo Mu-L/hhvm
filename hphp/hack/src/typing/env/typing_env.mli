@@ -270,6 +270,11 @@ val get_module : env -> module_key -> module_decl option
 
 val get_current_module : env -> string option
 
+val set_current_package_override_from_file_attributes :
+  env -> ('ex, 'en) Aast_defs.file_attribute list -> env
+
+val get_current_package_override : env -> string option
+
 (** Register the current top-level structure as being dependent on the current
     module *)
 val make_depend_on_current_module : Typing_env_types.env -> unit
@@ -558,6 +563,8 @@ val with_packages : env -> SSet.t -> (env -> env * 'a) -> env * 'a
 val is_package_loaded : env -> string -> bool
 
 val package_v2 : env -> bool
+
+val package_v2_bypass_package_check_for_class_const : env -> bool
 
 (** Remove solved variable from environment by replacing it by its binding. *)
 val remove_var :
