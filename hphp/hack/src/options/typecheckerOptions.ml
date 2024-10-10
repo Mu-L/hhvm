@@ -146,6 +146,9 @@ let const_attribute t = t.GlobalOptions.tco_const_attribute
 
 let check_attribute_locations t = t.GlobalOptions.tco_check_attribute_locations
 
+let type_refinement_partition_shapes t =
+  t.GlobalOptions.tco_type_refinement_partition_shapes
+
 let error_php_lambdas t = t.GlobalOptions.tco_error_php_lambdas
 
 let disallow_discarded_nullable_awaitables t =
@@ -285,8 +288,6 @@ let log_fanout t ~fanout_cardinal =
 let populate_dead_unsafe_cast_heap t =
   t.GlobalOptions.tco_populate_dead_unsafe_cast_heap
 
-let rust_elab t = t.GlobalOptions.tco_rust_elab
-
 let locl_cache_capacity t = t.GlobalOptions.tco_locl_cache_capacity
 
 let locl_cache_node_threshold t = t.GlobalOptions.tco_locl_cache_node_threshold
@@ -315,9 +316,14 @@ let using_extended_reasons t = Option.is_some @@ tco_extended_reasons t
 let enable_abstract_method_optional_parameters t =
   t.GlobalOptions.tco_enable_abstract_method_optional_parameters
 
+let disable_physical_equality t = t.GlobalOptions.tco_disable_physical_equality
+
 let hack_warnings t = t.GlobalOptions.hack_warnings
 
 let package_v2 t = t.GlobalOptions.tco_package_v2
+
+let package_v2_support_multifile_tests t =
+  t.GlobalOptions.tco_package_v2_support_multifile_tests
 
 let package_v2_bypass_package_check_for_class_const t =
   t.GlobalOptions.tco_package_v2_bypass_package_check_for_class_const

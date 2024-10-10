@@ -1,4 +1,19 @@
 Errors:
+  [110:7-9] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [123:9-11] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [128:9-11] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [131:9-14] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [132:9-30] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [133:9-28] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [135:9-17] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [137:9-22] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [139:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [141:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [143:9-15] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [145:9-15] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [147:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [149:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
+  [151:9-153:4] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
   [163:9-14] Cannot use dynamic class or method name in strict mode
   [164:10-21] Cannot use dynamic class or method name in strict mode
   [165:10-31] Cannot use dynamic class or method name in strict mode
@@ -23,21 +38,6 @@ Errors:
   [191:9-13] Cannot use dynamic class or method name in strict mode
   [192:10-14] Cannot use dynamic class or method name in strict mode
   [193:10-14] Cannot use dynamic class or method name in strict mode
-  [110:7-9] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [123:9-11] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [128:9-11] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [131:9-14] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [132:9-30] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [133:9-28] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [135:9-17] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [137:9-22] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [139:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [141:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [143:9-15] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [145:9-15] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [147:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [149:9-13] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
-  [151:9-153:4] Dynamic method access is not allowed. Please use the method name directly, for example `::myMethodName()`
 [(Fun
     { fd_namespace =
       { Namespace_env.ns_ns_uses = <opaque>; ns_class_uses = <opaque>; 
@@ -122,8 +122,8 @@ Errors:
          f_params =
          [{ param_annotation = (); param_type_hint = ((), (Some ([20:22-29], Hdynamic))); 
             param_pos = [20:30-32]; param_name = "$x"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -244,8 +244,8 @@ Errors:
          f_params =
          [{ param_annotation = (); param_type_hint = ((), (Some ([107:20-27], Hdynamic))); 
             param_pos = [107:28-30]; param_name = "$x"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -429,8 +429,8 @@ Errors:
          f_params =
          [{ param_annotation = (); param_type_hint = ((), (Some ([157:24-31], Hdynamic))); 
             param_pos = [157:32-34]; param_name = "$x"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =

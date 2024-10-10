@@ -18,11 +18,17 @@ package thrift
 
 import (
 	"testing"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 func TestHeaderProtocolHeaders(t *testing.T) {
 	mockSocket := newMockSocket()
-	proto1, err := NewHeaderProtocol(mockSocket)
+	proto1, err := newHeaderProtocol(mockSocket, types.ProtocolIDCompact, 0, map[string]string{
+		"preferred_cheese": "gouda",
+		IDVersionHeader:    IDVersion,
+		IdentityHeader:     "batman",
+	})
 	if err != nil {
 		t.Fatalf("failed to create header protocol: %s", err)
 	}
@@ -31,28 +37,15 @@ func TestHeaderProtocolHeaders(t *testing.T) {
 		t.Fatalf("failed to create header protocol: %s", err)
 	}
 
-	proto1.(RequestHeaders).SetRequestHeader("preferred_cheese", "cheddar")
-	if v, _ := proto1.(RequestHeaders).GetRequestHeader("preferred_cheese"); v != "cheddar" {
+	proto1.SetRequestHeader("preferred_cheese", "cheddar")
+	if v, _ := proto1.(*headerProtocol).trans.writeInfoHeaders["preferred_cheese"]; v != "cheddar" {
 		t.Fatalf("failed to set header")
 	}
-	if len(proto1.(RequestHeaders).GetRequestHeaders()) != 1 {
+	if len(proto1.(*headerProtocol).trans.writeInfoHeaders) != 1 {
 		t.Fatalf("wrong number of headers")
 	}
 
-	proto1.SetPersistentHeader("preferred_cheese", "gouda")
-	if v, _ := proto1.GetPersistentHeader("preferred_cheese"); v != "gouda" {
-		t.Fatalf("failed to set persistent header")
-	}
-	if len(proto1.GetPersistentHeaders()) != 1 {
-		t.Fatalf("wrong number of headers")
-	}
-
-	SetIdentity(proto1, "batman")
-	if gotIdentity, ok := proto1.GetPersistentHeader(IdentityHeader); !ok || gotIdentity != "batman" {
-		t.Fatalf("failed to set identity")
-	}
-
-	proto1.WriteMessageBegin("", CALL, 1)
+	proto1.WriteMessageBegin("", types.CALL, 1)
 	proto1.WriteMessageEnd()
 	proto1.Flush()
 
@@ -61,7 +54,7 @@ func TestHeaderProtocolHeaders(t *testing.T) {
 		t.Fatalf("failed to read message from proto1 in proto2")
 	}
 
-	if v, _ := proto2.GetResponseHeader("preferred_cheese"); v != "gouda" {
+	if v, _ := proto2.GetResponseHeaders()["preferred_cheese"]; v != "gouda" {
 		t.Fatalf("failed to read header, got: %s", v)
 	}
 

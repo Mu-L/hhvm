@@ -80,8 +80,14 @@ DelegatedCredential DelegatedCredentialUtils::generateCredential(
     const folly::ssl::EvpPkeyUniquePtr& credKey,
     SignatureScheme signScheme,
     SignatureScheme verifyScheme,
+    CertificateVerifyContext verifyContext,
     std::chrono::seconds validSeconds) {
   DelegatedCredential cred;
+  if (verifyContext != CertificateVerifyContext::ServerDelegatedCredential &&
+      verifyContext != CertificateVerifyContext::ClientDelegatedCredential) {
+    throw std::runtime_error(
+        "Requested credential with invalid verification context");
+  }
   if (validSeconds > std::chrono::hours(24 * 7)) {
     // Can't be valid longer than a week!
     throw std::runtime_error(
@@ -156,23 +162,27 @@ DelegatedCredential DelegatedCredentialUtils::generateCredential(
 
   auto toSign = prepareSignatureBuffer(
       cred, folly::ssl::OpenSSLCertUtils::derEncode(*cert->getX509()));
-  cred.signature = cert->sign(
-      cred.credential_scheme,
-      CertificateVerifyContext::DelegatedCredential,
-      toSign->coalesce());
+  cred.signature =
+      cert->sign(cred.credential_scheme, verifyContext, toSign->coalesce());
 
   return cred;
+}
+
+std::chrono::system_clock::time_point
+DelegatedCredentialUtils::getCredentialExpiresTime(
+    const folly::ssl::X509UniquePtr& parentCert,
+    const DelegatedCredential& credential) {
+  auto notBefore = X509_get0_notBefore(parentCert.get());
+  auto notBeforeTime =
+      folly::ssl::OpenSSLCertUtils::asnTimeToTimepoint(notBefore);
+  return notBeforeTime + std::chrono::seconds(credential.valid_time);
 }
 
 void DelegatedCredentialUtils::checkCredentialTimeValidity(
     const folly::ssl::X509UniquePtr& parentCert,
     const DelegatedCredential& credential,
     const std::shared_ptr<Clock>& clock) {
-  auto notBefore = X509_get0_notBefore(parentCert.get());
-  auto notBeforeTime =
-      folly::ssl::OpenSSLCertUtils::asnTimeToTimepoint(notBefore);
-  auto credentialExpiresTime =
-      notBeforeTime + std::chrono::seconds(credential.valid_time);
+  auto credentialExpiresTime = getCredentialExpiresTime(parentCert, credential);
   auto now = clock->getCurrentTime();
   if (now >= credentialExpiresTime) {
     throw FizzException(
@@ -183,6 +193,16 @@ void DelegatedCredentialUtils::checkCredentialTimeValidity(
   if (credentialExpiresTime - now > kMaxDelegatedCredentialLifetime) {
     throw FizzException(
         "credential validity is longer than a week from now",
+        AlertDescription::illegal_parameter);
+  }
+
+  auto notAfter = X509_get0_notAfter(parentCert.get());
+  auto notAfterTime =
+      folly::ssl::OpenSSLCertUtils::asnTimeToTimepoint(notAfter);
+  // Credential expiry time must be less than certificate's expiry time
+  if (credentialExpiresTime >= notAfterTime) {
+    throw FizzException(
+        "credential validity is longer than parent cert validity",
         AlertDescription::illegal_parameter);
   }
 }

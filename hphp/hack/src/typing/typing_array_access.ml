@@ -68,6 +68,14 @@ let error_assign_array_append env p ty =
              });
   (env, ty)
 
+let add_error_tuple env p =
+  Typing_error_utils.add_typing_error
+    ~env
+    Typing_error.(
+      primary
+      @@ Primary.Generic_unify
+           { pos = p; msg = Reason.string_of_ureason Reason.index_tuple })
+
 let maybe_make_supportdyn r env ~supportdyn ty =
   if supportdyn then
     Typing_utils.make_supportdyn r env ty
@@ -124,16 +132,33 @@ let widen_for_array_get ~lhs_of_null_coalesce ~expr_pos index_expr env ty =
     let ty = MakeType.keyed_container r index_ty element_ty in
     (env, Some ty)
   (* For tuples, we just freshen the element types *)
-  | (r, Ttuple tyl) -> begin
+  | (r, Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } }) ->
+  begin
     (* requires integer literal *)
     match index_expr with
     (* Should freshen type variables *)
     | (_, _, Aast.Int _) ->
-      let (env, params) =
-        List.map_env env tyl ~f:(fun env _ty ->
+      let (env, t_required) =
+        List.map_env env t_required ~f:(fun env _ty ->
             Env.fresh_type_invariant env expr_pos)
       in
-      (env, Some (MakeType.tuple r params))
+      let (env, t_optional) =
+        List.map_env env t_optional ~f:(fun env _ty ->
+            Env.fresh_type_invariant env expr_pos)
+      in
+      let (env, t_variadic) =
+        if is_nothing t_variadic then
+          (env, t_variadic)
+        else
+          Env.fresh_type_invariant env expr_pos
+      in
+      ( env,
+        Some
+          (mk
+             ( r,
+               Ttuple
+                 { t_required; t_extra = Textra { t_optional; t_variadic } } ))
+      )
     | _ -> (env, None)
   end
   (* Whatever the lower bound, construct an open, singleton shape type. *)
@@ -277,21 +302,6 @@ let maybe_pessimise_type env ty =
     pessimise_type env ty
   else
     (env, ty)
-
-let pessimised_tup_assign p env arg_ty =
-  let env = Env.open_tyvars env p in
-  let (env, ty) = Env.fresh_type env p in
-  let (env, pess_ty) = pessimise_type env ty in
-  let env = Env.set_tyvar_variance env pess_ty in
-  (* There can't be an error since the type variable is fresh *)
-  let cb = Typing_error.Reasons_callback.unify_error_at p in
-  let (env, ty_err_opt) = SubType.sub_type env arg_ty pess_ty (Some cb) in
-  (* Enforce the invariant - this call should never give us an error *)
-  if Option.is_some ty_err_opt then
-    Errors.internal_error p "Subtype of fresh type variable";
-  let (env, ty_err_opt) = Typing_solver.close_tyvars_and_solve env in
-  Option.iter ~f:(Typing_error_utils.add_typing_error ~env) ty_err_opt;
-  (env, ty)
 
 (** Typing of array-get like expressions; [ty1] is the type of the expression
   into which we are indexing (the 'collection'), [e2] is the index expression
@@ -585,24 +595,36 @@ let rec array_get
         in
         Option.iter ty_err1 ~f:(Typing_error_utils.add_typing_error ~env);
         (env, (ty, dflt_arr_res, idx_err_res))
-      | Ttuple tyl ->
+      (* TODO splats in tuples *)
+      | Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } } ->
+      begin
         (* requires integer literal *)
-        (match e2 with
-        | (_, p, Int n) ->
-          let idx = int_of_string_opt n in
-          (match Option.bind idx ~f:(List.nth tyl) with
-          | Some nth -> (env, (nth, dflt_arr_res, Ok ty2))
-          | None ->
-            Typing_error_utils.add_typing_error
-              ~env
-              Typing_error.(
-                primary
-                @@ Primary.Generic_unify
-                     {
-                       pos = p;
-                       msg = Reason.string_of_ureason Reason.index_tuple;
-                     });
+        match e2 with
+        | (_, p, Int idx_str) ->
+          let idx = int_of_string_opt idx_str in
+          let count_required = List.length t_required in
+          let count_optional = List.length t_optional in
+          (match idx with
+          (* Index is within required elements *)
+          | Some n when Int.(n >= 0) && Int.(n < count_required) ->
+            (env, (List.nth_exn t_required n, dflt_arr_res, Ok ty2))
+          (* Index is within optional elements; error if this isn't a null coalesce *)
+          | Some n
+            when Int.(n >= count_required)
+                 && Int.(n < count_required + count_optional) ->
+            let ty = List.nth_exn t_optional (n - count_required) in
+            if not lhs_of_null_coalesce then add_error_tuple env p;
+            (env, (ty, dflt_arr_res, Ok ty2))
+          (* Index is within variadic elements; error if this isn't a null coalesce *)
+          | Some n
+            when Int.(n >= count_required + count_optional)
+                 && not (is_nothing t_variadic) ->
+            if not lhs_of_null_coalesce then add_error_tuple env p;
+            (env, (t_variadic, dflt_arr_res, Ok ty2))
+          (* Index is out of range *)
+          | _ ->
             let (env, ty) = err_witness env p in
+            add_error_tuple env p;
             (env, (ty, dflt_arr_res, Ok ty2)))
         | (_, p, _) ->
           Typing_error_utils.add_typing_error
@@ -615,7 +637,8 @@ let rec array_get
                      msg = Reason.string_of_ureason Reason.URtuple_access;
                    });
           let (env, ty) = err_witness env expr_pos in
-          (env, (ty, dflt_arr_res, Error (ty2, MakeType.int Reason.none))))
+          (env, (ty, dflt_arr_res, Error (ty2, MakeType.int Reason.none)))
+      end
       | Tclass (((_, cn) as id), _, argl)
         when String.equal cn SN.Collections.cPair ->
         let (ty_fst, ty_snd) =
@@ -842,6 +865,7 @@ let rec array_get
       | Tintersection _
       | Taccess _
       | Tlabel _
+      | Ttuple { t_extra = Tsplat _; _ }
       | Tneg _ ->
         if not ignore_error then error_array env expr_pos expr_ty;
         let (env, res_ty) = err_witness env expr_pos in
@@ -1054,16 +1078,27 @@ let widen_for_assign_array_get ~expr_pos index_expr env ty =
   match deref ty with
   (* dynamic is valid for assign array get *)
   | (_, Tdynamic) -> ((env, None), Some ty)
-  | (r, Ttuple tyl) -> begin
+  | (r, Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } }) ->
+  begin
     (* requires integer literal *)
     match index_expr with
     (* Should freshen type variables *)
     | (_, _, Aast.Int _) ->
-      let (env, params) =
-        List.map_env env tyl ~f:(fun env _ty ->
+      let (env, t_required) =
+        List.map_env env t_required ~f:(fun env _ty ->
             Env.fresh_type_invariant env expr_pos)
       in
-      ((env, None), Some (mk (r, Ttuple params)))
+      let (env, t_optional) =
+        List.map_env env t_optional ~f:(fun env _ty ->
+            Env.fresh_type_invariant env expr_pos)
+      in
+      ( (env, None),
+        Some
+          (mk
+             ( r,
+               Ttuple
+                 { t_required; t_extra = Textra { t_optional; t_variadic } } ))
+      )
     | _ -> ((env, None), None)
   end
   | _ -> ((env, None), None)
@@ -1377,7 +1412,10 @@ let assign_array_get ~array_pos ~expr_pos ur env ty1 (key : Nast.expr) tkey ty2
           iter ~f:(Typing_error_utils.add_typing_error ~env)
           @@ merge ty_err1 ty_err2 ~f:Typing_error.both);
         (env, (ety1, Ok ety1, idx_err, err_res))
-      | Ttuple tyl ->
+      (* TODO T201398626 T201398652 *)
+      | Ttuple
+          { t_required; t_extra = Textra { t_optional = []; t_variadic = _ } }
+        ->
         let fail key_err reason =
           let (_, p, _) = key in
           Typing_error_utils.add_typing_error
@@ -1392,7 +1430,7 @@ let assign_array_get ~array_pos ~expr_pos ur env ty1 (key : Nast.expr) tkey ty2
           match key with
           | (_, _, Int n) ->
             let idx = int_of_string_opt n in
-            (match Option.map ~f:(List.split_n tyl) idx with
+            (match Option.map ~f:(List.split_n t_required) idx with
             | Some (tyl', _ :: tyl'') ->
               let ty = MakeType.tuple r (tyl' @ (ty2 :: tyl'')) in
               let (env, ty) = maybe_make_supportdyn r env ~supportdyn ty in
@@ -1456,6 +1494,7 @@ let assign_array_get ~array_pos ~expr_pos ur env ty1 (key : Nast.expr) tkey ty2
       | Tclass _
       | Taccess _
       | Tlabel _
+      | Ttuple _
       | Tneg _ ->
         Typing_error_utils.add_typing_error
           ~env

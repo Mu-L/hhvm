@@ -7,14 +7,14 @@ package included
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 
 
@@ -24,7 +24,7 @@ func NewSomeMap() SomeMap {
     return make(map[int32]string)
 }
 
-func WriteSomeMap(item SomeMap, p thrift.Format) error {
+func WriteSomeMap(item SomeMap, p thrift.Encoder) error {
     if err := p.WriteMapBegin(thrift.I32, thrift.STRING, len(item)); err != nil {
     return thrift.PrependError("error writing map begin: ", err)
 }
@@ -49,7 +49,7 @@ if err := p.WriteMapEnd(); err != nil {
     return nil
 }
 
-func ReadSomeMap(p thrift.Format) (SomeMap, error) {
+func ReadSomeMap(p thrift.Decoder) (SomeMap, error) {
     var decodeResult SomeMap
     decodeErr := func() error {
         _ /* keyType */, _ /* valueType */, size, err := p.ReadMapBegin()
@@ -96,7 +96,7 @@ func NewSomeListOfTypeMap() SomeListOfTypeMap {
     return make([]SomeMap, 0)
 }
 
-func WriteSomeListOfTypeMap(item SomeListOfTypeMap, p thrift.Format) error {
+func WriteSomeListOfTypeMap(item SomeListOfTypeMap, p thrift.Encoder) error {
     if err := p.WriteListBegin(thrift.MAP, len(item)); err != nil {
     return thrift.PrependError("error writing list begin: ", err)
 }
@@ -115,7 +115,7 @@ if err := p.WriteListEnd(); err != nil {
     return nil
 }
 
-func ReadSomeListOfTypeMap(p thrift.Format) (SomeListOfTypeMap, error) {
+func ReadSomeListOfTypeMap(p thrift.Decoder) (SomeListOfTypeMap, error) {
     var decodeResult SomeListOfTypeMap
     decodeErr := func() error {
         _ /* elemType */, size, err := p.ReadListBegin()
@@ -145,4 +145,5 @@ result := listResult
     }()
     return decodeResult, decodeErr
 }
+
 

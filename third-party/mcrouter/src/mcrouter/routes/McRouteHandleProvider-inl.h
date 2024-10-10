@@ -34,9 +34,11 @@
 #include "mcrouter/routes/FailoverRoute.h"
 #include "mcrouter/routes/HashRouteFactory.h"
 #include "mcrouter/routes/McBucketRoute.h"
+#include "mcrouter/routes/McRefillRoute.h"
 #include "mcrouter/routes/PoolRouteUtils.h"
 #include "mcrouter/routes/RateLimitRoute.h"
 #include "mcrouter/routes/RateLimiter.h"
+#include "mcrouter/routes/RoutingUtils.h"
 #include "mcrouter/routes/ShadowRoute.h"
 #include "mcrouter/routes/ShardHashFunc.h"
 #include "mcrouter/routes/ShardSplitRoute.h"
@@ -45,8 +47,6 @@
 namespace facebook {
 namespace memcache {
 namespace mcrouter {
-
-static constexpr uint32_t kMaxTotalFanout = 32 * 1024;
 
 extern template MemcacheRouterInfo::RouteHandlePtr
 createHashRoute<MemcacheRouterInfo>(
@@ -283,7 +283,6 @@ McRouteHandleProvider<RouterInfo>::makePool(
     // servers
     auto jhostnames = json.get_ptr("hostnames");
     auto jfailureDomains = json.get_ptr("failure_domains");
-    auto jAdditionalFanout = json.get_ptr("additional_fanout");
     checkLogic(
         !jfailureDomains || jfailureDomains->isArray(),
         "failure_domains is not an array");
@@ -303,25 +302,8 @@ McRouteHandleProvider<RouterInfo>::makePool(
         jservers->size(),
         jfailureDomains ? jfailureDomains->size() : 0);
 
-    checkLogic(
-        !jAdditionalFanout || jAdditionalFanout->isInt(),
-        "additional_fanout is not an integer");
-    uint32_t additionalFanout = 0;
-    if (jAdditionalFanout) {
-      additionalFanout = jAdditionalFanout->getInt();
-    }
-    checkLogic(
-        static_cast<uint64_t>(additionalFanout + 1) *
-                static_cast<uint64_t>(proxy_.router().opts().num_proxies) <=
-            kMaxTotalFanout,
-        "(additional_fanout={} + 1) * num_proxies={} must be <= {}",
-        additionalFanout,
-        proxy_.router().opts().num_proxies,
-        kMaxTotalFanout);
-
-    checkLogic(
-        additionalFanout == 0 || !proxy_.router().opts().thread_affinity,
-        "additional_fanout is not supported with thread_affinity");
+    uint32_t additionalFanout =
+        getAdditionalFanout(json, proxy_.router().opts());
 
     int32_t poolStatIndex = proxy_.router().getStatsEnabledPoolIndex(name);
 
@@ -581,6 +563,26 @@ McRouteHandleProvider<RouterInfo>::createSRRoute(
     route = std::move(makeShadowRoutes(
         factory, json, {std::move(route)}, proxy_, *extraProvider_)[0]);
   }
+
+  if constexpr (RouterInfo::hasMcRefillRoute) {
+    bool refillOnMiss = false;
+    if (auto* jRefillOnMiss = json.get_ptr("refill_on_miss")) {
+      refillOnMiss = parseBool(*jRefillOnMiss, "refill_on_miss");
+    }
+    if (refillOnMiss) {
+      auto jRefillFromTier = json.get_ptr("refill_from_tier");
+      checkLogic(
+          jRefillFromTier != nullptr,
+          "SRroute: 'refill_from_tier' property is missing");
+      folly::dynamic refillJson = json;
+      refillJson["service_name"] = *jRefillFromTier;
+      refillJson["type"] = "SRRoute";
+
+      route = makeMcRefillRouteUsePrimaryAndRefill<RouterInfo>(
+          route, factoryFunc(factory, refillJson, proxy_));
+    }
+  }
+
   route = bucketize(std::move(route), json);
 
   if (needAsynclog) {

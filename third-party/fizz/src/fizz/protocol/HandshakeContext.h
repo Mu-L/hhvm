@@ -8,7 +8,7 @@
 
 #pragma once
 
-#include <fizz/backend/openssl/Hasher.h>
+#include <fizz/crypto/Hasher.h>
 #include <fizz/record/Types.h>
 
 namespace fizz {
@@ -45,10 +45,15 @@ class HandshakeContext {
   virtual std::unique_ptr<HandshakeContext> clone() const = 0;
 };
 
-template <typename Hash>
 class HandshakeContextImpl : public HandshakeContext {
  public:
-  HandshakeContextImpl(const std::string& hkdfLabelPrefix);
+  explicit HandshakeContextImpl(const HasherFactoryWithMetadata* makeHasher)
+      : HandshakeContextImpl(makeHasher, makeHasher->make()) {}
+
+  HandshakeContextImpl(
+      const HasherFactoryWithMetadata* makeHasher,
+      std::unique_ptr<Hasher> hashState)
+      : makeHasher_(makeHasher), hashState_(std::move(hashState)) {}
 
   void appendToTranscript(const Buf& data) override;
 
@@ -57,19 +62,16 @@ class HandshakeContextImpl : public HandshakeContext {
   Buf getFinishedData(folly::ByteRange baseKey) const override;
 
   folly::ByteRange getBlankContext() const override {
-    return Hash::BlankHash;
+    return makeHasher_->blankHash();
   }
 
   virtual std::unique_ptr<HandshakeContext> clone() const override {
-    auto newCtx = std::make_unique<HandshakeContextImpl>(hkdfLabelPrefix_);
-    newCtx->hashState_ = hashState_;
-    return newCtx;
+    return std::make_unique<HandshakeContextImpl>(
+        makeHasher_, hashState_->clone());
   }
 
  private:
-  fizz::openssl::Hasher<Hash> hashState_;
-  std::string hkdfLabelPrefix_;
+  const HasherFactoryWithMetadata* makeHasher_;
+  std::unique_ptr<Hasher> hashState_;
 };
 } // namespace fizz
-
-#include <fizz/protocol/HandshakeContext-inl.h>

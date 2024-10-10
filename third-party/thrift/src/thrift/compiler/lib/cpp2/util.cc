@@ -23,11 +23,8 @@
 #include <queue>
 #include <stdexcept>
 
-#include <openssl/opensslv.h>
-#include <openssl/sha.h>
-#if OPENSSL_VERSION_NUMBER >= 0x030000000 // v3.0.0
 #include <openssl/evp.h>
-#endif
+#include <openssl/sha.h>
 
 #include <fmt/core.h>
 
@@ -38,7 +35,7 @@
 #include <thrift/compiler/ast/t_set.h>
 #include <thrift/compiler/ast/t_struct.h>
 #include <thrift/compiler/ast/t_typedef.h>
-#include <thrift/compiler/gen/cpp/type_resolver.h>
+#include <thrift/compiler/generate/cpp/name_resolver.h>
 #include <thrift/compiler/lib/uri.h>
 
 namespace apache {
@@ -70,7 +67,7 @@ bool is_custom_type(const t_type& type) {
 }
 
 bool is_custom_type(const t_field& field) {
-  return gen::cpp::type_resolver::find_first_adapter(field) ||
+  return cpp_name_resolver::find_first_adapter(field) ||
       is_custom_type(*field.get_type());
 }
 
@@ -367,7 +364,7 @@ bool is_orderable(t_type const& type) {
 }
 
 std::string_view get_type(const t_type* type) {
-  return value_or_empty(gen::cpp::type_resolver::find_type(*type));
+  return value_or_empty(cpp_name_resolver::find_type(*type));
 }
 
 bool is_implicit_ref(const t_type* type) {
@@ -608,14 +605,7 @@ std::string get_gen_type_class_with_indirection(t_type const& type) {
 
 std::string sha256_hex(std::string const& in) {
   std::uint8_t mid[SHA256_DIGEST_LENGTH];
-#if OPENSSL_VERSION_NUMBER >= 0x030000000 // v3.0.0
   EVP_Digest(in.data(), in.size(), mid, nullptr, EVP_sha256(), nullptr);
-#else
-  SHA256_CTX hasher;
-  SHA256_Init(&hasher);
-  SHA256_Update(&hasher, in.data(), in.size());
-  SHA256_Final(mid, &hasher);
-#endif
 
   constexpr auto alpha = "0123456789abcdef";
 

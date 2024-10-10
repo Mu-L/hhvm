@@ -138,10 +138,18 @@ let rec check_hint env (pos, hint) =
         } ->
     List.iter hl ~f:(check_hint env);
     check_hint env h
-  | Aast.Htuple hl
   | Aast.Hunion hl
   | Aast.Hintersection hl ->
     List.iter hl ~f:(check_hint env)
+  | Aast.Htuple { tup_required; tup_extra } ->
+    List.iter tup_required ~f:(check_hint env);
+    begin
+      match tup_extra with
+      | Aast.Hextra { tup_optional; tup_variadic } ->
+        List.iter tup_optional ~f:(check_hint env);
+        Option.iter tup_variadic ~f:(check_hint env)
+      | Aast.Hsplat h -> check_hint env h
+    end
 
 and check_shape env Aast.{ nsi_allows_unknown_fields = _; nsi_field_map } =
   List.iter ~f:(fun v -> check_hint env v.Aast.sfi_hint) nsi_field_map
@@ -164,7 +172,17 @@ let handler =
     inherit Tast_visitor.handler_base
 
     method! at_typedef env t =
-      check_hint env t.t_kind;
+      let hints =
+        match t.t_assignment with
+        | SimpleTypeDef { tvh_vis = _; tvh_hint } -> [tvh_hint]
+        | CaseType (variant, variants) ->
+          List.concat_map (variant :: variants) ~f:(fun v ->
+              v.tctv_hint
+              :: List.concat_map
+                   v.tctv_where_constraints
+                   ~f:(fun (h1, _ck, h2) -> [h1; h2]))
+      in
+      List.iter hints ~f:(check_hint env);
       Option.iter t.t_as_constraint ~f:(check_hint env);
       Option.iter t.t_super_constraint ~f:(check_hint env)
 

@@ -10,60 +10,12 @@
 #include <functional>
 #include <folly/Range.h>
 
-#include <thrift/lib/py3/enums.h>
 #include "thrift/compiler/test/fixtures/py3/gen-py3cpp/module_data.h"
 #include "thrift/compiler/test/fixtures/py3/gen-py3cpp/module_types.h"
 #include "thrift/compiler/test/fixtures/py3/gen-py3cpp/module_metadata.h"
 namespace thrift {
 namespace py3 {
 
-
-template<>
-inline const std::vector<std::pair<std::string_view, std::string_view>>& PyEnumTraits<
-    ::py3::simple::AnEnum>::namesmap() {
-  static const folly::Indestructible<NamesMap> pairs {
-    {
-      {"NOTSET", "None"},
-    }
-  };
-  return *pairs;
-}
-
-
-template<>
-inline const std::vector<std::pair<std::string_view, std::string_view>>& PyEnumTraits<
-    ::py3::simple::AnEnumRenamed>::namesmap() {
-  static const folly::Indestructible<NamesMap> pairs {
-    {
-      {"name_", "name"},
-      {"value_", "value"},
-      {"renamed_", "normal"},
-    }
-  };
-  return *pairs;
-}
-
-
-template<>
-inline const std::vector<std::pair<std::string_view, std::string_view>>& PyEnumTraits<
-    ::py3::simple::Flags>::namesmap() {
-  static const folly::Indestructible<NamesMap> pairs {
-    {
-    }
-  };
-  return *pairs;
-}
-
-
-template<>
-inline const std::vector<std::pair<std::string_view, std::string_view>>& PyEnumTraits<
-    ::py3::simple::BinaryUnion::Type>::namesmap() {
-  static const folly::Indestructible<NamesMap> pairs {
-    {
-    }
-  };
-  return *pairs;
-}
 
 
 template<>

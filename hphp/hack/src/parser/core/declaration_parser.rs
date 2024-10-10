@@ -140,6 +140,12 @@ where
         })
     }
 
+    fn parse_type_specifier_opt(&mut self, allow_var: bool, allow_attr: bool) -> S::Output {
+        self.with_type_parser(|p: &mut TypeParser<'a, S>| {
+            p.parse_type_specifier_opt(allow_var, allow_attr)
+        })
+    }
+
     fn with_statement_parser<F, U>(&mut self, f: F) -> U
     where
         F: Fn(&mut StatementParser<'a, S>) -> U,
@@ -1660,17 +1666,36 @@ where
         let optional = self.parse_optional_opt();
         let callconv = self.parse_call_convention_opt();
         let readonly = self.parse_readonly_opt();
+        let ellipsis1 = self.parse_ellipsis_opt();
         let token = self.peek_token();
-        let type_specifier = match token.kind() {
+        let (pre_ellipsis, type_specifier, ellipsis) = match token.kind() {
             TokenKind::Variable | TokenKind::DotDotDot => {
                 let pos = self.pos();
-                self.sc_mut().make_missing(pos)
+                (
+                    self.sc_mut().make_missing(pos),
+                    self.sc_mut().make_missing(pos),
+                    ellipsis1,
+                )
             }
             _ => {
-                self.parse_type_specifier(/* allow_var = */ false, /* allow_attr */ false)
+                let ts = if ellipsis1.is_missing() {
+                    self.parse_type_specifier(
+                        /* allow_var = */ false, /* allow_attr */ false,
+                    )
+                } else {
+                    self.parse_type_specifier_opt(
+                        /* allow_var = */ false, /* allow_attr */ false,
+                    )
+                };
+                if ts.is_missing() && !ellipsis1.is_missing() {
+                    let pos = self.pos();
+                    (self.sc_mut().make_missing(pos), ts, ellipsis1)
+                } else {
+                    let ellipsis2 = self.parse_ellipsis_opt();
+                    (ellipsis1, ts, ellipsis2)
+                }
             }
         };
-        let ellipsis = self.parse_ellipsis_opt();
         let name = self.require_variable();
         let default = self.parse_simple_initializer_opt();
         let parameter_end = self.pos();
@@ -1681,6 +1706,7 @@ where
             optional,
             callconv,
             readonly,
+            pre_ellipsis,
             type_specifier,
             ellipsis,
             name,
@@ -1843,7 +1869,7 @@ where
 
     fn parse_where_constraint_list_item(&mut self) -> Option<S::Output> {
         match self.peek_token_kind() {
-            TokenKind::Semicolon | TokenKind::LeftBrace => None,
+            TokenKind::Semicolon | TokenKind::LeftBrace | TokenKind::Bar => None,
             _ => {
                 let where_constraint = self.parse_where_constraint();
                 let comma = self.optional_token(TokenKind::Comma);
@@ -2441,7 +2467,8 @@ where
                         let pos = this.pos();
                         this.sc_mut().make_missing(pos)
                     } else {
-                        this.sc_mut().make_case_type_variant(bar, typ)
+                        let where_clause = this.parse_where_clause_opt();
+                        this.sc_mut().make_case_type_variant(bar, typ, where_clause)
                     }
                 },
                 TokenKind::Semicolon,

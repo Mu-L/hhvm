@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<e3fcd186585378e72d97aba80e30c25f>>
+// @generated SignedSource<<918b60cd8c49eefa45db8a2647a0d896>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -198,7 +198,7 @@ pub enum CstrVariance {
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving hash")]
+#[rust_to_ocaml(attr = "deriving (eq, hash)")]
 #[repr(u8)]
 pub enum FieldKind {
     Absent,
@@ -272,6 +272,8 @@ pub enum PrjSymm {
     PrjSymmFnParamInout(isize, isize, VarianceDir),
     #[rust_to_ocaml(name = "Prj_symm_fn_ret")]
     PrjSymmFnRet,
+    #[rust_to_ocaml(name = "Prj_symm_supportdyn")]
+    PrjSymmSupportdyn,
 }
 
 /// Asymmetric projections are those in which the same decomposition is applied
@@ -304,39 +306,14 @@ pub enum PrjAsymm {
     PrjAsymmNeg,
     #[rust_to_ocaml(name = "Prj_asymm_nullable")]
     PrjAsymmNullable,
+    #[rust_to_ocaml(name = "Prj_asymm_arraykey")]
+    PrjAsymmArraykey,
+    #[rust_to_ocaml(name = "Prj_asymm_num")]
+    PrjAsymmNum,
 }
 impl TrivialDrop for PrjAsymm {}
 arena_deserializer::impl_deserialize_in_arena!(PrjAsymm);
 
-/// For asymmetric projections we need to track which of the sub- or supertype
-/// was decomposed
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    Eq,
-    EqModuloPos,
-    FromOcamlRep,
-    FromOcamlRepIn,
-    Hash,
-    NoPosHash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    ToOcamlRep
-)]
-#[rust_to_ocaml(attr = "deriving hash")]
-#[repr(u8)]
-pub enum Side {
-    Sub,
-    Super,
-}
-impl TrivialDrop for Side {}
-arena_deserializer::impl_deserialize_in_arena!(Side);
-
-/// Top-level projections
 #[derive(
     Clone,
     Debug,
@@ -354,61 +331,27 @@ arena_deserializer::impl_deserialize_in_arena!(Side);
 )]
 #[rust_to_ocaml(attr = "deriving hash")]
 #[repr(C, u8)]
-pub enum Prj {
-    Symm(PrjSymm),
-    Asymm(Side, PrjAsymm),
-}
-
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    Eq,
-    EqModuloPos,
-    FromOcamlRep,
-    FromOcamlRepIn,
-    Hash,
-    NoPosHash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    ToOcamlRep
-)]
-#[rust_to_ocaml(attr = "deriving (hash, show)")]
-#[repr(u8)]
 pub enum FlowKind {
     #[rust_to_ocaml(name = "Flow_assign")]
     FlowAssign,
+    #[rust_to_ocaml(name = "Flow_call")]
+    FlowCall,
+    #[rust_to_ocaml(name = "Flow_prop_access")]
+    FlowPropAccess,
     #[rust_to_ocaml(name = "Flow_local")]
     FlowLocal,
-    #[rust_to_ocaml(name = "Flow_solved")]
-    FlowSolved,
-    #[rust_to_ocaml(name = "Flow_subtype")]
-    FlowSubtype,
-    #[rust_to_ocaml(name = "Flow_subtype_toplevel")]
-    FlowSubtypeToplevel,
-    #[rust_to_ocaml(name = "Flow_prj")]
-    FlowPrj,
-    #[rust_to_ocaml(name = "Flow_extends")]
-    FlowExtends,
-    #[rust_to_ocaml(name = "Flow_transitive")]
-    FlowTransitive,
     #[rust_to_ocaml(name = "Flow_fun_return")]
     FlowFunReturn,
     #[rust_to_ocaml(name = "Flow_param_hint")]
     FlowParamHint,
     #[rust_to_ocaml(name = "Flow_return_expr")]
     FlowReturnExpr,
-    #[rust_to_ocaml(name = "Flow_upper_bound")]
-    FlowUpperBound,
-    #[rust_to_ocaml(name = "Flow_lower_bound")]
-    FlowLowerBound,
+    #[rust_to_ocaml(name = "Flow_instantiate")]
+    FlowInstantiate(String),
 }
-impl TrivialDrop for FlowKind {}
-arena_deserializer::impl_deserialize_in_arena!(FlowKind);
 
+/// Witness the reason for a type during typing using the position of a hint or
+/// expression
 #[derive(
     Clone,
     Debug,
@@ -498,11 +441,11 @@ pub enum WitnessLocl {
     UnsetField(pos::Pos, String),
     Regex(pos::Pos),
     #[rust_to_ocaml(name = "Type_variable")]
-    TypeVariable(pos::Pos),
+    TypeVariable(pos::Pos, isize),
     #[rust_to_ocaml(name = "Type_variable_generics")]
-    TypeVariableGenerics(pos::Pos, String, String),
+    TypeVariableGenerics(pos::Pos, String, String, isize),
     #[rust_to_ocaml(name = "Type_variable_error")]
-    TypeVariableError(pos::Pos),
+    TypeVariableError(pos::Pos, isize),
     Shape(pos::Pos, String),
     #[rust_to_ocaml(name = "Shape_literal")]
     ShapeLiteral(pos::Pos),
@@ -523,8 +466,11 @@ pub enum WitnessLocl {
     #[rust_to_ocaml(name = "Unsafe_cast")]
     UnsafeCast(pos::Pos),
     Pattern(pos::Pos),
+    #[rust_to_ocaml(name = "Join_point")]
+    JoinPoint(pos::Pos),
 }
 
+/// Witness the reason for a type during decling using the position of a hint
 #[derive(
     Clone,
     Debug,
@@ -552,6 +498,8 @@ pub enum WitnessDecl {
     ClassClass(pos_or_decl::PosOrDecl, String),
     #[rust_to_ocaml(name = "Var_param_from_decl")]
     VarParamFromDecl(pos_or_decl::PosOrDecl),
+    #[rust_to_ocaml(name = "Tuple_from_splat")]
+    TupleFromSplat(pos_or_decl::PosOrDecl),
     #[rust_to_ocaml(name = "Vec_or_dict_key")]
     VecOrDictKey(pos_or_decl::PosOrDecl),
     #[rust_to_ocaml(name = "Ret_fun_kind_from_decl")]
@@ -593,6 +541,38 @@ pub enum WitnessDecl {
     PessimisedThis(pos_or_decl::PosOrDecl),
 }
 
+/// Axioms are information about types provided by the user in class or type
+/// parameter declarations. We make use of this information during subtype
+/// constraint simplification
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(attr = "deriving hash")]
+#[repr(u8)]
+pub enum Axiom {
+    Extends,
+    #[rust_to_ocaml(name = "Upper_bound")]
+    UpperBound,
+    #[rust_to_ocaml(name = "Lower_bound")]
+    LowerBound,
+}
+impl TrivialDrop for Axiom {}
+arena_deserializer::impl_deserialize_in_arena!(Axiom);
+
 /// The reason why something is expected to have a certain type
 #[derive(
     Clone,
@@ -612,17 +592,66 @@ pub enum WitnessDecl {
 #[rust_to_ocaml(attr = "deriving hash")]
 #[repr(C, u8)]
 pub enum T_ {
+    /// Lift a decl-time witness into a reason
     #[rust_to_ocaml(name = "From_witness_decl")]
     FromWitnessDecl(WitnessDecl),
     Instantiate(Box<T_>, String, Box<T_>),
     #[rust_to_ocaml(name = "No_reason")]
     NoReason,
+    /// Lift a typing-time witness into a reason
     #[rust_to_ocaml(name = "From_witness_locl")]
     FromWitnessLocl(WitnessLocl),
-    Flow(Box<T_>, FlowKind, Box<T_>),
-    Prj(Prj, Box<T_>),
-    Rev(Box<T_>),
+    /// Records that a type with reason [bound] acted as a lower bound
+    /// for the type with reason [of_]
+    #[rust_to_ocaml(name = "Lower_bound")]
+    LowerBound {
+        bound: Box<T_>,
+        of__: Box<T_>,
+    },
+    /// Records the flow of a type from an expression or hint into an
+    /// expression during typing
+    Flow {
+        from: Box<T_>,
+        kind: FlowKind,
+        into: Box<T_>,
+    },
+    /// Represents the projection of the sub- and supertype during subtype
+    /// constraints simplifiction. [sub_prj] is the subtype resulting from the
+    /// projection whilst [sub] and [super] and the reasons for the parent
+    /// types
+    #[rust_to_ocaml(name = "Prj_both")]
+    PrjBoth {
+        sub_prj: Box<T_>,
+        prj: PrjSymm,
+        sub: Box<T_>,
+        super_: Box<T_>,
+    },
+    /// Represents the projection of the sub- or supertype during subtype
+    /// constraints simplifiction. [part] is the sub/supertype resulting from
+    /// the projection whilst [whole] is the reason for the parent type.
+    #[rust_to_ocaml(name = "Prj_one")]
+    PrjOne {
+        part: Box<T_>,
+        whole: Box<T_>,
+        prj: PrjAsymm,
+    },
+    /// Represents the use of a user-defined axiom about either the
+    /// subtype or supertype during subtype constraints simplifiction.
+    /// [next] is the sub/supertype resulting from the application of the
+    /// axiom whilst [prev] is reason for original type.
+    Axiom {
+        next: Box<T_>,
+        prev: Box<T_>,
+        axiom: Axiom,
+    },
+    /// Records the definition site of type alongside the reason recording its
+    /// use.
     Def(pos_or_decl::PosOrDecl, Box<T_>),
+    Solved {
+        solution: Box<T_>,
+        of__: isize,
+        in__: Box<T_>,
+    },
     Invalid,
     #[rust_to_ocaml(name = "Missing_field")]
     MissingField,
@@ -664,31 +693,6 @@ pub enum T_ {
     #[rust_to_ocaml(name = "Opaque_type_from_module")]
     OpaqueTypeFromModule(pos_or_decl::PosOrDecl, String, Box<T_>),
 }
-
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    Deserialize,
-    Eq,
-    EqModuloPos,
-    FromOcamlRep,
-    FromOcamlRepIn,
-    Hash,
-    NoPosHash,
-    Ord,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    ToOcamlRep
-)]
-#[repr(u8)]
-pub enum Direction {
-    Fwd,
-    Bwd,
-}
-impl TrivialDrop for Direction {}
-arena_deserializer::impl_deserialize_in_arena!(Direction);
 
 pub type Reason = T_;
 

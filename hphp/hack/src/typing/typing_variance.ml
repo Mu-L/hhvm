@@ -51,6 +51,9 @@ type position_descr =
   | Rwhere_as
   | Rwhere_super
   | Rwhere_eq
+  | Rcase_type_where_as
+  | Rcase_type_where_super
+  | Rcase_type_where_eq
   | Rfun_inout_parameter
 
 type position_variance =
@@ -152,6 +155,12 @@ let reason_to_string ~sign (_, descr, variance) =
   | Rwhere_eq -> "`where _ = _` constraints are invariant on the left and right"
   | Rwhere_super ->
     "`where _ super _` constraints are contravariant on the left, covariant on the right"
+  | Rcase_type_where_as ->
+    "`case type where _ as _` constraints are covariant on the left, contravariant on the right"
+  | Rcase_type_where_eq ->
+    "`case type where _ = _` constraints are invariant on the left and right"
+  | Rcase_type_where_super ->
+    "`case type where _ super _` constraints are contravariant on the left, covariant on the right"
   | Rfun_inout_parameter ->
     "Inout/ref function parameters are both covariant and contravariant"
   | Rrefinement_eq -> "exact refinements are invariant"
@@ -347,10 +356,12 @@ and get_typarams ~tracked tenv (ty : decl_ty) =
   | Trefinement (ty, rs) ->
     SMap.fold
       (fun _ { rc_bound; _ } acc ->
+        union acc
+        @@
         match rc_bound with
         | TRexact bnd ->
           let tp = get_typarams bnd in
-          union acc @@ union (flip tp) tp
+          union (flip tp) tp
         | TRloose bnds ->
           (* Lower bounds on type members are contravariant
            * while upper bounds are covariant. Interestingly,
@@ -366,9 +377,14 @@ and get_typarams ~tracked tenv (ty : decl_ty) =
       rs.cr_consts
       (get_typarams ty)
   | Tunion tyl
-  | Tintersection tyl
-  | Ttuple tyl ->
+  | Tintersection tyl ->
     get_typarams_list tyl
+  | Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } } ->
+    union
+      (get_typarams_list t_optional)
+      (union (get_typarams_list t_required) (get_typarams t_variadic))
+  | Ttuple { t_required; t_extra = Tsplat t_splat } ->
+    union (get_typarams_list t_required) (get_typarams t_splat)
   | Tshape { s_fields = m; _ } ->
     TShapeMap.fold
       (fun _ { sft_ty; _ } res -> get_typarams_union res sft_ty)
@@ -531,18 +547,6 @@ and get_typarams ~tracked tenv (ty : decl_ty) =
       get_class_variance tenv (Positioned.unsafe_to_raw_positioned pos_name)
     in
     get_typarams_variance_list empty variancel tyl
-  | Tnewtype (name, tyl, _) ->
-    let variancel =
-      let tparams =
-        match Typing_env.get_typedef tenv name with
-        | Decl_entry.Found { td_tparams; _ } -> td_tparams
-        | Decl_entry.DoesNotExist
-        | Decl_entry.NotYetAvailable ->
-          []
-      in
-      List.map tparams ~f:make_decl_tparam_variance
-    in
-    get_typarams_variance_list empty variancel tyl
   | Tvec_or_dict (ty1, ty2) -> union (get_typarams ty1) (get_typarams ty2)
 
 let get_positive_negative_generics ~tracked ~is_mutable env acc ty =
@@ -658,9 +662,17 @@ let rec hint : Env.t -> variance -> Aast_defs.hint -> unit =
   | Haccess (h, _) ->
     hint env variance h
   | Hunion tyl
-  | Hintersection tyl
-  | Htuple tyl ->
+  | Hintersection tyl ->
     hint_list env variance tyl
+  | Htuple { tup_required; tup_extra } ->
+    hint_list env variance tup_required;
+    begin
+      match tup_extra with
+      | Hextra { tup_optional; tup_variadic } ->
+        hint_list env variance tup_optional;
+        Option.iter tup_variadic ~f:(hint env variance)
+      | Hsplat tup_splat -> hint env variance tup_splat
+    end
   | Hshape { nsi_allows_unknown_fields = _; nsi_field_map } ->
     List.iter
       nsi_field_map
@@ -763,6 +775,7 @@ let fun_param : Env.t -> variance -> Nast.fun_param -> unit =
     param_annotation = _;
     param_info = _;
     param_readonly = _;
+    param_splat;
     param_callconv;
     param_user_attributes = _;
     param_visibility = _;
@@ -781,6 +794,7 @@ let fun_param : Env.t -> variance -> Nast.fun_param -> unit =
                 hfparam_kind = param_callconv;
                 hfparam_readonlyness = None;
                 hfparam_optional = None;
+                hfparam_splat = param_splat;
               }))
 
 let fun_where_constraint : Env.t -> Aast.where_constraint_hint -> unit =
@@ -990,6 +1004,7 @@ let props_from_constructors : Nast.method_ list -> Nast.class_var list =
                param_annotation = ();
                param_readonly;
                param_info = _;
+               param_splat = _;
                param_callconv = _;
                param_user_attributes;
                param_visibility;
@@ -1066,6 +1081,34 @@ let class_def : Typing_env_types.env -> Nast.class_ -> unit =
   List.iter c_methods ~f:(class_method env class_);
   ()
 
+(* in case type where clauses:
+   `as` constraints are contravariant on the left and covariant on the right
+   `super` constraints are covariant on the left and contravariant on the right
+*)
+let case_type_where_constraint : Env.t -> Aast.where_constraint_hint -> unit =
+ fun env (h1, ck, h2) ->
+  let pos1 = Ast_defs.get_pos h1 in
+  let pos2 = Ast_defs.get_pos h2 in
+  match ck with
+  | Ast_defs.Constraint_super ->
+    let var1 = Vcovariant [(pos1, Rcase_type_where_super, Pcovariant)] in
+    let var2 =
+      Vcontravariant [(pos2, Rcase_type_where_super, Pcontravariant)]
+    in
+    hint env var1 h1;
+    hint env var2 h2
+  | Ast_defs.Constraint_eq ->
+    let reason1 = [(pos1, Rcase_type_where_eq, Pinvariant)] in
+    let reason2 = [(pos2, Rcase_type_where_eq, Pinvariant)] in
+    let var = Vinvariant (reason1, reason2) in
+    hint env var h1;
+    hint env var h2
+  | Ast_defs.Constraint_as ->
+    let var1 = Vcontravariant [(pos1, Rcase_type_where_as, Pcontravariant)] in
+    let var2 = Vcovariant [(pos2, Rcase_type_where_as, Pcovariant)] in
+    hint env var1 h1;
+    hint env var2 h2
+
 (*****************************************************************************)
 (* The entry point (for typedefs). *)
 (*****************************************************************************)
@@ -1073,14 +1116,14 @@ let typedef : Typing_env_types.env -> Nast.typedef -> unit =
  fun env typedef ->
   let {
     Aast.t_tparams;
-    t_kind;
+    t_assignment;
+    t_runtime_type = _;
     t_annotation = _;
     t_name = _;
     t_as_constraint = _;
     t_super_constraint = _;
     t_user_attributes = _;
     t_mode = _;
-    t_vis = _;
     t_namespace = _;
     t_span = _;
     t_emit_id = _;
@@ -1093,6 +1136,17 @@ let typedef : Typing_env_types.env -> Nast.typedef -> unit =
   } =
     typedef
   in
+  let (hints, where_constraints) =
+    match t_assignment with
+    | Aast.SimpleTypeDef { Aast.tvh_vis = _; Aast.tvh_hint } -> ([tvh_hint], [])
+    | Aast.CaseType (variant, variants) ->
+      let variants = variant :: variants in
+      let hints = List.map variants ~f:(fun v -> v.Aast.tctv_hint) in
+      let where_constraints =
+        List.map variants ~f:(fun v -> v.Aast.tctv_where_constraints)
+      in
+      (hints, List.concat where_constraints)
+  in
   let env =
     {
       Env.tpenv =
@@ -1102,5 +1156,9 @@ let typedef : Typing_env_types.env -> Nast.typedef -> unit =
       env;
     }
   in
-  let reason_covariant = [(Ast_defs.get_pos t_kind, Rtypedef, Pcovariant)] in
-  hint env (Vcovariant reason_covariant) t_kind
+  List.iter hints ~f:(fun t_kind ->
+      let reason_covariant =
+        [(Ast_defs.get_pos t_kind, Rtypedef, Pcovariant)]
+      in
+      hint env (Vcovariant reason_covariant) t_kind);
+  List.iter where_constraints ~f:(case_type_where_constraint env)

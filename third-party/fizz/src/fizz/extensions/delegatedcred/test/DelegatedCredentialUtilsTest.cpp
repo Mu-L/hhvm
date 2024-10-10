@@ -8,6 +8,7 @@
 
 #include <folly/portability/GMock.h>
 #include <folly/portability/GTest.h>
+#include <folly/ssl/OpenSSLCertUtils.h>
 #include <folly/ssl/OpenSSLPtrTypes.h>
 
 #include <fizz/crypto/Utils.h>
@@ -155,6 +156,27 @@ TEST_F(DelegatedCredentialUtilsTest, TestCredentialWrongKeyUsage) {
       "cert lacks digital signature key usage");
 }
 
+TEST_F(DelegatedCredentialUtilsTest, TestGetCredentialExpiresTime) {
+  auto cert = fizz::test::getCert(kCert);
+  uint32_t secondsSinceEpoch = 1000000;
+  auto notBeforeTime = std::chrono::system_clock::to_time_t(
+      std::chrono::system_clock::time_point(
+          std::chrono::seconds(secondsSinceEpoch)));
+  folly::ssl::ASN1TimeUniquePtr notBeforeTimeASN1(
+      ASN1_TIME_set(nullptr, notBeforeTime));
+  X509_set1_notBefore(cert.get(), notBeforeTimeASN1.get());
+
+  auto credential = getCredential();
+  credential.valid_time = 234567;
+
+  auto credentialExpiresTime =
+      DelegatedCredentialUtils::getCredentialExpiresTime(cert, credential);
+  EXPECT_EQ(
+      credentialExpiresTime,
+      std::chrono::system_clock::time_point(
+          std::chrono::seconds(secondsSinceEpoch + credential.valid_time)));
+}
+
 TEST_F(DelegatedCredentialUtilsTest, TestCertExpiredCredential) {
   auto credential = getCredential();
   // Make it expire immediately after cert is valid
@@ -177,6 +199,32 @@ TEST_F(DelegatedCredentialUtilsTest, TestCredentialValidForTooLong) {
             fizz::test::getCert(kCert), credential, clock_);
       },
       "credential validity is longer than a week from now");
+}
+
+TEST_F(DelegatedCredentialUtilsTest, TestCertNotAfter) {
+  auto cert = fizz::test::getCert(kCert);
+
+  auto notBefore = X509_get0_notBefore(cert.get());
+  auto notBeforeTime =
+      folly::ssl::OpenSSLCertUtils::asnTimeToTimepoint(notBefore);
+  auto notAfterTime = clock_->getCurrentTime() + std::chrono::days(1);
+  auto notAfterTimeT = std::chrono::system_clock::to_time_t(notAfterTime);
+  folly::ssl::ASN1TimeUniquePtr notAfterTimeASN1(
+      ASN1_TIME_set(nullptr, notAfterTimeT));
+  X509_set1_notAfter(cert.get(), notAfterTimeASN1.get());
+
+  auto credentialExpiryTime = notAfterTime + std::chrono::seconds(1);
+  auto credentialValidTime = std::chrono::duration_cast<std::chrono::seconds>(
+      credentialExpiryTime - notBeforeTime);
+
+  auto credential = getCredential();
+  credential.valid_time = credentialValidTime.count();
+  expectThrows(
+      [&]() {
+        DelegatedCredentialUtils::checkCredentialTimeValidity(
+            cert, credential, clock_);
+      },
+      "credential validity is longer than parent cert validity");
 }
 } // namespace test
 } // namespace extensions

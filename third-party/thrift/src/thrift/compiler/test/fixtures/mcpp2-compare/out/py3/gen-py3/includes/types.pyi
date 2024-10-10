@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class AnEnum(thrift.py3.types.Enum):
@@ -32,7 +28,7 @@ class AStruct(thrift.py3.types.Struct, _typing.Hashable):
         FieldA: bool
         pass
 
-    FieldA: Final[int] = ...
+    FieldA: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -41,7 +37,7 @@ class AStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        FieldA: _typing.Union[int, '__NotSet', None]=NOTSET
+        FieldA: _typing.Union[int, None]=None
     ) -> AStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['AStruct'], bytes]]: ...
@@ -61,7 +57,7 @@ class AStructB(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
 
-    FieldA: Final[_typing.Optional[AStruct]] = ...
+    FieldA: _typing.Final[_typing.Optional[AStruct]] = ...
 
     def __init__(
         self, *,
@@ -70,7 +66,7 @@ class AStructB(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        FieldA: _typing.Union[AStruct, '__NotSet', None]=NOTSET
+        FieldA: _typing.Union[AStruct, None]=None
     ) -> AStructB: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['AStructB'], bytes]]: ...

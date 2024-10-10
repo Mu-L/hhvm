@@ -57,7 +57,7 @@ type pos_byte_string = (Pos_or_decl.t[@hash.ignore]) * t_byte_string
 [@@deriving eq, hash, ord, show]
 
 type tshape_field_name =
-  | TSFlit_int of pos_string
+  | TSFregex_group of pos_string
   | TSFlit_str of pos_byte_string
   | TSFclass_const of pos_id * pos_string
 [@@deriving eq, hash, ord, show]
@@ -66,22 +66,24 @@ module TShapeField = struct
   type t = tshape_field_name [@@deriving hash, show { with_path = false }]
 
   let pos : t -> Pos_or_decl.t = function
-    | TSFlit_int (p, _)
+    | TSFregex_group (p, _)
     | TSFlit_str (p, _) ->
       p
     | TSFclass_const ((cls_pos, _), (mem_pos, _)) ->
       Pos_or_decl.btw cls_pos mem_pos
 
   let name = function
-    | TSFlit_int (_, s)
+    | TSFregex_group (_, s)
     | TSFlit_str (_, s) ->
       s
     | TSFclass_const ((_, s1), (_, s2)) -> s1 ^ "::" ^ s2
 
   let of_ast : (Pos.t -> Pos_or_decl.t) -> Ast_defs.shape_field_name -> t =
    fun convert_pos -> function
-    | Ast_defs.SFlit_int (p, s) -> TSFlit_int (convert_pos p, s)
+    | Ast_defs.SFregex_group (p, s) -> TSFregex_group (convert_pos p, s)
     | Ast_defs.SFlit_str (p, s) -> TSFlit_str (convert_pos p, s)
+    | Ast_defs.SFclassname (p, cls) ->
+      TSFclass_const ((convert_pos p, cls), (convert_pos p, "class"))
     | Ast_defs.SFclass_const ((pcls, cls), (pconst, const)) ->
       TSFclass_const ((convert_pos pcls, cls), (convert_pos pconst, const))
 
@@ -91,7 +93,7 @@ module TShapeField = struct
    * we have to write our own compare. *)
   let compare x y =
     match (x, y) with
-    | (TSFlit_int (_, s1), TSFlit_int (_, s2)) -> String.compare s1 s2
+    | (TSFregex_group (_, s1), TSFregex_group (_, s2)) -> String.compare s1 s2
     | (TSFlit_str (_, s1), TSFlit_str (_, s2)) -> String.compare s1 s2
     | (TSFclass_const ((_, s1), (_, s1')), TSFclass_const ((_, s2), (_, s2')))
       ->
@@ -100,8 +102,8 @@ module TShapeField = struct
         ~cmp2:String.compare
         (s1, s1')
         (s2, s2')
-    | (TSFlit_int _, _) -> -1
-    | (TSFlit_str _, TSFlit_int _) -> 1
+    | (TSFregex_group _, _) -> -1
+    | (TSFlit_str _, TSFregex_group _) -> 1
     | (TSFlit_str _, _) -> -1
     | (TSFclass_const _, _) -> 1
 
@@ -230,22 +232,46 @@ type 'ty fun_type = {
 }
 [@@deriving eq, hash, show { with_path = false }]
 
-type type_predicate =
-  | IsBool
-  | IsInt
-  | IsString
-  | IsArraykey
-  | IsFloat
-  | IsNum
-  | IsResource
-  | IsNull
-  | IsTupleOf of type_predicate list
+type type_tag =
+  | BoolTag
+  | IntTag
+  | StringTag
+  | ArraykeyTag
+  | FloatTag
+  | NumTag
+  | ResourceTag
+  | NullTag
+  | ClassTag of Ast_defs.id_
 [@@deriving eq, ord, hash, show { with_path = false }]
 
-type neg_type =
-  | Neg_class of pos_id
-  | Neg_predicate of type_predicate
-[@@deriving hash, show { with_path = false }]
+type shape_field_predicate = {
+  (* T196048813 *)
+  (* sfp_optional: bool; *)
+  sfp_predicate: type_predicate;
+}
+
+and shape_predicate = {
+  (* T196048813 *)
+  (* sp_allows_unknown_fields: bool; *)
+  sp_fields: shape_field_predicate TShapeMap.t;
+}
+
+(* TODO optional and variadic components T201398626 T201398652 *)
+and tuple_predicate = { tp_required: type_predicate list }
+
+and type_predicate_ =
+  | IsTag of type_tag
+  | IsTupleOf of tuple_predicate
+  | IsShapeOf of shape_predicate
+
+and type_predicate =
+  (Reason.t
+  [@hash.ignore]
+  [@equal (fun _ _ -> true)]
+  [@compare (fun _ _ -> 0)]
+  [@printer (fun _ _ -> ())])
+  * type_predicate_
+[@@deriving eq, ord, hash, show { with_path = false }]
 
 (* This is to avoid a compile error with ppx_hash "Unbound value _hash_fold_phase". *)
 let _hash_fold_phase hsv _ = hsv
@@ -334,8 +360,8 @@ and _ ty_ =
   | Tfun : 'phase ty fun_type -> 'phase ty_
       (** A wrapper around fun_type, which contains the full type information for a
        * function, method, lambda, etc. *)
-  | Ttuple : 'phase ty list -> 'phase ty_
-      (** Tuple, with ordered list of the types of the elements of the tuple. *)
+  | Ttuple : 'phase tuple_type -> 'phase ty_
+      (** A wrapper around tuple_type, which contains information about tuple elements *)
   | Tshape : 'phase shape_type -> 'phase ty_
   | Tgeneric : string * 'phase ty list -> 'phase ty_
       (** The type of a generic parameter. The constraints on a generic parameter
@@ -358,32 +384,32 @@ and _ ty_ =
       (** Tvec_or_dict (ty1, ty2) => "vec_or_dict<ty1, ty2>" *)
   | Taccess : 'phase taccess_type -> 'phase ty_
       (** Name of class, name of type const, remaining names of type consts *)
-  | Tnewtype : string * 'phase ty list * 'phase ty -> 'phase ty_
-      (** The type of an opaque type or enum. Outside their defining files or
-       * when they represent enums, they are "opaque", which means that they
-       * only unify with themselves. Within a file, uses of newtypes are
-       * expanded to their definitions (unless the newtype is an enum).
-       *
-       * However, it is possible to have a constraint that allows us to relax
-       * opaqueness. For example:
-       *
-       *   newtype MyType as int = ...
-       *
-       * or
-       *
-       *   enum MyType: int as int { ... }
-       *
-       * Outside of the file where the type was defined, this translates to:
-       *
-       *   Tnewtype ((pos, "MyType"), [], Tprim Tint)
-       *
-       * which means that MyType is abstract, but is a subtype of int as well.
-       * When the constraint is omitted, the third parameter is set to mixed.
-       *
-       * The second parameter is the list of type arguments to the type.
-       *)
   (*========== Below Are Types That Cannot Be Declared In User Code ==========*)
   | Tvar : Tvid.t -> locl_phase ty_
+  | Tnewtype : string * locl_phase ty list * locl_phase ty -> locl_phase ty_
+      (** The type of an opaque type or enum. Outside their defining files or
+        when they represent enums, they are "opaque", which means that they
+        only unify with themselves. Within a file, uses of newtypes are
+        expanded to their definitions (unless the newtype is an enum).
+
+        However, it is possible to have a constraint that allows us to relax
+        opaqueness. For example:
+
+          newtype MyType as int = ...
+
+        or
+
+          enum MyType: int as int { ... }
+
+        Outside of the file where the type was defined, this translates to:
+
+          Tnewtype ((pos, "MyType"), [], Tprim Tint)
+
+        which means that MyType is abstract, but is a subtype of int as well.
+        When the constraint is omitted, the third parameter is set to mixed.
+
+        The second parameter is the list of type arguments to the type.
+       *)
   | Tunapplied_alias : string -> locl_phase ty_
       (** This represents a type alias that lacks necessary type arguments. Given
            type Foo<T1,T2> = ...
@@ -399,8 +425,8 @@ and _ ty_ =
        * If exact=Exact, then this represents instances of *exactly* this class
        * If exact=Nonexact, this also includes subclasses
        *)
-  | Tneg : neg_type -> locl_phase ty_
-      (** The negation of the type in neg_type *)
+  | Tneg : type_predicate -> locl_phase ty_
+      (** The negation of the [type_predicate] *)
   | Tlabel : string -> locl_phase ty_
       (** The type of the label expression #ID *)
 
@@ -440,6 +466,31 @@ and 'phase shape_type = {
   s_unknown_value: 'phase ty;
   s_fields: 'phase shape_field_type TShapeMap.t;
 }
+[@@deriving hash]
+
+(**
+  Required and extra components of a tuple. Extra components
+  are either optional + variadic, or a type splat.
+  Exmaple 1:
+    (string,bool,optional float,optional bool,int...)
+  has require components string, bool, optional components float, bool
+  and variadic component int.
+  Example 2:
+    (string,float,...T)
+  has required components string, float, and splat component T.
+*)
+and 'phase tuple_type = {
+  t_required: 'phase ty list;
+  t_extra: 'phase tuple_extra;
+}
+[@@deriving hash]
+
+and 'phase tuple_extra =
+  | Textra of {
+      t_optional: 'phase ty list;
+      t_variadic: 'phase ty;
+    }
+  | Tsplat of 'phase ty
 [@@deriving hash]
 
 let nonexact = Nonexact { cr_consts = SMap.empty }
@@ -496,8 +547,15 @@ module Flags = struct
 
   let get_fp_readonly fp = FunParam.readonly fp.fp_flags
 
+  let get_fp_splat fp = FunParam.splat fp.fp_flags
+
   let make_fp_flags
-      ~mode ~accept_disposable ~has_default ~readonly ~ignore_readonly_error =
+      ~mode
+      ~accept_disposable
+      ~is_optional
+      ~readonly
+      ~ignore_readonly_error
+      ~splat =
     let inout =
       match mode with
       | FPinout -> true
@@ -506,13 +564,14 @@ module Flags = struct
     FunParam.make
       ~inout
       ~accept_disposable
-      ~has_default
+      ~is_optional
       ~readonly
       ~ignore_readonly_error
+      ~splat
 
   let get_fp_accept_disposable fp = FunParam.accept_disposable fp.fp_flags
 
-  let get_fp_has_default fp = FunParam.has_default fp.fp_flags
+  let get_fp_is_optional fp = FunParam.is_optional fp.fp_flags
 
   let get_fp_ignore_readonly_error fp =
     FunParam.ignore_readonly_error fp.fp_flags
@@ -595,7 +654,7 @@ module Pp = struct
       Format.fprintf fmt "@])"
     | Ttuple a0 ->
       Format.fprintf fmt "(@[<2>Ttuple@ ";
-      pp_list pp_ty fmt a0;
+      pp_tuple_type fmt a0;
       Format.fprintf fmt "@])"
     | Tshape a0 ->
       Format.fprintf fmt "(@[<2>Tshape@ ";
@@ -637,7 +696,7 @@ module Pp = struct
       Format.fprintf fmt "@,))@]"
     | Tneg a0 ->
       Format.fprintf fmt "(@[<2>Tneg@ ";
-      pp_neg_type fmt a0;
+      pp_type_predicate fmt a0;
       Format.fprintf fmt "@])"
     | Tlabel a0 ->
       Format.fprintf fmt "(@[<2>Tlabel@ ";
@@ -737,6 +796,36 @@ module Pp = struct
 
     Format.fprintf fmt "@ }@]"
 
+  and pp_tuple_extra : type a. Format.formatter -> a tuple_extra -> unit =
+   fun fmt extra ->
+    match extra with
+    | Textra { t_optional; t_variadic } ->
+      Format.fprintf fmt "@[%s =@ " "t_optional";
+      pp_list pp_ty fmt t_optional;
+      Format.fprintf fmt "@]";
+      Format.fprintf fmt ";@ ";
+
+      Format.fprintf fmt "@[%s =@ " "t_variadic";
+      pp_ty fmt t_variadic;
+      Format.fprintf fmt "@]"
+    | Tsplat t_splat ->
+      Format.fprintf fmt "@[%s =@ " "t_splat";
+      pp_ty fmt t_splat;
+      Format.fprintf fmt "@]"
+
+  and pp_tuple_type : type a. Format.formatter -> a tuple_type -> unit =
+   fun fmt { t_required; t_extra } ->
+    Format.fprintf fmt "@[<2>{ ";
+
+    Format.fprintf fmt "@[%s =@ " "t_required";
+    pp_list pp_ty fmt t_required;
+    Format.fprintf fmt "@]";
+    Format.fprintf fmt ";@ ";
+
+    pp_tuple_extra fmt t_extra;
+
+    Format.fprintf fmt "@ }@]"
+
   let pp_decl_ty : Format.formatter -> decl_ty -> unit =
    (fun fmt ty -> pp_ty fmt ty)
 
@@ -751,16 +840,6 @@ module Pp = struct
 end
 
 include Pp
-
-(** Compare two neg_type, ignoring any position information. *)
-let neg_type_compare (neg1 : neg_type) neg2 =
-  match (neg1, neg2) with
-  | (Neg_class c1, Neg_class c2) ->
-    (* We ignore positions here *)
-    String.compare (snd c1) (snd c2)
-  | (Neg_predicate p1, Neg_predicate p2) -> compare_type_predicate p1 p2
-  | (Neg_predicate _, Neg_class _) -> -1
-  | (Neg_class _, Neg_predicate _) -> 1
 
 (* Constructor and deconstructor functions for types and constraint types.
  * Abstracting these lets us change the implementation, e.g. hash cons
@@ -855,9 +934,9 @@ let rec ty__compare : type a. ?normalize_lists:bool -> a ty_ -> a ty_ -> int =
     end
     | (Tfun fty, Tfun fty2) -> tfun_compare fty fty2
     | (Tunion tyl1, Tunion tyl2)
-    | (Tintersection tyl1, Tintersection tyl2)
-    | (Ttuple tyl1, Ttuple tyl2) ->
+    | (Tintersection tyl1, Tintersection tyl2) ->
       tyl_compare ~sort:normalize_lists ~normalize_lists tyl1 tyl2
+    | (Ttuple t1, Ttuple t2) -> tuple_type_compare t1 t2
     | (Tgeneric (n1, args1), Tgeneric (n2, args2)) -> begin
       match String.compare n1 n2 with
       | 0 -> tyl_compare ~sort:false ~normalize_lists args1 args2
@@ -894,7 +973,7 @@ let rec ty__compare : type a. ?normalize_lists:bool -> a ty_ -> a ty_ -> int =
       | 0 -> String.compare (snd id1) (snd id2)
       | n -> n
     end
-    | (Tneg neg1, Tneg neg2) -> neg_type_compare neg1 neg2
+    | (Tneg neg1, Tneg neg2) -> compare_type_predicate neg1 neg2
     | (Tnonnull, Tnonnull) -> 0
     | (Tdynamic, Tdynamic) -> 0
     | (Tlabel name1, Tlabel name2) -> String.compare name1 name2
@@ -942,6 +1021,24 @@ let rec ty__compare : type a. ?normalize_lists:bool -> a ty_ -> a ty_ -> int =
           (TShapeMap.elements fields2)
       | n -> n
     end
+  and tuple_extra_compare : type a. a tuple_extra -> a tuple_extra -> int =
+   fun t1 t2 ->
+    match (t1, t2) with
+    | (Textra _, Tsplat _) -> -1
+    | (Tsplat _, Textra _) -> 1
+    | (Tsplat t_splat1, Tsplat t_splat2) -> ty_compare t_splat1 t_splat2
+    | ( Textra { t_optional = t_optional1; t_variadic = t_variadic1 },
+        Textra { t_optional = t_optional2; t_variadic = t_variadic2 } ) ->
+      (match ty_compare t_variadic1 t_variadic2 with
+      | 0 -> List.compare ty_compare t_optional1 t_optional2
+      | n -> n)
+  and tuple_type_compare : type a. a tuple_type -> a tuple_type -> int =
+   fun t1 t2 ->
+    let { t_required = t_required1; t_extra = t_extra1 } = t1 in
+    let { t_required = t_required2; t_extra = t_extra2 } = t2 in
+    match List.compare ty_compare t_required1 t_required2 with
+    | 0 -> tuple_extra_compare t_extra1 t_extra2
+    | n -> n
   and user_attribute_param_compare p1 p2 =
     let dest_user_attribute_param p =
       match p with

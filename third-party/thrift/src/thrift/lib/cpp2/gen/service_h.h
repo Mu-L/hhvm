@@ -20,7 +20,7 @@
 #include <unordered_set>
 
 #include <folly/Portability.h>
-#include <folly/experimental/coro/Task.h>
+#include <folly/coro/Task.h>
 #include <folly/futures/Future.h>
 #include <thrift/lib/cpp/TApplicationException.h>
 #include <thrift/lib/cpp/protocol/TProtocolTypes.h>
@@ -36,10 +36,7 @@ class IOBufQueue;
 
 } // namespace folly
 
-namespace apache {
-namespace thrift {
-namespace detail {
-namespace si {
+namespace apache::thrift::detail::si {
 
 enum class InvocationType {
   AsyncTm,
@@ -51,6 +48,3 @@ enum class InvocationType {
 };
 
 }
-} // namespace detail
-} // namespace thrift
-} // namespace apache

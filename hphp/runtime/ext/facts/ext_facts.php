@@ -114,27 +114,15 @@ function sync(): void;
 <<__Native>>
 function module_to_path(string $module_name)[]: ?string;
 <<__Native>>
-function module_to_path_relative(string $module_name)[]: ?string;
-<<__Native>>
 function type_to_path(string $type_name)[]: ?string;
-<<__Native>>
-function type_to_path_relative(string $type_name)[]: ?string;
 <<__Native>>
 function function_to_path(string $function_name)[]: ?string;
 <<__Native>>
-function function_to_path_relative(string $function_name)[]: ?string;
-<<__Native>>
 function constant_to_path(string $constant_name)[]: ?string;
-<<__Native>>
-function constant_to_path_relative(string $constant_name)[]: ?string;
 <<__Native>>
 function type_alias_to_path(string $type_alias_name)[]: ?string;
 <<__Native>>
-function type_alias_to_path_relative(string $type_alias_name)[]: ?string;
-<<__Native>>
 function type_or_type_alias_to_path(string $type_name)[]: ?string;
-<<__Native>>
-function type_or_type_alias_to_path_relative(string $type_name)[]: ?string;
 
 /**
  * Return all the symbols defined in the given path.
@@ -214,6 +202,18 @@ function subtypes(
   /* classname<T> */ string $base_type,
   /* DeriveFilters */ ?darray<string, dynamic> $filters = null,
 )[]: vec<string>;
+
+/**
+ * Get the transitive types which extend, implement, or use the given base type.
+ *
+ * Throws InvalidOperationException if Facts is not enabled.
+ */
+<<__Native>>
+function transitive_subtypes(
+  /* classname<T> */ string $base_type,
+  /* DeriveFilters */ ?darray<string, dynamic> $filters = null,
+  bool $include_interface_require_extends = false,
+ )[]: vec<string>;
 
 /**
  * Get all types which the given type extends, implements, or uses.

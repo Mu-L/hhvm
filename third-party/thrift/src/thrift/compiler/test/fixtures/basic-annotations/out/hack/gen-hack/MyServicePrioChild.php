@@ -59,11 +59,6 @@ interface MyServicePrioChildClientIf extends MyServicePrioParentClientIf {
 trait MyServicePrioChildClientBase {
   require extends \ThriftClientBase;
 
-}
-
-class MyServicePrioChildAsyncClient extends MyServicePrioParentAsyncClient implements MyServicePrioChildAsyncClientIf {
-  use MyServicePrioChildClientBase;
-
   /**
    * Original thrift definition:-
    * void
@@ -77,36 +72,24 @@ class MyServicePrioChildAsyncClient extends MyServicePrioParentAsyncClient imple
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = MyServicePrioChild_pang_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("MyServicePrioChild", "pang", $args);
-    $currentseqid = $this->sendImplHelper($args, "pang", false);
+    $currentseqid = $this->sendImplHelper($args, "pang", false, "MyServicePrioChild" );
     await $this->genAwaitResponse(MyServicePrioChild_pang_result::class, "pang", true, $currentseqid, $rpc_options);
   }
+
+}
+
+class MyServicePrioChildAsyncClient extends MyServicePrioParentAsyncClient implements MyServicePrioChildAsyncClientIf {
+  use MyServicePrioChildClientBase;
 
 }
 
 class MyServicePrioChildClient extends MyServicePrioParentClient implements MyServicePrioChildClientIf {
   use MyServicePrioChildClientBase;
 
-  /**
-   * Original thrift definition:-
-   * void
-   *   pang();
-   */
-  public async function pang(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = MyServicePrioChild_pang_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("MyServicePrioChild", "pang", $args);
-    $currentseqid = $this->sendImplHelper($args, "pang", false);
-    await $this->genAwaitResponse(MyServicePrioChild_pang_result::class, "pang", true, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_pang(): int {
     $args = MyServicePrioChild_pang_args::withDefaultValues();
-    return $this->sendImplHelper($args, "pang", false);
+    return $this->sendImplHelper($args, "pang", false, "MyServicePrioChild" );
   }
   public function recv_pang(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(MyServicePrioChild_pang_result::class, "pang", true, $expectedsequenceid);

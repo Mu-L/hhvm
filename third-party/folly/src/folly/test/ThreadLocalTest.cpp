@@ -255,6 +255,18 @@ TEST(ThreadLocalPtr, CustomDeleter2) {
   EXPECT_EQ(1010, Widget::totalVal_);
 }
 
+TEST(ThreadLocalPtr, SharedPtr) {
+  ThreadLocalPtr<int> tlp;
+  auto sp = std::make_shared<int>(7);
+  EXPECT_EQ(1, sp.use_count());
+  tlp.reset(sp);
+  EXPECT_EQ(2, sp.use_count());
+  EXPECT_EQ(sp.get(), tlp.get());
+  tlp.reset();
+  EXPECT_EQ(1, sp.use_count());
+  EXPECT_EQ(static_cast<void*>(nullptr), tlp.get());
+}
+
 TEST(ThreadLocal, NotDefaultConstructible) {
   struct Object {
     int value;
@@ -299,6 +311,29 @@ TEST(ThreadLocal, BasicDestructor) {
   ThreadLocal<Widget> w;
   std::thread([&w]() { w->val_ += 10; }).join();
   EXPECT_EQ(10, Widget::totalVal_);
+}
+
+TEST(ThreadLocal, MoveCtorFrom) {
+  int calls = 0;
+  ThreadLocal<int> src{[&] { return ++calls; }};
+  EXPECT_EQ(1, *src);
+  auto dst = static_cast<ThreadLocal<int>&&>(src);
+  EXPECT_THROW(*src, std::bad_function_call);
+  std::thread([&] { EXPECT_THROW(*src, std::bad_function_call); }).join();
+  EXPECT_EQ(1, *dst);
+  std::thread([&] { EXPECT_EQ(2, *dst); }).join();
+}
+
+TEST(ThreadLocal, MoveAssignFrom) {
+  int calls = 0;
+  ThreadLocal<int> src{[&] { return ++calls; }};
+  EXPECT_EQ(1, *src);
+  ThreadLocal<int> dst;
+  dst = static_cast<ThreadLocal<int>&&>(src);
+  EXPECT_THROW(*src, std::bad_function_call);
+  std::thread([&] { EXPECT_THROW(*src, std::bad_function_call); }).join();
+  EXPECT_EQ(1, *dst);
+  std::thread([&] { EXPECT_EQ(2, *dst); }).join();
 }
 
 // this should force a realloc of the ElementWrapper array

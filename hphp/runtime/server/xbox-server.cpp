@@ -115,6 +115,14 @@ static THREAD_LOCAL(XboxRequestHandler, s_xbox_request_handler);
 struct XboxWorker
   : JobQueueWorker<XboxTransport*,Server*,true,false,JobQueueDropVMStack>
 {
+  void abortJob(XboxTransport *job) override {
+    Logger::Warning("Job dropped by JobQueueDispatcher because of timeout in xbox.");    
+    auto const handler = createRequestHandler();
+    handler->abortRequest(job);
+    destroyRequestHandler();
+    job->decRefCount();
+  }
+
   void doJob(XboxTransport *job) override {
     try {
       // If this job or the previous job that ran on this thread have
@@ -161,8 +169,9 @@ private:
 
 ///////////////////////////////////////////////////////////////////////////////
 
-static JobQueueDispatcher<XboxWorker> *s_dispatcher;
 static Mutex s_dispatchMutex;
+static JobQueueDispatcher<XboxWorker> *s_dispatcher;
+static ServiceData::CounterCallback* s_counters;
 
 void XboxServer::Restart() {
   Stop();
@@ -175,7 +184,21 @@ void XboxServer::Restart() {
          Cfg::Xbox::ServerInfoThreadCount,
          Cfg::Server::ThreadDropCacheTimeoutSeconds,
          Cfg::Server::ThreadDropStack,
-         nullptr);
+         nullptr,
+         INT_MAX,
+         Cfg::Xbox::ServerInfoMaxJobQueuingMs);
+      s_counters = new ServiceData::CounterCallback(
+          [](std::map<std::string, int64_t>& counters) {
+            // For the entire duration when the counters are registered, we make
+            // sure `s_dispatcher` is initialized and won't be stopped. See
+            // `XboxServer::Stop()` where we deregister the counters before
+            // destroying `s_counters`.
+            assertx(s_dispatcher);
+            auto const& stats = s_dispatcher->getDispatcherStats();
+            counters["xbox_inflight_requests"] = stats.activeThreads;
+            counters["xbox_queued_requests"] = stats.queuedJobCount;
+          }
+      );
     }
     if (Cfg::Xbox::ServerInfoLogInfo) {
       Logger::Info("xbox server started");
@@ -187,6 +210,8 @@ void XboxServer::Restart() {
 void XboxServer::Stop() {
   if (!s_dispatcher) return;
 
+  delete s_counters;
+  s_counters = nullptr;
   JobQueueDispatcher<XboxWorker>* dispatcher = nullptr;
   {
     Lock l(s_dispatchMutex);
@@ -283,6 +308,7 @@ OptResource XboxServer::TaskStart(const String& msg,
 
       assertx(s_dispatcher);
       s_dispatcher->enqueue(job);
+      g_context->incrXboxTasksStarted();
 
       return OptResource(std::move(task));
     }

@@ -10,6 +10,7 @@
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
 
+
 namespace facebook::ns::qwerty {
 namespace enums_constants {
 
@@ -34,6 +35,8 @@ namespace enums_constants {
   static_cast<::std::int16_t>(2) } } } } } };
   return *instance;
 }
+
+
 
 } // namespace enums_constants
 } // namespace facebook::ns::qwerty

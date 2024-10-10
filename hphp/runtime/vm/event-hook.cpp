@@ -336,7 +336,6 @@ void runUserProfilerOnFunctionEnter(const ActRec* ar, bool isResume) {
     frameinfo
   );
 
-  ImplicitContext::Saver s;
   g_context->invokeFunc(func, params, ctx.this_, ctx.cls,
                         RuntimeCoeffects::defaults(), ctx.dynamic);
 }
@@ -371,7 +370,6 @@ void runUserProfilerOnFunctionExit(const ActRec* ar, const TypedValue* retval,
     frameinfo
   );
 
-  ImplicitContext::Saver s;
   g_context->invokeFunc(func, params, ctx.this_, ctx.cls,
                         RuntimeCoeffects::defaults(), ctx.dynamic);
 }
@@ -407,7 +405,6 @@ static Variant call_intercept_handler(
   par.append(called_on);
   par.append(args);
 
-  ImplicitContext::Saver s;
   auto ret = Variant::attach(
     g_context->invokeFunc(f, par.toVariant(), callCtx.this_, callCtx.cls,
                           RuntimeCoeffects::defaults(), callCtx.dynamic)
@@ -464,7 +461,6 @@ static Variant call_intercept_handler_callback(
     assertx(tvIsVec(generics));
     return Array(val(generics).parr);
   }();
-  ImplicitContext::Saver s;
   return Variant::attach(
     g_context->invokeFunc(f, args, callCtx.this_, callCtx.cls,
                           RuntimeCoeffects::defaults(),

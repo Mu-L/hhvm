@@ -18,6 +18,7 @@ include "thrift/annotation/cpp.thrift"
 include "thrift/annotation/thrift.thrift"
 
 cpp_include "thrift/lib/cpp2/protocol/CursorBasedSerializer.h"
+cpp_include "thrift/lib/cpp2/util/ManagedStringView.h"
 cpp_include "thrift/test/AdapterTest.h"
 
 @thrift.Experimental
@@ -29,6 +30,9 @@ union Inner {
 
 @cpp.Adapter{name = "::apache::thrift::CursorSerializationAdapter"}
 typedef Struct StructCursor
+
+@cpp.Type{name = "::apache::thrift::ManagedStringViewWithConversions"}
+typedef string ManagedStringViewField
 
 struct Struct {
   1: optional string string_field;
@@ -65,6 +69,19 @@ union Stringish {
   1: string string_field;
   @cpp.Type{name = "folly::IOBuf"}
   2: binary binary_field;
+}
+
+struct StructWithCppType {
+  @cpp.Type{name = "std::uint32_t"}
+  1: i32 someId;
+  2: ManagedStringViewField someName;
+}
+
+struct StructWithOptional {
+  1: optional string optional_string;
+  2: optional list<i64> optional_list;
+  3: optional map<i32, i32> optional_map;
+  4: optional Containers optional_containers;
 }
 
 enum E {

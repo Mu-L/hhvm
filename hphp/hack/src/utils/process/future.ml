@@ -361,6 +361,8 @@ let continue_with_future
 let continue_with (a : 'a t) (f : 'a -> 'b) : 'b t =
   continue_with_future a (fun a -> of_value (f a))
 
+let map f a = continue_with a f
+
 let continue_and_map_err (a : 'a t) (f : ('a, error) result -> ('b, 'c) result)
     : ('b, 'c) result t =
   let f res = of_value (f res) in
@@ -448,3 +450,8 @@ module Promise = struct
       Error e
     | (Ok a, Ok b) -> Ok (a, b)
 end
+
+let yojson_of_t (yojson_of_t : 'a -> Yojson.Safe.t) t = yojson_of_t @@ get_exn t
+
+let t_of_yojson (t_of_yojson : Yojson.Safe.t -> 'a) json =
+  t_of_yojson json |> of_value

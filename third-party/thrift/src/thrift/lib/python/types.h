@@ -61,15 +61,6 @@ inline PyObject* toPyObject(void* object) {
     }                                     \
   } while (false)
 
-template <typename T, typename V>
-inline T convInt(V v) {
-  if (v >= std::numeric_limits<T>::min() &&
-      v <= std::numeric_limits<T>::max()) {
-    return static_cast<T>(v);
-  }
-  LOG(FATAL) << "int out of range";
-}
-
 /**
  * Creates a new "union tuple" initialized for an empty union.
  *
@@ -82,6 +73,8 @@ inline T convInt(V v) {
  * The tuple returned by this function always has values `(0, Py_None)`.
  */
 PyObject* createUnionTuple();
+
+PyObject* createMutableUnionDataHolder();
 
 /***
  * Returns a new "struct tuple" whose field elements are uninitialized.
@@ -97,6 +90,18 @@ PyObject* createUnionTuple();
  * See also: `createStructTupleWithDefaultValues()`.
  */
 PyObject* createStructTuple(int16_t numFields);
+
+/**
+ * Returns a new "struct list" whose field elements are uninitialized.
+ *
+ * There are function pairs such as *StructTuple* and *StructList*. These
+ * functions offer similar functionalities. The key distinction is the type of
+ * underlying container used: `StructTuple` uses a Python `tuple`, while
+ * `StructList` uses a Python `list`. The use of a `list` in `StructList`
+ * specific to mutable types, enabling modifications to the elements and
+ * supporting deep-copy operations.
+ */
+PyObject* createStructList(int16_t numFields);
 
 /**
  * Returns a new "struct tuple" associated with an immutable Thrift struct,
@@ -131,7 +136,7 @@ PyObject* createImmutableStructTupleWithDefaultValues(
     const detail::StructInfo& structInfo);
 
 /**
- * Returns a new "struct tuple" associated with an mutable Thrift struct,
+ * Returns a new "struct list" associated with an mutable Thrift struct,
  * all elements initialized with default values.
  *
  * This function is very similar to its immutable counterpart. Please see the
@@ -142,27 +147,31 @@ PyObject* createImmutableStructTupleWithDefaultValues(
  * for the corresponding type:
  *   * In the mutable version, the standard value for lists is an empty `list`.
  */
-PyObject* createMutableStructTupleWithDefaultValues(
+PyObject* createMutableStructListWithDefaultValues(
     const detail::StructInfo& structInfo);
 
 /**
  * Sets the "isset" flag of the `index`-th field of the given struct tuple
  * `object` to the given `value`.
  *
- * @param objectPtr Pointer to a "struct tuple" (see `createStructTuple()
- *        above). This is assumed to be a `PyTupleObject`, whose memory holds
- *        the elements (starting with the "isset" bytearray) after a header
- *        consisting of `PyVarObject`. The memory immediately after the
- *        `sizeof(PyVarObject)` bytes is expected to correspond to a
- *        `PyBytesObject` that holds the isset flags bytearray (see above).
- *        If the bytearray is not properly initialized, or `index` is invalid
- *        (i.e., negative or greather than the number of fields), behavior is
- *        undefined.
+ * @param structTuple Pointer to a "struct tuple" (see `createStructTuple()`
+ *        above). This is assumed to be a `PyTupleObject`. The first element of
+ *        the tuple contains the isset bytearray. If the bytearray is not
+ *        properly initialized, or if the `index` is invalid (i.e., negative or
+ *        greater than the number of fields), the behavior is undefined.
  *
  * @throws if unable to read a bytearray from the expected isset flags bytearray
  *         (see `object` param documentation above).
  */
-void setStructIsset(void* objectPtr, int16_t index, bool value);
+void setStructIsset(PyObject* structTuple, int16_t index, bool value);
+
+/**
+ * Sets the "isset" flag of the `index`-th field of the given 'struct list'
+ * `object` to the given `value`.
+ *
+ * Please see `createStructList()`.
+ */
+void setMutableStructIsset(PyObject* structList, int16_t index, bool value);
 
 /*
  * Returns a new "struct tuple" with all its elements set to `None`
@@ -175,6 +184,14 @@ void setStructIsset(void* objectPtr, int16_t index, bool value);
  *
  */
 PyObject* createStructTupleWithNones(const detail::StructInfo& structInfo);
+
+/*
+ * Returns a new "struct list" with all its elements set to `None`
+ * (i.e., `Py_None`).
+ *
+ * Please see `createStructList()`.
+ */
+PyObject* createStructListWithNones(const detail::StructInfo& structInfo);
 
 /**
  * Populates unset fields of a immutable Thrift struct's "struct tuple" with
@@ -192,7 +209,7 @@ void populateImmutableStructTupleUnsetFieldsWithDefaultValues(
     PyObject* object, const detail::StructInfo& structInfo);
 
 /**
- * Populates unset fields of a mutable Thrift struct's "struct tuple" with
+ * Populates unset fields of a mutable Thrift struct's "struct list" with
  * default values.
  *
  * This function is very similar to its immutable counterpart. Please see the
@@ -203,16 +220,16 @@ void populateImmutableStructTupleUnsetFieldsWithDefaultValues(
  *
  * Throws on error
  */
-void populateMutableStructTupleUnsetFieldsWithDefaultValues(
+void populateMutableStructListUnsetFieldsWithDefaultValues(
     PyObject* object, const detail::StructInfo& structInfo);
 
 /**
- * Resets the field at `index` of the "struct tuple" with the default value.
+ * Resets the field at `index` of the "struct list" with the default value.
  *
  * Throws on error
  */
 void resetFieldToStandardDefault(
-    PyObject* tuple, const detail::StructInfo& structInfo, int index);
+    PyObject* structList, const detail::StructInfo& structInfo, int index);
 
 struct PyObjectDeleter {
   void operator()(PyObject* p) { Py_XDECREF(p); }
@@ -236,135 +253,6 @@ inline PyObject* setPyObject(void* objectPtr, UniquePyObjectPtr value) {
   Py_XDECREF(oldObject);
   return *pyObjPtr;
 }
-
-inline UniquePyObjectPtr primitiveCppToPython(bool value) {
-  PyObject* ret = value ? Py_True : Py_False;
-  Py_INCREF(ret);
-  return UniquePyObjectPtr{ret};
-}
-
-inline UniquePyObjectPtr primitiveCppToPython(std::int32_t value) {
-  if (UniquePyObjectPtr ret{PyLong_FromLong(value)}) {
-    return ret;
-  }
-  THRIFT_PY3_CHECK_ERROR();
-}
-
-inline UniquePyObjectPtr primitiveCppToPython(std::int8_t value) {
-  return primitiveCppToPython(static_cast<std::int32_t>(value));
-}
-
-inline UniquePyObjectPtr primitiveCppToPython(std::int16_t value) {
-  return primitiveCppToPython(static_cast<std::int32_t>(value));
-}
-
-inline UniquePyObjectPtr primitiveCppToPython(std::int64_t value) {
-  if (UniquePyObjectPtr ret{PyLong_FromLongLong(value)}) {
-    return ret;
-  }
-  THRIFT_PY3_CHECK_ERROR();
-}
-
-inline UniquePyObjectPtr primitiveCppToPython(float value) {
-  if (UniquePyObjectPtr ret{PyFloat_FromDouble(value)}) {
-    return ret;
-  }
-  THRIFT_PY3_CHECK_ERROR();
-}
-
-inline UniquePyObjectPtr primitiveCppToPython(double value) {
-  if (UniquePyObjectPtr ret{PyFloat_FromDouble(value)}) {
-    return ret;
-  }
-  THRIFT_PY3_CHECK_ERROR();
-}
-
-template <typename PrimitiveType>
-detail::ThriftValue primitivePythonToCpp(PyObject* object);
-
-template <>
-inline detail::ThriftValue primitivePythonToCpp<bool>(PyObject* object) {
-  DCHECK(object == Py_True || object == Py_False);
-  return detail::ThriftValue{object == Py_True};
-}
-
-template <typename T>
-inline detail::ThriftValue pyLongToCpp(PyObject* object) {
-  auto value = PyLong_AsLong(object);
-  if (value == -1) {
-    THRIFT_PY3_CHECK_POSSIBLE_ERROR();
-  }
-  return detail::ThriftValue{convInt<T>(value)};
-}
-
-template <>
-inline detail::ThriftValue primitivePythonToCpp<std::int8_t>(PyObject* object) {
-  return pyLongToCpp<std::int8_t>(object);
-}
-
-template <>
-inline detail::ThriftValue primitivePythonToCpp<std::int16_t>(
-    PyObject* object) {
-  return pyLongToCpp<std::int16_t>(object);
-}
-
-template <>
-inline detail::ThriftValue primitivePythonToCpp<std::int32_t>(
-    PyObject* object) {
-  return pyLongToCpp<std::int32_t>(object);
-}
-
-template <>
-inline detail::ThriftValue primitivePythonToCpp<std::int64_t>(
-    PyObject* object) {
-  auto value = PyLong_AsLongLong(object);
-  if (value == -1) {
-    THRIFT_PY3_CHECK_POSSIBLE_ERROR();
-  }
-  return detail::ThriftValue{convInt<std::int64_t>(value)};
-}
-
-template <>
-inline detail::ThriftValue primitivePythonToCpp<double>(PyObject* object) {
-  auto value = PyFloat_AsDouble(object);
-  if (value == -1.0) {
-    THRIFT_PY3_CHECK_POSSIBLE_ERROR();
-  }
-  return detail::ThriftValue{value};
-}
-
-template <>
-inline detail::ThriftValue primitivePythonToCpp<float>(PyObject* object) {
-  auto value = PyFloat_AsDouble(object);
-  if (value == -1.0) {
-    THRIFT_PY3_CHECK_POSSIBLE_ERROR();
-  }
-  return detail::ThriftValue{static_cast<float>(value)};
-}
-
-template <typename PrimitiveType, protocol::TType Type>
-struct PrimitiveTypeInfo {
-  static detail::OptionalThriftValue get(
-      const void* objectPtr, const detail::TypeInfo& /* typeInfo */) {
-    PyObject* pyObj = *toPyObjectPtr(objectPtr);
-    return folly::make_optional<detail::ThriftValue>(
-        primitivePythonToCpp<PrimitiveType>(pyObj));
-  }
-
-  static void set(void* objectPtr, PrimitiveType value) {
-    setPyObject(objectPtr, primitiveCppToPython(value));
-  }
-
-  static const detail::TypeInfo typeInfo;
-};
-
-template <typename PrimitiveType, protocol::TType Type>
-const detail::TypeInfo PrimitiveTypeInfo<PrimitiveType, Type>::typeInfo{
-    /* .type */ Type,
-    /* .get */ get,
-    /* .set */ reinterpret_cast<detail::VoidFuncPtr>(set),
-    /* .typeExt */ nullptr,
-};
 
 extern const detail::TypeInfo& boolTypeInfo;
 extern const detail::TypeInfo& byteTypeInfo;
@@ -643,7 +531,7 @@ void SetTypeInfoTemplate<T>::consumeElem(
   DCHECK(elem);
   // This is nasty hack since Cython generated code will incr the refcnt
   // so PySet_Add will fail. Need to temporarily decrref.
-  auto currentRefCnt = Py_REFCNT(*pyObjPtr);
+  const Py_ssize_t currentRefCnt = Py_REFCNT(*pyObjPtr);
   _fbthrift_Py_SET_REFCNT(*pyObjPtr, 1);
   if (PySet_Add(*pyObjPtr, elem) == -1) {
     _fbthrift_Py_SET_REFCNT(*pyObjPtr, currentRefCnt);
@@ -838,7 +726,8 @@ using FieldValueMap = std::unordered_map<int16_t, PyObject*>;
  */
 class DynamicStructInfo {
  public:
-  DynamicStructInfo(const char* name, int16_t numFields, bool isUnion = false);
+  DynamicStructInfo(
+      const char* name, int16_t numFields, bool isUnion, bool isMutable);
 
   // DynamicStructInfo is non-copyable
   DynamicStructInfo(const DynamicStructInfo&) = delete;
@@ -864,6 +753,12 @@ class DynamicStructInfo {
    * behavior.
    */
   void addFieldInfo(
+      detail::FieldID id,
+      detail::FieldQualifier qualifier,
+      const char* name,
+      const detail::TypeInfo* typeInfo);
+
+  void addMutableFieldInfo(
       detail::FieldID id,
       detail::FieldQualifier qualifier,
       const char* name,
@@ -928,6 +823,20 @@ class DynamicStructInfo {
 
 detail::TypeInfo createImmutableStructTypeInfo(
     const DynamicStructInfo& dynamicStructInfo);
+
+detail::TypeInfo createMutableStructTypeInfo(
+    const DynamicStructInfo& dynamicStructInfo);
+
+/**
+ * Retrieves the start address of the array that holds pointers to the elements
+ * in a `PyListObject`.
+ */
+inline PyObject* getListObjectItemBase(void* pyList) {
+  return reinterpret_cast<PyObject*>(&PyList_GET_ITEM(pyList, 0));
+}
+inline const PyObject* getListObjectItemBase(const void* pyList) {
+  return reinterpret_cast<PyObject*>(&PyList_GET_ITEM(pyList, 0));
+}
 
 } // namespace apache::thrift::python
 

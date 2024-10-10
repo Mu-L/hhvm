@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 
+include "thrift/annotation/cpp.thrift"
 include "thrift/annotation/python.thrift"
+include "thrift/test/thrift-python/included.thrift"
 
 namespace py3 thrift.test.thrift_python
 
@@ -52,6 +54,8 @@ struct TestStructWithDefaultValues {
   5: TestStruct unqualified_struct_intrinsic_default;
 
   6: optional TestStruct optional_struct_intrinsic_default;
+
+  7: list<i32> unqualified_list_i32 = [1, 2, 3];
 }
 
 struct TestStructAllThriftPrimitiveTypes {
@@ -160,6 +164,7 @@ union TestUnion {
 struct TestStructWithUnionField {
   1: i32 i32_field;
   2: TestUnion union_field;
+  3: included.TestUnion union_field_from_included;
 }
 
 exception TestExceptionAllThriftPrimitiveTypes {
@@ -191,4 +196,38 @@ exception TestExceptionAllThriftPrimitiveTypes {
 struct TestStructWithExceptionField {
   1: i32 i32_field;
   2: TestExceptionAllThriftPrimitiveTypes exception_field;
+}
+
+struct TestStructCopy {
+  1: i32 unqualified_i32;
+  2: optional i32 optional_i32;
+
+  3: string unqualified_string;
+  4: optional string optional_string;
+
+  5: list<i32> unqualified_list_i32;
+  6: set<string> unqualified_set_string;
+  7: map<string, i32> unqualified_map_string_i32;
+
+  8: optional TestStructCopy recursive_struct;
+
+  @cpp.Type{name = "folly::IOBuf"}
+  9: binary unqualified_binary;
+}
+
+exception TestExceptionCopy {
+  1: i32 unqualified_i32;
+  2: optional i32 optional_i32;
+
+  3: string unqualified_string;
+  4: optional string optional_string;
+
+  5: list<i32> unqualified_list_i32;
+  6: optional list<i32> optional_list_i32;
+
+  7: set<string> unqualified_set_string;
+  8: optional set<string> optional_set_string;
+
+  9: map<string, i32> unqualified_map_string_i32;
+  10: optional TestExceptionCopy recursive_exception;
 }

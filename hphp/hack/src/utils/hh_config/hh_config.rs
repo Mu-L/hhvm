@@ -21,6 +21,7 @@ use oxidized::decl_parser_options::DeclParserOptions;
 use oxidized::experimental_features;
 use oxidized::global_options::ExtendedReasonsConfig;
 use oxidized::global_options::GlobalOptions;
+use oxidized::global_options::NoneOrAllExcept;
 use oxidized::parser_options::ParserOptions;
 use package::PackageInfo;
 use sha1::Digest;
@@ -55,6 +56,7 @@ pub struct HhConfig {
     pub sharedmem_heap_size: usize,
     pub ide_fall_back_to_full_index: bool,
     pub hh_distc_should_disable_trace_store: bool,
+    pub hh_distc_exponential_backoff_num_retries: usize,
     pub naming_table_compression_level: usize,
     pub naming_table_compression_threads: usize,
     pub eden_fetch_parallelism: usize,
@@ -81,6 +83,16 @@ impl HhConfig {
         packages_path
     }
 
+    pub fn package_v2_enabled(hhconfig: &ConfigFile, overrides: &ConfigFile) -> bool {
+        let package_v2_config: bool = hhconfig
+            .get_bool_or("package_v2", GlobalOptions::default().tco_package_v2)
+            .unwrap_or(GlobalOptions::default().tco_package_v2);
+        let package_v2: bool = overrides
+            .get_bool_or("package_v2", package_v2_config)
+            .unwrap_or(package_v2_config);
+        package_v2
+    }
+
     pub fn from_files(
         root: impl AsRef<Path>,
         hhconfig_path: impl AsRef<Path>,
@@ -101,7 +113,8 @@ impl HhConfig {
         } else {
             String::new()
         };
-        let package_info: PackageInfo = PackageInfo::from_text(
+        let package_info: PackageInfo = PackageInfo::from_text_strict(
+            Self::package_v2_enabled(&hhconfig, overrides),
             root.as_ref().to_str().unwrap_or_default(),
             package_config_pathbuf.to_str().unwrap_or_default(),
         )
@@ -156,7 +169,11 @@ impl HhConfig {
         let custom_error_config = CustomErrorConfig::from_path(custom_error_config_path)?;
         let package_config_pathbuf = Self::create_packages_path(hhconfig_path.as_path());
         let package_config_path = package_config_pathbuf.as_path();
-        let package_info: PackageInfo = PackageInfo::from_text(
+        let package_info: PackageInfo = PackageInfo::from_text_strict(
+            // FIXME
+            hh_config_file
+                .get_bool_or("package_v2", GlobalOptions::default().tco_package_v2)
+                .unwrap_or(GlobalOptions::default().tco_package_v2),
             root.as_ref().to_str().unwrap_or_default(),
             package_config_path.to_str().unwrap_or_default(),
         )
@@ -223,6 +240,7 @@ impl HhConfig {
         )?;
 
         let default = ParserOptions::default();
+        let experimental_features = hhconfig.get_str("enable_experimental_stx_features");
         let po = ParserOptions {
             hhvm_compat_mode: default.hhvm_compat_mode,
             hhi_mode: default.hhi_mode,
@@ -284,19 +302,15 @@ impl HhConfig {
             disallow_static_constants_in_default_func_args: default
                 .disallow_static_constants_in_default_func_args,
             unwrap_concurrent: default.unwrap_concurrent,
-            disallow_direct_superglobals_refs: hhconfig.get_bool_or(
-                "disallow_direct_superglobals_refs",
-                default.disallow_direct_superglobals_refs,
-            )?,
             stack_size: default.stack_size,
             use_legacy_experimental_feature_config: false,
-            experimental_features: hhconfig
-                .get_str("enable_experimental_stx_features")
-                .map_or(
-                    Ok::<_, anyhow::Error>(default.experimental_features),
-                    parse_experimental_features,
-                )?,
-            consider_unspecified_experimental_features_released: false,
+            experimental_features: experimental_features.map_or(
+                Ok::<_, anyhow::Error>(default.experimental_features),
+                parse_experimental_features,
+            )?,
+            // If there was no experimental features status list in configuration, consider all
+            // existing experimental features to be released and hence usable.
+            consider_unspecified_experimental_features_released: experimental_features.is_none(),
         };
         let default = GlobalOptions::default();
         let opts = GlobalOptions {
@@ -337,6 +351,7 @@ impl HhConfig {
             tco_custom_error_config: custom_error_config,
             tco_const_attribute: default.tco_const_attribute,
             tco_check_attribute_locations: default.tco_check_attribute_locations,
+            tco_type_refinement_partition_shapes: default.tco_type_refinement_partition_shapes,
             glean_reponame: default.glean_reponame,
             symbol_write_index_inherited_members: default.symbol_write_index_inherited_members,
             symbol_write_ownership: default.symbol_write_ownership,
@@ -404,7 +419,6 @@ impl HhConfig {
             tco_record_fine_grained_dependencies: default.tco_record_fine_grained_dependencies,
             tco_loop_iteration_upper_bound: default.tco_loop_iteration_upper_bound,
             tco_populate_dead_unsafe_cast_heap: default.tco_populate_dead_unsafe_cast_heap,
-            tco_rust_elab: local_config.rust_elab,
             dump_tast_hashes: hh_conf.get_bool_or("dump_tast_hashes", default.dump_tast_hashes)?,
             dump_tasts: match hh_conf.get_str("dump_tasts") {
                 None => default.dump_tasts,
@@ -430,18 +444,32 @@ impl HhConfig {
                 Ok (n) => Some(ExtendedReasonsConfig::Extended(n)),
                 Err(data) => {
                     if data.eq("debug") { Some(ExtendedReasonsConfig::Debug) }
+                    else if data.eq("legacy") { Some(ExtendedReasonsConfig::Legacy) }
                     else { None }
                 }
             }),
-            hack_warnings: hhconfig.get_all_or_some_ints_or("hack_warnings", default.hack_warnings)?,
+            tco_disable_physical_equality: hh_conf.get_bool_or("disable_physical_equality", default.tco_disable_physical_equality)?,
+            hack_warnings: {
+                let is_on = hh_conf.get_bool_or("hack_warnings", true)?;
+                if is_on {
+                    let disabled_warnings = hhconfig.get_ints_or("disabled_warnings", vec![])?;
+                    NoneOrAllExcept::AllExcept(disabled_warnings)
+                } else {
+                    NoneOrAllExcept::NNone
+                }
+            },
+            warnings_default_all: hhconfig.get_bool_or("warnings_default_all", default.warnings_default_all)?,
             tco_strict_switch: hhconfig.get_bool_or("strict_switch", default.tco_strict_switch)?,
             tco_package_v2: hhconfig.get_bool_or("package_v2", default.tco_package_v2)?,
+            tco_package_v2_support_multifile_tests: hhconfig.get_bool_or("package_v2_support_multifile_tests", default.tco_package_v2_support_multifile_tests)?,
             tco_package_v2_bypass_package_check_for_class_const: hhconfig.get_bool_or("package_v2_bypass_package_check_for_class_const", default.tco_package_v2_bypass_package_check_for_class_const)?,
-            preexisting_warnings: default.preexisting_warnings,
             re_no_cache: hhconfig.get_bool_or("re_no_cache", default.re_no_cache)?,
             hh_distc_should_disable_trace_store: hhconfig.get_bool_or(
                     "hh_distc_should_disable_trace_store", default.hh_distc_should_disable_trace_store)?,
+            hh_distc_exponential_backoff_num_retries: hhconfig.get_int_or(
+                    "hh_distc_exponential_backoff_num_retries", default.hh_distc_exponential_backoff_num_retries)?,
             tco_enable_abstract_method_optional_parameters: hhconfig.get_bool_or("enable_abstract_method_optional_parameters", default.tco_enable_abstract_method_optional_parameters)?,
+            recursive_case_types: hhconfig.get_bool_or("recursive_case_types", default.recursive_case_types)?,
         };
         let mut c = Self {
             local_config,
@@ -496,6 +524,9 @@ impl HhConfig {
                 "eden_fetch_parallelism" => {
                     c.eden_fetch_parallelism = parse_json(&value)?;
                 }
+                "hh_distc_exponential_backoff_num_retries" => {
+                    c.hh_distc_exponential_backoff_num_retries = parse_json(&value)?;
+                }
                 _ => {}
             }
         }
@@ -513,17 +544,10 @@ fn parse_json<'de, T: serde::de::Deserialize<'de>>(value: &'de str) -> Result<T>
 
 fn parse_experimental_features(
     s: &str,
-) -> Result<
-    Vec<(
-        experimental_features::FeatureName,
-        experimental_features::FeatureStatus,
-    )>,
-> {
-    let features: Vec<_> = parse_json::<BTreeMap<String, String>>(s)?
-        .into_iter()
-        .collect();
+) -> Result<BTreeMap<String, experimental_features::FeatureStatus>> {
+    let features = parse_json::<BTreeMap<String, String>>(s)?;
     features
-        .iter()
+        .into_iter()
         .map(experimental_features::FeatureName::parse_experimental_feature)
         .collect()
 }

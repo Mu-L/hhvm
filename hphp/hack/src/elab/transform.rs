@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<3edbfa1396e6f817eaa41c11ce62f6ae>>
+// @generated SignedSource<<bb5e81b8de85b2b88859fde289b32b27>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -994,7 +994,7 @@ impl Transform for FunParam {
                 type_hint: ref mut __binding_1,
                 name: ref mut __binding_3,
                 info: ref mut __binding_4,
-                user_attributes: ref mut __binding_7,
+                user_attributes: ref mut __binding_8,
                 ..
             } => {
                 {
@@ -1009,7 +1009,7 @@ impl Transform for FunParam {
                 {
                     __binding_4.transform(env, &mut pass.clone())
                 }
-                { __binding_7.transform(env, &mut pass.clone()) }
+                { __binding_8.transform(env, &mut pass.clone()) }
             }
         }
     }
@@ -1883,6 +1883,80 @@ impl Transform for Method_ {
         }
     }
 }
+impl Transform for TypedefVisibilityAndHint {
+    fn transform(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        let mut in_pass = pass.clone();
+        if let Break(..) = pass.on_ty_typedef_visibility_and_hint_top_down(env, self) {
+            return;
+        }
+        stack_limit::maybe_grow(|| self.traverse(env, pass));
+        in_pass.on_ty_typedef_visibility_and_hint_bottom_up(env, self);
+    }
+    fn traverse(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        match self {
+            TypedefVisibilityAndHint {
+                hint: ref mut __binding_1,
+                ..
+            } => {
+                let pass = &mut pass.clone();
+                let mut in_pass = pass.clone();
+                if let Break(..) =
+                    pass.on_fld_typedef_visibility_and_hint_hint_top_down(env, __binding_1)
+                {
+                    return;
+                }
+                __binding_1.transform(env, &mut pass.clone());
+                in_pass.on_fld_typedef_visibility_and_hint_hint_bottom_up(env, __binding_1);
+            }
+        }
+    }
+}
+impl Transform for TypedefCaseTypeVariant {
+    fn transform(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        let mut in_pass = pass.clone();
+        if let Break(..) = pass.on_ty_typedef_case_type_variant_top_down(env, self) {
+            return;
+        }
+        stack_limit::maybe_grow(|| self.traverse(env, pass));
+        in_pass.on_ty_typedef_case_type_variant_bottom_up(env, self);
+    }
+    fn traverse(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        match self {
+            TypedefCaseTypeVariant {
+                hint: ref mut __binding_0,
+                where_constraints: ref mut __binding_1,
+            } => {
+                {
+                    __binding_0.transform(env, &mut pass.clone())
+                }
+                { __binding_1.transform(env, &mut pass.clone()) }
+            }
+        }
+    }
+}
+impl Transform for TypedefAssignment {
+    fn transform(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        let mut in_pass = pass.clone();
+        if let Break(..) = pass.on_ty_typedef_assignment_top_down(env, self) {
+            return;
+        }
+        stack_limit::maybe_grow(|| self.traverse(env, pass));
+        in_pass.on_ty_typedef_assignment_bottom_up(env, self);
+    }
+    fn traverse(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        match self {
+            TypedefAssignment::SimpleTypeDef(ref mut __binding_0) => {
+                __binding_0.transform(env, &mut pass.clone())
+            }
+            TypedefAssignment::CaseType(ref mut __binding_0, ref mut __binding_1) => {
+                {
+                    __binding_0.transform(env, &mut pass.clone())
+                }
+                { __binding_1.transform(env, &mut pass.clone()) }
+            }
+        }
+    }
+}
 impl Transform for Typedef {
     fn transform(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
         let mut in_pass = pass.clone();
@@ -1900,9 +1974,10 @@ impl Transform for Typedef {
                 tparams: ref mut __binding_2,
                 as_constraint: ref mut __binding_3,
                 super_constraint: ref mut __binding_4,
-                kind: ref mut __binding_5,
-                user_attributes: ref mut __binding_6,
-                file_attributes: ref mut __binding_7,
+                assignment: ref mut __binding_5,
+                runtime_type: ref mut __binding_6,
+                user_attributes: ref mut __binding_7,
+                file_attributes: ref mut __binding_8,
                 namespace: ref mut __binding_10,
                 emit_id: ref mut __binding_12,
                 is_ctx: ref mut __binding_13,
@@ -1928,21 +2003,16 @@ impl Transform for Typedef {
                     __binding_4.transform(env, &mut pass.clone())
                 }
                 {
-                    {
-                        let pass = &mut pass.clone();
-                        let mut in_pass = pass.clone();
-                        if let Break(..) = pass.on_fld_typedef_kind_top_down(env, __binding_5) {
-                            return;
-                        }
-                        __binding_5.transform(env, &mut pass.clone());
-                        in_pass.on_fld_typedef_kind_bottom_up(env, __binding_5);
-                    }
+                    __binding_5.transform(env, &mut pass.clone())
                 }
                 {
                     __binding_6.transform(env, &mut pass.clone())
                 }
                 {
                     __binding_7.transform(env, &mut pass.clone())
+                }
+                {
+                    __binding_8.transform(env, &mut pass.clone())
                 }
                 {
                     __binding_10.transform(env, &mut pass.clone())
@@ -2510,6 +2580,72 @@ impl Transform for NastShapeInfo {
         }
     }
 }
+impl Transform for TupleInfo {
+    fn transform(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        let mut in_pass = pass.clone();
+        if let Break(..) = pass.on_ty_tuple_info_top_down(env, self) {
+            return;
+        }
+        stack_limit::maybe_grow(|| self.traverse(env, pass));
+        in_pass.on_ty_tuple_info_bottom_up(env, self);
+    }
+    fn traverse(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        match self {
+            TupleInfo {
+                required: ref mut __binding_0,
+                extra: ref mut __binding_1,
+            } => {
+                {
+                    __binding_0.transform(env, &mut pass.clone())
+                }
+                { __binding_1.transform(env, &mut pass.clone()) }
+            }
+        }
+    }
+}
+impl Transform for TupleExtraInfo {
+    fn transform(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        let mut in_pass = pass.clone();
+        if let Break(..) = pass.on_ty_tuple_extra_info_top_down(env, self) {
+            return;
+        }
+        stack_limit::maybe_grow(|| self.traverse(env, pass));
+        in_pass.on_ty_tuple_extra_info_bottom_up(env, self);
+    }
+    fn traverse(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        match self {
+            TupleExtraInfo {
+                optional: ref mut __binding_0,
+                variadic: ref mut __binding_1,
+            } => {
+                {
+                    __binding_0.transform(env, &mut pass.clone())
+                }
+                { __binding_1.transform(env, &mut pass.clone()) }
+            }
+        }
+    }
+}
+impl Transform for TupleExtra {
+    fn transform(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        let mut in_pass = pass.clone();
+        if let Break(..) = pass.on_ty_tuple_extra_top_down(env, self) {
+            return;
+        }
+        stack_limit::maybe_grow(|| self.traverse(env, pass));
+        in_pass.on_ty_tuple_extra_bottom_up(env, self);
+    }
+    fn traverse(&mut self, env: &Env, pass: &mut (impl Pass + Clone)) {
+        match self {
+            TupleExtra::Hextra(ref mut __binding_0) => {
+                __binding_0.transform(env, &mut pass.clone())
+            }
+            TupleExtra::Hsplat(ref mut __binding_0) => {
+                __binding_0.transform(env, &mut pass.clone())
+            }
+        }
+    }
+}
 const _: () = {
     impl Transform for KvcKind {}
 };
@@ -2609,6 +2745,9 @@ const _: () = {
 };
 const _: () = {
     impl Transform for OptionalKind {}
+};
+const _: () = {
+    impl Transform for SplatKind {}
 };
 const _: () = {
     impl Transform for OgNullFlavor {}

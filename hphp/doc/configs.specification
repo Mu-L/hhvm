@@ -166,6 +166,10 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 
   Constants from traits behave like constants from interfaces (error on conflict)
 
+- bool Eval.PackageV2 = false, UNKNOWN, globaldata|compileroption(PackageV2)
+
+  Enable support for the PackageV2 package specification.
+
 - std::string Eval.ActiveDeployment = "", UNKNOWN, globaldata|compileroption(ActiveDeployment)
 
   Describes the active deployment for selecting the set of packages
@@ -244,6 +248,8 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 
 - std::set<std::string> Eval.NonInterceptableFunctions = {}, UNKNOWN, globaldata
 
+- std::set<std::string> Eval.InterceptableBuiltins = {}, UNKNOWN, globaldata
+
 - bool Eval.LogExternCompilerPerf = false, UNKNOWN, hackc(hhbc)
 
   Whether to log extern compiler performance
@@ -251,6 +257,19 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 - bool Eval.FoldLazyClassKeys = true, UNKNOWN, unitcacheflag|hackc(hhbc)
 
 - bool Eval.EmitNativeEnumClassLabels = true, UNKNOWN, unitcacheflag|hackc(hhbc)
+
+- bool Eval.LockFreeFuncDef = true, paulbiss
+
+  Remove locking from Func::def()
+
+- int Eval.AsyncJitLogStatsRate = 0, paulbiss
+
+  Log stats about the async JIT to hhvm_async_jit_stats using StructuredLog
+
+- int Eval.HandleResumeStatsRate = 0, paulbiss
+
+  Log stats about calls to handleResume to hhvm_resume_locations using
+  StructuredLog
 
 # Hack.Lang
 
@@ -269,12 +288,8 @@ The format can be found in hphp/tools/configs/generate-configs.rs
   Emit specialized bytecodes when we an infer a typehint does not contain a
   reified generic bytecode, powered by decl directed bytecode
 
-- bool Hack.Lang.DisallowDirectSuperglobalsRefs = false, UNKNOWN, repooptionsflag(Parser)|hackc(parser)
-
-  Make it so referencing superglobals directly via their $_[A-Z]+ "variable"
-  name hard-fails rather than emitting, e.g., CgetG
-
 - std::map<std::string,std::string> Hack.Lang.AliasedNamespaces = {}, UNKNOWN, repooptionsflag(Parser)|lookuppath(AliasedNamespaces)
+- std::map<std::string,std::string> Hack.Lang.TrivialBuiltins = {}, UNKNOWN, repooptionsflag(Parser)|lookuppath(TrivialBuiltins)
 
 - bool Hack.Lang.OptimizeParamLifetimes = false, paulbiss, repooptionsflag(Parser)|hackc(hhbc)
 - bool Hack.Lang.OptimizeLocalLifetimes = false, paulbiss, repooptionsflag(Parser)|hackc(hhbc)
@@ -397,6 +412,7 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 - int Jit.Threads = 4, UNKNOWN
 - int Jit.WorkerThreads, UNKNOWN
 - int Jit.WorkerThreadsForSerdes = 0, UNKNOWN
+- int Jit.MaxUnitLoaderThreads = 16, UNKNOWN
 - int Jit.WorkerArenas, UNKNOWN
 - bool Jit.ParallelDeserialize = true, UNKNOWN
 - int Jit.LdimmqSpan = 8, UNKNOWN
@@ -424,6 +440,7 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 - bool Jit.RerunRetranslateAll = false, UNKNOWN
 - bool Jit.BuildOutliningHashes = false, UNKNOWN
 - bool Jit.PGOLayoutSplitHotCold, UNKNOWN
+- bool Jit.PGOLayoutResplitFrozen = true, UNKNOWN
 - bool Jit.PGOVasmBlockCounters = true, UNKNOWN
 - bool Jit.PGOVasmBlockCountersOptPrologue = true, UNKNOWN
 - uint32_t Jit.PGOVasmBlockCountersMaxOpMismatches = 12, UNKNOWN
@@ -431,7 +448,9 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 - double Jit.PGOVasmBlockCountersHotWeightMultiplier = 0, UNKNOWN
 - bool Jit.LayoutSeparateZeroWeightBlocks = false, UNKNOWN
 - bool Jit.LayoutPrologueSplitHotCold, UNKNOWN
+- bool Jit.LayoutLiveSplitHotCold = true, UNKNOWN
 - bool Jit.LayoutProfileSplitHotCold = true, UNKNOWN
+- bool Jit.LayoutSplitFrozen = true, UNKNOWN
 - uint64_t Jit.LayoutMinHotThreshold = 0, UNKNOWN
 - uint64_t Jit.LayoutMinColdThreshold = 0, UNKNOWN
 - double Jit.LayoutHotThreshold = 0.01, UNKNOWN
@@ -451,6 +470,7 @@ The format can be found in hphp/tools/configs/generate-configs.rs
   1 - All functions can be renamed
   2 - Functions in RenamableFunctions config list can be renamed
 
+- bool Jit.BuiltinsInterceptableByDefault = true, UNKNOWN, compileroption(JitBuiltinsInterceptableByDefault)|unitcacheflag
 - uint32_t Jit.InterceptFunctionLogRate = 1000, UNKNOWN
 - bool Jit.UseVtuneAPI = false, UNKNOWN
 - bool Jit.DisabledByHphpd = false, UNKNOWN
@@ -658,6 +678,7 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 - int Server.InternalWarmupThreads = 0, UNKNOWN
 - boost::container::flat_set<std::string> Server.HighPriorityEndPoints = {}, UNKNOWN
 - bool Server.ExitOnBindFail = false, UNKNOWN
+- bool Server.LogBootStats = true, UNKNOWN
 - std::string Server.Host = "", UNKNOWN
 - int Server.Port = 80, UNKNOWN
 - int Server.PortFd = -1, UNKNOWN, nobind
@@ -732,7 +753,6 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 - bool Server.ForceChunkedEncoding = false, UNKNOWN
 - int64_t Server.MaxPostSize = 100, UNKNOWN, postprocess
 - bool Server.AlwaysPopulateRawPostData = false, UNKNOWN
-- std::string Server.TakeoverFilename = "", UNKNOWN
 - bool Server.ExpiresActive = true, UNKNOWN
 - int Server.ExpiresDefault = 2592000, UNKNOWN, postprocess
 - std::string Server.DefaultCharsetName = "", UNKNOWN
@@ -897,6 +917,10 @@ The format can be found in hphp/tools/configs/generate-configs.rs
 
 - int Xbox.ServerInfo.ThreadCount = 10, UNKNOWN
 - int Xbox.ServerInfo.MaxQueueLength = INT_MAX, UNKNOWN, postprocess
+- int Xbox.ServerInfo.MaxJobQueuingMs = -1, UNKNOWN
+
+  Maximum duration in ms an xbox thread may sit in the queue.
+
 - std::string Xbox.ServerInfo.RequestInitFunction = "", UNKNOWN
 - std::string Xbox.ServerInfo.RequestInitDocument = "", UNKNOWN
 - bool Xbox.ServerInfo.LogInfo = false, UNKNOWN

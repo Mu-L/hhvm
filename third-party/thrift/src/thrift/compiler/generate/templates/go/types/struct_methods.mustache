@@ -58,18 +58,13 @@
 
 {{/struct:fields_sorted}}{{!
 
-  toString method.
-
-}}{{#struct:fields_sorted}}
-{{> types/field_method_to_string}}
-
-{{/struct:fields_sorted}}{{!
-
   DefaultGet method.
 
 }}{{#struct:fields_sorted}}
 {{#field:pointer?}}
+{{#program:gen_default_get?}}
 {{> types/field_method_default_get}}
+{{/program:gen_default_get?}}
 
 {{/field:pointer?}}
 {{/struct:fields_sorted}}{{!

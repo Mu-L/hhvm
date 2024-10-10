@@ -17,8 +17,10 @@ open Hh_json_helpers
 type args = {
   from: string;
   config: (string * string) list;
+  disable_format_on_save: bool;
   ignore_hh_version: bool;
   naming_table: string option;
+  warnings_saved_state_path: Path.t option;
   notebook_mode: bool;
   verbose: bool;
   root_from_cli: Path.t;
@@ -40,15 +42,17 @@ let env =
         {
           from = "[init]";
           config = [];
+          disable_format_on_save = false;
           ignore_hh_version = false;
           naming_table = None;
+          warnings_saved_state_path = None;
           notebook_mode = false;
           verbose = false;
           root_from_cli = Path.dummy_path;
         };
       root = Path.dummy_path;
       hhconfig_version_and_switch = "[init]";
-      local_config = ServerLocalConfig.default;
+      local_config = ServerLocalConfigLoad.default;
     }
 
 (** When did this binary start? *)
@@ -263,13 +267,13 @@ type ide_refactor_patch = {
 let initialize_params_ref : Lsp.Initialize.params option ref = ref None
 
 (** This flag is used to control how much will be written
-to log-files. It can be turned on initially by --verbose at the command-line or
-setting "trace:Verbose" in initializationParams. Thereafter, it can
-be changed by the user dynamically via $/setTraceNotification.
-Don't alter this reference directly; instead use [set_verbose_to_file]
-so as to pass the message on to ide_service as well.
-Note: control for how much will be written to stderr is solely
-controlled by --verbose at the command-line, stored in env.verbose. *)
+  to log-files. It can be turned on initially by --verbose at the command-line or
+  setting "trace:Verbose" in initializationParams. Thereafter, it can
+  be changed by the user dynamically via $/setTraceNotification.
+  Don't alter this reference directly; instead use [set_verbose_to_file]
+  so as to pass the message on to ide_service as well.
+  Note: control for how much will be written to stderr is solely
+  controlled by --verbose at the command-line, stored in env.verbose. *)
 let verbose_to_file : bool ref = ref false
 
 let requests_outstanding : (lsp_request * result_handler) IdMap.t ref =
@@ -281,11 +285,11 @@ let get_outstanding_request_exn (id : lsp_id) : lsp_request =
   | None -> failwith "response id doesn't correspond to an outstanding request"
 
 (** hh_server pushes errors to an errors.bin file, which we tail along.
-(Only in ide_standalone mode; we don't do anything in other modes.)
-This variable is where we store our progress in seeking an errors.bin, or tailing
-one we already found. It's updated
-(1) by [handle_tick] which runs every second and may call [try_open_errors_file] to seek errors.bin;
-(2) by [handle_errors_file_item] which tails an errors.bin file. *)
+  (Only in ide_standalone mode; we don't do anything in other modes.)
+  This variable is where we store our progress in seeking an errors.bin, or tailing
+  one we already found. It's updated
+  (1) by [handle_tick] which runs every second and may call [try_open_errors_file] to seek errors.bin;
+  (2) by [handle_errors_file_item] which tails an errors.bin file. *)
 let latest_hh_server_errors : errors_conn ref =
   ref
     (SeekingErrors
@@ -295,9 +299,9 @@ let latest_hh_server_errors : errors_conn ref =
        })
 
 (** This is the latest state of the progress.json file, updated once a second
-in a background Lwt process [background_status_refresher]. This file is where the
-monitor reports its status like "starting up", and hh_server reports its status
-like "typechecking". *)
+  in a background Lwt process [background_status_refresher]. This file is where the
+  monitor reports its status like "starting up", and hh_server reports its status
+  like "typechecking". *)
 let latest_hh_server_progress : Server_progress.t ref =
   ref
     Server_progress.
@@ -309,8 +313,8 @@ let latest_hh_server_progress : Server_progress.t ref =
       }
 
 (** Have we already sent a status message over LSP? If so, and our new
-status will be just the same as the previous one, we won't need to send it
-again. This stores the most recent status that the LSP client has. *)
+  status will be just the same as the previous one, we won't need to send it
+  again. This stores the most recent status that the LSP client has. *)
 let showStatus_outstanding : string ref = ref ""
 
 let log s = Hh_logger.log ("[client-lsp] " ^^ s)
@@ -341,10 +345,10 @@ let ensure_cancelled (cancellation_token : unit Lwt.u) : unit =
     ()
 
 (** The architecture of clientLsp is a single-threaded message loop inside
-[ClientLsp.main]. The loop calls [get_next_event] to wait for the next
-event from a variety of sources, dispatches it according to what kind of event
-it is, and repeats until it finally receives an event that an "exit" lsp notification
-has been received from the client. *)
+  [ClientLsp.main]. The loop calls [get_next_event] to wait for the next
+  event from a variety of sources, dispatches it according to what kind of event
+  it is, and repeats until it finally receives an event that an "exit" lsp notification
+  has been received from the client. *)
 type event =
   | Client_message of incoming_metadata * lsp_message
       (** The editor e.g. VSCode might send a request or notification LSP message to us
@@ -1347,7 +1351,6 @@ let start_server () : unit =
         from = !env.args.from;
         no_load = false;
         watchman_debug_logging = false;
-        log_inference_constraints = false;
         silent = true;
         exit_on_failure = false;
         ignore_hh_version = false;
@@ -1402,15 +1405,15 @@ let announce_ide_failure (error_data : ClientIdeMessage.rich_error) : unit Lwt.t
   Lwt.return_unit
 
 (** Like all async methods, this method has a synchronous preamble up
-to its first await point, at which point it returns a promise to its
-caller; the rest of the method will be scheduled asynchronously.
-The synchronous preamble sends an "initialize" request to the ide_service.
-The asynchronous continuation is triggered when the response comes back;
-it then pumps messages to and from the ide service.
-Note: the fact that the request is sent in the synchronous preamble, is
-important for correctness - the rest of the codebase can send other requests
-to the ide_service at any time, safe in the knowledge that such requests will
-necessarily be delivered after the initialize request. *)
+  to its first await point, at which point it returns a promise to its
+  caller; the rest of the method will be scheduled asynchronously.
+  The synchronous preamble sends an "initialize" request to the ide_service.
+  The asynchronous continuation is triggered when the response comes back;
+  it then pumps messages to and from the ide service.
+  Note: the fact that the request is sent in the synchronous preamble, is
+  important for correctness - the rest of the codebase can send other requests
+  to the ide_service at any time, safe in the knowledge that such requests will
+  necessarily be delivered after the initialize request. *)
 let run_ide_service
     (ide_service : ClientIdeService.t)
     (initialize_params : Lsp.Initialize.params)
@@ -1455,6 +1458,7 @@ let run_ide_service
       ide_service
       ~root:!env.root
       ~naming_table_load_info
+      ~warnings_saved_state_path:!env.args.warnings_saved_state_path
       ~config:!env.args.config
       ~ignore_hh_version:!env.args.ignore_hh_version
       ~open_files
@@ -1481,9 +1485,9 @@ let stop_ide_service
   Lwt.return_unit
 
 (** This function looks at three sources of information (1) hh_server progress.json file,
-(2) whether we're currently tailing an errors.bin file or whether we failed to open one,
-(3) status of clientIdeDaemon. It synthesizes a status message suitable for display
-in the VSCode status bar. *)
+  (2) whether we're currently tailing an errors.bin file or whether we failed to open one,
+  (3) status of clientIdeDaemon. It synthesizes a status message suitable for display
+  in the VSCode status bar. *)
 let merge_statuses_standalone
     (server : Server_progress.t)
     (errors : errors_conn)
@@ -1622,8 +1626,8 @@ let refresh_status ~(ide_service : ClientIdeService.t ref) : unit =
     ()
 
 (** This kicks off a permanent process which, once a second, reads progress.json
-and calls [refresh_status]. Because it's an Lwt process, it's able to update
-status even when we're stuck waiting for RPC. *)
+  and calls [refresh_status]. Because it's an Lwt process, it's able to update
+  status even when we're stuck waiting for RPC. *)
 let background_status_refresher (ide_service : ClientIdeService.t ref) : unit =
   let rec loop () =
     latest_hh_server_progress := Server_progress.read ();
@@ -1653,21 +1657,21 @@ let ide_rpc
   | Error error_data -> raise (Daemon_nonfatal_exception error_data)
 
 (** This sets up a background watcher which polls the file for size changes due
-to it being appended to; each file size change, it writes to an [Lwt_stream.t] everything that
-has been appended since last append. (Except: the first item it places on the stream
-comes not from the file, but rather from the [open_file_results] parameter; moreover
-subsequent items that it reads from the file are culled if they refer to files
-mentioned in [open_file_results]. This exception is a vehicle for (1) the rest of the
-code to read IDE-results and file-results in a uniform way, (2) an easy way for us
-to "mask" file-results by culling out all file-results that pertain to files open in the IDE.)
+  to it being appended to; each file size change, it writes to an [Lwt_stream.t] everything that
+  has been appended since last append. (Except: the first item it places on the stream
+  comes not from the file, but rather from the [open_file_results] parameter; moreover
+  subsequent items that it reads from the file are culled if they refer to files
+  mentioned in [open_file_results]. This exception is a vehicle for (1) the rest of the
+  code to read IDE-results and file-results in a uniform way, (2) an easy way for us
+  to "mask" file-results by culling out all file-results that pertain to files open in the IDE.)
 
-Once the file has been unlinked, then
-the background watcher will gather everything that has been appended until
-that point, write it to the stream, close the stream, and terminate.
-Note: if you have a watcher, and unlink the file, and start a new file
-with the same name without first waiting for the stream to close, then
-there might be a race condition. Suggestion: wait for the stream to close
-before starting a new file! *)
+  Once the file has been unlinked, then
+  the background watcher will gather everything that has been appended until
+  that point, write it to the stream, close the stream, and terminate.
+  Note: if you have a watcher, and unlink the file, and start a new file
+  with the same name without first waiting for the stream to close, then
+  there might be a race condition. Suggestion: wait for the stream to close
+  before starting a new file! *)
 let watch_refs_stream_file
     (file : Path.t)
     ~(open_file_results : (string * Pos.absolute) list Lsp.UriMap.t) :
@@ -2137,8 +2141,14 @@ let do_hover_common (infos : HoverService.hover_info list) : Hover.result =
            match hoverInfo with
            | { HoverService.snippet = ""; _ } -> []
            | { HoverService.snippet; addendum; _ } ->
-             MarkedCode ("hack", snippet)
-             :: List.map ~f:(fun s -> MarkedString s) addendum)
+             let addendum = List.map ~f:(fun s -> MarkedString s) addendum in
+             let addendum =
+               if List.is_empty addendum then
+                 addendum
+               else
+                 MarkedString "---" :: addendum
+             in
+             MarkedCode ("hack", snippet) :: addendum)
     |> List.concat
   in
   (* We pull the position from the SymbolOccurrence.t record, so I would be
@@ -2922,7 +2932,7 @@ let do_formatting_common
   let lsp_doc = UriMap.find uri editor_open_files in
   let content = lsp_doc.Lsp.TextDocumentItem.text in
   let response =
-    ServerFormat.go_ide ~filename_for_logging ~content ~action ~options
+    Ide_format.go_ide ~filename_for_logging ~content ~action ~options
   in
   match response with
   | Error "File failed to parse without errors" ->
@@ -2963,24 +2973,24 @@ let do_documentOnTypeFormatting
   let open DocumentOnTypeFormatting in
   let open TextDocumentIdentifier in
   (*
-In LSP, positions do not point directly to characters, but to spaces in between characters.
-Thus, the LSP position that the cursor points to after typing a character is the space
-immediately after the character.
+    In LSP, positions do not point directly to characters, but to spaces in between characters.
+    Thus, the LSP position that the cursor points to after typing a character is the space
+    immediately after the character.
 
-For example:
-      Character positions:      0 1 2 3 4 5 6
-                                f o o ( ) { }
-      LSP positions:           0 1 2 3 4 5 6 7
+    For example:
+          Character positions:      0 1 2 3 4 5 6
+                                    f o o ( ) { }
+          LSP positions:           0 1 2 3 4 5 6 7
 
-      The cursor is at LSP position 7 after typing the "}" of "foo(){}"
-      But the character position of "}" is 6.
+          The cursor is at LSP position 7 after typing the "}" of "foo(){}"
+          But the character position of "}" is 6.
 
-Nuclide currently sends positions according to LSP, but everything else in the server
-and in hack formatting assumes that positions point directly to characters.
+    Nuclide currently sends positions according to LSP, but everything else in the server
+    and in hack formatting assumes that positions point directly to characters.
 
-Thus, to send the position of the character itself for formatting,
-  we must subtract one.
-*)
+    Thus, to send the position of the character itself for formatting,
+      we must subtract one.
+    *)
   let position =
     { params.position with character = params.position.character - 1 }
   in
@@ -3321,9 +3331,9 @@ let report_recheck_telemetry
     ~start_handle_time:!ref_unblocked_time;
   ()
 
-(** This function shold be called anytime we've recomputed live squiggles
-(e.g. upon didChange, codeAction, didClose). It (1) sends publishDiagnostics
-as necessary, (2) sends an LSP telemetry/event to say what it has done. *)
+(** This function should be called anytime we've recomputed live squiggles
+  (e.g. upon didChange, codeAction, didClose). It (1) sends publishDiagnostics
+  as necessary, (2) sends an LSP telemetry/event to say what it has done. *)
 let publish_and_report_after_recomputing_live_squiggles
     (state : state)
     (file_path : Path.t)
@@ -3359,13 +3369,14 @@ let publish_and_report_after_recomputing_live_squiggles
     new_state
 
 (** When the errors-file gets new items or is closed, this function updates diagnostics as necessary,
-and switches from TailingErrors to SeekingErrors if it's closed.
-Principles: (1) don't touch open files, since they are governed solely by clientIdeDaemon;
-(2) only update an existing diagnostic if the scrape's start_time is newer than it,
-since these will have come recently from clientIdeDaemon, to which we grant primacy. *)
+  and switches from TailingErrors to SeekingErrors if it's closed.
+  Principles: (1) don't touch open files, since they are governed solely by clientIdeDaemon;
+  (2) only update an existing diagnostic if the scrape's start_time is newer than it,
+  since these will have come recently from clientIdeDaemon, to which we grant primacy. *)
 let handle_errors_file_item
-    ~(state : state ref) (item : Server_progress.ErrorsRead.read_result option)
-    : result_telemetry option Lwt.t =
+    ~(state : state ref)
+    (item : Server_progress.ErrorsRead.read_result option)
+    (error_filter : Filter_errors.Filter.t) : result_telemetry option Lwt.t =
   (* a small helper, to send the actual lsp message *)
   let publish params =
     notify_jsonrpc ~powered_by:Hh_server (PublishDiagnosticsNotification params)
@@ -3491,6 +3502,7 @@ let handle_errors_file_item
               when Float.(existing_timestamp > start_time) ->
               acc
             | _ ->
+              let file_errors = Filter_errors.filter error_filter file_errors in
               (* We do not precompute additional diagnostic information (like
                  where to display additional LSP visual hints) for errors
                  received from the server. They will in general only be received
@@ -3509,21 +3521,21 @@ let handle_errors_file_item
     Lwt.return_none
 
 (** If we're in [errors_conn = SeekingErrors], then this function will try to open the
-current errors-file. If success then we'll set [latest_hh_server_errors] to [TailingErrors].
-If failure then we'll set it to [SeekingErrors], which includes error explanation for why
-the attempt failed. We'll also clear out all squiggles.
+  current errors-file. If success then we'll set [latest_hh_server_errors] to [TailingErrors].
+  If failure then we'll set it to [SeekingErrors], which includes error explanation for why
+  the attempt failed. We'll also clear out all squiggles.
 
-If the failure was due to a version mismatch, we also take the opportunity
-to check: has the version changed under our feet since we ourselves started?
-If it has, then we exit with an error code (so that VSCode will relaunch
-the correct version of lsp afterwards). If it hasn't, then we continue,
-and the version mismatch must necessarily indicate that hh_server is the
-wrong version.
+  If the failure was due to a version mismatch, we also take the opportunity
+  to check: has the version changed under our feet since we ourselves started?
+  If it has, then we exit with an error code (so that VSCode will relaunch
+  the correct version of lsp afterwards). If it hasn't, then we continue,
+  and the version mismatch must necessarily indicate that hh_server is the
+  wrong version.
 
-If we're in [errors_conn = TrailingErrors] already, this function is a no-op.
+  If we're in [errors_conn = TrailingErrors] already, this function is a no-op.
 
-If we're called before even having received the initialize request from LSP client
-(hence before we even know the project root), this is a no-op. *)
+  If we're called before even having received the initialize request from LSP client
+  (hence before we even know the project root), this is a no-op. *)
 let try_open_errors_file ~(state : state ref) : unit Lwt.t =
   match !latest_hh_server_errors with
   | TailingErrors _ -> Lwt.return_unit
@@ -3751,7 +3763,7 @@ let do_initialize ~initialize_params : Initialize.result =
               want_openClose = true;
               want_change = IncrementalSync;
               want_willSave = false;
-              want_willSaveWaitUntil = true;
+              want_willSaveWaitUntil = not !env.args.disable_format_on_save;
               want_didSave = Some { includeText = false };
             };
           hoverProvider = true;
@@ -3944,24 +3956,24 @@ let is_cancellation_of_request ~message { Jsonrpc.json; _ } : bool =
     | M.Is_response -> false)
 
 (** This will run [f] but wrap it up in a way that respects cancellation:
-1. If there's already a cancellation request for [message] in the queue, then we'll
-just raise [RequestCancelled] Lsp exception immediately.
-2. Otherwise, we'll await the callback [f], but if a cancellation request arrives
-in the queue while awaiting then we'll use [WorkerCancel.stop_workers] to cooperatively
-request it to finish.
+  1. If there's already a cancellation request for [message] in the queue, then we'll
+  just raise [RequestCancelled] Lsp exception immediately.
+  2. Otherwise, we'll await the callback [f], but if a cancellation request arrives
+  in the queue while awaiting then we'll use [WorkerCancel.stop_workers] to cooperatively
+  request it to finish.
 
-INVARIANT: only one concurrent caller should invoke this function. (why? because
-our cancellation mechanism [WorkerCancel.stop_workers] is a single bit, hence unable
-to know which of multiple concurrent calls should be stopped). If this requirement
-is violated, (1) we might end up cancelling the wrong thing, (2) we'll log
-invariant_violation_bugs in [ide_rpc], here, and other places that call
-[assert_workers_are_not_stopped]. It's easy to see how our caller upholds
-the invariant -- we have only a single caller, the main ClientLsp message-loop,
-which isn't concurrent with itself.
+  INVARIANT: only one concurrent caller should invoke this function. (why? because
+  our cancellation mechanism [WorkerCancel.stop_workers] is a single bit, hence unable
+  to know which of multiple concurrent calls should be stopped). If this requirement
+  is violated, (1) we might end up cancelling the wrong thing, (2) we'll log
+  invariant_violation_bugs in [ide_rpc], here, and other places that call
+  [assert_workers_are_not_stopped]. It's easy to see how our caller upholds
+  the invariant -- we have only a single caller, the main ClientLsp message-loop,
+  which isn't concurrent with itself.
 
-INVARIANT: This function assumes the invariant that workers are not stopped
-prior to entering this function, and restores the invariant upon exiting.
-(Again, this would go wrong in the presence of multiple concurrent callers). *)
+  INVARIANT: This function assumes the invariant that workers are not stopped
+  prior to entering this function, and restores the invariant upon exiting.
+  (Again, this would go wrong in the presence of multiple concurrent callers). *)
 let respect_cancellation
     (client : Jsonrpc.t) ~(predicate : Jsonrpc.timestamped_json -> bool) ~f =
   assert_workers_are_not_stopped ();
@@ -4599,7 +4611,10 @@ let handle_client_message
         id
         (DocumentRangeFormattingResult result);
       Lwt.return_some (make_result_telemetry (List.length result))
-    (* textDocument/onTypeFormatting. TODO(T155870670): remove this *)
+    (* textDocument/onTypeFormatting.
+        - The Meta Hack extension does not use this, instead uses hackfmt directly (D46758283)
+        - We keep this implementation for non-VSCode extension clients (notebooks, Vim, etc.)
+    *)
     | (_, RequestMessage (id, DocumentOnTypeFormattingRequest params)) ->
       let%lwt () = cancel_if_stale client timestamp short_timeout in
       let result = do_documentOnTypeFormatting editor_open_files params in
@@ -4765,36 +4780,41 @@ let handle_tick ~(state : state ref) : result_telemetry option Lwt.t =
     ~terminate_on_failure:false;
   Lwt.return_none
 
-let main
-    (args : args)
-    ~(init_id : string)
-    ~(local_config : ServerLocalConfig.t)
-    ~(init_proc_stack : string list option) : Exit_status.t Lwt.t =
-  Printexc.record_backtrace true;
-
-  let root = args.root_from_cli in
-
+let setup_logging ~root ~verbose =
   (* Log to a file on disk. Note that calls to `Hh_logger` will always write to
      `stderr`; this is in addition to that. *)
-  let client_lsp_log_fn = ServerFiles.client_lsp_log root in
+  let log_filename = ServerFiles.client_lsp_log root in
   begin
-    try Sys.rename client_lsp_log_fn (client_lsp_log_fn ^ ".old") with
+    try Sys.rename log_filename (log_filename ^ ".old") with
     | _e -> ()
   end;
-  Hh_logger.set_log client_lsp_log_fn;
+  Hh_logger.set_log log_filename;
   (* The --verbose flag in env.verbose is the only thing that controls verbosity
      to stderr. Meanwhile, verbosity-to-file can be altered dynamically by the user.
      Why are they different? because we should write to stderr under a test harness,
      but we should never write to stderr when invoked by VSCode - it's not even guaranteed
      to drain the stderr pipe. *)
-  if args.verbose then begin
+  if verbose then begin
     Hh_logger.Level.set_min_level_stderr Hh_logger.Level.Debug;
     Hh_logger.Level.set_min_level_file Hh_logger.Level.Debug
   end else begin
     Hh_logger.Level.set_min_level_stderr Hh_logger.Level.Error;
     Hh_logger.Level.set_min_level_file Hh_logger.Level.Info
   end;
-  log "Starting clientLsp at %s" client_lsp_log_fn;
+  log_filename
+
+let main
+    (args : args)
+    ~(init_id : string)
+    ~(config : ServerConfig.t)
+    ~(local_config : ServerLocalConfig.t)
+    ~(init_proc_stack : string list option) : Exit_status.t Lwt.t =
+  Printexc.record_backtrace true;
+
+  let root = args.root_from_cli in
+
+  let log_filename = setup_logging ~root ~verbose:args.verbose in
+  log "Starting clientLsp at %s" log_filename;
   log "cmd: %s" (String.concat ~sep:" " (Array.to_list Sys.argv));
   log "LSP Init id: %s" init_id;
 
@@ -4811,6 +4831,12 @@ let main
 
   env := { args; hhconfig_version_and_switch; root; local_config };
 
+  let error_filter =
+    Filter_errors.Filter.make
+      ~default_all:local_config.ServerLocalConfig.warnings_default_all
+      ~generated_files:(ServerConfig.warnings_generated_files config)
+      []
+  in
   let ide_service =
     ref
       (ClientIdeService.make
@@ -4819,17 +4845,17 @@ let main
            verbose_to_stderr = args.verbose;
            verbose_to_file = args.verbose;
            shm_handle;
-           client_lsp_log_fn;
+           client_lsp_log_fn = log_filename;
+           error_filter;
          })
   in
   background_status_refresher ide_service;
 
   let client = Jsonrpc.make_t () in
-  let deferred_action : (unit -> unit Lwt.t) option ref = ref None in
   let state = ref Pre_init in
   let ref_event = ref None in
   let ref_unblocked_time = ref (Unix.gettimeofday ()) in
-  (* ref_unblocked_time is the time at which we're no longer blocked on either
+  (* `ref_unblocked_time` is the time at which we're no longer blocked on either
    * clientLsp message-loop or hh_server, and can start actually handling.
    * Everything that blocks will update this variable. *)
   let process_next_event () : unit Lwt.t =
@@ -4838,14 +4864,6 @@ let main
        [respect_cancellation], but its ~finally clause guarantees that it unstops workers
        before it completes i.e. before we continue this [process_next_event] loop. *)
     try%lwt
-      let%lwt () =
-        match !deferred_action with
-        | Some deferred_action ->
-          let%lwt () = deferred_action () in
-          Lwt.return_unit
-        | None -> Lwt.return_unit
-      in
-      deferred_action := None;
       let%lwt event = get_next_event state client ide_service in
       if not (is_tick event) then
         log_debug "next event: %s" (event_to_string event);
@@ -4882,7 +4900,8 @@ let main
             ~ide_service
             ~notification
             ~ref_unblocked_time
-        | Errors_file result -> handle_errors_file_item ~state result
+        | Errors_file result ->
+          handle_errors_file_item ~state result error_filter
         | Refs_file result ->
           Lwt.return (handle_refs_file_items ~state:!state result)
         | Shell_out_complete (result, triggering_request, shellable_type) ->

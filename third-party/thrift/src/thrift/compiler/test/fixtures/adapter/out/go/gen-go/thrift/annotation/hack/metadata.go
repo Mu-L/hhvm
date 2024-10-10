@@ -6,22 +6,15 @@
 package hack
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
@@ -29,11 +22,65 @@ var (
     premadeThriftType_string = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_STRING_TYPE.Ptr(),
             )
+    premadeThriftType_hack_FieldWrapper = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.FieldWrapper"),
+            )
+    premadeThriftType_hack_Wrapper = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.Wrapper"),
+            )
+    premadeThriftType_hack_Adapter = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.Adapter"),
+            )
+    premadeThriftType_hack_SkipCodegen = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.SkipCodegen"),
+            )
+    premadeThriftType_hack_Name = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.Name"),
+            )
     premadeThriftType_list_string = metadata.NewThriftType().SetTList(
         metadata.NewThriftListType().
             SetValueType(premadeThriftType_string),
             )
+    premadeThriftType_hack_UnionEnumAttributes = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.UnionEnumAttributes"),
+            )
+    premadeThriftType_hack_StructTrait = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.StructTrait"),
+            )
+    premadeThriftType_hack_Attributes = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.Attributes"),
+            )
+    premadeThriftType_hack_StructAsTrait = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.StructAsTrait"),
+            )
+    premadeThriftType_hack_ModuleInternal = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("hack.ModuleInternal"),
+            )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "string": premadeThriftType_string,
+    "hack.FieldWrapper": premadeThriftType_hack_FieldWrapper,
+    "hack.Wrapper": premadeThriftType_hack_Wrapper,
+    "hack.Adapter": premadeThriftType_hack_Adapter,
+    "hack.SkipCodegen": premadeThriftType_hack_SkipCodegen,
+    "hack.Name": premadeThriftType_hack_Name,
+    "hack.UnionEnumAttributes": premadeThriftType_hack_UnionEnumAttributes,
+    "hack.StructTrait": premadeThriftType_hack_StructTrait,
+    "hack.Attributes": premadeThriftType_hack_Attributes,
+    "hack.StructAsTrait": premadeThriftType_hack_StructAsTrait,
+    "hack.ModuleInternal": premadeThriftType_hack_ModuleInternal,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
     metadata.NewThriftStruct().
@@ -162,6 +209,12 @@ var enumMetadatas = []*metadata.ThriftEnum{
 }
 
 var serviceMetadatas = []*metadata.ThriftService{
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.

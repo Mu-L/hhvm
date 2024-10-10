@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<2a1b77b1c5d4d8f2f953e1d2b768d67d>>
+// @generated SignedSource<<0ee705441142d821588779254c098413>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -71,10 +71,14 @@ pub type PositionedByteString = (Pos, bstr::BString);
 #[rust_to_ocaml(attr = "transform.opaque")]
 #[repr(C, u8)]
 pub enum ShapeFieldName {
-    #[rust_to_ocaml(name = "SFlit_int")]
-    SFlitInt(Pstring),
+    /// TODO(T199271494) Eliminate this group node and its supporting code. It
+    /// is conjured by typing for inference of Shapes::idx for regex results,
+    /// but is otherwise never emitted.
+    #[rust_to_ocaml(name = "SFregex_group")]
+    SFregexGroup(Pstring),
     #[rust_to_ocaml(name = "SFlit_str")]
     SFlitStr(PositionedByteString),
+    SFclassname(Id),
     #[rust_to_ocaml(name = "SFclass_const")]
     SFclassConst(Id, Pstring),
 }
@@ -278,6 +282,32 @@ pub enum OptionalKind {
 }
 impl TrivialDrop for OptionalKind {}
 arena_deserializer::impl_deserialize_in_arena!(OptionalKind);
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(attr = "transform.opaque")]
+#[repr(u8)]
+pub enum SplatKind {
+    Splat,
+}
+impl TrivialDrop for SplatKind {}
+arena_deserializer::impl_deserialize_in_arena!(SplatKind);
 
 #[derive(
     Clone,
@@ -606,7 +636,6 @@ pub enum TypedefVisibility {
     Transparent,
     Opaque,
     OpaqueModule,
-    CaseType,
 }
 impl TrivialDrop for TypedefVisibility {}
 arena_deserializer::impl_deserialize_in_arena!(TypedefVisibility);

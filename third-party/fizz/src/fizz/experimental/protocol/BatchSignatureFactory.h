@@ -57,6 +57,11 @@ class BatchSignatureFactory : public Factory {
     return original_->makeKeyDeriver(cipher);
   }
 
+  const HasherFactoryWithMetadata* makeHasherFactory(
+      HashFunction digest) const override {
+    return original_->makeHasherFactory(digest);
+  }
+
   std::unique_ptr<HandshakeContext> makeHandshakeContext(
       CipherSuite cipher) const override {
     return original_->makeHandshakeContext(cipher);
@@ -64,24 +69,16 @@ class BatchSignatureFactory : public Factory {
 
   std::unique_ptr<KeyExchange> makeKeyExchange(
       NamedGroup group,
-      KeyExchangeMode mode) const override {
-    return original_->makeKeyExchange(group, mode);
+      KeyExchangeRole role) const override {
+    return original_->makeKeyExchange(group, role);
   }
 
   std::unique_ptr<Aead> makeAead(CipherSuite cipher) const override {
     return original_->makeAead(cipher);
   }
 
-  Random makeRandom() const override {
-    return original_->makeRandom();
-  }
-
-  uint32_t makeTicketAgeAdd() const override {
-    return original_->makeTicketAgeAdd();
-  }
-
-  std::unique_ptr<folly::IOBuf> makeRandomBytes(size_t count) const override {
-    return original_->makeRandomBytes(count);
+  void makeRandomBytes(unsigned char* out, size_t count) const override {
+    return original_->makeRandomBytes(out, count);
   }
 
   /**
@@ -101,10 +98,6 @@ class BatchSignatureFactory : public Factory {
 
   std::shared_ptr<Cert> makeIdentityOnlyCert(std::string ident) const override {
     return original_->makeIdentityOnlyCert(std::move(ident));
-  }
-
-  std::string getHkdfPrefix() const override {
-    return original_->getHkdfPrefix();
   }
 
  private:

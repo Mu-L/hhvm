@@ -250,10 +250,11 @@ where
         Self::make(syntax, value)
     }
 
-    fn make_case_type_variant(ctx: &C, bar: Self, type_: Self) -> Self {
+    fn make_case_type_variant(ctx: &C, bar: Self, type_: Self, where_clause: Self) -> Self {
         let syntax = SyntaxVariant::CaseTypeVariant(ctx.get_arena().alloc(CaseTypeVariantChildren {
             bar,
             type_,
+            where_clause,
         }));
         let value = V::from_values(syntax.iter_children().map(|child| &child.value));
         Self::make(syntax, value)
@@ -546,13 +547,14 @@ where
         Self::make(syntax, value)
     }
 
-    fn make_parameter_declaration(ctx: &C, attribute: Self, visibility: Self, optional: Self, call_convention: Self, readonly: Self, type_: Self, ellipsis: Self, name: Self, default_value: Self, parameter_end: Self) -> Self {
+    fn make_parameter_declaration(ctx: &C, attribute: Self, visibility: Self, optional: Self, call_convention: Self, readonly: Self, pre_ellipsis: Self, type_: Self, ellipsis: Self, name: Self, default_value: Self, parameter_end: Self) -> Self {
         let syntax = SyntaxVariant::ParameterDeclaration(ctx.get_arena().alloc(ParameterDeclarationChildren {
             attribute,
             visibility,
             optional,
             call_convention,
             readonly,
+            pre_ellipsis,
             type_,
             ellipsis,
             name,
@@ -1719,11 +1721,23 @@ where
         Self::make(syntax, value)
     }
 
-    fn make_closure_parameter_type_specifier(ctx: &C, optional: Self, call_convention: Self, readonly: Self, type_: Self, ellipsis: Self) -> Self {
+    fn make_closure_parameter_type_specifier(ctx: &C, optional: Self, call_convention: Self, readonly: Self, pre_ellipsis: Self, type_: Self, ellipsis: Self) -> Self {
         let syntax = SyntaxVariant::ClosureParameterTypeSpecifier(ctx.get_arena().alloc(ClosureParameterTypeSpecifierChildren {
             optional,
             call_convention,
             readonly,
+            pre_ellipsis,
+            type_,
+            ellipsis,
+        }));
+        let value = V::from_values(syntax.iter_children().map(|child| &child.value));
+        Self::make(syntax, value)
+    }
+
+    fn make_tuple_or_union_or_intersection_element_type_specifier(ctx: &C, optional: Self, pre_ellipsis: Self, type_: Self, ellipsis: Self) -> Self {
+        let syntax = SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier(ctx.get_arena().alloc(TupleOrUnionOrIntersectionElementTypeSpecifierChildren {
+            optional,
+            pre_ellipsis,
             type_,
             ellipsis,
         }));

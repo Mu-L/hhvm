@@ -64,51 +64,7 @@ template <class>
 struct A {};
 struct B {};
 
-struct HashableStruct1 {};
-struct HashableStruct2 {};
-struct UnhashableStruct {};
-
-template <typename X, typename Y>
-struct CompositeStruct {
-  X x;
-  Y y;
-};
-
 } // namespace
-
-namespace std {
-
-template <>
-struct hash<HashableStruct1> {
-  [[maybe_unused]] size_t operator()(const HashableStruct1&) const noexcept {
-    return 0;
-  }
-};
-
-template <>
-struct hash<HashableStruct2> {
-  [[maybe_unused]] size_t operator()(const HashableStruct2&) const noexcept {
-    return 0;
-  }
-};
-
-template <typename X, typename Y>
-struct hash<enable_std_hash_helper<CompositeStruct<X, Y>, X, Y>> {
-  [[maybe_unused]] size_t operator()(
-      const CompositeStruct<X, Y>& value) const noexcept {
-    return std::hash<X>{}(value.x) + std::hash<Y>{}(value.y);
-  }
-};
-
-static_assert(is_hashable_v<HashableStruct1>);
-static_assert(is_hashable_v<HashableStruct2>);
-static_assert(!is_hashable_v<UnhashableStruct>);
-static_assert(is_hashable_v<CompositeStruct<HashableStruct1, HashableStruct1>>);
-static_assert(is_hashable_v<CompositeStruct<HashableStruct1, HashableStruct2>>);
-static_assert(
-    !is_hashable_v<CompositeStruct<HashableStruct1, UnhashableStruct>>);
-
-} // namespace std
 
 namespace folly {
 template <>
@@ -532,6 +488,27 @@ TEST(Traits, like) {
            value));
 }
 
+#if defined(__cpp_concepts)
+TEST(Traits, UncvrefSameAs) {
+  static_assert(folly::uncvref_same_as<std::vector<int>, std::vector<int>>);
+  static_assert(folly::uncvref_same_as<std::vector<int>&, std::vector<int>>);
+  static_assert(
+      folly::uncvref_same_as<const std::vector<int>&, std::vector<int>>);
+  static_assert(folly::uncvref_same_as<std::vector<int>&&, std::vector<int>>);
+
+  constexpr auto refersToExample =
+      [](folly::uncvref_same_as<std::vector<int>> auto&&) {};
+
+  static_assert(std::invocable<decltype(refersToExample), std::vector<int>>);
+  static_assert(
+      std::invocable<decltype(refersToExample), const std::vector<int>&>);
+  static_assert(std::invocable<decltype(refersToExample), std::vector<int>&&>);
+
+  static_assert(
+      !std::invocable<decltype(refersToExample), std::vector<char>&&>);
+}
+#endif
+
 TEST(Traits, isUnboundedArrayV) {
   EXPECT_FALSE((folly::is_unbounded_array_v<void>));
   EXPECT_FALSE((folly::is_unbounded_array_v<int>));
@@ -547,28 +524,33 @@ TEST(Traits, isBoundedArrayV) {
 }
 
 TEST(Traits, isInstantiationOfV) {
-  EXPECT_TRUE((detail::is_instantiation_of_v<A, A<int>>));
-  EXPECT_FALSE((detail::is_instantiation_of_v<A, B>));
+  EXPECT_TRUE((is_instantiation_of_v<A, A<int>>));
+  EXPECT_FALSE((is_instantiation_of_v<A, B>));
 }
 
 TEST(Traits, isInstantiationOf) {
-  EXPECT_TRUE((detail::is_instantiation_of<A, A<int>>::value));
-  EXPECT_FALSE((detail::is_instantiation_of<A, B>::value));
+  EXPECT_TRUE((is_instantiation_of<A, A<int>>::value));
+  EXPECT_FALSE((is_instantiation_of<A, B>::value));
 }
 
-TEST(Traits, isSimilarInstantiationV) {
-  EXPECT_TRUE((detail::is_similar_instantiation_v<A<int>, A<long>>));
-  EXPECT_FALSE((detail::is_similar_instantiation_v<A<int>, tag_t<int>>));
-  EXPECT_FALSE((detail::is_similar_instantiation_v<A<int>, B>));
-  EXPECT_FALSE((detail::is_similar_instantiation_v<B, B>));
-}
+#if defined(__cpp_concepts)
+TEST(Traits, InstantiationOf) {
+  static_assert(folly::instantiated_from<A<int>, A>);
+  static_assert(!folly::instantiated_from<A<int>&, A>);
+  static_assert(!folly::instantiated_from<A<int>, std::vector>);
 
-TEST(Traits, isSimilarInstantiation) {
-  EXPECT_TRUE((detail::is_similar_instantiation<A<int>, A<long>>::value));
-  EXPECT_FALSE((detail::is_similar_instantiation<A<int>, tag_t<int>>::value));
-  EXPECT_FALSE((detail::is_similar_instantiation<A<int>, B>::value));
-  EXPECT_FALSE((detail::is_similar_instantiation<B, B>::value));
+  static_assert(folly::uncvref_instantiated_from<A<int>, A>);
+  static_assert(folly::uncvref_instantiated_from<A<int>&, A>);
+  static_assert(!folly::uncvref_instantiated_from<A<int>&, std::vector>);
+
+  auto example = [](folly::uncvref_instantiated_from<std::vector> auto&&) {};
+
+  static_assert(std::invocable<decltype(example), std::vector<int>&&>);
+  static_assert(std::invocable<decltype(example), std::vector<int>&>);
+  static_assert(std::invocable<decltype(example), const std::vector<int>&>);
+  static_assert(std::invocable<decltype(example), std::vector<int>>);
 }
+#endif
 
 TEST(Traits, member_pointer_traits_data) {
   struct o {};
@@ -743,6 +725,26 @@ TEST(Traits, type_list_size) {
       5, (type_list_size_t<tag_t<long long, long, int, short, char>>::value));
 }
 
+TEST(Traits, type_list_concat) {
+  static_assert(std::is_same_v<tag_t<>, type_list_concat_t<tag_t>>);
+  static_assert(std::is_same_v<tag_t<>, type_list_concat_t<tag_t, tag_t<>>>);
+  static_assert(
+      std::is_same_v<tag_t<>, type_list_concat_t<tag_t, tag_t<>, tag_t<>>>);
+  static_assert(
+      std::is_same_v<tag_t<int>, type_list_concat_t<tag_t, tag_t<int>>>);
+  static_assert(std::is_same_v<
+                tag_t<int, double>,
+                type_list_concat_t<tag_t, tag_t<int>, tag_t<double>>>);
+  static_assert( //
+      std::is_same_v<
+          tag_t<int, void, double, inspects_tag>,
+          type_list_concat_t<
+              tag_t,
+              std::tuple<int, void, double>,
+              tag_t<>,
+              tag_t<inspects_tag>>>);
+}
+
 TEST(Traits, value_pack) {
   EXPECT_EQ(3, (folly::value_pack_size_v<7u, 8, '9'>));
   EXPECT_EQ(3, (folly::value_pack_size_t<7u, 8, '9'>::value));
@@ -759,4 +761,52 @@ TEST(Traits, value_list) {
           int,
           folly::value_list_element_type_t<1, vtag_t<7u, 8, '9'>>>));
   EXPECT_EQ(8, (folly::value_list_element_v<1, vtag_t<7u, 8, '9'>>));
+}
+
+template <auto...>
+struct also_vtag_t {};
+
+TEST(Traits, value_list_concat) {
+  static_assert(std::is_same_v<vtag_t<>, value_list_concat_t<vtag_t>>);
+  static_assert(
+      std::is_same_v<vtag_t<>, value_list_concat_t<vtag_t, vtag_t<>>>);
+  static_assert(
+      std::
+          is_same_v<vtag_t<>, value_list_concat_t<vtag_t, vtag_t<>, vtag_t<>>>);
+  static_assert(
+      std::is_same_v<vtag_t<7>, value_list_concat_t<vtag_t, vtag_t<7>>>);
+  static_assert( //
+      std::is_same_v<
+          vtag_t<3, 1, 4, 1, 5, 9>,
+          value_list_concat_t<
+              vtag_t,
+              also_vtag_t<3, 1>,
+              vtag_t<>,
+              vtag_t<4>,
+              vtag_t<1, 5, 9>>>);
+}
+
+TEST(Traits, type_pack_find) {
+  EXPECT_EQ(0, folly::type_pack_find_v<int>);
+  EXPECT_EQ(0, folly::type_pack_find_t<int>{});
+  EXPECT_EQ(4, (folly::type_pack_find_v<long, char, short, int, float>));
+  EXPECT_EQ(4, (folly::type_pack_find_t<long, char, short, int, float>{}));
+  EXPECT_EQ(2, (folly::type_pack_find_v<int, char, short, int, float>));
+  EXPECT_EQ(2, (folly::type_pack_find_t<int, char, short, int, float>{}));
+}
+
+TEST(Traits, type_list_find) {
+  EXPECT_EQ(0, (folly::type_list_find_v<int, folly::tag_t<>>));
+  EXPECT_EQ(0, (folly::type_list_find_t<int, folly::tag_t<>>{}));
+  EXPECT_EQ(
+      4,
+      (folly::type_list_find_v<long, folly::tag_t<char, short, int, float>>));
+  EXPECT_EQ(
+      4,
+      (folly::type_list_find_t<long, folly::tag_t<char, short, int, float>>{}));
+  EXPECT_EQ(
+      2, (folly::type_list_find_v<int, folly::tag_t<char, short, int, float>>));
+  EXPECT_EQ(
+      2,
+      (folly::type_list_find_t<int, folly::tag_t<char, short, int, float>>{}));
 }

@@ -50,45 +50,19 @@ class KeyDerivation {
       folly::ByteRange salt,
       folly::ByteRange ikm) = 0;
 
-  virtual void hash(const folly::IOBuf& in, folly::MutableByteRange out) = 0;
-
-  virtual void hmac(
-      folly::ByteRange key,
-      const folly::IOBuf& in,
-      folly::MutableByteRange out) = 0;
-
   virtual std::unique_ptr<KeyDerivation> clone() const = 0;
 };
 
 class KeyDerivationImpl : public KeyDerivation {
  public:
-  KeyDerivationImpl(
-      const std::string& labelPrefix,
-      size_t hashLength,
-      HashFunc hashFunc,
-      HmacFunc hmacFunc,
-      HkdfImpl hkdf,
-      folly::ByteRange blankHash);
-
-  ~KeyDerivationImpl() override = default;
+  explicit KeyDerivationImpl(const HasherFactoryWithMetadata* hf) : hkdf_(hf) {}
 
   size_t hashLength() const override {
-    return hashLength_;
-  }
-
-  void hash(const folly::IOBuf& in, folly::MutableByteRange out) override {
-    hashFunc_(in, out);
-  }
-
-  void hmac(
-      folly::ByteRange key,
-      const folly::IOBuf& in,
-      folly::MutableByteRange out) override {
-    hmacFunc_(key, in, out);
+    return hkdf_.hashLength();
   }
 
   folly::ByteRange blankHash() const override {
-    return blankHash_;
+    return hkdf_.hasher()->blankHash();
   }
 
   Buf expandLabel(
@@ -112,16 +86,11 @@ class KeyDerivationImpl : public KeyDerivation {
   }
 
   std::unique_ptr<KeyDerivation> clone() const override {
-    return std::unique_ptr<KeyDerivation>(new KeyDerivationImpl(
-        labelPrefix_, hashLength_, hashFunc_, hmacFunc_, hkdf_, blankHash_));
+    return std::unique_ptr<KeyDerivation>(
+        new KeyDerivationImpl(hkdf_.hasher()));
   }
 
  private:
-  std::string labelPrefix_;
-  size_t hashLength_;
-  HashFunc hashFunc_;
-  HmacFunc hmacFunc_;
-  HkdfImpl hkdf_;
-  folly::ByteRange blankHash_;
+  Hkdf hkdf_;
 };
 } // namespace fizz

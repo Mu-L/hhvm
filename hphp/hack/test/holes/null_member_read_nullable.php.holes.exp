@@ -17,8 +17,8 @@
          m_params =
          [{ param_annotation = (int); param_type_hint = ((int), (Some ([4:38-41], (Hprim Tint)))); 
             param_pos = [4:42-44]; param_name = "$x"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = (Some Public) }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = (Some Public) }
            ];
          m_ctxs = None; m_unsafe_ctxs = None;
          m_body =
@@ -62,35 +62,37 @@
          f_params =
          [{ param_annotation = (bool); param_type_hint = ((bool), (Some ([8:36-40], (Hprim Tbool)))); 
             param_pos = [8:41-43]; param_name = "$a"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
          { fb_ast =
            [([9:3-38],
              (Expr
-                ((?MyVeryOwnC), [9:3-37],
+                ((?exact MyVeryOwnC), [9:3-37],
                  (Binop
-                    { bop = (Eq None); lhs = ((?MyVeryOwnC), [9:3-5], (Lvar ([9:3-5], $c)));
+                    { bop = (Eq None); lhs = ((?exact MyVeryOwnC), [9:3-5], (Lvar ([9:3-5], $c)));
                       rhs =
-                      ((?MyVeryOwnC), [9:8-37],
+                      ((?exact MyVeryOwnC), [9:8-37],
                        (Eif (((bool), [9:8-10], (Lvar ([9:8-10], $a))), (Some (
                           (null), [9:13-17], Null)),
-                          ((MyVeryOwnC), [9:20-37], (New (((MyVeryOwnC), [9:24-34], (CI ([9:24-34], "\\MyVeryOwnC"))), [], [((int), [9:35-36], (Int "0"))], None, ((function(int $x): void))))))))
+                          ((exact MyVeryOwnC), [9:20-37],
+                           (New (((exact MyVeryOwnC), [9:24-34], (CI ([9:24-34], "\\MyVeryOwnC"))), [], [((int), [9:35-36], (Int "0"))], None, ((function(int $x): void)))))
+                          )))
                       }))));
              ([11:3-9],
               (Expr
                  ((nothing), [11:3-8],
-                  (Obj_get (((?MyVeryOwnC), [11:3-5], (Hole (((?MyVeryOwnC), [11:3-5], (Lvar ([11:3-5], $c))), (?MyVeryOwnC), (nothing), Typing))), (
-                     (nothing), [11:7-8], (Id ([11:7-8], "x"))), OG_nullthrows, Is_prop)))));
+                  (Obj_get (((?exact MyVeryOwnC), [11:3-5], (Hole (((?exact MyVeryOwnC), [11:3-5], (Lvar ([11:3-5], $c))), (?exact MyVeryOwnC), (nothing), Typing))),
+                     ((nothing), [11:7-8], (Id ([11:7-8], "x"))), OG_nullthrows, Is_prop)))));
              ([13:3-13],
               (Expr
                  ((void), [13:3-12],
                   (Call
                      { func =
                        (((function(): void)), [13:3-10],
-                        (Obj_get (((?MyVeryOwnC), [13:3-5], (Hole (((?MyVeryOwnC), [13:3-5], (Lvar ([13:3-5], $c))), (?MyVeryOwnC), (MyVeryOwnC), Typing))),
+                        (Obj_get (((?exact MyVeryOwnC), [13:3-5], (Hole (((?exact MyVeryOwnC), [13:3-5], (Lvar ([13:3-5], $c))), (?exact MyVeryOwnC), (exact MyVeryOwnC), Typing))),
                            (((function(): void)), [13:7-10], (Id ([13:7-10], "bar"))), OG_nullthrows, Is_method)));
                        targs = []; args = []; unpacked_arg = None }))))
              ]

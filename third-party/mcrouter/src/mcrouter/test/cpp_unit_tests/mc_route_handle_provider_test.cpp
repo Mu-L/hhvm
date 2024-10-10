@@ -56,6 +56,13 @@ const char* const kPoolRoute =
    "hash": { "hash_func": "Crc32" }
  })";
 
+const char* const kPoolRouteInvalidFanout =
+    R"({
+   "type": "PoolRoute",
+   "pool": { "name": "mock", "servers": [ ], "additional_fanout": 40000},
+   "hash": { "hash_func": "Crc32" },
+ })";
+
 const char* const kBucketizedSRRoute =
     R"({
    "type": "SRRoute",
@@ -79,6 +86,20 @@ const char* const kBucketizedPoolRoute =
    "bucketize": true,
    "total_buckets": 1000,
    "bucketization_keyspace": "tst"
+})";
+
+const char* const kRefillOnMissSRRoute =
+    R"({
+   "type": "SRRoute",
+   "service_name": "twmemcache.shadow.bucketization-test",
+   "server_timeout": 200,
+   "asynclog_name": "test.asynclog",
+   "axonlog": false,
+   "bucketize": true,
+   "total_buckets": 1000,
+   "bucketization_keyspace": "tst",
+   "refill_on_miss": true,
+   "refill_from_tier": "twmemcache.shadow.mcrouter-rc"
 })";
 
 struct TestSetup {
@@ -149,6 +170,16 @@ TEST(McRouteHandleProvider, pool_route) {
   EXPECT_EQ("asynclog:mock", asynclogRoutes["mock"]->routeName());
 }
 
+TEST(McRouteHandleProvider, pool_route_with_invalid_fanout) {
+  try {
+    TestSetup setup;
+    auto rh = setup.getRoute(kPoolRouteInvalidFanout);
+  } catch (const std::logic_error&) {
+    return;
+  }
+  FAIL() << "No exception thrown";
+}
+
 TEST(McRouteHandleProvider, bucketized_sr_route_and_mcreplay_asynclogRoutes) {
   TestSetup setup;
   auto rh = setup.getRoute(kBucketizedSRRoute);
@@ -175,4 +206,13 @@ TEST(McRouteHandleProvider, bucketized_pool_route_and_mcreplay_asynclogRoutes) {
   EXPECT_EQ(
       "bucketize|total_buckets=1000|bucketization_keyspace=tst|prefix_map_enabled=false",
       asynclogRoutes["test.asynclog"]->routeName());
+}
+
+TEST(McRouteHandleProvider, bucketized_sr_route_with_refill_on_miss) {
+  TestSetup setup;
+  auto rh = setup.getRoute(kRefillOnMissSRRoute);
+  EXPECT_TRUE(rh != nullptr);
+  EXPECT_EQ(
+      "bucketize|total_buckets=1000|bucketization_keyspace=tst|prefix_map_enabled=false",
+      rh->routeName());
 }

@@ -20,6 +20,7 @@
       "definition_html": "uint32_t apache::thrift::op::detail::SerializedSize&lt; true, type::union_t&lt; T &gt; &gt;::operator()",
       "argsstring_html": "(Protocol &amp;prot, const T &amp;s) const",
       "name_html": "operator()",
+      "qualifiedname_html": "apache::thrift::op::detail::SerializedSize&lt; true, type::union_t&lt; T &gt; &gt;::operator()",
       "param": [
         {
           "type_html": "Protocol &amp;",
@@ -32,11 +33,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "269",
+        "line": "270",
         "column": "12",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "269",
-        "bodyend": "271"
+        "bodystart": "270",
+        "bodyend": "272"
       },
       "definition": {
         "simple_html": "template &lt;typename Protocol&gt;\nuint32_t operator()(Protocol&amp; prot, const T&amp; s) const",

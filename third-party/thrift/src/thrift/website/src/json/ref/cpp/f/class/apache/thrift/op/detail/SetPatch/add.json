@@ -21,6 +21,7 @@
       "definition_html": "void apache::thrift::op::detail::SetPatch&lt; Patch &gt;::add",
       "argsstring_html": "(C &amp;&amp;keys)",
       "name_html": "add",
+      "qualifiedname_html": "apache::thrift::op::detail::SetPatch::add",
       "param": [
         {
           "type_html": "C &amp;&amp;",
@@ -29,11 +30,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "line": "182",
+        "line": "183",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "bodystart": "182",
-        "bodyend": "185"
+        "bodystart": "183",
+        "bodyend": "186"
       },
       "definition": {
         "simple_html": "template &lt;typename C = T&gt;\nvoid add(C&amp;&amp; keys)",

@@ -33,9 +33,13 @@
 
 THRIFT_FLAG_DECLARE_string(rocket_frame_parser);
 
-namespace apache {
-namespace thrift {
-namespace rocket {
+namespace apache::thrift::rocket {
+
+namespace detail {
+enum class ParserMode { STRATEGY, ALLOCATING };
+ParserMode stringToMode(const std::string& modeStr) noexcept;
+ParserAllocatorType& getDefaultAllocator();
+} // namespace detail
 
 // TODO (T160861572): deprecate most of logic in this class and replace with
 // either AllocatingParserStrategy or FrameLengthParserStrategy
@@ -45,17 +49,16 @@ class Parser final : public folly::AsyncTransport::ReadCallback {
   explicit Parser(
       T& owner, std::shared_ptr<ParserAllocatorType> alloc = nullptr)
       : owner_(owner),
-        mode_(stringToMode(THRIFT_FLAG(rocket_frame_parser))),
-        allocator_(alloc ? alloc : std::make_shared<ParserAllocatorType>()) {
-    if (mode_ == ParserMode::STRATEGY) {
+        mode_(detail::stringToMode(THRIFT_FLAG(rocket_frame_parser))) {
+    if (mode_ == detail::ParserMode::STRATEGY) {
       frameLengthParser_ =
           std::make_unique<ParserStrategy<T, FrameLengthParserStrategy>>(
               owner_);
     }
-    if (mode_ == ParserMode::ALLOCATING) {
+    if (mode_ == detail::ParserMode::ALLOCATING) {
       allocatingParser_ = std::make_unique<
           ParserStrategy<T, AllocatingParserStrategy, ParserAllocatorType>>(
-          owner_, *allocator_);
+          owner_, alloc ? *alloc : detail::getDefaultAllocator());
     }
   }
 
@@ -69,40 +72,22 @@ class Parser final : public folly::AsyncTransport::ReadCallback {
       std::unique_ptr<folly::IOBuf> /*readBuf*/) noexcept override;
 
   bool isBufferMovable() noexcept override {
-    return mode_ != ParserMode::ALLOCATING;
+    return mode_ != detail::ParserMode::ALLOCATING;
   }
 
   const folly::IOBuf& getReadBuffer() const;
 
  private:
-  enum class ParserMode { STRATEGY, ALLOCATING };
-
-  static ParserMode stringToMode(const std::string& modeStr) noexcept {
-    if (modeStr == "strategy") {
-      return ParserMode::STRATEGY;
-    } else if (modeStr == "allocating") {
-      return ParserMode::ALLOCATING;
-    }
-
-    LOG(WARNING) << "Invalid parser mode: '" << modeStr
-                 << ", default to ParserMode::STRATEGY";
-    return ParserMode::STRATEGY;
-  }
-
   T& owner_;
 
-  ParserMode mode_;
+  detail::ParserMode mode_;
   std::unique_ptr<ParserStrategy<T, FrameLengthParserStrategy>>
       frameLengthParser_;
-
-  std::shared_ptr<ParserAllocatorType> allocator_;
   std::unique_ptr<
       ParserStrategy<T, AllocatingParserStrategy, ParserAllocatorType>>
       allocatingParser_;
 };
 
-} // namespace rocket
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::rocket
 
 #include <thrift/lib/cpp2/transport/rocket/framing/Parser-inl.h>

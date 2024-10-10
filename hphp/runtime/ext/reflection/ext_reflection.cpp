@@ -756,7 +756,8 @@ static Array get_function_param_info(const Func* func) {
 
     auto const nonExtendedConstraint =
       fpi.typeConstraint.hasConstraint() &&
-      !fpi.typeConstraint.isExtended();
+      !fpi.typeConstraint.isDisplayNullable() &&
+      !fpi.typeConstraint.isSoft();
     auto const type = nonExtendedConstraint
       ? fpi.typeConstraint.typeName()
       : staticEmptyString();
@@ -930,9 +931,7 @@ const StaticString
   s_MemoizeLSB("__MemoizeLSB"),
   s_systemlib_create_opaque_value("__SystemLib\\create_opaque_value"),
   s_KeyedByIC("KeyedByIC"),
-  s_MakeICInaccessible("MakeICInaccessible"),
-  s_SoftMakeICInaccessible("SoftMakeICInaccessible"),
-  s_Uncategorized("Uncategorized");
+  s_MakeICInaccessible("MakeICInaccessible");
 
 ALWAYS_INLINE
 static Array get_function_user_attributes(const Func* func) {
@@ -954,9 +953,7 @@ static Array get_function_user_attributes(const Func* func) {
         } else {
           auto const sd = tv.m_data.pstr;
           if (sd->same(s_KeyedByIC.get()) ||
-              sd->same(s_MakeICInaccessible.get()) ||
-              sd->same(s_SoftMakeICInaccessible.get()) ||
-              sd->same(s_Uncategorized.get())) {
+              sd->same(s_MakeICInaccessible.get())) {
             if (Cfg::Eval::EmitNativeEnumClassLabels) {
               args.append(make_tv<KindOfEnumClassLabel>(sd));
             } else {
@@ -1949,11 +1946,7 @@ static String HHVM_METHOD(ReflectionTypeConstant, getAssignedTypeHint) {
   }
 
   if (isArrayLikeType(cns->val.m_type)) {
-    auto const cls = cns->cls;
-    // go to the preclass to find the unresolved TypeStructure to get
-    // the original assigned type text
-    auto const preCls = cls->preClass();
-    auto typeCns = preCls->lookupConstant(cns->name);
+    auto typeCns = cns->preConst;
     assertx(typeCns->kind() == ConstModifiers::Kind::Type);
     assertx(!typeCns->isAbstractAndUninit());
     assertx(isArrayLikeType(typeCns->val().m_type));

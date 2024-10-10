@@ -11,8 +11,8 @@
                 fp_type = (Rhint ([5:21-24]), (Tprim Tint));
                 fp_flags =
                 { Typing_defs_flags.FunParam.accept_disposable = false;
-                  inout = false; has_default = false; readonly = false;
-                  ignore_readonly_error = false };
+                  inout = false; is_optional = false; readonly = false;
+                  ignore_readonly_error = false; splat = false };
                 fp_def_value = None }
                ];
              ft_implicit_params = { capability = (CapDefaults [5:10-20]) };
@@ -50,8 +50,8 @@
                  fp_type = (Rhint ([7:23-24]), (Tgeneric ("T", [])));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [7:10-11]) };
@@ -103,8 +103,8 @@
                         ((Rhint ([14:21-28]), Tthis), [([14:27-28], "T")])));
                     fp_flags =
                     { Typing_defs_flags.FunParam.accept_disposable = false;
-                      inout = false; has_default = false; readonly = false;
-                      ignore_readonly_error = false };
+                      inout = false; is_optional = false; readonly = false;
+                      ignore_readonly_error = false; splat = false };
                     fp_def_value = None }
                    ];
                  ft_implicit_params =

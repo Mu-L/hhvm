@@ -39,8 +39,9 @@
                             [(Rhint ([4:42-47]), Tmixed)])));
                         fp_flags =
                         { Typing_defs_flags.FunParam.accept_disposable =
-                          false; inout = false; has_default = false;
-                          readonly = false; ignore_readonly_error = false };
+                          false; inout = false; is_optional = false;
+                          readonly = false; ignore_readonly_error = false;
+                          splat = false };
                         fp_def_value = None }
                        ];
                      ft_implicit_params =

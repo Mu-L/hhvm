@@ -129,14 +129,13 @@ Optional<TypeConstraint> TypeConstraint::UnionBuilder::recordConstraint(const Ty
     // checkable so just return mixed.
     return TypeConstraint{
       AnnotType::Mixed,
-      TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::Resolved,
+      TypeConstraintFlags::Resolved,
       ClassConstraint { m_typeName }
     };
   }
 
   // Copy over common flags.
   m_flags |= tc.flags() & (TypeConstraintFlags::Nullable
-                           | TypeConstraintFlags::ExtendedHint
                            | TypeConstraintFlags::TypeVar
                            | TypeConstraintFlags::Soft
                            | TypeConstraintFlags::TypeConstant
@@ -148,7 +147,7 @@ Optional<TypeConstraint> TypeConstraint::UnionBuilder::recordConstraint(const Ty
       // Canonicalization: If we have a mixed then we're just mixed.
       return TypeConstraint{
         AnnotType::Mixed,
-        TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::Resolved,
+        TypeConstraintFlags::Resolved,
         ClassConstraint { m_typeName }
       };
     }
@@ -286,13 +285,13 @@ TypeConstraint TypeConstraint::UnionBuilder::finish() && {
     if (contains(m_flags, TypeConstraintFlags::Nullable)) {
       return TypeConstraint{
         AnnotType::Mixed,
-        TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::Resolved,
+        TypeConstraintFlags::Resolved,
         ClassConstraint { m_typeName }
       };
     } else {
       return TypeConstraint{
         AnnotType::Nonnull,
-        TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::Resolved,
+        TypeConstraintFlags::Resolved,
         ClassConstraint { m_typeName }
       };
     }
@@ -306,13 +305,13 @@ TypeConstraint TypeConstraint::UnionBuilder::finish() && {
     if (contains(m_flags, TypeConstraintFlags::Nullable)) {
       return TypeConstraint{
         AnnotType::Null,
-        TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::Resolved,
+        TypeConstraintFlags::Resolved,
         ClassConstraint { m_typeName }
       };
     } else {
       return TypeConstraint{
         AnnotType::Nothing,
-        TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::Resolved,
+        TypeConstraintFlags::Resolved,
         ClassConstraint { m_typeName }
       };
     }
@@ -662,7 +661,7 @@ std::string TypeConstraint::displayName(const Class* context /*= nullptr*/,
   if (isSoft()) {
     name += '@';
   }
-  if (contains(m_flags, TypeConstraintFlags::DisplayNullable) && isExtended()) {
+  if (isDisplayNullable()) {
     name += '?';
   }
 
@@ -788,7 +787,6 @@ std::string showUnionTypeMask(UnionTypeMask mask) {
 std::string show(TypeConstraintFlags flags) {
   std::string res;
   bitName(res, flags, TypeConstraintFlags::Nullable, "Nullable");
-  bitName(res, flags, TypeConstraintFlags::ExtendedHint, "ExtendedHint");
   bitName(res, flags, TypeConstraintFlags::TypeVar, "TypeVar");
   bitName(res, flags, TypeConstraintFlags::Soft, "Soft");
   bitName(res, flags, TypeConstraintFlags::TypeConstant, "TypeConstant");
@@ -947,24 +945,33 @@ TypeConstraint TypeConstraint::resolvedWithAutoload() const {
     p,
     // Type alias.
     [this](FoundTypeAlias td) -> Optional<TypeConstraint> {
-      std::vector<TypeConstraint> parts;
-      for (auto const& tc : eachTypeConstraintInUnion(td.value->value)) {
+      if (!td.value->value.isUnion()) {
+        auto const& tc = td.value->value;
         auto type = tc.type();
         auto klass = type == AnnotType::SubObject
           ? tc.clsNamedType()->getCachedClass() : nullptr;
         auto copy = *this;
         auto const typeName = klass ? klass->name() : nullptr;
         copy.resolveType(type, td.value->value.isNullable(), typeName);
-        parts.push_back(copy);
+        return copy;
+      }
+      std::vector<TypeConstraint> parts;
+      auto const flags = m_flags & (TypeConstraintFlags::Nullable
+                                    | TypeConstraintFlags::TypeVar
+                                    | TypeConstraintFlags::Soft
+                                    | TypeConstraintFlags::TypeConstant
+                                    | TypeConstraintFlags::DisplayNullable
+                                    | TypeConstraintFlags::UpperBound);
+      for (auto const& tc : eachTypeConstraintInUnion(td.value->value)) {
+        parts.push_back(tc);
+        parts.back().addFlags(flags);
       }
       return makeUnion(typeName(), parts);
     },
     // Enum.
     [this](FoundClass cls) -> Optional<TypeConstraint> {
       if (isEnum(cls.value)) {
-        auto const type = cls.value->enumBaseTy()
-          ? enumDataTypeToAnnotType(*cls.value->enumBaseTy())
-          : AnnotType::ArrayKey;
+        auto const type = cls.value->enumBaseTy().type();
         auto copy = *this;
         copy.resolveType(type, false, nullptr);
         return copy;
@@ -1106,10 +1113,14 @@ bool TypeConstraint::equivalentForProp(const TypeConstraint& other) const {
   return simplify(resolved0) == simplify(resolved1);
 }
 
-template <bool Assert, bool ForProp>
-bool TypeConstraint::checkNamedTypeNonObj(tv_rval val) const {
+template <TypeConstraint::CheckMode Mode>
+bool TypeConstraint::checkNamedTypeNonObj(tv_rval val,
+                                          const Class* context) const {
   assertx(val.type() != KindOfObject);
   assertx(isUnresolved());
+
+  constexpr auto Assert  = Mode == CheckMode::Assert;
+  constexpr auto ForProp = Mode == CheckMode::ExactProp;
 
   auto const p = [&]() -> NamedTypeValue {
     if (!Assert) {
@@ -1180,14 +1191,7 @@ bool TypeConstraint::checkNamedTypeNonObj(tv_rval val) const {
       // constraint if it is. We only need to do this when the underlying
       // type is not an object, since only int and string can be enums.
       if (isEnum(c.value)) {
-        auto dt = c.value->enumBaseTy();
-        // For an enum, if the underlying type is mixed, we still require
-        // it is either an int or a string!
-        if (dt) {
-          return equivDataTypes(*dt, val.type());
-        } else {
-          return isIntType(val.type()) || isStringType(val.type());
-        }
+        return c.value->enumBaseTy().checkImpl<Mode>(val, context);
       }
       return false;
     },
@@ -1256,9 +1260,9 @@ bool TypeConstraint::checkImpl(tv_rval val,
   assertx(isCheckable());
   assertx(tvIsPlausible(*val));
 
-  auto const isAssert = Mode == CheckMode::Assert;
-  auto const isPasses = Mode == CheckMode::AlwaysPasses;
-  auto const isProp   = Mode == CheckMode::ExactProp;
+  auto const isAssert          = Mode == CheckMode::Assert;
+  auto const isPasses          = Mode == CheckMode::AlwaysPasses;
+  auto const isProp DEBUG_ONLY = Mode == CheckMode::ExactProp;
 
   // We shouldn't provide a context for the conservative checks.
   assertx(!isAssert || !context);
@@ -1358,7 +1362,9 @@ bool TypeConstraint::checkImpl(tv_rval val,
       case AnnotAction::Fallback:
       case AnnotAction::FallbackCoerce:
         assertx(tc.isUnresolved());
-        if (!isPasses && tc.checkNamedTypeNonObj<isAssert, isProp>(val)) return true;
+        if (!isPasses && tc.checkNamedTypeNonObj<Mode>(val, context)) {
+          return true;
+        }
         break;
       case AnnotAction::WarnClass:
       case AnnotAction::ConvertClass:
@@ -1488,12 +1494,6 @@ bool TypeConstraint::alwaysPasses(DataType dt) const {
       return false;
   }
   not_reached();
-}
-
-bool TypeConstraint::isSoftOrBuiltinSoft(const Func* func) const {
-  if (isSoft()) return true;
-  if (!func->isCPPBuiltin()) return false;
-  return RO::EvalCheckBuiltinParamTypeHints <= 1;
 }
 
 bool TypeConstraint::validForProp() const {
@@ -1661,11 +1661,7 @@ bool TypeConstraint::checkStringCompatible() const {
       return false;
     },
     [&](FoundClass c) {
-      if (isEnum(c.value)) {
-        auto dt = c.value->enumBaseTy();
-        return !dt || isStringType(dt);
-      }
-      return false;
+      return isEnum(c.value) && c.value->enumBaseTy().checkStringCompatible();
     },
     [&](NotFound) {
       return false;
@@ -1795,9 +1791,8 @@ void TypeConstraint::verifyParamFail(tv_lval c,
   auto const givenType = describe_actual_type(c);
 
   // Handle parameter type constraint failures
-  if (isSoftOrBuiltinSoft(func)) {
-    // Soft extended type hints raise warnings instead of recoverable
-    // errors, to ease migration.
+  if (isSoft()) {
+    // Soft type hints raise warnings instead of recoverable errors
     raise_warning_unsampled(
       folly::format(
         "Argument {} to {}() must be {} {}, {} given",
@@ -1806,7 +1801,7 @@ void TypeConstraint::verifyParamFail(tv_lval c,
         name, givenType
       ).str()
     );
-  } else if (isExtended() && isNullable()) {
+  } else if (isDisplayNullable()) {
     raise_typehint_error(
       folly::format(
         "Argument {} to {}() must be {} {}, {} given",
@@ -1838,11 +1833,7 @@ void TypeConstraint::verifyParamFail(tv_lval c,
     }
   }
 
-  assertx(
-    isSoftOrBuiltinSoft(func) ||
-    isThis() ||
-    check(c, ctx)
-  );
+  assertx(isSoft() || isThis() || check(c, ctx));
 }
 
 void TypeConstraint::verifyReturnFail(tv_lval c, const Class* ctx,
@@ -2015,7 +2006,6 @@ void TcUnionPieceIterator::buildUnionTypeConstraint() {
   using CC = ClassConstraint;
 
   auto flags = m_flags & (TypeConstraintFlags::Nullable
-                          | TypeConstraintFlags::ExtendedHint
                           | TypeConstraintFlags::TypeVar
                           | TypeConstraintFlags::Soft
                           | TypeConstraintFlags::TypeConstant

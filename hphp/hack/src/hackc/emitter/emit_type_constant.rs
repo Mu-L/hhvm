@@ -19,6 +19,7 @@ use oxidized::aast_defs::Hint;
 use oxidized::aast_defs::Hint_;
 use oxidized::aast_defs::NastShapeInfo;
 use oxidized::aast_defs::ShapeFieldInfo;
+use oxidized::aast_defs::TupleInfo;
 use oxidized::ast;
 use oxidized::ast_defs;
 use oxidized::ast_defs::ShapeFieldName;
@@ -102,7 +103,7 @@ fn is_prim_or_resolved_classname(kind: TypeStructureKind) -> bool {
 fn shape_field_name(sf: &ShapeFieldName) -> (String, bool) {
     use oxidized::ast_defs::Id;
     match sf {
-        ShapeFieldName::SFlitInt((_, s)) => (s.to_string(), false),
+        ShapeFieldName::SFregexGroup((_, s)) => (s.to_string(), false),
         ShapeFieldName::SFlitStr((_, s)) => {
             (
                 // FIXME: This is not safe--string literals are binary strings.
@@ -111,6 +112,10 @@ fn shape_field_name(sf: &ShapeFieldName) -> (String, bool) {
                 false,
             )
         }
+        ShapeFieldName::SFclassname(Id(_, cname)) => (
+            hhbc::ClassName::from_ast_name_and_mangle(cname).to_string(),
+            false,
+        ),
         ShapeFieldName::SFclassConst(Id(_, cname), (_, s)) => {
             let id = hhbc::ClassName::from_ast_name_and_mangle(cname);
             (format!("{}::{}", id.as_str(), s), true)
@@ -366,12 +371,13 @@ fn hint_to_type_constant_list(
             r.append(&mut return_type);
             r
         }
-        Hint_::Htuple(hints) => {
+        // TODO optional and variadic components T201398626 T201398652
+        Hint_::Htuple(TupleInfo { required, .. }) => {
             let mut r = vec![];
             r.push(encode_kind(TypeStructureKind::T_tuple));
             r.push(encode_entry(
                 "elem_types",
-                hints_to_type_constant(opts, tparams, targ_map, type_refinement_in_hint, hints)?,
+                hints_to_type_constant(opts, tparams, targ_map, type_refinement_in_hint, required)?,
             ));
             r
         }
@@ -459,11 +465,10 @@ pub(crate) fn typedef_to_type_structure(
     tparams: &[&str],
     typedef: &ast::Typedef,
 ) -> Result<TypedValue> {
-    let is_case_type = typedef.vis.is_case_type();
-
+    let is_case_type = matches!(typedef.assignment, ast::TypedefAssignment::CaseType(_, _));
     // For a case type we always want to ensure that it's wrapped in a Hunion.
     let tmp;
-    let kind = match (is_case_type, &typedef.kind) {
+    let kind = match (is_case_type, &typedef.runtime_type) {
         (false, kind) => kind,
         (true, kind @ Hint(_, box Hint_::Hunion(_))) => kind,
         (true, hint @ Hint(pos, _)) => {
@@ -471,7 +476,6 @@ pub(crate) fn typedef_to_type_structure(
             &tmp
         }
     };
-
     let mut tconsts = hint_to_type_constant_list(
         opts,
         tparams,
@@ -480,8 +484,10 @@ pub(crate) fn typedef_to_type_structure(
         kind,
     )?;
     tconsts.append(&mut get_typevars(tparams));
-    if typedef.vis.is_opaque() || typedef.vis.is_opaque_module() {
-        tconsts.push(encode_entry("opaque", TypedValue::Bool(true)));
+    if let aast::TypedefAssignment::SimpleTypeDef(vis_hint) = &typedef.assignment {
+        if vis_hint.vis.is_opaque() || vis_hint.vis.is_opaque_module() {
+            tconsts.push(encode_entry("opaque", TypedValue::Bool(true)));
+        }
     };
     let mangled_name = hhbc_string_utils::mangle(typedef.name.1.clone());
     let name = hhbc_string_utils::strip_global_ns(&mangled_name);

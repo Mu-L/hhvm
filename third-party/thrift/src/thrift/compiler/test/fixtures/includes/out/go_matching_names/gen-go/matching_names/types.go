@@ -7,18 +7,17 @@ package matching_names
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
     includesAlso "IncludesAlso"
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 var _ = includesAlso.GoUnusedProtection__
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
-
 
 type IncludesAlso struct {
     Also *includesAlso.Also `thrift:"also,1" json:"also" db:"also"`
@@ -27,20 +26,18 @@ type IncludesAlso struct {
 var _ thrift.Struct = (*IncludesAlso)(nil)
 
 func NewIncludesAlso() *IncludesAlso {
-    return (&IncludesAlso{}).
-        SetAlsoNonCompat(*includesAlso.NewAlso())
+    return (&IncludesAlso{}).setDefaults()
 }
 
 func (x *IncludesAlso) GetAlso() *includesAlso.Also {
     if !x.IsSetAlso() {
         return nil
     }
-
     return x.Also
 }
 
-func (x *IncludesAlso) SetAlsoNonCompat(value includesAlso.Also) *IncludesAlso {
-    x.Also = &value
+func (x *IncludesAlso) SetAlsoNonCompat(value *includesAlso.Also) *IncludesAlso {
+    x.Also = value
     return x
 }
 
@@ -53,7 +50,7 @@ func (x *IncludesAlso) IsSetAlso() bool {
     return x != nil && x.Also != nil
 }
 
-func (x *IncludesAlso) writeField1(p thrift.Format) error {  // Also
+func (x *IncludesAlso) writeField1(p thrift.Encoder) error {  // Also
     if !x.IsSetAlso() {
         return nil
     }
@@ -73,19 +70,15 @@ func (x *IncludesAlso) writeField1(p thrift.Format) error {  // Also
     return nil
 }
 
-func (x *IncludesAlso) readField1(p thrift.Format) error {  // Also
-    result := *includesAlso.NewAlso()
+func (x *IncludesAlso) readField1(p thrift.Decoder) error {  // Also
+    result := includesAlso.NewAlso()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.Also = &result
+    x.Also = result
     return nil
-}
-
-func (x *IncludesAlso) toString1() string {  // Also
-    return fmt.Sprintf("%v", x.Also)
 }
 
 // Deprecated: Use NewIncludesAlso().GetAlso() instead.
@@ -98,7 +91,7 @@ func (x *IncludesAlso) DefaultGetAlso() *includesAlso.Also {
 
 
 
-func (x *IncludesAlso) Write(p thrift.Format) error {
+func (x *IncludesAlso) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("IncludesAlso"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -117,7 +110,7 @@ func (x *IncludesAlso) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *IncludesAlso) Read(p thrift.Format) error {
+func (x *IncludesAlso) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -132,15 +125,16 @@ func (x *IncludesAlso) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRUCT)):  // also
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -156,18 +150,15 @@ func (x *IncludesAlso) Read(p thrift.Format) error {
 }
 
 func (x *IncludesAlso) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("IncludesAlso({")
-    sb.WriteString(fmt.Sprintf("Also:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *IncludesAlso) setDefaults() *IncludesAlso {
+    return x.
+        SetAlsoNonCompat(includesAlso.NewAlso())
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

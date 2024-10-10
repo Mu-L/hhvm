@@ -10,6 +10,7 @@
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
 
+
 namespace facebook::thrift::test {
 namespace module_constants {
 
@@ -121,6 +122,8 @@ namespace module_constants {
   ::apache::thrift::test::TemplatedTestAdapter::fromThrift(::std::int8_t(static_cast<::std::int8_t>(3))) } };
   return *instance;
 }
+
+
 
 } // namespace module_constants
 } // namespace facebook::thrift::test

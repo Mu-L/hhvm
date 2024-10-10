@@ -29,6 +29,7 @@ class Command;
 class Root;
 struct Query;
 struct QueryResult;
+struct ClientContext;
 
 class Client : public std::enable_shared_from_this<Client> {
  public:
@@ -40,6 +41,8 @@ class Client : public std::enable_shared_from_this<Client> {
 
   void enqueueResponse(json_ref resp);
   void enqueueResponse(UntypedResponse resp);
+
+  ClientContext getClientInfo() const;
 
   const uint64_t unique_id;
   std::unique_ptr<watchman_stream> stm;
@@ -68,6 +71,9 @@ class Client : public std::enable_shared_from_this<Client> {
   std::shared_ptr<Publisher::Subscriber> errorSub;
 
  protected:
+  const pid_t peerPid_;
+  const facebook::eden::ProcessInfoHandle peerInfo_;
+
   void sendErrorResponse(std::string_view formatted);
 
   template <typename T, typename... Rest>
@@ -239,8 +245,6 @@ class UserClient final : public Client {
   void clientThread() noexcept;
 
   const std::chrono::system_clock::time_point since_;
-  const pid_t peerPid_;
-  const facebook::eden::ProcessInfoHandle peerInfo_;
 
   ClientStatus status_;
 };

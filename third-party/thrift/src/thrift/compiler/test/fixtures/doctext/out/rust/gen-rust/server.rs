@@ -22,6 +22,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[doc = "Detailed overview of service"]
 #[::async_trait::async_trait]
 pub trait C: ::std::marker::Send + ::std::marker::Sync + 'static {
@@ -127,8 +128,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for C's methods.
 #[derive(Clone, Debug)]
 pub struct CProcessor<P, H, R, RS> {
@@ -136,6 +135,7 @@ pub struct CProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_C_f {
 }
@@ -161,6 +161,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_C_
     }
 }
 
+
 struct Args_C_numbers {
 }
 
@@ -184,6 +185,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_C_
         })
     }
 }
+
 
 struct Args_C_thing {
     a: ::std::primitive::i32,
@@ -223,7 +225,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_C_
         })
     }
 }
-
 
 impl<P, H, R, RS> CProcessor<P, H, R, RS>
 where
@@ -289,7 +290,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "C.f", exception = ?exn);
+                ::tracing::error!(method = "C.f", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -449,7 +450,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "C.thing", exception = ?exn);
+                ::tracing::error!(method = "C.thing", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

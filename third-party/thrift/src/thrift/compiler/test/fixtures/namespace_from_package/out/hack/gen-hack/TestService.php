@@ -65,11 +65,6 @@ interface TestServiceClientIf extends \IThriftSyncIf {
 trait TestServiceClientBase {
   require extends \ThriftClientBase;
 
-}
-
-class TestServiceAsyncClient extends \ThriftClientBase implements TestServiceAsyncClientIf {
-  use TestServiceClientBase;
-
   /**
    * Original thrift definition:-
    * i64
@@ -85,40 +80,26 @@ class TestServiceAsyncClient extends \ThriftClientBase implements TestServiceAsy
       'int1' => $int1,
     ));
     await $this->asyncHandler_->genBefore("TestService", "init", $args);
-    $currentseqid = $this->sendImplHelper($args, "init", false);
+    $currentseqid = $this->sendImplHelper($args, "init", false, "TestService" );
     return await $this->genAwaitResponse(\test\namespace_from_package\module\TestService_init_result::class, "init", false, $currentseqid, $rpc_options);
   }
+
+}
+
+class TestServiceAsyncClient extends \ThriftClientBase implements TestServiceAsyncClientIf {
+  use TestServiceClientBase;
 
 }
 
 class TestServiceClient extends \ThriftClientBase implements TestServiceClientIf {
   use TestServiceClientBase;
 
-  /**
-   * Original thrift definition:-
-   * i64
-   *   init(1: i64 int1);
-   */
-  public async function init(int $int1): Awaitable<int> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = \test\namespace_from_package\module\TestService_init_args::fromShape(shape(
-      'int1' => $int1,
-    ));
-    await $this->asyncHandler_->genBefore("TestService", "init", $args);
-    $currentseqid = $this->sendImplHelper($args, "init", false);
-    return await $this->genAwaitResponse(\test\namespace_from_package\module\TestService_init_result::class, "init", false, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_init(int $int1): int {
     $args = \test\namespace_from_package\module\TestService_init_args::fromShape(shape(
       'int1' => $int1,
     ));
-    return $this->sendImplHelper($args, "init", false);
+    return $this->sendImplHelper($args, "init", false, "TestService" );
   }
   public function recv_init(?int $expectedsequenceid = null): int {
     return $this->recvImplHelper(\test\namespace_from_package\module\TestService_init_result::class, "init", false, $expectedsequenceid);

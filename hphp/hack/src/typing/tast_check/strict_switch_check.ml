@@ -260,19 +260,14 @@ let rec symbolic_dnf_values env ty : ValueSet.t =
     | Tnonnull -> ValueSet.universe
     | _ -> Set.add (symbolic_dnf_values env ty) Value.Null
   end
-  | Tneg (Neg_predicate predicate) -> begin
+  | Tneg predicate -> begin
     match
-      Typing_defs.get_node
-      @@ Typing_refinement.TyPredicate.to_ty
-           (Typing_defs.get_reason ty)
-           predicate
+      Typing_defs.get_node @@ Typing_refinement.TyPredicate.to_ty predicate
     with
     | Tprim prim -> ValueSet.(symbolic_diff universe (prim_to_values prim))
     | _ -> ValueSet.universe
   end
-  | Tneg (Neg_class _) (* a safe over-approximation *)
-  | Tany _ ->
-    ValueSet.universe
+  | Tany _ -> ValueSet.universe
   | Tnewtype (newtype_name, args, _) ->
     let open If_enum_or_enum_class in
     apply
@@ -448,8 +443,14 @@ let error_unused_cases env expected_ty unused_cases =
           {
             pos;
             kind = "";
-            expected = lazy (Typing_print.full_strip_ns env expected_ty);
-            actual = lazy (Typing_print.full_strip_ns env ty);
+            expected =
+              lazy
+                (Typing_print.full_strip_ns
+                   ~hide_internals:true
+                   env
+                   expected_ty);
+            actual =
+              lazy (Typing_print.full_strip_ns ~hide_internals:true env ty);
             expected_pos = expected_ty |> Typing_defs.get_pos |> Option.some;
           })
 

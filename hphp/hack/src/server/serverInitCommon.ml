@@ -161,10 +161,7 @@ let defer_or_do_type_check
     (t : float)
     ~(telemetry_label : string)
     ~(cgroup_steps : CgroupProfiler.step_group) : ServerEnv.env * float =
-  (* No type checking in AI mode *)
-  if Option.is_some (ServerArgs.ai_mode genv.options) then
-    (env, t)
-  else if
+  if
     ServerArgs.check_mode genv.options
     || Option.is_some (ServerArgs.save_filename genv.options)
   then (
@@ -240,6 +237,7 @@ let defer_or_do_type_check
              ~log_errors:true
              genv
              env)
+        ~warnings_saved_state:ServerEnv.(env.init_env.mergebase_warning_hashes)
     in
     let env = { env with errorl = Errors.merge errorl env.errorl } in
     log_type_check_end

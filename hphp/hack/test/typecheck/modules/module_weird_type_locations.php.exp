@@ -1,3 +1,7 @@
+WARN: File "module_weird_type_locations.php--also-A.php", line 7, characters 3-11:
+This `as` assertion will always succeed and hence is redundant. The expression on the left has a type `T` which is a subtype of `int`. (Warn[12011])
+WARN: File "module_weird_type_locations.php--not-A.php", line 7, characters 3-11:
+This `as` assertion will always succeed and hence is redundant. The expression on the left has a type `T` which is a subtype of `int`. (Warn[12011])
 ERROR: File "module_weird_type_locations.php--also-A.php", line 6, characters 42-44:
 You cannot use this type in a public declaration. (Typing[4446])
   File "module_weird_type_locations.php--A.php", line 6, characters 15-17:

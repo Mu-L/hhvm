@@ -2,7 +2,8 @@ open Typing_defs
 open Typing_env_types
 module Env = Typing_env
 
-(** For all type constant T of type variable, make its type equal to `ty`::T *)
+(** [make_all_type_consts_equal env v ty] makes the types of
+  all type constants T of type variable v equal to `ty`::T *)
 val make_all_type_consts_equal :
   env ->
   Tvid.t ->
@@ -21,4 +22,4 @@ val get_tyvar_type_const :
   Tvid.t ->
   pos_id ->
   on_error:Typing_error.Reasons_callback.t option ->
-  (env * Typing_error.t option) * locl_ty
+  (env * Typing_error.t option * Type_expansions.cycle_reporter list) * locl_ty

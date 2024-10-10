@@ -10,6 +10,7 @@
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
 
+
 namespace test::fixtures::basic {
 namespace module_constants {
 
@@ -44,6 +45,8 @@ namespace module_constants {
   static_cast<::std::int32_t>(54) } } } };
   return *instance;
 }
+
+
 
 } // namespace module_constants
 } // namespace test::fixtures::basic

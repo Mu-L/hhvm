@@ -170,6 +170,7 @@ pub struct U10 {
 pub enum U11 {
     string(::std::string::String),
     integer(::std::primitive::i32),
+    btreeset(::std::collections::BTreeSet<crate::types::U11>),
     UnknownField(::std::primitive::i32),
 }
 
@@ -255,6 +256,10 @@ impl ::fbthrift::ThriftEnum for E1 {
             Self::B0,
             Self::B1,
         ]
+    }
+
+    fn inner_value(&self) -> i32 {
+        self.0
     }
 }
 
@@ -358,6 +363,10 @@ impl ::fbthrift::ThriftEnum for F2 {
     fn variant_values() -> &'static [Self] {
         &[
         ]
+    }
+
+    fn inner_value(&self) -> i32 {
+        self.0
     }
 }
 
@@ -465,6 +474,10 @@ impl ::fbthrift::ThriftEnum for EnumWithDerives {
             Self::UNKNOWN,
             Self::STUFF,
         ]
+    }
+
+    fn inner_value(&self) -> i32 {
+        self.0
     }
 }
 
@@ -1328,6 +1341,10 @@ where
     fn read(p: &mut P) -> ::anyhow::Result<Self> {
         static FIELDS: &[::fbthrift::Field] = &[
         ];
+        #[allow(unused_mut)]
+        let mut fields = Self {
+            
+        };
         let _ = ::anyhow::Context::context(p.read_struct_begin(|_| ()), "Expected a T6")?;
         loop {
             let (_, fty, fid) = p.read_field_begin(|_| (), FIELDS)?;
@@ -1338,9 +1355,7 @@ where
             p.read_field_end()?;
         }
         p.read_struct_end()?;
-        ::std::result::Result::Ok(Self {
-            
-        })
+        ::std::result::Result::Ok(fields)
     }
 }
 
@@ -2096,6 +2111,11 @@ where
                 ::fbthrift::Serialize::write(inner, p);
                 p.write_field_end();
             }
+            Self::btreeset(inner) => {
+                p.write_field_begin("btreeset", ::fbthrift::TType::Set, 3);
+                ::fbthrift::Serialize::write(inner, p);
+                p.write_field_end();
+            }
             Self::UnknownField(_) => {}
         }
         p.write_field_stop();
@@ -2110,6 +2130,7 @@ where
     #[inline]
     fn read(p: &mut P) -> ::anyhow::Result<Self> {
         static FIELDS: &[::fbthrift::Field] = &[
+            ::fbthrift::Field::new("btreeset", ::fbthrift::TType::Set, 3),
             ::fbthrift::Field::new("integer", ::fbthrift::TType::I32, 2),
             ::fbthrift::Field::new("str", ::fbthrift::TType::String, 1),
         ];
@@ -2127,6 +2148,10 @@ where
                 (::fbthrift::TType::I32, 2, false) => {
                     once = true;
                     alt = ::std::option::Option::Some(Self::integer(::fbthrift::Deserialize::read(p)?));
+                }
+                (::fbthrift::TType::Set, 3, false) => {
+                    once = true;
+                    alt = ::std::option::Option::Some(Self::btreeset(::fbthrift::Deserialize::read(p)?));
                 }
                 (fty, _, false) => p.skip(fty)?,
                 (badty, badid, true) => return ::std::result::Result::Err(::std::convert::From::from(::fbthrift::ProtocolError::UnwantedExtraUnionField(
@@ -2148,6 +2173,7 @@ impl U11 {
         match self {
             Self::string(_) => ::std::option::Option::Some(("string", "str")),
             Self::integer(_) => ::std::option::Option::Some(("integer", "integer")),
+            Self::btreeset(_) => ::std::option::Option::Some(("btreeset", "btreeset")),
             Self::UnknownField(_) => ::std::option::Option::None,
         }
     }
@@ -2161,6 +2187,15 @@ impl ::fbthrift::metadata::ThriftAnnotations for U11 {
         if type_id == ::std::any::TypeId::of::<rust__types::Name>() {
             let mut tmp = ::std::option::Option::Some(rust__types::Name {
                 name: "U11".to_owned(),
+                ..::std::default::Default::default()
+            });
+            let r: &mut dyn ::std::any::Any = &mut tmp;
+            let r: &mut ::std::option::Option<T> = r.downcast_mut().unwrap();
+            return r.take();
+        }
+
+        if type_id == ::std::any::TypeId::of::<rust__types::Ord>() {
+            let mut tmp = ::std::option::Option::Some(rust__types::Ord {
                 ..::std::default::Default::default()
             });
             let r: &mut dyn ::std::any::Any = &mut tmp;
@@ -2190,6 +2225,8 @@ impl ::fbthrift::metadata::ThriftAnnotations for U11 {
                 }
             },
             2 => {
+            },
+            3 => {
             },
             _ => {}
         }
@@ -2251,6 +2288,10 @@ where
     fn read(p: &mut P) -> ::anyhow::Result<Self> {
         static FIELDS: &[::fbthrift::Field] = &[
         ];
+        #[allow(unused_mut)]
+        let mut fields = Self {
+            _dot_dot_Default_default: self::dot_dot::OtherFields(()),
+        };
         let _ = ::anyhow::Context::context(p.read_struct_begin(|_| ()), "Expected a TransitiveDerives")?;
         loop {
             let (_, fty, fid) = p.read_field_begin(|_| (), FIELDS)?;
@@ -2261,9 +2302,7 @@ where
             p.read_field_end()?;
         }
         p.read_struct_end()?;
-        ::std::result::Result::Ok(Self {
-            _dot_dot_Default_default: self::dot_dot::OtherFields(()),
-        })
+        ::std::result::Result::Ok(fields)
     }
 }
 
@@ -2365,6 +2404,10 @@ where
     fn read(p: &mut P) -> ::anyhow::Result<Self> {
         static FIELDS: &[::fbthrift::Field] = &[
         ];
+        #[allow(unused_mut)]
+        let mut fields = Self {
+            _dot_dot_Default_default: self::dot_dot::OtherFields(()),
+        };
         let _ = ::anyhow::Context::context(p.read_struct_begin(|_| ()), "Expected a StructWithTransitiveDerives")?;
         loop {
             let (_, fty, fid) = p.read_field_begin(|_| (), FIELDS)?;
@@ -2375,9 +2418,7 @@ where
             p.read_field_end()?;
         }
         p.read_struct_end()?;
-        ::std::result::Result::Ok(Self {
-            _dot_dot_Default_default: self::dot_dot::OtherFields(()),
-        })
+        ::std::result::Result::Ok(fields)
     }
 }
 
@@ -2470,6 +2511,10 @@ where
     fn read(p: &mut P) -> ::anyhow::Result<Self> {
         static FIELDS: &[::fbthrift::Field] = &[
         ];
+        #[allow(unused_mut)]
+        let mut fields = Self {
+            _dot_dot_Default_default: self::dot_dot::OtherFields(()),
+        };
         let _ = ::anyhow::Context::context(p.read_struct_begin(|_| ()), "Expected a SomeError")?;
         loop {
             let (_, fty, fid) = p.read_field_begin(|_| (), FIELDS)?;
@@ -2480,9 +2525,7 @@ where
             p.read_field_end()?;
         }
         p.read_struct_end()?;
-        ::std::result::Result::Ok(Self {
-            _dot_dot_Default_default: self::dot_dot::OtherFields(()),
-        })
+        ::std::result::Result::Ok(fields)
     }
 }
 

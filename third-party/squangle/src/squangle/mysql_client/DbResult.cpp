@@ -10,14 +10,10 @@
 
 #include <ostream>
 
-#include <folly/ScopeGuard.h>
-
-#include "squangle/mysql_client/AsyncMysqlClient.h"
+#include "squangle/mysql_client/Connection.h"
 #include "squangle/mysql_client/Operation.h"
 
-namespace facebook {
-namespace common {
-namespace mysql_client {
+namespace facebook::common::mysql_client {
 
 std::ostream& operator<<(
     std::ostream& stream,
@@ -30,7 +26,7 @@ MysqlException::MysqlException(
     OperationResult failure_type,
     unsigned int mysql_errno,
     const std::string& mysql_error,
-    ConnectionKey conn_key,
+    std::shared_ptr<const ConnectionKey> conn_key,
     Duration elapsed_time)
     : Exception(
           (failure_type == OperationResult::Failed ||
@@ -40,9 +36,9 @@ MysqlException::MysqlException(
                     "Mysql error {}. {} to db {} at {}:{}",
                     mysql_errno,
                     mysql_error,
-                    conn_key.db_name(),
-                    conn_key.host(),
-                    conn_key.port())
+                    conn_key->db_name(),
+                    conn_key->host(),
+                    conn_key->port())
               : std::string(Operation::toString(failure_type))),
       OperationResultBase(std::move(conn_key), elapsed_time),
       failure_type_(failure_type),
@@ -56,11 +52,26 @@ bool DbResult::ok() const {
 DbResult::DbResult(
     std::unique_ptr<Connection>&& conn,
     OperationResult result,
-    ConnectionKey conn_key,
+    std::shared_ptr<const ConnectionKey> conn_key,
     Duration elapsed)
     : OperationResultBase(std::move(conn_key), elapsed),
       conn_(std::move(conn)),
       result_(result) {}
+
+DbResult::~DbResult() = default;
+
+DbResult::DbResult(DbResult&& other) noexcept : OperationResultBase(other) {
+  conn_ = std::move(other.conn_);
+  result_ = other.result_;
+}
+
+DbResult& DbResult::operator=(DbResult&& other) noexcept {
+  OperationResultBase::operator=(other);
+  conn_ = std::move(other.conn_);
+  result_ = other.result_;
+
+  return *this;
+}
 
 std::unique_ptr<Connection> DbResult::releaseConnection() {
   return std::move(conn_);
@@ -69,7 +80,7 @@ std::unique_ptr<Connection> DbResult::releaseConnection() {
 ConnectResult::ConnectResult(
     std::unique_ptr<Connection>&& conn,
     OperationResult result,
-    ConnectionKey conn_key,
+    std::shared_ptr<const ConnectionKey> conn_key,
     Duration elapsed_time,
     uint32_t num_attempts)
     : DbResult(std::move(conn), result, std::move(conn_key), elapsed_time),
@@ -198,11 +209,13 @@ void StreamedQueryResult::setResult(
     int64_t affected_rows,
     int64_t last_insert_id,
     const std::string& recv_gtid,
-    const RespAttrs& resp_attrs) {
+    const RespAttrs& resp_attrs,
+    unsigned int warnings_count) {
   num_affected_rows_ = affected_rows;
   last_insert_id_ = last_insert_id;
   recv_gtid_ = recv_gtid;
   resp_attrs_ = resp_attrs;
+  warnings_count_ = warnings_count;
 }
 
 void StreamedQueryResult::setException(folly::exception_wrapper ex) {
@@ -223,7 +236,7 @@ folly::Optional<StreamedQueryResult> MultiQueryStreamHandler::nextQuery() {
   }
 
   // Runs in User thread
-  connection()->wait();
+  connection().wait();
   DCHECK(operation_->isPaused() || operation_->done());
 
   folly::Optional<StreamedQueryResult> res;
@@ -244,7 +257,7 @@ folly::Optional<StreamedQueryResult> MultiQueryStreamHandler::nextQuery() {
 
 std::unique_ptr<Connection> MultiQueryStreamHandler::releaseConnection() {
   // Runs in User thread
-  connection()->wait();
+  connection().wait();
   if (state_ == State::OperationSucceeded || state_ == State::OperationFailed) {
     return operation_->releaseConnection();
   }
@@ -271,37 +284,37 @@ const std::string& MultiQueryStreamHandler::mysql_error() const {
 }
 
 void MultiQueryStreamHandler::streamCallback(
-    FetchOperation* op,
+    FetchOperation& op,
     StreamState op_state) {
   // Runs in IO Thread
   if (op_state == StreamState::InitQuery) {
-    op->pauseForConsumer();
+    op.pauseForConsumer();
     state_ = State::InitResult;
   } else if (op_state == StreamState::RowsReady) {
-    op->pauseForConsumer();
+    op.pauseForConsumer();
     state_ = State::ReadRows;
   } else if (op_state == StreamState::QueryEnded) {
-    op->pauseForConsumer();
+    op.pauseForConsumer();
     state_ = State::ReadResult;
   } else if (op_state == StreamState::Success) {
     state_ = State::OperationSucceeded;
   } else {
     exception_wrapper_ = folly::make_exception_wrapper<QueryException>(
-        op->numCurrentQuery(),
-        op->result(),
-        op->mysql_errno(),
-        op->mysql_error(),
-        *op->connection()->getKey(),
-        op->elapsed());
+        op.numCurrentQuery(),
+        op.result(),
+        op.mysql_errno(),
+        op.mysql_error(),
+        op.connection()->getKey(),
+        op.opElapsed());
     state_ = State::OperationFailed;
   }
-  op->connection()->notify();
+  op.connection()->notify();
 }
 
 folly::Optional<EphemeralRow> MultiQueryStreamHandler::fetchOneRow(
     StreamedQueryResult* result) {
   checkStreamedQueryResult(result);
-  connection()->wait();
+  connection().wait();
   // Accepted states: ReadRows, ReadResult, OperationFailed
   if (state_ == State::ReadRows) {
     if (!operation_->rowStream()->hasNext()) {
@@ -327,7 +340,7 @@ folly::Optional<EphemeralRow> MultiQueryStreamHandler::fetchOneRow(
 
 void MultiQueryStreamHandler::fetchQueryEnd(StreamedQueryResult* result) {
   checkStreamedQueryResult(result);
-  connection()->wait();
+  connection().wait();
   // Accepted states: ReadResult, OperationFailed
   if (state_ == State::ReadResult) {
     handleQueryEnded(result);
@@ -341,7 +354,7 @@ void MultiQueryStreamHandler::fetchQueryEnd(StreamedQueryResult* result) {
 }
 
 void MultiQueryStreamHandler::resumeOperation() {
-  connection()->resetActionable();
+  connection().resetActionable();
   operation_->resume();
 }
 
@@ -350,7 +363,8 @@ void MultiQueryStreamHandler::handleQueryEnded(StreamedQueryResult* result) {
       operation_->currentAffectedRows(),
       operation_->currentLastInsertId(),
       operation_->currentRecvGtid(),
-      operation_->currentRespAttrs());
+      operation_->currentRespAttrs(),
+      operation_->currentWarningsCount());
   result->freeHandler();
   resumeOperation();
 }
@@ -425,8 +439,8 @@ MultiQueryStreamHandler::~MultiQueryStreamHandler() {
   }
 }
 
-Connection* MultiQueryStreamHandler::connection() const {
-  return operation_->connection();
+Connection& MultiQueryStreamHandler::connection() const {
+  return *operation_->connection();
 }
 
 EphemeralRowFields* StreamedQueryResult::getRowFields() const {
@@ -434,6 +448,5 @@ EphemeralRowFields* StreamedQueryResult::getRowFields() const {
       << "Trying to get the row fileds after " << "query end";
   return stream_handler_->operation_->rowStream()->getEphemeralRowFields();
 }
-} // namespace mysql_client
-} // namespace common
-} // namespace facebook
+
+} // namespace facebook::common::mysql_client

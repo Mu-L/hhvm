@@ -4,3 +4,17 @@
  * DO NOT EDIT UNLESS YOU ARE SURE THAT YOU KNOW WHAT YOU ARE DOING
  *  @generated @nocommit
  */
+
+#include "thrift/compiler/test/fixtures/terse_write/gen-cpp2/terse_write_constants.h"
+
+#include <thrift/lib/cpp2/gen/module_constants_cpp.h>
+
+
+
+namespace facebook::thrift::test::terse_write {
+namespace terse_write_constants {
+
+
+
+} // namespace terse_write_constants
+} // namespace facebook::thrift::test::terse_write

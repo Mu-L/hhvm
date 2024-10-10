@@ -11,9 +11,9 @@ license = "MIT"
 path = "lib.rs"
 
 [dependencies]
-anyhow = "1.0.75"
+anyhow = "1.0.86"
 ast_scope = { version = "0.0.0", path = "../emitter/cargo/ast_scope" }
-bstr = { version = "1.4.0", features = ["serde", "std", "unicode"] }
+bstr = { version = "1.10.0", features = ["serde", "std", "unicode"] }
 core_utils_rust = { version = "0.0.0", path = "../../utils/core" }
 emit_type_hint = { version = "0.0.0", path = "../emitter/cargo/emit_type_hint" }
 error = { version = "0.0.0", path = "../error/cargo/error" }
@@ -24,5 +24,5 @@ lazy_static = "1.4"
 naming_special_names_rust = { version = "0.0.0", path = "../../naming" }
 oxidized = { version = "0.0.0", path = "../../oxidized" }
 regex = "1.9.2"
-thiserror = "1.0.49"
+thiserror = "1.0.64"
 write_bytes = { version = "0.0.0", path = "../../utils/write_bytes/write_bytes" }

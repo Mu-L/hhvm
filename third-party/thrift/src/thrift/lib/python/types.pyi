@@ -75,6 +75,7 @@ class FieldInfo:
         default_value: object,
         adapter_info: typing.Optional[tuple[object, Struct]],
         is_primitive: bool,
+        idl_type: int = -1,
     ) -> None: ...
 
 class ListTypeInfo:
@@ -99,7 +100,7 @@ class AdaptedTypeInfo:
         self,
         orig_type_info: AnyTypeInfo,
         adapter_class: typing.Type[TAdapter],
-        transitive_annotation: typing.Callable[[], typing.Optional[Struct]],
+        transitive_annotation_factory: typing.Callable[[], typing.Optional[Struct]],
     ) -> None: ...
 
 # Parent class for structs and unions
@@ -123,10 +124,12 @@ class Union(
     StructOrUnion,
     metaclass=UnionMeta,
 ):
-    # pyre-ignore[4]: it can be anything
-    type: typing.Any
-    # pyre-ignore[4]: it can be anything
-    value: typing.Any
+    # these types are made more specific in gencode, so can't be `Final` here
+    type: enum.Enum
+    value: object
+    # these are added to avoid naming collisions with `type` and `value` arms
+    fbthrift_current_value: object
+    fbthrift_current_field: enum.Enum
     def __bool__(self) -> bool: ...
 
 class StructMeta(type, typing.Iterable[typing.Tuple[str, typing.Any]]): ...

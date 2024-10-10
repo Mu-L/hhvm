@@ -38,6 +38,9 @@ module Classes = struct
 
   let cHH_BuiltinAbstractEnumClass = "\\HH\\BuiltinAbstractEnumClass"
 
+  (** The base class for all lambda values *)
+  let cClosure = "\\Closure"
+
   let cThrowable = "\\Throwable"
 
   let cStdClass = "\\stdClass"
@@ -969,13 +972,7 @@ module PseudoFunctions = struct
 end
 
 module StdlibFunctions = struct
-  let is_array = "\\is_array"
-
   let get_class = "\\get_class"
-
-  let array_filter = "\\array_filter"
-
-  let call_user_func = "\\call_user_func"
 
   let type_structure = "\\HH\\type_structure"
 
@@ -984,10 +981,6 @@ module StdlibFunctions = struct
   let array_unmark_legacy = "\\HH\\array_unmark_legacy"
 
   let is_any_array = "\\HH\\is_any_array"
-
-  let is_dict_or_darray = "\\HH\\is_dict_or_darray"
-
-  let is_vec_or_varray = "\\HH\\is_vec_or_varray"
 
   (* All Id funcions that Typing.dispatch_call handles specially *)
   let special_dispatch =
@@ -1206,25 +1199,6 @@ end
 
 module Hips = struct
   let inspect = "\\inspect"
-end
-
-module Superglobals = struct
-  let globals = "$GLOBALS"
-
-  let is_superglobal =
-    let superglobals =
-      HashSet.of_list
-        [
-          "$_SERVER";
-          "$_GET";
-          "$_POST";
-          "$_FILES";
-          "$_COOKIE";
-          "$_REQUEST";
-          "$_ENV";
-        ]
-    in
-    (fun x -> HashSet.mem superglobals x)
 end
 
 module Regex = struct

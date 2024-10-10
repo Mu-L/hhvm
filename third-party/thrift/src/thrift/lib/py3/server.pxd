@@ -101,9 +101,8 @@ cdef extern from "thrift/lib/cpp2/server/ThriftServer.h" \
         uint16_t getPort() nogil
         void setAddress(cfollySocketAddress& addr) nogil
         void setAddress(string ip, uint16_t port) nogil
-        void setInterface(shared_ptr[cServerInterface]) nogil
+        void setInterface(shared_ptr[cAsyncProcessorFactory]) nogil
         void setStatusInterface(shared_ptr[cStatusServerInterface]) nogil
-        void setProcessorFactory(shared_ptr[cAsyncProcessorFactory]) nogil
         void serve() nogil except +
         void stop() nogil except +
         void stopListening() nogil except +
@@ -140,6 +139,8 @@ cdef extern from "thrift/lib/cpp2/server/ThriftServer.h" \
         void setQuickExitOnShutdownTimeout(cbool quickExitOnShutdownTimeout)
         void addRoutingHandler(unique_ptr[cTransportRoutingHandler])
         void disableInfoLogging()
+        cbool resourcePoolEnabled() nogil noexcept
+        void requireResourcePools() nogil noexcept
 
 cdef extern from "folly/ssl/OpenSSLCertUtils.h" \
         namespace "folly::ssl":
@@ -211,6 +212,7 @@ cdef extern from "thrift/lib/cpp2/server/Cpp2ConnContext.h" \
 
 cdef class AsyncProcessorFactory:
     cdef shared_ptr[cAsyncProcessorFactory] _cpp_obj
+    cdef cbool requireResourcePools(AsyncProcessorFactory self)
 
 
 cdef class ServiceInterface(AsyncProcessorFactory):

@@ -17,7 +17,7 @@
 #pragma once
 
 #include <folly/ExceptionWrapper.h>
-#include <folly/experimental/coro/Task.h>
+#include <folly/Try.h>
 
 #include <thrift/lib/cpp/SerializedMessage.h>
 #include <thrift/lib/cpp/TProcessorEventHandler.h>
@@ -100,21 +100,28 @@ class ContextStack {
 
   void resetClientRequestContextHeader();
 
-#if FOLLY_HAS_COROUTINES
-  bool shouldProcessClientInterceptors() const noexcept {
-    return clientInterceptors_ != nullptr && !clientInterceptors_->empty();
+  const std::shared_ptr<std::vector<std::shared_ptr<ClientInterceptorBase>>>&
+  getClientInterceptors() const {
+    return clientInterceptors_;
   }
-  folly::coro::Task<void> processClientInterceptorsOnRequest();
-  folly::coro::Task<void> processClientInterceptorsOnResponse();
-#endif
+
+  [[nodiscard]] folly::Try<void> processClientInterceptorsOnRequest(
+      ClientInterceptorOnRequestArguments arguments,
+      apache::thrift::transport::THeader* headers) noexcept;
+  [[nodiscard]] folly::Try<void> processClientInterceptorsOnResponse(
+      const apache::thrift::transport::THeader* headers) noexcept;
 
  private:
   std::shared_ptr<std::vector<std::shared_ptr<TProcessorEventHandler>>>
       handlers_;
   std::shared_ptr<std::vector<std::shared_ptr<ClientInterceptorBase>>>
       clientInterceptors_;
+  // Must be NUL-terminated.
   const char* const serviceName_;
-  const char* const method_;
+  // "{service_name}.{method_name}"
+  const char* const methodNamePrefixed_;
+  // "{method_name}", without the service name prefix
+  const char* const methodNameUnprefixed_;
   void** serviceContexts_;
   // While the server-side has a Cpp2RequestContext, the client-side "fakes" it
   // with an embedded version. We can't make it nullptr because this is the API
@@ -152,6 +159,9 @@ class ContextStack {
           detail::ClientInterceptorOnRequestStorage> clientInterceptorsStorage);
 
   void*& contextAt(size_t i);
+
+  detail::ClientInterceptorOnRequestStorage*
+  getStorageForClientInterceptorOnRequestByIndex(std::size_t index);
 };
 
 } // namespace apache::thrift

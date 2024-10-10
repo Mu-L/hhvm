@@ -12,12 +12,20 @@ module Definition : sig
   val show : t -> string
 end
 
+module Environment : sig
+  type t
+
+  val default : t
+
+  val definitions : t -> Definition.t list
+end
+
 module Type : sig
   type t
 
-  val inhabitant_of : t -> string
+  val inhabitant_of : Environment.t -> t -> string
 
   val show : t -> string
 
-  val mk : unit -> t * Definition.t list
+  val mk : Environment.t -> depth:int option -> Environment.t * t
 end

@@ -18,8 +18,7 @@
 
 #include <thrift/lib/cpp2/async/Interaction.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 namespace {
 const transport::THeader::StringToStringMap& kEmptyMap() {
   static const transport::THeader::StringToStringMap& map =
@@ -196,6 +195,11 @@ int64_t RpcOptions::getInteractionId() const {
   return interactionId_;
 }
 
+RpcOptions& RpcOptions::copyInteractionIdFrom(const RpcOptions& other) {
+  interactionId_ = other.getInteractionId();
+  return *this;
+}
+
 RpcOptions& RpcOptions::setLoggingContext(std::string loggingContext) {
   loggingContext_ = std::move(loggingContext);
   return *this;
@@ -282,5 +286,13 @@ std::string_view RpcOptions::getConnectionKey() const {
   return connectionKey_;
 }
 
-} // namespace thrift
-} // namespace apache
+RpcOptions& RpcOptions::setChecksum(RpcOptions::Checksum checksum) {
+  checksum_ = checksum;
+  return *this;
+}
+
+RpcOptions::Checksum RpcOptions::getChecksum() const {
+  return checksum_;
+}
+
+} // namespace apache::thrift

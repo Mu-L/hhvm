@@ -232,7 +232,8 @@ struct detect_promise_return_object_eager_conversion_ {
     // unblock expected/optional coroutines. This should be removed once the
     // build config is changed to use -Wno-deprecated-experimental-coroutine.
     FOLLY_PUSH_WARNING
-#if defined(__clang__) && (__clang_major__ < 17 && __clang_major__ > 13)
+#if defined(__clang__) && \
+    (13 < __clang_major__ && __clang_major__ < 17 - defined(__APPLE__))
     FOLLY_CLANG_DISABLE_WARNING("-Wdeprecated-experimental-coroutine")
 #endif
     co_return;
@@ -300,7 +301,6 @@ class ExtendedCoroutineHandle;
 // Extended promise interface folly::coro types are expected to implement
 class ExtendedCoroutinePromise {
  public:
-  virtual coroutine_handle<> getHandle() = 0;
   // Types may provide a more efficient resumption path when they know they will
   // be receiving an error result from the awaitee.
   // If they do, they might also update the active stack frame.
@@ -323,8 +323,13 @@ class ExtendedCoroutineHandle {
   /*implicit*/ ExtendedCoroutineHandle(coroutine_handle<> handle) noexcept
       : basic_(handle) {}
 
-  /*implicit*/ ExtendedCoroutineHandle(ExtendedCoroutinePromise* ptr) noexcept
-      : basic_(ptr->getHandle()), extended_(ptr) {}
+  template <
+      typename Promise,
+      std::enable_if_t<
+          std::is_base_of_v<ExtendedCoroutinePromise, Promise>,
+          int> = 0>
+  /*implicit*/ ExtendedCoroutineHandle(Promise* p) noexcept
+      : basic_(coroutine_handle<Promise>::from_promise(*p)), extended_(p) {}
 
   ExtendedCoroutineHandle() noexcept = default;
 
@@ -333,8 +338,6 @@ class ExtendedCoroutineHandle {
   void destroy() { basic_.destroy(); }
 
   coroutine_handle<> getHandle() const noexcept { return basic_; }
-
-  ExtendedCoroutinePromise* getPromise() const noexcept { return extended_; }
 
   std::pair<ExtendedCoroutineHandle, AsyncStackFrame*> getErrorHandle(
       exception_wrapper& ex) {
@@ -358,23 +361,6 @@ class ExtendedCoroutineHandle {
 
   coroutine_handle<> basic_;
   ExtendedCoroutinePromise* extended_{nullptr};
-};
-
-template <typename Promise>
-class ExtendedCoroutinePromiseImpl : public ExtendedCoroutinePromise {
- public:
-  coroutine_handle<> getHandle() final {
-    return coroutine_handle<Promise>::from_promise(
-        *static_cast<Promise*>(this));
-  }
-
-  std::pair<ExtendedCoroutineHandle, AsyncStackFrame*> getErrorHandle(
-      exception_wrapper&) override {
-    return {getHandle(), nullptr};
-  }
-
- protected:
-  ~ExtendedCoroutinePromiseImpl() = default;
 };
 
 } // namespace folly::coro

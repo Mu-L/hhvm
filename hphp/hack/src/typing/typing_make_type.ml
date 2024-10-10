@@ -19,9 +19,9 @@ let prim_type r t = mk (r, Tprim t)
 
 (* Make a negation type *)
 let neg r neg_t =
-  match neg_t with
+  match snd neg_t with
   (* Represent the negation of Tnull as Tnonnull, instead of Tneg Tnull *)
-  | Neg_predicate IsNull -> mk (r, Tnonnull)
+  | IsTag NullTag -> mk (r, Tnonnull)
   | _ -> mk (r, Tneg neg_t)
 
 let traversable r ty = class_type r SN.Collections.cTraversable [ty]
@@ -104,7 +104,24 @@ let nonnull r = mk (r, Tnonnull)
 
 let dynamic r = mk (r, Tdynamic)
 
-let like r ty = mk (r, Tlike ty)
+let is_dynamic_or_like_or_mixed ty =
+  match get_node ty with
+  | Tdynamic
+  | Tlike _
+  | Tmixed ->
+    true
+  | _ -> false
+
+let like r ty =
+  if is_dynamic_or_like_or_mixed ty then
+    ty
+  else
+    match get_node ty with
+    | Tapply ((_, n), [inner_ty])
+      when String.equal n Naming_special_names.Classes.cSupportDyn
+           && is_dynamic_or_like_or_mixed inner_ty ->
+      ty
+    | _ -> mk (r, Tlike ty)
 
 let locl_like r ty =
   if Typing_defs.is_dynamic ty then
@@ -165,7 +182,14 @@ let nullable : type a. a Reason.t_ -> a ty -> a ty =
 
 let apply r id tyl = mk (r, Tapply (id, tyl))
 
-let tuple r tyl = mk (r, Ttuple tyl)
+let tuple r tyl =
+  mk
+    ( r,
+      Ttuple
+        {
+          t_required = tyl;
+          t_extra = Textra { t_optional = []; t_variadic = nothing r };
+        } )
 
 let union r tyl =
   match tyl with

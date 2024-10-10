@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<f3499329b1126fd3cf40d7f7da9524db>>
+// @generated SignedSource<<217be576677ce11528e6e4242ad71473>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -160,8 +160,8 @@ arena_deserializer::impl_deserialize_in_arena!(PosByteString<'arena>);
 #[repr(C, u8)]
 pub enum TshapeFieldName<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    #[rust_to_ocaml(name = "TSFlit_int")]
-    TSFlitInt(&'a PosString<'a>),
+    #[rust_to_ocaml(name = "TSFregex_group")]
+    TSFregexGroup(&'a PosString<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "TSFlit_str")]
     TSFlitStr(&'a PosByteString<'a>),
@@ -470,20 +470,91 @@ arena_deserializer::impl_deserialize_in_arena!(FunType<'arena>);
 )]
 #[rust_to_ocaml(attr = "deriving (eq, ord, hash, (show { with_path = false }))")]
 #[repr(C, u8)]
-pub enum TypePredicate<'a> {
-    IsBool,
-    IsInt,
-    IsString,
-    IsArraykey,
-    IsFloat,
-    IsNum,
-    IsResource,
-    IsNull,
+pub enum TypeTag<'a> {
+    BoolTag,
+    IntTag,
+    StringTag,
+    ArraykeyTag,
+    FloatTag,
+    NumTag,
+    ResourceTag,
+    NullTag,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    IsTupleOf(&'a [TypePredicate<'a>]),
+    ClassTag(&'a ast_defs::Id_<'a>),
 }
-impl<'a> TrivialDrop for TypePredicate<'a> {}
-arena_deserializer::impl_deserialize_in_arena!(TypePredicate<'arena>);
+impl<'a> TrivialDrop for TypeTag<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TypeTag<'arena>);
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[repr(C)]
+pub struct ShapeFieldPredicate<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub sfp_predicate: TypePredicate<'a>,
+}
+impl<'a> TrivialDrop for ShapeFieldPredicate<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(ShapeFieldPredicate<'arena>);
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C)]
+pub struct ShapePredicate<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub sp_fields: t_shape_map::TShapeMap<'a, &'a ShapeFieldPredicate<'a>>,
+}
+impl<'a> TrivialDrop for ShapePredicate<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(ShapePredicate<'arena>);
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C)]
+pub struct TuplePredicate<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub tp_required: &'a [TypePredicate<'a>],
+}
+impl<'a> TrivialDrop for TuplePredicate<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TuplePredicate<'arena>);
 
 #[derive(
     Clone,
@@ -501,18 +572,44 @@ arena_deserializer::impl_deserialize_in_arena!(TypePredicate<'arena>);
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (hash, (show { with_path = false }))")]
+#[rust_to_ocaml(and)]
 #[repr(C, u8)]
-pub enum NegType<'a> {
+pub enum TypePredicate_<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    #[rust_to_ocaml(name = "Neg_class")]
-    NegClass(&'a PosId<'a>),
+    IsTag(&'a TypeTag<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    #[rust_to_ocaml(name = "Neg_predicate")]
-    NegPredicate(&'a TypePredicate<'a>),
+    IsTupleOf(&'a TuplePredicate<'a>),
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    IsShapeOf(&'a ShapePredicate<'a>),
 }
-impl<'a> TrivialDrop for NegType<'a> {}
-arena_deserializer::impl_deserialize_in_arena!(NegType<'arena>);
+impl<'a> TrivialDrop for TypePredicate_<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TypePredicate_<'arena>);
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(attr = "deriving (eq, ord, hash, (show { with_path = false }))")]
+#[repr(C)]
+pub struct TypePredicate<'a>(
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)] pub &'a reason::Reason<'a>,
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)] pub &'a TypePredicate_<'a>,
+);
+impl<'a> TrivialDrop for TypePredicate<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TypePredicate<'arena>);
 
 #[derive(
     Clone,
@@ -652,9 +749,9 @@ pub enum Ty_<'a> {
     /// function, method, lambda, etc.
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     Tfun(&'a FunType<'a>),
-    /// Tuple, with ordered list of the types of the elements of the tuple.
+    /// A wrapper around tuple_type, which contains information about tuple elements
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    Ttuple(&'a [&'a Ty<'a>]),
+    Ttuple(&'a TupleType<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     Tshape(&'a ShapeType<'a>),
     /// The type of a generic parameter. The constraints on a generic parameter
@@ -684,6 +781,7 @@ pub enum Ty_<'a> {
     /// Name of class, name of type const, remaining names of type consts
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     Taccess(&'a TaccessType<'a>),
+    Tvar(isize),
     /// The type of an opaque type or enum. Outside their defining files or
     /// when they represent enums, they are "opaque", which means that they
     /// only unify with themselves. Within a file, uses of newtypes are
@@ -692,15 +790,15 @@ pub enum Ty_<'a> {
     /// However, it is possible to have a constraint that allows us to relax
     /// opaqueness. For example:
     ///
-    ///   newtype MyType as int = ...
+    /// newtype MyType as int = ...
     ///
     /// or
     ///
-    ///   enum MyType: int as int { ... }
+    /// enum MyType: int as int { ... }
     ///
     /// Outside of the file where the type was defined, this translates to:
     ///
-    ///   Tnewtype ((pos, "MyType"), [], Tprim Tint)
+    /// Tnewtype ((pos, "MyType"), [], Tprim Tint)
     ///
     /// which means that MyType is abstract, but is a subtype of int as well.
     /// When the constraint is omitted, the third parameter is set to mixed.
@@ -709,7 +807,6 @@ pub enum Ty_<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(inline_tuple)]
     Tnewtype(&'a (&'a str, &'a [&'a Ty<'a>], &'a Ty<'a>)),
-    Tvar(isize),
     /// This represents a type alias that lacks necessary type arguments. Given
     /// type Foo<T1,T2> = ...
     /// Tunappliedalias "Foo" stands for usages of plain Foo, without supplying
@@ -730,9 +827,9 @@ pub enum Ty_<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(inline_tuple)]
     Tclass(&'a (PosId<'a>, Exact<'a>, &'a [&'a Ty<'a>])),
-    /// The negation of the type in neg_type
+    /// The negation of the [type_predicate]
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    Tneg(&'a NegType<'a>),
+    Tneg(&'a TypePredicate<'a>),
     /// The type of the label expression #ID
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     Tlabel(&'a str),
@@ -932,3 +1029,73 @@ pub struct ShapeType<'a> {
 }
 impl<'a> TrivialDrop for ShapeType<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(ShapeType<'arena>);
+
+/// Required and extra components of a tuple. Extra components
+/// are either optional + variadic, or a type splat.
+/// Exmaple 1:
+/// (string,bool,optional float,optional bool,int...)
+/// has require components string, bool, optional components float, bool
+/// and variadic component int.
+/// Example 2:
+/// (string,float,...T)
+/// has required components string, float, and splat component T.
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(attr = "deriving hash")]
+#[rust_to_ocaml(prefix = "t_")]
+#[repr(C)]
+pub struct TupleType<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub required: &'a [&'a Ty<'a>],
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub extra: TupleExtra<'a>,
+}
+impl<'a> TrivialDrop for TupleType<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TupleType<'arena>);
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(attr = "deriving hash")]
+#[repr(C, u8)]
+pub enum TupleExtra<'a> {
+    #[rust_to_ocaml(prefix = "t_")]
+    Textra {
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        optional: &'a [&'a Ty<'a>],
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        variadic: &'a Ty<'a>,
+    },
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    Tsplat(&'a Ty<'a>),
+}
+impl<'a> TrivialDrop for TupleExtra<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TupleExtra<'arena>);

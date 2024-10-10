@@ -24,6 +24,7 @@
 
 #include "mcrouter/lib/carbon/example/gen/HelloGoodbyeRouteHandleIf.h"
 #include "mcrouter/lib/carbon/example/gen/HelloGoodbyeRouterStats.h"
+#include "mcrouter/lib/carbon/example/gen/HelloGoodbyeRoutingGroups.h"
 
 // Forward declarations
 namespace folly {
@@ -76,6 +77,7 @@ struct HelloGoodbyeRouterInfo {
   static constexpr const char* name = "HelloGoodbye";
   static constexpr const bool bucketization = false;
   static constexpr const bool useRequestAclChecker = false;
+  static constexpr const bool hasMcRefillRoute = false;
 
   template <class Route>
   using RouteHandle = HelloGoodbyeRouteHandle<Route>;

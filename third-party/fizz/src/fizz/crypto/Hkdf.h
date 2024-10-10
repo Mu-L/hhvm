@@ -9,6 +9,7 @@
 #pragma once
 
 #include <fizz/crypto/Crypto.h>
+#include <fizz/crypto/Hasher.h>
 #include <folly/io/IOBuf.h>
 
 namespace fizz {
@@ -22,58 +23,33 @@ namespace fizz {
  */
 class Hkdf {
  public:
-  virtual ~Hkdf() = default;
-
-  virtual std::vector<uint8_t> extract(
-      folly::ByteRange salt,
-      folly::ByteRange ikm) const = 0;
-
-  virtual std::unique_ptr<folly::IOBuf> expand(
-      folly::ByteRange extractedKey,
-      const folly::IOBuf& info,
-      size_t outputBytes) const = 0;
-
-  virtual std::unique_ptr<folly::IOBuf> hkdf(
-      folly::ByteRange ikm,
-      folly::ByteRange salt,
-      const folly::IOBuf& info,
-      size_t outputBytes) const = 0;
-
-  virtual size_t hashLength() const = 0;
-};
-
-/**
- * HKDF implementation using a templated HMAC implementation.
- *
- * The template struct requires the following parameters:
- *   - HashLen: length of the hash digest
- *   - hmac(ByteRange key, const IOBuf& in, MutableByteRange out)
- */
-class HkdfImpl : public Hkdf {
- public:
-  HkdfImpl(size_t hashLength, HmacFunc hmacFunc)
-      : hashLength_(hashLength), hmacFunc_(hmacFunc) {}
+  explicit Hkdf(const HasherFactoryWithMetadata* makeHasher)
+      : makeHasher_(makeHasher) {}
 
   std::vector<uint8_t> extract(folly::ByteRange salt, folly::ByteRange ikm)
-      const override;
+      const;
 
   std::unique_ptr<folly::IOBuf> expand(
       folly::ByteRange extractedKey,
       const folly::IOBuf& info,
-      size_t outputBytes) const override;
+      size_t outputBytes) const;
 
   std::unique_ptr<folly::IOBuf> hkdf(
       folly::ByteRange ikm,
       folly::ByteRange salt,
       const folly::IOBuf& info,
-      size_t outputBytes) const override;
+      size_t outputBytes) const;
 
-  size_t hashLength() const override {
-    return hashLength_;
+  // TODO: Deprecate. Use hasher().hashLength()
+  size_t hashLength() const {
+    return makeHasher_->hashLength();
+  }
+
+  const HasherFactoryWithMetadata* hasher() const {
+    return makeHasher_;
   }
 
  private:
-  size_t hashLength_;
-  HmacFunc hmacFunc_;
+  const HasherFactoryWithMetadata* makeHasher_;
 };
 } // namespace fizz

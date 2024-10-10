@@ -34,7 +34,10 @@ aast_defs::ReifyKind
 aast_defs::RequireKind
 aast_defs::Sid
 aast_defs::Stmt_
+aast_defs::TupleExtra
 aast_defs::TypeconstAbstractKind
+aast_defs::TypedefAssignment
+aast_defs::TypedefVisibilityAndHint
 aast_defs::XhpAttribute
 ast_defs::Abstraction
 ast_defs::Bop
@@ -203,10 +206,13 @@ typing_defs_core::Reactivity
 typing_defs_core::RefinedConst
 typing_defs_core::RefinedConstBound
 typing_defs_core::ShapeKind
+typing_defs_core::TupleExtra
 typing_defs_core::TshapeFieldName
 typing_defs_core::Ty_
 typing_defs_core::TypeOrigin
 typing_defs_core::TypePredicate
+typing_defs_core::TypePredicate_
+typing_defs_core::TypeTag
 typing_defs_core::UserAttributeParam
 typing_defs_core::ValKind
 typing_defs_core::XhpAttr
@@ -240,6 +246,7 @@ typing_defs::ClassTypeRefinementBounds
 typing_defs::ShapeKind
 typing_defs::Ty_
 typing_defs::Typeconst
+typing_defs::TypedefTypeAssignment
 typing_defs::TypeOrigin
 typing_defs::ValKind
 typing_defs::XhpAttr
@@ -248,6 +255,7 @@ typing_inference_env::Tvenv
 typing_mutability_env::MutabilityEnv
 typing_mutability_env::MutType
 typing_reason::ArgPosition
+typing_reason::Axiom
 typing_reason::Blame
 typing_reason::BlameSource
 typing_reason::CtorKind

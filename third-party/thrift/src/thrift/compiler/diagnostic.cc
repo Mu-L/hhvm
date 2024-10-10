@@ -16,6 +16,7 @@
 
 #include <thrift/compiler/diagnostic.h>
 
+#include <ostream>
 #include <string>
 
 using apache::thrift::compiler::diagnostic;
@@ -48,6 +49,13 @@ fmt::format_context::iterator fmt::formatter<diagnostic>::format(
   if (!d.name().empty()) {
     fmt::format_to(out, " [{}]", d.name());
   }
+  if (d.fixit_hint()) {
+    fmt::format_to(
+        out,
+        " fix: [original: \"{}\"][replacement: \"{}\"]",
+        d.fixit_hint()->original(),
+        d.fixit_hint()->replacement());
+  }
   return out;
 }
 
@@ -75,6 +83,7 @@ diagnostic_results::diagnostic_results(
 void diagnostics_engine::do_report(
     source_location loc,
     std::string name,
+    std::optional<fixit> fixit_hint,
     diagnostic_level level,
     std::string msg) {
   if (level == diagnostic_level::error) {
@@ -90,12 +99,20 @@ void diagnostics_engine::do_report(
     file_name = resolved_loc.file_name();
     line = resolved_loc.line();
   }
+  if (fixit_hint) {
+    fixit_hint->resolve_location(*source_mgr_, loc);
+  }
   report_cb_(
       {level,
        std::move(msg),
        std::move(file_name),
        static_cast<int>(line),
-       std::move(name)});
+       std::move(name),
+       std::move(fixit_hint)});
+}
+
+std::ostream& operator<<(std::ostream& out, const diagnostic& diag) {
+  return out << diag.str();
 }
 
 } // namespace compiler

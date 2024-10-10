@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -58,7 +55,6 @@ from collections.abc import Sequence, Set, Mapping, Iterable
 import weakref as __weakref
 import builtins as _builtins
 import importlib
-
 
 
 
@@ -108,7 +104,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline max_i64_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).max_i64_field_ref().value()
 
     @property
@@ -116,7 +111,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return self.max_i64_field_impl()
 
     cdef inline min_i64_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).min_i64_field_ref().value()
 
     @property
@@ -124,7 +118,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return self.min_i64_field_impl()
 
     cdef inline max_i32_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).max_i32_field_ref().value()
 
     @property
@@ -132,7 +125,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return self.max_i32_field_impl()
 
     cdef inline min_i32_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).min_i32_field_ref().value()
 
     @property
@@ -140,7 +132,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return self.min_i32_field_impl()
 
     cdef inline max_i16_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).max_i16_field_ref().value()
 
     @property
@@ -148,7 +139,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return self.max_i16_field_impl()
 
     cdef inline min_i16_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).min_i16_field_ref().value()
 
     @property
@@ -156,7 +146,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return self.min_i16_field_impl()
 
     cdef inline max_byte_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).max_byte_field_ref().value()
 
     @property
@@ -164,7 +153,6 @@ cdef class Limits(thrift.py3.types.Struct):
         return self.max_byte_field_impl()
 
     cdef inline min_byte_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).min_byte_field_ref().value()
 
     @property

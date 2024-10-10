@@ -88,11 +88,7 @@ let test_process_file_deferring () =
   Decl_counters.set_mode HackEventLogger.PerFileProfilingConfig.DeclingTopCounts;
   let prev_counter_state = Counters.reset () in
   let { Typing_check_service.deferred_decls; _ } =
-    Typing_check_service.process_file
-      ctx
-      file
-      ~log_errors:false
-      ~decl_cap_mb:None
+    Typing_check_service.process_file ctx file ~decl_cap_mb:None
   in
   Counters.restore_state prev_counter_state;
 
@@ -146,7 +142,10 @@ let test_compute_tast_counting () =
       ~contents:foo_contents
   in
   let { Tast_provider.Compute_tast_and_errors.telemetry; _ } =
-    Tast_provider.compute_tast_and_errors_unquarantined ~ctx ~entry
+    Tast_provider.compute_tast_and_errors_unquarantined
+      ~ctx
+      ~entry
+      ~error_filter:Tast_provider.ErrorFilter.default
   in
 
   Asserter.Int_asserter.assert_equals
@@ -184,7 +183,10 @@ let test_compute_tast_counting_local_mem () =
           ~contents:foo_contents
       in
       let { Tast_provider.Compute_tast_and_errors.telemetry; _ } =
-        Tast_provider.compute_tast_and_errors_unquarantined ~ctx ~entry
+        Tast_provider.compute_tast_and_errors_unquarantined
+          ~ctx
+          ~entry
+          ~error_filter:Tast_provider.ErrorFilter.default
       in
       Asserter.Int_asserter.assert_equals
         expected_decling_count

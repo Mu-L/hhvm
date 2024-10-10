@@ -21,6 +21,7 @@
       "definition_html": "void apache::thrift::op::detail::SetPatch&lt; Patch &gt;::erase",
       "argsstring_html": "(U &amp;&amp;val)",
       "name_html": "erase",
+      "qualifiedname_html": "apache::thrift::op::detail::SetPatch::erase",
       "param": [
         {
           "type_html": "U &amp;&amp;",
@@ -29,11 +30,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "line": "209",
+        "line": "210",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "bodystart": "209",
-        "bodyend": "211"
+        "bodystart": "210",
+        "bodyend": "212"
       },
       "definition": {
         "simple_html": "template &lt;typename U = typename T::value_type&gt;\nvoid erase(U&amp;&amp; val)",

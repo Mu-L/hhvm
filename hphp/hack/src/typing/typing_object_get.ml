@@ -367,7 +367,15 @@ let rec this_appears_covariantly ~contra env ty =
   in
   match get_node ty with
   | Tthis -> not contra
-  | Ttuple tyl
+  | Ttuple { t_required; t_extra } ->
+    List.exists t_required ~f:(this_appears_covariantly ~contra env)
+    || begin
+         match t_extra with
+         | Textra { t_optional; t_variadic } ->
+           List.exists t_optional ~f:(this_appears_covariantly ~contra env)
+           || this_appears_covariantly ~contra env t_variadic
+         | Tsplat t_splat -> this_appears_covariantly ~contra env t_splat
+       end
   | Tunion tyl
   | Tintersection tyl ->
     List.exists tyl ~f:(this_appears_covariantly ~contra env)
@@ -405,15 +413,6 @@ let rec this_appears_covariantly ~contra env ty =
   | Tprim _
   | Tgeneric _ ->
     false
-  | Tnewtype (name, tyl, _) ->
-    let tparams =
-      match Env.get_typedef env name with
-      | Decl_entry.Found { td_tparams; _ } -> td_tparams
-      | Decl_entry.DoesNotExist
-      | Decl_entry.NotYetAvailable ->
-        []
-    in
-    this_appears_covariantly_params tparams tyl
 
 (** We know that the receiver is a concrete class, not a generic with
     bounds, or a Tunion. *)
@@ -1508,7 +1507,9 @@ let obj_get_with_mismatches
       | _ -> (env, ty)
     in
     (* First strip off top-level like, so we can see the class (or union of classes) underneath *)
-    let stripped_receiver_ty = Typing_utils.strip_dynamic env receiver_ty in
+    let (env, stripped_receiver_ty) =
+      Typing_dynamic_utils.strip_dynamic env receiver_ty
+    in
     let (env, freshened_receiver_ty) =
       freshen_receiver_ty_and_assert_subtype env stripped_receiver_ty
     in

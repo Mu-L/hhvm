@@ -47,6 +47,7 @@ using ::apache::thrift::detail::operator<=;
 using ::apache::thrift::detail::operator>=;
 
 
+/** Glean {"file": "thrift/compiler/test/fixtures/deprecated-enforce-required/src/module.thrift", "name": "Foo", "kind": "struct" } */
 class Foo final  {
  private:
   friend struct ::apache::thrift::detail::st::struct_private_access;
@@ -121,51 +122,61 @@ class Foo final  {
   bool operator==(const Foo&) const;
   bool operator<(const Foo&) const;
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<const T&> bar_ref() const& {
     return ::apache::thrift::required_field_ref<const T&>{this->__fbthrift_field_bar};
   }
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<const T&&> bar_ref() const&& {
     return ::apache::thrift::required_field_ref<const T&&>{static_cast<const T&&>(this->__fbthrift_field_bar)};
   }
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<T&> bar_ref() & {
     return ::apache::thrift::required_field_ref<T&>{this->__fbthrift_field_bar};
   }
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<T&&> bar_ref() && {
     return ::apache::thrift::required_field_ref<T&&>{static_cast<T&&>(this->__fbthrift_field_bar)};
   }
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<const T&> bar() const& {
     return ::apache::thrift::required_field_ref<const T&>{this->__fbthrift_field_bar};
   }
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<const T&&> bar() const&& {
     return ::apache::thrift::required_field_ref<const T&&>{static_cast<const T&&>(this->__fbthrift_field_bar)};
   }
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<T&> bar() & {
     return ::apache::thrift::required_field_ref<T&>{this->__fbthrift_field_bar};
   }
 
+  /** Glean { "field": "bar" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::required_field_ref<T&&> bar() && {
     return ::apache::thrift::required_field_ref<T&&>{static_cast<T&&>(this->__fbthrift_field_bar)};
   }
 
+  /** Glean { "field": "bar" } */
   ::std::int32_t get_bar() const {
     return __fbthrift_field_bar;
   }
 
-  [[deprecated("Use `FOO.bar_ref() = BAR;` instead of `FOO.set_bar(BAR);`")]]
+  /** Glean { "field": "bar" } */
+  [[deprecated("Use `FOO.bar() = BAR;` instead of `FOO.set_bar(BAR);`")]]
   ::std::int32_t& set_bar(::std::int32_t bar_) {
     bar_ref() = bar_;
     return __fbthrift_field_bar;

@@ -377,16 +377,7 @@ pub mod memoize_option {
 
     pub const MAKE_IC_INACCESSSIBLE: &str = "MakeICInaccessible";
 
-    pub const SOFT_MAKE_IC_INACCESSSIBLE: &str = "SoftMakeICInaccessible";
-
-    pub const UNCATEGORIZED: &str = "Uncategorized";
-
-    pub static _ALL: &[&str] = &[
-        KEYED_BY_IC,
-        MAKE_IC_INACCESSSIBLE,
-        SOFT_MAKE_IC_INACCESSSIBLE,
-        UNCATEGORIZED,
-    ];
+    pub static _ALL: &[&str] = &[KEYED_BY_IC, MAKE_IC_INACCESSSIBLE];
 
     lazy_static! {
         static ref VALID_SET: HashSet<&'static str> = _ALL.iter().copied().collect();
@@ -560,13 +551,7 @@ pub mod pseudo_functions {
 }
 
 pub mod std_lib_functions {
-    pub const IS_ARRAY: &str = "\\is_array";
-
     pub const GET_CLASS: &str = "\\get_class";
-
-    pub const ARRAY_FILTER: &str = "\\array_filter";
-
-    pub const CALL_USER_FUNC: &str = "\\call_user_func";
 
     pub const TYPE_STRUCTURE: &str = "\\HH\\type_structure";
 
@@ -577,10 +562,6 @@ pub mod std_lib_functions {
     pub const IS_PHP_ARRAY: &str = "\\HH\\is_php_array";
 
     pub const IS_ANY_ARRAY: &str = "\\HH\\is_any_array";
-
-    pub const IS_DICT_OR_DARRAY: &str = "\\HH\\is_dict_or_darray";
-
-    pub const IS_VEC_OR_VARRAY: &str = "\\HH\\is_vec_or_varray";
 }
 
 pub mod typehints {
@@ -861,8 +842,6 @@ pub mod coeffects {
 
     pub const ZONED: &str = "zoned";
 
-    pub const ZONED_WITH: &str = "zoned_with";
-
     pub const PURE: &str = "pure";
 
     pub const READ_GLOBALS: &str = "read_globals";
@@ -881,8 +860,7 @@ pub mod coeffects {
 
     pub fn is_any_zoned(x: &str) -> bool {
         lazy_static! {
-            static ref ZONED_SET: HashSet<&'static str> =
-                vec![ZONED, ZONED_WITH].into_iter().collect();
+            static ref ZONED_SET: HashSet<&'static str> = vec![ZONED].into_iter().collect();
         }
         ZONED_SET.contains(x)
     }
@@ -890,7 +868,7 @@ pub mod coeffects {
     pub fn is_any_zoned_or_defaults(x: &str) -> bool {
         lazy_static! {
             static ref ZONED_SET: HashSet<&'static str> =
-                vec![ZONED, ZONED_WITH, ZONED_LOCAL, ZONED_SHALLOW, DEFAULTS]
+                vec![ZONED, ZONED_LOCAL, ZONED_SHALLOW, DEFAULTS]
                     .into_iter()
                     .collect();
         }
@@ -923,7 +901,6 @@ pub mod coeffects {
         Rx,
 
         // Zoned hierarchy
-        ZonedWith,
         ZonedLocal,
         ZonedShallow,
         Zoned,
@@ -950,7 +927,6 @@ pub mod coeffects {
                 Rx => write!(f, "{}", RX),
                 WriteThisProps => write!(f, "{}", WRITE_THIS_PROPS),
                 WriteProps => write!(f, "{}", WRITE_PROPS),
-                ZonedWith => write!(f, "{}", ZONED_WITH),
                 ZonedLocal => write!(f, "{}", ZONED_LOCAL),
                 ZonedShallow => write!(f, "{}", ZONED_SHALLOW),
                 Zoned => write!(f, "{}", ZONED),
@@ -974,7 +950,6 @@ pub mod coeffects {
             RX => Some(Ctx::Rx),
             WRITE_THIS_PROPS => Some(Ctx::WriteThisProps),
             WRITE_PROPS => Some(Ctx::WriteProps),
-            ZONED_WITH => Some(Ctx::ZonedWith),
             ZONED_LOCAL => Some(Ctx::ZonedLocal),
             ZONED_SHALLOW => Some(Ctx::ZonedShallow),
             ZONED => Some(Ctx::Zoned),
@@ -1006,9 +981,7 @@ pub mod coeffects {
             Ctx::LeakSafe | Ctx::LeakSafeLocal | Ctx::LeakSafeShallow => {
                 self::capability_in_controlled_ctx(c)
             }
-            Ctx::Zoned | Ctx::ZonedLocal | Ctx::ZonedShallow | Ctx::ZonedWith => {
-                self::capability_in_policied_ctx(c)
-            }
+            Ctx::Zoned | Ctx::ZonedLocal | Ctx::ZonedShallow => self::capability_in_policied_ctx(c),
             // By definition, granular capabilities are not contexts and cannot
             // contain other capabilities. Also included in the fall through here
             // are pure, namespaced, polymorphic, and encapsulated contexts; oldrx related
@@ -1185,8 +1158,10 @@ pub mod expression_trees {
     pub const VISIT_BREAK: &str = "visitBreak";
     pub const VISIT_CONTINUE: &str = "visitContinue";
     pub const VISIT_PROPERTY_ACCESS: &str = "visitPropertyAccess";
+    pub const VISIT_INSTANCE_METHOD: &str = "visitInstanceMethod";
     pub const VISIT_XHP: &str = "visitXhp";
     pub const VISIT_KEYED_COLLECTION: &str = "visitKeyedCollection";
+    pub const VISIT_OPTIONAL_PARAMETER: &str = "visitOptionalParameter";
     pub const MAKE_KEYED_COLLECTION_TYPE: &str = "__makeType";
 
     pub const SPLICE: &str = "splice";

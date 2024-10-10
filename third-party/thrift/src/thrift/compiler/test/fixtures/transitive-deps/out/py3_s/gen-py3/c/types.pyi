@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class C(thrift.py3.types.Struct, _typing.Hashable):
@@ -24,7 +20,7 @@ class C(thrift.py3.types.Struct, _typing.Hashable):
         i: bool
         pass
 
-    i: Final[int] = ...
+    i: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -33,7 +29,7 @@ class C(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        i: _typing.Union[int, '__NotSet', None]=NOTSET
+        i: _typing.Union[int, None]=None
     ) -> C: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['C'], bytes]]: ...
@@ -52,6 +48,7 @@ class C(thrift.py3.types.Struct, _typing.Hashable):
 class E(thrift.py3.exceptions.GeneratedError, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 

@@ -18,9 +18,6 @@ function soft_run_with<Tout>(
   return $f();
 }
 
-const string RUN_WITH_SOFT_INACCESSIBLE_KEY_PREFIX = 'nonfunction/';
-
-
 function embed_implicit_context_state_in_closure<T>(
   (function ()[defaults]: T) $f,
 )[zoned]: (function ()[defaults]: T) {
@@ -53,11 +50,8 @@ function embed_implicit_context_state_in_async_closure<T>(
 }
 
 enum State: string as string {
-  NULL = 'NULL';
   VALUE = 'VALUE';
-  SOFT_SET = 'SOFT_SET';
   INACCESSIBLE = 'INACCESSIBLE';
-  SOFT_INACCESSIBLE = 'SOFT_INACCESSIBLE';
 }
 
 /**
@@ -70,15 +64,6 @@ enum State: string as string {
 <<__Native>>
 function get_state_unsafe()[zoned]: string /* State */;
 
-/**
- * Returns True if we are in the empty IC state
- * False otherwise
- *
- * Does not affect the state of the IC
- */
-<<__Native>>
-function is_inaccessible()[zoned]: bool;
-
 } // namespace ImplicitContext
 
 namespace ImplicitContext\_Private {
@@ -90,7 +75,7 @@ final class ImplicitContextData {}
  * Returns the implicit context keyed by $key or null if such doesn't exist
  */
 <<__Native>>
-function get_implicit_context(string $key)[zoned]: mixed;
+function get_implicit_context(string $key)[leak_safe]: mixed;
 
 <<__Native>>
 function get_whole_implicit_context()[zoned]: ImplicitContextData;
@@ -102,7 +87,7 @@ function get_whole_implicit_context()[zoned]: ImplicitContextData;
  * Does not affect the state of the IC
  */
 <<__Native>>
-function has_key(string $key)[zoned]: bool;
+function has_key(string $key)[leak_safe]: bool;
 
 /**
  * Creates implicit context $context keyed by $key.
@@ -112,7 +97,7 @@ function create_implicit_context(
   string $key,
   mixed $context,
   bool $memo_sensitive,
-)[zoned]: ImplicitContextData;
+)[leak_safe]: ImplicitContextData;
 
 /*
  * Returns the currently implicit context hash or empty string if
@@ -134,7 +119,7 @@ function get_implicit_context_debug_info()[]: vec<string>;
 abstract class ImplicitContext {
   abstract const type T as nonnull;
   abstract const bool IS_MEMO_SENSITIVE;
-  abstract const ctx CRun;
+  abstract const ctx CRun as [leak_safe];
 
   protected static async function runWithAsync<Tout>(
     this::T $context,
@@ -190,8 +175,6 @@ abstract class ImplicitContext {
 enum class MemoizeOption: string {
   string KeyedByIC = 'KeyedByIC';
   string MakeICInaccessible = 'MakeICInaccessible';
-  string SoftMakeICInaccessible = 'SoftMakeICInaccessible';
-  string Uncategorized = 'Uncategorized';
 }
 
 } // namespace HH
@@ -233,50 +216,6 @@ namespace HH\Coeffects {
     // Needs to be awaited here so that context dependency is established
     // between parent/child functions
     return await $result;
-  }
-
-  namespace _Private {
-
-  /**
-   * The internal entry point for zoned_with functions
-   */
-  <<__Native>>
-  function enter_zoned_with<Tout, Tpolicy>(
-    (function()[zoned_with<Tpolicy>]: Tout) $f
-  )[zoned]: mixed /* Tout */;
-
-  } // namespace _Private
-
-  /**
-   * The public entry point for zoned_with functions
-   */
-  function enter_zoned_with<Tout, Tcontext as ImplicitContext, Tval>(
-    classname<Tcontext> $cls,
-    Tval $value,
-    (function()[zoned_with<Tval>]: Tout) $f,
-  )[zoned]: Tout where Tval = Tcontext::T {
-    return $cls::set(
-      $value,
-      ()[zoned] ==> _Private\enter_zoned_with($f)
-    );
-  }
-
-  /**
-   * The public entry point for async zoned_with functions
-   */
-  async function enter_zoned_with_async<
-    Tout,
-    Tcontext as ImplicitContext,
-    Tval
-  >(
-    classname<Tcontext> $cls,
-    Tval $value,
-    (function()[zoned_with<Tval>]: Awaitable<Tout>) $f,
-  )[zoned]: Awaitable<Tout> where Tval = Tcontext::T {
-    return await $cls::setAsync(
-      $value,
-      ()[zoned] ==> _Private\enter_zoned_with($f)
-    );
   }
 
 } // namespace HH\Coeffects

@@ -12,8 +12,9 @@ module ShapeSet = Ast_defs.ShapeSet
 
 let get_pos name =
   match name with
-  | Ast_defs.SFlit_int (pos, _)
+  | Ast_defs.SFregex_group (pos, _)
   | Ast_defs.SFlit_str (pos, _)
+  | Ast_defs.SFclassname (pos, _)
   | Ast_defs.SFclass_const (_, (pos, _)) ->
     pos
 

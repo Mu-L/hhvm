@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -59,66 +56,13 @@ import weakref as __weakref
 import builtins as _builtins
 import importlib
 
+from module.types_impl_FBTHRIFT_ONLY_DO_NOT_USE import (
+    Animal,
+)
+
 from module.containers_FBTHRIFT_ONLY_DO_NOT_USE import (
     List__Vehicle,
 )
-
-
-
-cdef __EnumData __Animal_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cAnimal](), Animal)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __AnimalMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __Animal_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __Animal_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __Animal_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __Animal_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class Animal(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __Animal_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cAnimal].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.Animal"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "module.thrift_types"
-        )
-        return python_types.Animal(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> Animal, <PyTypeObject*> __AnimalMeta)
-
 
 
 cdef object get_types_reflection():
@@ -162,7 +106,6 @@ cdef class Color(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline red_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).red_ref().value()
 
     @property
@@ -170,7 +113,6 @@ cdef class Color(thrift.py3.types.Struct):
         return self.red_impl()
 
     cdef inline green_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).green_ref().value()
 
     @property
@@ -178,7 +120,6 @@ cdef class Color(thrift.py3.types.Struct):
         return self.green_impl()
 
     cdef inline blue_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).blue_ref().value()
 
     @property
@@ -186,7 +127,6 @@ cdef class Color(thrift.py3.types.Struct):
         return self.blue_impl()
 
     cdef inline alpha_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).alpha_ref().value()
 
     @property
@@ -307,7 +247,6 @@ cdef class Vehicle(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline color_impl(self):
-
         if self.__fbthrift_cached_color is None:
             self.__fbthrift_cached_color = Color._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).color_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_color
@@ -319,7 +258,6 @@ cdef class Vehicle(thrift.py3.types.Struct):
     cdef inline licensePlate_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).licensePlate_ref().has_value():
             return None
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).licensePlate_ref().value_unchecked()).decode('UTF-8')
 
     @property
@@ -329,7 +267,6 @@ cdef class Vehicle(thrift.py3.types.Struct):
     cdef inline description_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).description_ref().has_value():
             return None
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).description_ref().value_unchecked()).decode('UTF-8')
 
     @property
@@ -339,7 +276,6 @@ cdef class Vehicle(thrift.py3.types.Struct):
     cdef inline name_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).name_ref().has_value():
             return None
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).name_ref().value_unchecked()).decode('UTF-8')
 
     @property
@@ -347,7 +283,6 @@ cdef class Vehicle(thrift.py3.types.Struct):
         return self.name_impl()
 
     cdef inline hasAC_impl(self):
-
         return <pbool> deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).hasAC_ref().value_unchecked()
 
     @property
@@ -473,7 +408,6 @@ cdef class Person(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline id_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).id_ref().value()
 
     @property
@@ -481,7 +415,6 @@ cdef class Person(thrift.py3.types.Struct):
         return self.id_impl()
 
     cdef inline name_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).name_ref().value()).decode('UTF-8')
 
     @property
@@ -491,7 +424,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline age_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).age_ref().has_value():
             return None
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).age_ref().value_unchecked()
 
     @property
@@ -501,7 +433,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline address_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).address_ref().has_value():
             return None
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).address_ref().value_unchecked()).decode('UTF-8')
 
     @property
@@ -511,7 +442,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline favoriteColor_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).favoriteColor_ref().has_value():
             return None
-
         if self.__fbthrift_cached_favoriteColor is None:
             self.__fbthrift_cached_favoriteColor = Color._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).favoriteColor_ref().ref_unchecked(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_favoriteColor
@@ -523,7 +453,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline friends_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).friends_ref().has_value():
             return None
-
         if self.__fbthrift_cached_friends is None:
             self.__fbthrift_cached_friends = Set__i64._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).friends_ref().ref_unchecked(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_friends
@@ -535,7 +464,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline bestFriend_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).bestFriend_ref().has_value():
             return None
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).bestFriend_ref().value_unchecked()
 
     @property
@@ -545,7 +473,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline petNames_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).petNames_ref().has_value():
             return None
-
         if self.__fbthrift_cached_petNames is None:
             self.__fbthrift_cached_petNames = Map__Animal_string._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).petNames_ref().ref_unchecked(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_petNames
@@ -557,7 +484,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline afraidOfAnimal_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).afraidOfAnimal_ref().has_value():
             return None
-
         if self.__fbthrift_cached_afraidOfAnimal is None:
             self.__fbthrift_cached_afraidOfAnimal = translate_cpp_enum_to_python(Animal, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).afraidOfAnimal_ref().value_unchecked()))
         return self.__fbthrift_cached_afraidOfAnimal
@@ -569,7 +495,6 @@ cdef class Person(thrift.py3.types.Struct):
     cdef inline vehicles_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).vehicles_ref().has_value():
             return None
-
         if self.__fbthrift_cached_vehicles is None:
             self.__fbthrift_cached_vehicles = List__Vehicle__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).vehicles_ref().ref_unchecked())
         return self.__fbthrift_cached_vehicles

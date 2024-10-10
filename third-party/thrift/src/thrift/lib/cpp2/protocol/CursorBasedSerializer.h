@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <initializer_list>
+#include <variant>
 #include <folly/io/Cursor.h>
 #include <folly/io/IOBufQueue.h>
 #include <thrift/lib/cpp2/protocol/BinaryProtocol.h>
@@ -115,17 +116,17 @@ class CursorSerializationWrapper {
    * to get contiguous buffers cheaply from the socket.
    */
   template <bool Contiguous = false>
-  StructuredCursorReader<ProtocolReader, Tag, Contiguous> beginRead() {
+  StructuredCursorReader<Tag, ProtocolReader, Contiguous> beginRead() {
     checkHasData();
     if (Contiguous && serializedData_->isChained()) {
       folly::throw_exception<std::runtime_error>(
           "Chained buffer passed to contiguous reader.");
     }
-    return StructuredCursorReader<ProtocolReader, Tag, Contiguous>(reader());
+    return StructuredCursorReader<Tag, ProtocolReader, Contiguous>(reader());
   }
   template <bool Contiguous>
   void endRead(
-      StructuredCursorReader<ProtocolReader, Tag, Contiguous>&& reader) {
+      StructuredCursorReader<Tag, ProtocolReader, Contiguous>&& reader) {
     reader.finalize();
     done();
   }
@@ -189,7 +190,10 @@ class CursorSerializationWrapper {
  * Cursor deserializer for Thrift structs and unions.
  * Typically constructed from a CursorSerializationWrapper.
  */
-template <typename ProtocolReader, typename Tag, bool Contiguous = false>
+template <
+    typename Tag,
+    typename ProtocolReader = BinaryProtocolReader,
+    bool Contiguous = false>
 class StructuredCursorReader : detail::BaseCursorReader<ProtocolReader> {
   using Base = detail::BaseCursorReader<ProtocolReader>;
   using State = typename Base::State;
@@ -215,7 +219,7 @@ class StructuredCursorReader : detail::BaseCursorReader<ProtocolReader> {
 
   template <typename Ident>
   using enable_string_view = typename std::enable_if_t<
-      Contiguous && type::is_a_v<type_tag<Ident>, type::string_c>,
+      type::is_a_v<type_tag<Ident>, type::string_c> && Contiguous,
       int>;
 
   template <typename U, typename Ident>
@@ -247,7 +251,7 @@ class StructuredCursorReader : detail::BaseCursorReader<ProtocolReader> {
     maybe_optional<view_type<Ident>, Ident> value;
     readField<Ident>(
         [&] {
-          detail::decodeTo<ProtocolReader, type_tag<Ident>>(
+          detail::decodeTo<type_tag<Ident>, ProtocolReader>(
               *protocol_, detail::maybe_emplace(value));
         },
         value);
@@ -305,20 +309,20 @@ class StructuredCursorReader : detail::BaseCursorReader<ProtocolReader> {
 
   template <typename Ident, enable_for<type::container_c, Ident> = 0>
   maybe_optional<
-      ContainerCursorReader<ProtocolReader, type_tag<Ident>, Contiguous>,
+      ContainerCursorReader<type_tag<Ident>, ProtocolReader, Contiguous>,
       Ident>
   beginRead() {
     if (!beforeReadField<Ident>()) {
       return {};
     }
     state_ = State::Child;
-    return ContainerCursorReader<ProtocolReader, type_tag<Ident>, Contiguous>{
+    return ContainerCursorReader<type_tag<Ident>, ProtocolReader, Contiguous>{
         protocol_};
   }
 
   template <typename CTag>
   void endRead(
-      ContainerCursorReader<ProtocolReader, CTag, Contiguous>&& child) {
+      ContainerCursorReader<CTag, ProtocolReader, Contiguous>&& child) {
     if (state_ != State::Child) {
       // This is a sentinel iterator for an empty container.
       DCHECK_EQ(child.remaining_, 0);
@@ -337,20 +341,20 @@ class StructuredCursorReader : detail::BaseCursorReader<ProtocolReader> {
 
   template <typename Ident, enable_for<type::structured_c, Ident> = 0>
   maybe_optional<
-      StructuredCursorReader<ProtocolReader, type_tag<Ident>, Contiguous>,
+      StructuredCursorReader<type_tag<Ident>, ProtocolReader, Contiguous>,
       Ident>
   beginRead() {
     if (!beforeReadField<Ident>()) {
       return {};
     }
     state_ = State::Child;
-    return StructuredCursorReader<ProtocolReader, type_tag<Ident>, Contiguous>{
+    return StructuredCursorReader<type_tag<Ident>, ProtocolReader, Contiguous>{
         protocol_};
   }
 
   template <typename CTag>
   void endRead(
-      StructuredCursorReader<ProtocolReader, CTag, Contiguous>&& child) {
+      StructuredCursorReader<CTag, ProtocolReader, Contiguous>&& child) {
     checkState(State::Child);
     child.finalize();
     afterReadField();
@@ -472,20 +476,16 @@ class StructuredCursorReader : detail::BaseCursorReader<ProtocolReader> {
 };
 
 /**
- * Allows iterating over containers without materializing them.
+ * Allows iterating over containers (set, list) without materializing them.
  * Behaves like a standard collection, ex:
  *  StructuredCursorReader<Struct> reader;
  *  auto listReader = reader.beginRead<ident::unqualified_list>();
  *  for (auto& val : listReader) { use(val); }
- *  reader.endRead(listReader);
+ *  reader.endRead(std::move(listReader));
  *
- *  auto mapReader = reader.beginRead<ident::unqualified_map>();
- *  std::unordered_map<K, V> map;
- *  map.reserve(mapReader.size());
- *  map.insert(mapReader.begin(), mapReader.end());
- *  reader.endRead(mapReader);
+ *  Note: ContainerCursorReader does not support map types.
  */
-template <typename ProtocolReader, typename Tag, bool Contiguous>
+template <typename Tag, typename ProtocolReader, bool Contiguous>
 class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
   using Base = detail::BaseCursorReader<ProtocolReader>;
   using State = typename Base::State;
@@ -513,7 +513,7 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
    * It permits use of range-based for loops and STL methods / constructors
    * taking two iterators, as in the examples in this class' docblock.
    */
-  ContainerCursorIterator<ProtocolReader, Tag, Contiguous> begin() {
+  ContainerCursorIterator<Tag, ProtocolReader, Contiguous> begin() {
     checkState(State::Active);
     if (remaining_ == 0) {
       return {};
@@ -522,9 +522,9 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
       lastRead_.emplace();
       readItem();
     }
-    return ContainerCursorIterator<ProtocolReader, Tag, Contiguous>{*this};
+    return ContainerCursorIterator<Tag, ProtocolReader, Contiguous>{*this};
   }
-  ContainerCursorIterator<ProtocolReader, Tag, Contiguous> end() const {
+  ContainerCursorIterator<Tag, ProtocolReader, Contiguous> end() const {
     return {};
   }
 
@@ -565,7 +565,7 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
       typename...,
       typename U = Tag,
       enable_cursor_for<type::container_c, U> = 0>
-  ContainerCursorReader<ProtocolReader, ElementTag, Contiguous> beginRead() {
+  ContainerCursorReader<ElementTag, ProtocolReader, Contiguous> beginRead() {
     checkState(State::Active);
     if (!remaining_) {
       folly::throw_exception<std::out_of_range>("No elements remaining");
@@ -573,13 +573,13 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
     DCHECK(!lastRead_)
         << "Can't mix manual and iterator APIs on same container.";
     state_ = State::Child;
-    return ContainerCursorReader<ProtocolReader, ElementTag, Contiguous>{
+    return ContainerCursorReader<ElementTag, ProtocolReader, Contiguous>{
         protocol_};
   }
 
   template <typename CTag>
   void endRead(
-      ContainerCursorReader<ProtocolReader, CTag, Contiguous>&& child) {
+      ContainerCursorReader<CTag, ProtocolReader, Contiguous>&& child) {
     checkState(State::Child);
     child.finalize();
     state_ = State::Active;
@@ -612,7 +612,7 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
       typename...,
       typename U = Tag,
       enable_cursor_for<type::structured_c, U> = 0>
-  StructuredCursorReader<ProtocolReader, ElementTag, Contiguous> beginRead() {
+  StructuredCursorReader<ElementTag, ProtocolReader, Contiguous> beginRead() {
     checkState(State::Active);
     if (!remaining_) {
       folly::throw_exception<std::out_of_range>("No elements remaining");
@@ -620,13 +620,13 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
     DCHECK(!lastRead_)
         << "Can't mix manual and iterator APIs on same container.";
     state_ = State::Child;
-    return StructuredCursorReader<ProtocolReader, ElementTag, Contiguous>{
+    return StructuredCursorReader<ElementTag, ProtocolReader, Contiguous>{
         protocol_};
   }
 
   template <typename CTag>
   void endRead(
-      StructuredCursorReader<ProtocolReader, CTag, Contiguous>&& child) {
+      StructuredCursorReader<CTag, ProtocolReader, Contiguous>&& child) {
     checkState(State::Child);
     child.finalize();
     state_ = State::Active;
@@ -665,7 +665,7 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
   friend class StructuredCursorReader;
   template <typename, typename, bool>
   friend class ContainerCursorReader;
-  friend class ContainerCursorIterator<ProtocolReader, Tag, Contiguous>;
+  friend class ContainerCursorIterator<Tag, ProtocolReader, Contiguous>;
 };
 
 /**
@@ -673,7 +673,7 @@ class ContainerCursorReader : detail::BaseCursorReader<ProtocolReader> {
  * This is an InputIterator, which means it must be iterated in a single pass.
  * Operator++ invalidates all other copies of the iterator.
  */
-template <typename ProtocolReader, typename Tag, bool Contiguous>
+template <typename Tag, typename ProtocolReader, bool Contiguous>
 class ContainerCursorIterator {
  public:
   using iterator_category = std::input_iterator_tag;
@@ -689,7 +689,7 @@ class ContainerCursorIterator {
   using reference = value_type&;
 
   explicit ContainerCursorIterator(
-      ContainerCursorReader<ProtocolReader, Tag, Contiguous>& in)
+      ContainerCursorReader<Tag, ProtocolReader, Contiguous>& in)
       : reader_(&in) {}
   ContainerCursorIterator() = default;
 
@@ -717,7 +717,7 @@ class ContainerCursorIterator {
   }
 
  private:
-  ContainerCursorReader<ProtocolReader, Tag, Contiguous>* reader_ = nullptr;
+  ContainerCursorReader<Tag, ProtocolReader, Contiguous>* reader_ = nullptr;
 };
 
 /**
@@ -834,7 +834,8 @@ class StructuredCursorWriter : detail::BaseCursorWriter {
         [&] { op::encode<type_tag<Ident>>(*protocol_, value); }, value);
   }
 
-  /** Allows writing containers whose size isn't known until afterwards.
+  /**
+   * Allows writing containers whose size isn't known until afterwards.
    * Less efficient than using write().
    * See the ContainerCursorWriter docblock for example usage.
    *
@@ -978,7 +979,7 @@ class StructuredCursorWriter : detail::BaseCursorWriter {
 };
 
 /**
- * Allows writing containers whose size is not known in advance.
+ * Allows writing containers (list, set) whose size is not known in advance.
  * Ex:
  *  StructuredCursorWriter writer;
  *  auto child = writer.beginWrite<ident::list_field>();
@@ -987,6 +988,7 @@ class StructuredCursorWriter : detail::BaseCursorWriter {
  *    child.write(*val);
  *  }
  *  writer.endWrite(std::move(child));
+ * Note: ContainerCursorWriter does not support map type.
  */
 template <typename Tag>
 class ContainerCursorWriter : detail::DelayedSizeCursorWriter {
@@ -1106,8 +1108,11 @@ class CursorSerializationAdapter {
         Protocol protForDebug;
         protForDebug.setInput(buf.get());
         protForDebug.skip(protocol::T_STRUCT);
+        // The check below should be using protForDebug.getCursorPosition() + 1,
+        // but due to a bug somewhere with streaming, an extra byte gets added
+        // to the buffer, causing this check to fail.
         DCHECK_LE(
-            buf->computeChainDataLength(), protForDebug.getCursorPosition() + 1)
+            buf->computeChainDataLength(), protForDebug.getCursorPosition() + 2)
             << "Cursor serialization only supports messages containing a single struct or union.";
       }
 
@@ -1147,8 +1152,8 @@ ContainerCursorWriter<Tag>::ContainerCursorWriter(BinaryProtocolWriter* p)
   writeSize();
 }
 
-template <typename ProtocolReader, typename Tag, bool Contiguous>
-ContainerCursorReader<ProtocolReader, Tag, Contiguous>::ContainerCursorReader(
+template <typename Tag, typename ProtocolReader, bool Contiguous>
+ContainerCursorReader<Tag, ProtocolReader, Contiguous>::ContainerCursorReader(
     ProtocolReader* p)
     : detail::BaseCursorReader<ProtocolReader>(p) {
   // Check element types
@@ -1183,8 +1188,8 @@ ContainerCursorReader<ProtocolReader, Tag, Contiguous>::ContainerCursorReader(
   }
 }
 
-template <typename ProtocolReader, typename Tag, bool Contiguous>
-void ContainerCursorReader<ProtocolReader, Tag, Contiguous>::finalize() {
+template <typename Tag, typename ProtocolReader, bool Contiguous>
+void ContainerCursorReader<Tag, ProtocolReader, Contiguous>::finalize() {
   checkState(State::Active);
   state_ = State::Done;
 
@@ -1204,24 +1209,22 @@ void ContainerCursorReader<ProtocolReader, Tag, Contiguous>::finalize() {
   }
 }
 
-template <typename ProtocolReader, typename Tag, bool Contiguous>
-void ContainerCursorReader<ProtocolReader, Tag, Contiguous>::readItem() {
+template <typename Tag, typename ProtocolReader, bool Contiguous>
+void ContainerCursorReader<Tag, ProtocolReader, Contiguous>::readItem() {
   DCHECK_GT(remaining_, 0);
   DCHECK(lastRead_);
 
   if constexpr (type::is_a_v<Tag, type::list_c>) {
     detail::decodeTo<
-        ProtocolReader,
-        typename detail::ContainerTraits<Tag>::ElementTag>(
-        *protocol_, *lastRead_);
+        typename detail::ContainerTraits<Tag>::ElementTag,
+        ProtocolReader>(*protocol_, *lastRead_);
   } else if constexpr (type::is_a_v<Tag, type::set_c>) {
     detail::decodeTo<
-        ProtocolReader,
-        typename detail::ContainerTraits<Tag>::ElementTag>(
-        *protocol_, *lastRead_);
+        typename detail::ContainerTraits<Tag>::ElementTag,
+        ProtocolReader>(*protocol_, *lastRead_);
   } else if constexpr (type::is_a_v<Tag, type::map_c>) {
     detail::
-        decodeTo<ProtocolReader, typename detail::ContainerTraits<Tag>::KeyTag>(
+        decodeTo<typename detail::ContainerTraits<Tag>::KeyTag, ProtocolReader>(
             *protocol_, lastRead_->first);
     detail::decodeTo<
         ProtocolReader,

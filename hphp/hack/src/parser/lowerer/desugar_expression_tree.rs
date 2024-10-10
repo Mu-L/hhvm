@@ -116,7 +116,35 @@ pub fn desugar(
                 &et_literal_pos,
             )]),
         };
-        let mut typing_fun_ = wrap_fun_(false, typing_fun_body, vec![], et_literal_pos.clone());
+        let param_type = aast::Hint(
+            et_literal_pos.clone(),
+            Box::new(Hint_::Hshape(aast::NastShapeInfo {
+                allows_unknown_fields: true,
+                field_map: vec![],
+            })),
+        );
+        let freevar_param = aast::FunParam {
+            annotation: (),
+            type_hint: aast::TypeHint((), Some(param_type)),
+            pos: et_literal_pos.clone(),
+            name: "$0fv_shape".to_string(),
+            info: aast::FunParamInfo::ParamOptional(Some(Expr(
+                (),
+                et_literal_pos.clone(),
+                Expr_::mk_shape(vec![]),
+            ))),
+            readonly: None,
+            callconv: ParamKind::Pnormal,
+            user_attributes: aast::UserAttributes(vec![]),
+            visibility: None,
+            splat: None,
+        };
+        let mut typing_fun_ = wrap_fun_(
+            false,
+            typing_fun_body,
+            vec![freevar_param],
+            et_literal_pos.clone(),
+        );
         typing_fun_.ctxs = Some(aast::Contexts(
             et_literal_pos.clone(),
             vec![ast::Hint(
@@ -201,6 +229,7 @@ pub fn desugar(
         info: ast::FunParamInfo::ParamRequired,
         callconv: ParamKind::Pnormal,
         readonly: None,
+        splat: None,
         user_attributes: Default::default(),
         visibility: None,
     };
@@ -1204,17 +1233,15 @@ impl RewriteState {
                             desugar_expr,
                         }
                     }
-                    // Source: MyDsl`$x->bar()`
-                    // Virtualized: $x->bar()
-                    // Desugared: $0v->visitCall($0v->visitMethodCall(new ExprPos(...), $0v->visitLocal(new ExprPos(...), '$x'), 'bar'), vec[])
-                    ObjGet(og) if og.3 == ast::PropOrMethod::IsMethod => {
-                        self.errors.push((
-                            pos,
-                            "Expression trees do not support calling instance methods".into(),
-                        ));
-                        unchanged_result
-                    }
+                    // Source: MyDsl`...()`
+                    // Virtualized: ...()
+                    // Desugared: $0v->visitCall(new ExprPos(...), ..., vec[])
                     _ => {
+                        let should_virtualize_call = match recv.2 {
+                            // We don't virtualize calls on instance methods
+                            ObjGet(ref og) if og.3 == ast::PropOrMethod::IsMethod => false,
+                            _ => true,
+                        };
                         let rewritten_recv =
                             self.rewrite_expr(Expr((), recv.1, recv.2), visitor_name);
 
@@ -1231,7 +1258,11 @@ impl RewriteState {
                             (),
                             pos.clone(),
                             Call(Box::new(ast::CallExpr {
-                                func: _virtualize_call(rewritten_recv.virtual_expr, &pos),
+                                func: if should_virtualize_call {
+                                    _virtualize_call(rewritten_recv.virtual_expr, &pos)
+                                } else {
+                                    rewritten_recv.virtual_expr
+                                },
                                 targs: vec![],
                                 args: build_args(virtual_args),
                                 unpacked_arg: None,
@@ -1278,19 +1309,30 @@ impl RewriteState {
                     }
                 }
 
+                let mut desugar_optional_params = Vec::with_capacity(fun_.params.len());
                 let mut param_names = Vec::with_capacity(fun_.params.len());
-                for param in &fun_.params {
-                    match param.info {
-                        ast::FunParamInfo::ParamOptional(Some(_)) => {
-                            self.errors.push((
-                                param.pos.clone(),
-                                "Expression trees do not support parameters with default values."
-                                    .into(),
+                for param in fun_.params.iter_mut() {
+                    match &param.info {
+                        ast::FunParamInfo::ParamOptional(Some(expr)) => {
+                            let rewritten_lambda = self.rewrite_expr(expr.clone(), visitor_name);
+                            let desugar_visit_optional_param_expr = v_meth_call(
+                                et::VISIT_OPTIONAL_PARAMETER,
+                                vec![
+                                    pos_expr.clone(),
+                                    string_literal(param.pos.clone(), &param.name),
+                                    rewritten_lambda.desugar_expr,
+                                ],
+                                &pos,
+                            );
+                            desugar_optional_params.push(desugar_visit_optional_param_expr);
+                            param.info = aast::FunParamInfo::ParamOptional(Some(
+                                rewritten_lambda.virtual_expr,
                             ));
                         }
-                        _ => {}
+                        _ => {
+                            param_names.push(string_literal(param.pos.clone(), &param.name));
+                        }
                     }
-                    param_names.push(string_literal(param.pos.clone(), &param.name));
                 }
 
                 let body = std::mem::take(&mut fun_.body.fb_ast.0);
@@ -1309,16 +1351,16 @@ impl RewriteState {
                         )))),
                     ));
                 }
+                let mut exprs = vec![
+                    pos_expr,
+                    vec_literal(param_names),
+                    vec_literal(desugar_body),
+                ];
+                if !desugar_optional_params.is_empty() {
+                    exprs.push(vec_literal(desugar_optional_params));
+                }
+                let desugar_expr = v_meth_call(et::VISIT_LAMBDA, exprs, &pos);
 
-                let desugar_expr = v_meth_call(
-                    et::VISIT_LAMBDA,
-                    vec![
-                        pos_expr,
-                        vec_literal(param_names),
-                        vec_literal(desugar_body),
-                    ],
-                    &pos,
-                );
                 fun_.body.fb_ast = ast::Block(virtual_body_stmts);
 
                 let virtual_expr = _virtualize_lambda(
@@ -1373,16 +1415,22 @@ impl RewriteState {
                     desugar_expr,
                 }
             }
-            // Source: MyDsl`(...)->foo`
-            // Virtualized to: `(...)->foo`
-            // Desugared to `$0v->visitPropertyAccess(new ExprPos(...), ...), 'foo')`
+            // Source:
+            //  MyDsl`(...)->foo` or
+            //  MyDsl`(...)->foo(...)`
+            // Virtualized to:
+            //   `(...)->foo` or
+            //   `(...)->foo(...)`
+            // Desugared to:
+            //   `$0v->visitPropertyAccess(new ExprPos(...), ..., 'foo')` or
+            //   `$0v->visitInstanceMethod(new ExprPos(...), ..., 'foo')`
             ObjGet(og) => {
                 let (e1, e2, null_flavor, is_prop_call) = *og;
 
                 if null_flavor == OgNullFlavor::OGNullsafe {
                     self.errors.push((
                         pos.clone(),
-                        "Expression Trees do not support nullsafe property access".into(),
+                        "Expression Trees do not support nullsafe property or instance method access".into(),
                     ));
                 }
                 let rewritten_e1 = self.rewrite_expr(e1, visitor_name);
@@ -1392,12 +1440,16 @@ impl RewriteState {
                 } else {
                     self.errors.push((
                         pos.clone(),
-                        "Expression trees only support named property access.".into(),
+                        "Expression trees only support named property or instance method access."
+                            .into(),
                     ));
                     e2.clone()
                 };
                 let desugar_expr = v_meth_call(
-                    et::VISIT_PROPERTY_ACCESS,
+                    match is_prop_call {
+                        PropOrMethod::IsProp => et::VISIT_PROPERTY_ACCESS,
+                        PropOrMethod::IsMethod => et::VISIT_INSTANCE_METHOD,
+                    },
                     vec![pos_expr, rewritten_e1.desugar_expr, id],
                     &pos,
                 );
@@ -1826,6 +1878,7 @@ fn immediately_invoked_lambda(
                 info: ast::FunParamInfo::ParamRequired,
                 callconv: ParamKind::Pnormal,
                 readonly: None,
+                splat: None,
                 user_attributes: Default::default(),
                 visibility: None,
             }

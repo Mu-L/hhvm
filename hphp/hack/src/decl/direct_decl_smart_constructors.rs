@@ -75,11 +75,15 @@ use oxidized_by_ref::typing_defs::ShapeType;
 use oxidized_by_ref::typing_defs::TaccessType;
 use oxidized_by_ref::typing_defs::Tparam;
 use oxidized_by_ref::typing_defs::TshapeFieldName;
+use oxidized_by_ref::typing_defs::TupleExtra;
+use oxidized_by_ref::typing_defs::TupleType;
 use oxidized_by_ref::typing_defs::Ty;
 use oxidized_by_ref::typing_defs::Ty_;
 use oxidized_by_ref::typing_defs::TypeOrigin;
 use oxidized_by_ref::typing_defs::Typeconst;
+use oxidized_by_ref::typing_defs::TypedefCaseTypeVariant;
 use oxidized_by_ref::typing_defs::TypedefType;
+use oxidized_by_ref::typing_defs::TypedefTypeAssignment;
 use oxidized_by_ref::typing_defs::WhereConstraint;
 use oxidized_by_ref::typing_defs_flags::FunParamFlags;
 use oxidized_by_ref::typing_defs_flags::FunTypeFlags;
@@ -388,8 +392,9 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                 _,
                 aast::Expr_::ClassConst((
                     aast::ClassId(_, _, aast::ClassId_::CI(&Id(_, class_name))),
-                    _,
-                )),
+                    _, // required to be "class" in constant initializer
+                ))
+                | aast::Expr_::Nameof(aast::ClassId(_, _, aast::ClassId_::CI(&Id(_, class_name)))),
             ) => {
                 // Imagine the case <<MyFancyEnum('foo'.X::class)>>
                 // We would expect a user attribute parameter to concatenate
@@ -432,6 +437,24 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
             self.namespace_builder
                 .elaborate_raw_id(ElaborateKind::Const, name),
         )
+    }
+
+    fn elaborate_class_id(&self, class_name: Node<'a>) -> Option<Id<'a>> {
+        self.expect_name(class_name).map(|id| {
+            if matches!(class_name, Node::XhpName(..))
+                && self.opts.disable_xhp_element_mangling
+                && self.opts.keep_user_attributes
+            {
+                // for facts, allow xhp class consts to be mangled later
+                // on even when xhp_element_mangling is disabled
+                let mut qualified = bump::String::with_capacity_in(id.1.len() + 1, self.arena);
+                qualified.push_str("\\");
+                qualified.push_str(id.1);
+                Id(id.0, self.arena.alloc_str(&qualified))
+            } else {
+                self.elaborate_id(id)
+            }
+        })
     }
 
     fn start_accumulating_const_refs(&mut self) {
@@ -755,6 +778,7 @@ pub struct FunParamDecl<'a> {
     pos: &'a Pos<'a>,
     name: Option<&'a str>,
     variadic: bool,
+    splat: bool,
     initializer: Node<'a>,
     parameter_end: Node<'a>,
 }
@@ -793,6 +817,14 @@ pub struct ClosureTypeHint<'a> {
     args: Node<'a>,
     #[allow(dead_code)]
     ret_hint: Node<'a>,
+}
+
+#[derive(Debug)]
+pub struct TupleComponentNode<'a> {
+    optional: bool,
+    pre_ellipsis: bool,
+    hint: Node<'a>,
+    ellipsis: bool,
 }
 
 #[derive(Debug)]
@@ -993,6 +1025,8 @@ pub enum Node<'a> {
     WhereConstraint(&'a WhereConstraint<'a>),
     RefinedConst(&'a (&'a str, RefinedConst<'a>)),
     EnumClassLabel(&'a str),
+    TupleComponent(&'a TupleComponentNode<'a>),
+    CaseTypeVariantWithWhereClause(&'a (&'a Node<'a>, &'a [&'a WhereConstraint<'a>])),
 
     // Non-ignored, fixed-width tokens (e.g., keywords, operators, braces, etc.).
     Token(FixedWidthToken),
@@ -1447,6 +1481,48 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
         self.node_to_ty_(node, true)
     }
 
+    fn node_to_tuple_element_ty(
+        &self,
+        node: Node<'a>,
+        select_optional: bool,
+    ) -> Option<&'a Ty<'a>> {
+        match node {
+            Node::TupleComponent(TupleComponentNode {
+                optional,
+                pre_ellipsis,
+                hint,
+                ellipsis,
+            }) if !ellipsis && !pre_ellipsis && *optional == select_optional => {
+                self.node_to_ty(*hint)
+            }
+            _ => None,
+        }
+    }
+
+    fn node_to_tuple_variadic_ty(&self, node: Node<'a>) -> Option<&'a Ty<'a>> {
+        match node {
+            Node::TupleComponent(TupleComponentNode {
+                optional: _,
+                pre_ellipsis: _,
+                hint,
+                ellipsis,
+            }) if *ellipsis => self.node_to_ty(*hint),
+            _ => None,
+        }
+    }
+
+    fn node_to_tuple_splat_ty(&self, node: Node<'a>) -> Option<&'a Ty<'a>> {
+        match node {
+            Node::TupleComponent(TupleComponentNode {
+                optional: _,
+                pre_ellipsis,
+                hint,
+                ellipsis: _,
+            }) if *pre_ellipsis => self.node_to_ty(*hint),
+            _ => None,
+        }
+    }
+
     fn make_supportdyn(&self, pos: &'a Pos<'a>, ty: Ty_<'a>) -> Ty_<'a> {
         Ty_::Tapply(self.alloc((
             (pos, naming_special_names::typehints::HH_SUPPORTDYN),
@@ -1476,6 +1552,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                 Some(self.alloc(Ty(reason, Ty_::Tunion(&[]))))
             }
             Node::Ty(ty) => Some(ty),
+            Node::TupleComponent(TupleComponentNode { hint, .. }) => self.node_to_ty(*hint),
             Node::Expr(expr) => {
                 fn expr_to_ty<'a>(arena: &'a Bump, expr: &'a nast::Expr<'a>) -> Option<Ty_<'a>> {
                     use aast::Expr_::*;
@@ -1830,6 +1907,24 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
         self.alloc(FunImplicitParams { capability })
     }
 
+    fn make_variadic_type(&self, ellipsis: Node<'a>) -> &'a Ty<'a> {
+        let pos = self.get_pos(ellipsis);
+        let reason = self.alloc(Reason::FromWitnessDecl(self.alloc(WitnessDecl::Hint(pos))));
+        match ellipsis.token_kind() {
+            // Type of unknown fields is mixed, or supportdyn<mixed> under implicit SD
+            Some(TokenKind::DotDotDot) => self.alloc(Ty(
+                reason,
+                if self.implicit_sdt() {
+                    self.make_supportdyn(pos, Ty_::Tmixed)
+                } else {
+                    Ty_::Tmixed
+                },
+            )),
+            // Closed shapes and tuples are expressed using `nothing` (empty union) as the type of unknown fields
+            _ => self.alloc(Ty(reason, Ty_::Tunion(&[]))),
+        }
+    }
+
     fn function_to_ty(
         &mut self,
         is_method: bool,
@@ -1979,6 +2074,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                             pos,
                             name,
                             variadic,
+                            splat,
                             initializer,
                             parameter_end,
                         }) => {
@@ -1998,6 +2094,13 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                                         self.alloc(WitnessDecl::VarParamFromDecl(pos)),
                                     )),
                                     ty_,
+                                ))
+                            } else if splat {
+                                self.alloc(Ty(
+                                    self.alloc(Reason::FromWitnessDecl(
+                                        self.alloc(WitnessDecl::TupleFromSplat(pos)),
+                                    )),
+                                    type_.1,
                                 ))
                             } else {
                                 type_
@@ -2044,6 +2147,9 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                             if readonly {
                                 flags |= FunParamFlags::READONLY
                             }
+                            if splat {
+                                flags |= FunParamFlags::SPLAT
+                            }
                             match kind {
                                 ParamMode::FPinout => {
                                     flags |= FunParamFlags::INOUT;
@@ -2052,7 +2158,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                             };
 
                             if optional || initializer.is_present() {
-                                flags |= FunParamFlags::HAS_DEFAULT;
+                                flags |= FunParamFlags::IS_OPTIONAL;
                             }
                             if variadic {
                                 ft_variadic = true;
@@ -2069,6 +2175,13 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                                             self.alloc(WitnessDecl::WitnessFromDecl(pos)),
                                         )
                                     }),
+                                    type_.1,
+                                ))
+                            } else if splat {
+                                self.alloc(Ty(
+                                    self.alloc(Reason::FromWitnessDecl(
+                                        self.alloc(WitnessDecl::TupleFromSplat(pos)),
+                                    )),
                                     type_.1,
                                 ))
                             } else {
@@ -2116,7 +2229,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
     fn make_shape_field_name(&self, name: Node<'a>) -> Option<ShapeFieldName<'a>> {
         Some(match name {
             Node::StringLiteral(&(s, pos)) => ShapeFieldName::SFlitStr(self.alloc((pos, s))),
-            // TODO: OCaml decl produces SFlitStr here instead of SFlitInt, so
+            // TODO: OCaml decl produces SFlitStr here instead of SFregexGroup, so
             // we must also. Looks like int literal keys have become a parse
             // error--perhaps that's why.
             Node::IntLiteral(&(s, pos)) => ShapeFieldName::SFlitStr(self.alloc((pos, s.into()))),
@@ -2145,11 +2258,14 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
 
     fn make_t_shape_field_name(&self, ShapeField(field): &ShapeField<'a>) -> TShapeField<'a> {
         TShapeField(match field {
-            ShapeFieldName::SFlitInt(&(pos, x)) => {
-                TshapeFieldName::TSFlitInt(self.alloc(PosString(pos, x)))
+            ShapeFieldName::SFregexGroup(&(pos, x)) => {
+                TshapeFieldName::TSFregexGroup(self.alloc(PosString(pos, x)))
             }
             ShapeFieldName::SFlitStr(&(pos, x)) => {
                 TshapeFieldName::TSFlitStr(self.alloc(PosByteString(pos, x)))
+            }
+            ShapeFieldName::SFclassname(&id) => {
+                TshapeFieldName::TSFclassConst(self.alloc((id.into(), PosString(id.0, "class"))))
             }
             ShapeFieldName::SFclassConst(&(id, &(pos, x))) => {
                 TshapeFieldName::TSFclassConst(self.alloc((id.into(), PosString(pos, x))))
@@ -2301,12 +2417,29 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
                 self.convert_tapply_to_tgeneric(tk),
                 self.convert_tapply_to_tgeneric(tv),
             ))),
-            Ty_::Ttuple(tys) => Ty_::Ttuple(
-                self.slice(
-                    tys.iter()
-                        .map(|&targ| self.convert_tapply_to_tgeneric(targ)),
-                ),
-            ),
+            Ty_::Ttuple(&TupleType {
+                required,
+                extra: TupleExtra::Textra { optional, variadic },
+            }) => {
+                let extra = self.alloc(TupleExtra::Textra {
+                    optional: self.slice(
+                        optional
+                            .iter()
+                            .map(|&targ| self.convert_tapply_to_tgeneric(targ)),
+                    ),
+                    variadic: self.convert_tapply_to_tgeneric(variadic),
+                });
+                Ty_::Ttuple(
+                    self.alloc(TupleType {
+                        required: self.slice(
+                            required
+                                .iter()
+                                .map(|&targ| self.convert_tapply_to_tgeneric(targ)),
+                        ),
+                        extra: *extra,
+                    }),
+                )
+            }
             Ty_::Tintersection(tys) => Ty_::Tintersection(
                 self.slice(tys.iter().map(|&ty| self.convert_tapply_to_tgeneric(ty))),
             ),
@@ -2367,7 +2500,8 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> DirectDeclSmartConstructors<'a,
             | Ty_::Tlabel(_)
             | Ty_::Tnewtype(_)
             | Ty_::Tvar(_)
-            | Ty_::TunappliedAlias(_) => panic!("unexpected decl type in constraint"),
+            | Ty_::TunappliedAlias(_)
+            | Ty_::Ttuple(_) => panic!("unexpected decl type in constraint"),
         };
         self.alloc(Ty(ty.0, ty_))
     }
@@ -3030,11 +3164,117 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
             | TokenKind::Readonly
             | TokenKind::Internal
             | TokenKind::Global
-            | TokenKind::Optional => Node::Token(FixedWidthToken::new(kind, token.start_offset())),
-            _ if kind.fixed_width().is_some() => {
-                Node::IgnoredToken(FixedWidthToken::new(kind, token.start_offset()))
+            | TokenKind::Optional
+            | TokenKind::Nameof => Node::Token(FixedWidthToken::new(kind, token.start_offset())),
+            TokenKind::Attribute
+            | TokenKind::Await
+            | TokenKind::Binary
+            | TokenKind::Break
+            | TokenKind::Case
+            | TokenKind::Catch
+            | TokenKind::Category
+            | TokenKind::Children
+            | TokenKind::Clone
+            | TokenKind::Concurrent
+            | TokenKind::Continue
+            | TokenKind::Default
+            | TokenKind::Do
+            | TokenKind::Echo
+            | TokenKind::Else
+            | TokenKind::Empty
+            | TokenKind::EndOfFile
+            | TokenKind::Endif
+            | TokenKind::Eval
+            | TokenKind::Exports
+            | TokenKind::Fallthrough
+            | TokenKind::File
+            | TokenKind::Finally
+            | TokenKind::For
+            | TokenKind::Foreach
+            | TokenKind::If
+            | TokenKind::Imports
+            | TokenKind::Include
+            | TokenKind::Include_once
+            | TokenKind::Instanceof
+            | TokenKind::Insteadof
+            | TokenKind::Integer
+            | TokenKind::Is
+            | TokenKind::Isset
+            | TokenKind::List
+            | TokenKind::Match
+            | TokenKind::Module
+            | TokenKind::New
+            | TokenKind::Parent
+            | TokenKind::Print
+            | TokenKind::Real
+            | TokenKind::Require
+            | TokenKind::Require_once
+            | TokenKind::Return
+            | TokenKind::Switch
+            | TokenKind::Throw
+            | TokenKind::Try
+            | TokenKind::Unset
+            | TokenKind::Upcast
+            | TokenKind::Use
+            | TokenKind::Using
+            | TokenKind::Var
+            | TokenKind::With
+            | TokenKind::Where
+            | TokenKind::While
+            | TokenKind::LeftBrace
+            | TokenKind::MinusGreaterThan
+            | TokenKind::Dollar
+            | TokenKind::LessThanEqualGreaterThan
+            | TokenKind::ExclamationEqual
+            | TokenKind::ExclamationEqualEqual
+            | TokenKind::Carat
+            | TokenKind::QuestionAs
+            | TokenKind::QuestionColon
+            | TokenKind::QuestionQuestionEqual
+            | TokenKind::Colon
+            | TokenKind::StarStarEqual
+            | TokenKind::StarEqual
+            | TokenKind::SlashEqual
+            | TokenKind::PercentEqual
+            | TokenKind::PlusEqual
+            | TokenKind::MinusEqual
+            | TokenKind::DotEqual
+            | TokenKind::LessThanLessThanEqual
+            | TokenKind::GreaterThanGreaterThanEqual
+            | TokenKind::AmpersandEqual
+            | TokenKind::CaratEqual
+            | TokenKind::BarEqual
+            | TokenKind::Comma
+            | TokenKind::ColonColon
+            | TokenKind::EqualGreaterThan
+            | TokenKind::EqualEqualGreaterThan
+            | TokenKind::QuestionMinusGreaterThan
+            | TokenKind::DollarDollar
+            | TokenKind::BarGreaterThan
+            | TokenKind::SlashGreaterThan
+            | TokenKind::LessThanSlash
+            | TokenKind::LessThanQuestion
+            | TokenKind::Backtick
+            | TokenKind::Hash
+            | TokenKind::Package
+            | TokenKind::Let
+            | TokenKind::ErrorToken
+            | TokenKind::DoubleQuotedStringLiteralHead
+            | TokenKind::StringLiteralBody
+            | TokenKind::DoubleQuotedStringLiteralTail
+            | TokenKind::HeredocStringLiteralHead
+            | TokenKind::HeredocStringLiteralTail
+            | TokenKind::XHPCategoryName
+            | TokenKind::XHPStringLiteral
+            | TokenKind::XHPBody
+            | TokenKind::XHPComment
+            | TokenKind::Hashbang => {
+                if kind.fixed_width().is_some() {
+                    Node::IgnoredToken(FixedWidthToken::new(kind, token.start_offset()))
+                } else {
+                    Node::Ignored(SK::Token(kind))
+                }
             }
-            _ => Node::Ignored(SK::Token(kind)),
         };
         self.previous_token_kind = kind;
         result
@@ -3444,21 +3684,19 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
             .iter()
             .any(|m| m.as_visibility() == Some(aast::Visibility::Internal));
         let is_module_newtype = module_kw_opt.is_ignored_token_with_kind(TokenKind::Module);
+        let vis = match keyword.token_kind() {
+            Some(TokenKind::Type) => aast::TypedefVisibility::Transparent,
+            Some(TokenKind::Newtype) if is_module_newtype => aast::TypedefVisibility::OpaqueModule,
+            Some(TokenKind::Newtype) => aast::TypedefVisibility::Opaque,
+            _ => aast::TypedefVisibility::Transparent,
+        };
         let typedef = self.alloc(TypedefType {
             module: self.module,
             pos,
-            vis: match keyword.token_kind() {
-                Some(TokenKind::Type) => aast::TypedefVisibility::Transparent,
-                Some(TokenKind::Newtype) if is_module_newtype => {
-                    aast::TypedefVisibility::OpaqueModule
-                }
-                Some(TokenKind::Newtype) => aast::TypedefVisibility::Opaque,
-                _ => aast::TypedefVisibility::Transparent,
-            },
             tparams,
             as_constraint,
             super_constraint,
-            type_: ty,
+            type_assignment: TypedefTypeAssignment::SimpleTypeDef(self.alloc((vis, ty))),
             is_ctx: false,
             attributes: user_attributes,
             internal,
@@ -3527,11 +3765,12 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
         let typedef = self.alloc(TypedefType {
             module: self.module,
             pos,
-            vis: aast::TypedefVisibility::Opaque,
             tparams,
             as_constraint,
             super_constraint,
-            type_: ty,
+            type_assignment: TypedefTypeAssignment::SimpleTypeDef(
+                self.alloc((aast::TypedefVisibility::Opaque, ty)),
+            ),
             is_ctx: true,
             attributes: user_attributes,
             internal: false,
@@ -3582,24 +3821,22 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
                 )))
             }
         };
-
-        let ty = match variants.len() {
-            0 => None,
-            1 => self.node_to_ty(*variants.iter().next().unwrap()),
-            _ => {
-                let pos = self.get_pos(variants);
-                let tys = self.slice(variants.iter().filter_map(|x| self.node_to_ty(*x)));
-                Some(self.alloc(Ty(
-                    self.alloc(Reason::FromWitnessDecl(self.alloc(WitnessDecl::Hint(pos)))),
-                    Ty_::Tunion(tys),
-                )))
-            }
-        };
-
-        let type_ = match ty {
-            Some(x) => x,
-            None => return Node::Ignored(SK::CaseTypeDeclaration),
-        };
+        let mut variants = variants.iter().filter_map(|x| match x {
+            Node::CaseTypeVariantWithWhereClause((ty, constraints)) => self
+                .node_to_ty(**ty)
+                .map(|ty| self.alloc(TypedefCaseTypeVariant(ty, constraints))),
+            _ => self
+                .node_to_ty(*x)
+                .map(|ty| self.alloc(TypedefCaseTypeVariant(ty, self.alloc([])))),
+        });
+        let variant;
+        if let Some(v) = variants.next() {
+            variant = v;
+        } else {
+            return Node::Ignored(SK::CaseTypeDeclaration);
+        }
+        let type_assignment =
+            TypedefTypeAssignment::CaseType(self.alloc((variant, self.slice(variants))));
 
         // Pop the type params stack only after creating all inner types.
         let tparams = self.pop_type_params(generic_parameter);
@@ -3638,11 +3875,10 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
         let typedef = self.alloc(TypedefType {
             module: self.module,
             pos,
-            vis: aast::TypedefVisibility::CaseType,
             tparams,
             as_constraint,
             super_constraint: None,
-            type_,
+            type_assignment,
             is_ctx: false,
             attributes: user_attributes,
             internal,
@@ -3656,11 +3892,26 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
         Node::Ignored(SK::CaseTypeDeclaration)
     }
 
-    fn make_case_type_variant(&mut self, _bar: Self::Output, type_: Self::Output) -> Self::Output {
+    fn make_case_type_variant(
+        &mut self,
+        _bar: Self::Output,
+        type_: Self::Output,
+        where_: Self::Output,
+    ) -> Self::Output {
         if type_.is_ignored() {
             Node::Ignored(SK::CaseTypeVariant)
         } else {
-            type_
+            let where_constraints = self.slice(where_.iter().filter_map(|&x| match x {
+                Node::WhereConstraint(x) => Some(x),
+                _ => None,
+            }));
+            if where_constraints.is_empty() {
+                type_
+            } else {
+                Node::CaseTypeVariantWithWhereClause(
+                    self.alloc((self.alloc(type_), where_constraints)),
+                )
+            }
         }
     }
 
@@ -3808,6 +4059,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
         optional: Self::Output,
         inout: Self::Output,
         readonly: Self::Output,
+        pre_ellipsis: Self::Output,
         hint: Self::Output,
         ellipsis: Self::Output,
         name: Self::Output,
@@ -3823,6 +4075,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
             None if variadic => (self.get_pos(ellipsis), None),
             None => return Node::Ignored(SK::ParameterDeclaration),
         };
+        let is_splat = pre_ellipsis.is_token(TokenKind::DotDotDot);
         let kind = if inout.is_token(TokenKind::Inout) {
             ParamMode::FPinout
         } else {
@@ -3852,6 +4105,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
             pos,
             name,
             variadic,
+            splat: is_splat,
             initializer,
             parameter_end,
         }))
@@ -5373,8 +5627,52 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
         // We don't need to include the tys list in this position merging
         // because by definition it's already contained by the two brackets.
         let pos = self.merge_positions(left_paren, right_paren);
-        let tys = self.slice(tys.iter().filter_map(|&node| self.node_to_ty(node)));
-        self.hint_ty(pos, Ty_::Ttuple(tys))
+        // Lowerer will check that required precede optional precede at most one variadic element
+        let required = self.slice(
+            tys.iter()
+                .filter_map(|&node| self.node_to_tuple_element_ty(node, false)),
+        );
+        let optional = self.slice(
+            tys.iter()
+                .filter_map(|&node| self.node_to_tuple_element_ty(node, true)),
+        );
+        let variadic_opt = tys
+            .iter()
+            .find_map(|&node| self.node_to_tuple_variadic_ty(node));
+        let splat_opt = tys
+            .iter()
+            .find_map(|&node| self.node_to_tuple_splat_ty(node));
+        let reason = self.alloc(Reason::FromWitnessDecl(self.alloc(WitnessDecl::Hint(pos))));
+        let variadic = match variadic_opt {
+            None => self.alloc(Ty(reason, Ty_::Tunion(&[]))),
+            Some(ty) => ty,
+        };
+        let extra = match splat_opt {
+            None => self.alloc(TupleExtra::Textra { optional, variadic }),
+            Some(hint) => self.alloc(TupleExtra::Tsplat(hint)),
+        };
+        self.hint_ty(
+            pos,
+            Ty_::Ttuple(self.alloc(TupleType {
+                required,
+                extra: *extra,
+            })),
+        )
+    }
+
+    fn make_tuple_or_union_or_intersection_element_type_specifier(
+        &mut self,
+        optional: Self::Output,
+        pre_ellipsis: Self::Output,
+        type_: Self::Output,
+        ellipsis: Self::Output,
+    ) -> Self::Output {
+        Node::TupleComponent(self.alloc(TupleComponentNode {
+            optional: optional.is_present(),
+            pre_ellipsis: pre_ellipsis.is_present(),
+            hint: type_,
+            ellipsis: ellipsis.is_present(),
+        }))
     }
 
     fn make_tuple_type_explicit_specifier(
@@ -5433,21 +5731,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
                 fields.insert(self.make_t_shape_field_name(name), type_)
             }
         }
-        let pos = self.get_pos(open);
-        let reason = self.alloc(Reason::FromWitnessDecl(self.alloc(WitnessDecl::Hint(pos))));
-        let kind = match open.token_kind() {
-            // Type of unknown fields is mixed, or supportdyn<mixed> under implicit SD
-            Some(TokenKind::DotDotDot) => self.alloc(Ty(
-                reason,
-                if self.implicit_sdt() {
-                    self.make_supportdyn(pos, Ty_::Tmixed)
-                } else {
-                    Ty_::Tmixed
-                },
-            )),
-            // Closed shapes are expressed using `nothing` (empty union) as the type of unknown fields
-            _ => self.alloc(Ty(reason, Ty_::Tunion(&[]))),
-        };
+        let kind = self.make_variadic_type(open);
         let pos = self.merge_positions(shape, rparen);
         let origin = TypeOrigin::MissingOrigin;
         self.hint_ty(
@@ -5508,22 +5792,8 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
         value: Self::Output,
     ) -> Self::Output {
         let pos = self.merge_positions(class_name, value);
-        let Id(class_name_pos, class_name_str) = match self.expect_name(class_name) {
-            Some(id) => {
-                if matches!(class_name, Node::XhpName(..))
-                    && self.opts.disable_xhp_element_mangling
-                    && self.opts.keep_user_attributes
-                {
-                    // for facts, allow xhp class consts to be mangled later
-                    // on even when xhp_element_mangling is disabled
-                    let mut qualified = bump::String::with_capacity_in(id.1.len() + 1, self.arena);
-                    qualified.push_str("\\");
-                    qualified.push_str(id.1);
-                    Id(id.0, self.arena.alloc_str(&qualified))
-                } else {
-                    self.elaborate_id(id)
-                }
-            }
+        let Id(class_name_pos, class_name_str) = match self.elaborate_class_id(class_name) {
+            Some(id) => id,
             None => return Node::Ignored(SK::ScopeResolutionExpression),
         };
         let class_id = self.alloc(aast::ClassId(
@@ -5544,6 +5814,27 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
             pos,
             nast::Expr_::ClassConst(self.alloc((class_id, self.alloc((value_id.0, value_id.1))))),
         )))
+    }
+
+    fn make_nameof_expression(
+        &mut self,
+        keyword: Self::Output,
+        class_name: Self::Output,
+    ) -> Self::Output {
+        let pos = self.merge_positions(keyword, class_name);
+        let Id(class_name_pos, class_name_str) = match self.elaborate_class_id(class_name) {
+            Some(id) => id,
+            None => return Node::Ignored(SK::NameofExpression),
+        };
+        let class_id = self.alloc(aast::ClassId(
+            (),
+            class_name_pos,
+            match class_name {
+                Node::Name(("self", _)) => aast::ClassId_::CIself,
+                _ => aast::ClassId_::CI(self.alloc(Id(class_name_pos, class_name_str))),
+            },
+        ));
+        Node::Expr(self.alloc(aast::Expr((), pos, nast::Expr_::Nameof(class_id))))
     }
 
     fn make_field_specifier(
@@ -5667,40 +5958,46 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
                 None => return Node::Ignored(SK::ConstructorCall),
             }
         };
-        let params = self.slice(args.iter().filter_map(|node| match node {
-            Node::Expr(aast::Expr(
-                _,
-                _,
-                aast::Expr_::ClassConst(&(
-                    aast::ClassId(_, _, aast::ClassId_::CI(&Id(pos, class_name))),
-                    (_, "class"),
-                )),
-            )) => {
-                let name = if class_name.starts_with(':') && self.opts.disable_xhp_element_mangling
-                {
-                    // for facts, allow xhp class consts to be mangled later on
-                    // even when xhp_element_mangling is disabled
-                    let mut qualified =
-                        bump::String::with_capacity_in(class_name.len() + 1, self.arena);
-                    qualified.push_str("\\");
-                    qualified.push_str(class_name);
-                    Id(pos, self.arena.alloc_str(&qualified))
-                } else {
-                    self.elaborate_id(Id(pos, class_name))
-                };
-                Some(AttributeParam::Classname(name))
-            }
-            Node::EnumClassLabel(label) => Some(AttributeParam::EnumClassLabel(label)),
-            Node::Expr(e @ aast::Expr(_, pos, _)) => {
-                // Try to parse a sequence of string concatenations
-                let mut acc = bump::Vec::new_in(self.arena);
-                self.fold_string_concat(e, &mut acc)
-                    .then(|| AttributeParam::String(pos, acc.into_bump_slice().into()))
-            }
-            Node::StringLiteral((slit, pos)) => Some(AttributeParam::String(pos, slit)),
-            Node::IntLiteral((ilit, _)) => Some(AttributeParam::Int(ilit)),
-            _ => None,
-        }));
+        let params =
+            self.slice(args.iter().filter_map(|node| match node {
+                Node::Expr(aast::Expr(
+                    _,
+                    _,
+                    aast::Expr_::ClassConst(&(
+                        aast::ClassId(_, _, aast::ClassId_::CI(&Id(pos, class_name))),
+                        (_, "class"),
+                    ))
+                    | aast::Expr_::Nameof(&aast::ClassId(
+                        _,
+                        _,
+                        aast::ClassId_::CI(&Id(pos, class_name)),
+                    )),
+                )) => {
+                    let name =
+                        if class_name.starts_with(':') && self.opts.disable_xhp_element_mangling {
+                            // for facts, allow xhp class consts to be mangled later on
+                            // even when xhp_element_mangling is disabled
+                            let mut qualified =
+                                bump::String::with_capacity_in(class_name.len() + 1, self.arena);
+                            qualified.push_str("\\");
+                            qualified.push_str(class_name);
+                            Id(pos, self.arena.alloc_str(&qualified))
+                        } else {
+                            self.elaborate_id(Id(pos, class_name))
+                        };
+                    Some(AttributeParam::Classname(name))
+                }
+                Node::EnumClassLabel(label) => Some(AttributeParam::EnumClassLabel(label)),
+                Node::Expr(e @ aast::Expr(_, pos, _)) => {
+                    // Try to parse a sequence of string concatenations
+                    let mut acc = bump::Vec::new_in(self.arena);
+                    self.fold_string_concat(e, &mut acc)
+                        .then(|| AttributeParam::String(pos, acc.into_bump_slice().into()))
+                }
+                Node::StringLiteral((slit, pos)) => Some(AttributeParam::String(pos, slit)),
+                Node::IntLiteral((ilit, _)) => Some(AttributeParam::Int(ilit)),
+                _ => None,
+            }));
         let string_literal_param = params.first().and_then(|p| match *p {
             AttributeParam::String(pos, s) => Some((pos, s)),
             _ => None,
@@ -5799,13 +6096,16 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
             };
 
             if fp.optional {
-                flags |= FunParamFlags::HAS_DEFAULT;
+                flags |= FunParamFlags::IS_OPTIONAL;
             }
             if fp.readonly {
                 flags |= FunParamFlags::READONLY;
             }
             if fp.variadic {
                 ft_variadic = true;
+            }
+            if fp.splat {
+                flags |= FunParamFlags::SPLAT;
             }
 
             self.alloc(FunParam {
@@ -5870,6 +6170,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
         optional: Self::Output,
         inout: Self::Output,
         readonly: Self::Output,
+        pre_ellipsis: Self::Output,
         hint: Self::Output,
         ellipsis: Self::Output,
     ) -> Self::Output {
@@ -5888,6 +6189,7 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> FlattenSmartConstructors
             pos: self.get_pos(hint),
             name: Some(""),
             variadic: ellipsis.is_token(TokenKind::DotDotDot),
+            splat: pre_ellipsis.is_token(TokenKind::DotDotDot),
             initializer: Node::Ignored(SK::Missing),
             parameter_end: Node::Ignored(SK::Missing),
         }))

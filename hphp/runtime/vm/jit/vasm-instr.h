@@ -345,6 +345,8 @@ struct Vunit;
   O(mulsd, Inone, U(s0) UH(s1,d), DH(d,s1))        \
   O(roundsd, I(dir), U(s), D(d))\
   O(sqrtsd, Inone, U(s), D(d))\
+  /* crc32, used for hashing */\
+  O(crc32q, Inone, UA(s0) UH(s1,d), DH(d,s1))\
   /* Generic instructions. */\
   O(prefetch, Inone, UM(m), Dn)\
   /* x64 instructions */\
@@ -353,7 +355,6 @@ struct Vunit;
   O(sarq, I(fl), UH(s,d), DH(d,s) D(sf))\
   O(shlq, I(fl), UH(s,d), DH(d,s) D(sf))\
   O(shrq, I(fl), UH(s,d), DH(d,s) D(sf))\
-  O(crc32q, Inone, UA(s0) UH(s1,d), DH(d,s1))\
   /* arm instructions */\
   O(csincb, I(cc), U(sf) U(f) U(t), D(d))\
   O(csincw, I(cc), U(sf) U(f) U(t), D(d))\
@@ -363,6 +364,10 @@ struct Vunit;
   O(mrs, I(s), Un, D(r))\
   O(msr, I(s), U(r), Dn)\
   O(ubfmli, I(mr) I(ms), U(s), D(d))\
+  O(loadpair, Inone, U(s), D(d0) D(d1))\
+  O(loadpairl, Inone, U(s), D(d0) D(d1))\
+  O(storepair, Inone, U(s0) U(s1) UW(d), Dn)\
+  O(storepairl, Inone, U(s0) U(s1) UW(d), Dn)\
   /* */
 
 /*
@@ -1258,6 +1263,11 @@ struct sqrtsd { VregDbl s, d; };
 struct prefetch { Vptr64 m; Vflags fl; };
 
 /*
+ * crc32 intrinsics, used for hashing
+ */
+struct crc32q { Vreg64 s0, s1; Vreg64 d; };
+
+/*
  * x64 intrinsics.
  */
 struct cqo {};
@@ -1265,7 +1275,6 @@ struct idiv { Vreg64 s; VregSF sf; Vflags fl; };
 struct sarq { Vreg64 s, d; VregSF sf; Vflags fl; }; // uses rcx
 struct shlq { Vreg64 s, d; VregSF sf; Vflags fl; }; // uses rcx
 struct shrq { Vreg64 s, d; VregSF sf; Vflags fl; }; // uses rcx
-struct crc32q { Vreg64 s0, s1; Vreg64 d; };
 
 /*
  * arm intrinsics.
@@ -1279,6 +1288,10 @@ struct fcvtzs { VregDbl s; Vreg64 d;};
 struct mrs { Immed s; Vreg64 r; };
 struct msr { Vreg64 r; Immed s; };
 struct ubfmli { Immed mr, ms; Vreg32 s, d; };
+struct loadpair { Vptr128 s; Vreg64 d0, d1; };
+struct loadpairl { Vptr64 s; Vreg32 d0, d1; };
+struct storepair { Vreg64 s0, s1; Vptr128 d; };
+struct storepairl { Vreg32 s0, s1; Vptr64 d; };
 
 ///////////////////////////////////////////////////////////////////////////////
 

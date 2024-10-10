@@ -58,6 +58,7 @@ let module_blacklist =
     "sexplib::std";
     "string_utils";
     "utils";
+    "pos::set";
   ]
 
 (* HACK: These submodules are defined inline in another module. We don't convert
@@ -80,6 +81,7 @@ let enum_modules =
     ("error_codes", "NastCheck");
     ("error_codes", "Typing");
     ("error_codes", "Init");
+    ("error_codes", "Warning");
     (* An optional error set that runs only for arg --enable-global-access-check. *)
     ("error_codes", "GlobalAccessCheck");
   ]

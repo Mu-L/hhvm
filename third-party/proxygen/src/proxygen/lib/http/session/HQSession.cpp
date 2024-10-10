@@ -1174,8 +1174,12 @@ void HQSession::readAvailable(quic::StreamId id) noexcept {
   VLOG(4) << __func__ << " sess=" << *this
           << ": readAvailable on streamID=" << id;
   if (readsPerLoop_ >= kMaxReadsPerLoop) {
-    VLOG(2) << __func__ << ": skipping read for streamID=" << id
+    if (sessionStats_) {
+      sessionStats_->recordReadPerLoopLimitExceeded();
+    }
+    VLOG(3) << __func__ << ": skipping read for streamID=" << id
             << " maximum reads per loop reached" << " sess=" << *this;
+
     return;
   }
   readsPerLoop_++;
@@ -1538,6 +1542,9 @@ void HQSession::applySettings(const SettingsList& settings) {
           supportsWebTransport_.set(folly::to_underlying(SettingEnabled::PEER));
           break;
         case hq::SettingId::WEBTRANSPORT_MAX_SESSIONS:
+          hasWT = setting.value > 0;
+          VLOG(3) << "Peer sent WEBTRANSPORT_MAX_SESSIONS: " << uint32_t(hasWT);
+          supportsWebTransport_.set(folly::to_underlying(SettingEnabled::PEER));
           break;
       }
     }
@@ -2559,6 +2566,11 @@ void HQSession::HQStreamTransportBase::onHeadersComplete(
             observer->requestStarted(observed, event);
           });
     }
+    if (WebTransport::isConnectMessage(*msg)) {
+      VLOG(3) << "Peer sent WT Connect";
+      session_.supportsWebTransport_.set(
+          folly::to_underlying(SettingEnabled::PEER));
+    }
   }
 
   if (!txn_.getHandler()) {
@@ -3286,6 +3298,21 @@ size_t HQSession::HQStreamTransportBase::sendChunkTerminator(
   return encodedSize;
 }
 
+size_t HQSession::HQStreamTransportBase::sendPadding(
+    HTTPTransaction* txn, uint16_t padding) noexcept {
+  VLOG(4) << __func__ << " txn=" << txn_ << " padding=" << padding;
+  CHECK(hasEgressStreamId()) << __func__ << " invoked on stream without egress";
+  DCHECK(txn == &txn_);
+  auto g = folly::makeGuard(setActiveCodec(__func__));
+  CHECK(codecStreamId_);
+  size_t encodedSize =
+      codecFilterChain->generatePadding(writeBuf_, *codecStreamId_, padding);
+  if (encodedSize > 0) {
+    notifyPendingEgress();
+  }
+  return encodedSize;
+}
+
 void HQSession::HQStreamTransportBase::onMessageBegin(
     HTTPCodec::StreamID streamID, HTTPMessage* /* msg */) {
   VLOG(4) << __func__ << " txn=" << txn_ << " streamID=" << streamID
@@ -3869,6 +3896,18 @@ HQSession::HQStreamTransport::resetWebTransportEgress(HTTPCodec::StreamID id,
     auto res = session_.sock_->resetStream(
         id,
         quic::ApplicationErrorCode(WebTransport::toHTTPErrorCode(errorCode)));
+    if (res.hasError()) {
+      return folly::makeUnexpected(WebTransport::ErrorCode::GENERIC_ERROR);
+    }
+  }
+  return folly::unit;
+}
+
+folly::Expected<folly::Unit, WebTransport::ErrorCode>
+HQSession::HQStreamTransport::setWebTransportStreamPriority(
+    HTTPCodec::StreamID id, HTTPPriority pri) {
+  if (session_.sock_) {
+    auto res = session_.sock_->setStreamPriority(id, toQuicPriority(pri));
     if (res.hasError()) {
       return folly::makeUnexpected(WebTransport::ErrorCode::GENERIC_ERROR);
     }

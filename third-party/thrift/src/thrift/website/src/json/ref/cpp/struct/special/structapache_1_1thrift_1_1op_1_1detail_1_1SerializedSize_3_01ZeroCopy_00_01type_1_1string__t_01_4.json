@@ -34,6 +34,7 @@
       "definition_html": "uint32_t apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::string_t &gt;::operator()",
       "argsstring_html": "(Protocol &amp;prot, folly::StringPiece s) const",
       "name_html": "operator()",
+      "qualifiedname_html": "apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::string_t &gt;::operator()",
       "param": [
         {
           "type_html": "Protocol &amp;",
@@ -46,11 +47,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "212",
+        "line": "213",
         "column": "12",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "212",
-        "bodyend": "214"
+        "bodystart": "213",
+        "bodyend": "215"
       },
       "definition": {
         "simple_html": "template &lt;typename Protocol&gt;\nuint32_t operator()(Protocol&amp; prot, folly::StringPiece s) const",
@@ -66,11 +67,11 @@
   ],
   "location": {
     "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "line": "210",
+    "line": "211",
     "column": "1",
     "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "bodystart": "210",
-    "bodyend": "215"
+    "bodystart": "211",
+    "bodyend": "216"
   },
   "namespacednames_html": [
     "apache",
@@ -113,6 +114,7 @@
               "definition_html": "uint32_t apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::string_t &gt;::operator()",
               "argsstring_html": "(Protocol &amp;prot, folly::StringPiece s) const",
               "name_html": "operator()",
+              "qualifiedname_html": "apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::string_t &gt;::operator()",
               "param": [
                 {
                   "type_html": "Protocol &amp;",
@@ -125,11 +127,11 @@
               ],
               "location": {
                 "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "line": "212",
+                "line": "213",
                 "column": "12",
                 "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "bodystart": "212",
-                "bodyend": "214"
+                "bodystart": "213",
+                "bodyend": "215"
               },
               "definition": {
                 "simple_html": "template &lt;typename Protocol&gt;\nuint32_t operator()(Protocol&amp; prot, folly::StringPiece s) const",

@@ -44,6 +44,7 @@ class _fbthrift_TestService_test_result(metaclass=_fbthrift_python_types.StructM
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            11, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -52,5 +53,4 @@ class _fbthrift_TestService_test_result(metaclass=_fbthrift_python_types.StructM
 _fbthrift_python_types.fill_specs(
     _fbthrift_TestService_test_args,
     _fbthrift_TestService_test_result,
-    
 )

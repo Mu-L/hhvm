@@ -24,11 +24,13 @@ class RequestCommon : public MessageCommon {
   RequestCommon(const RequestCommon& other) {
     traceContext_ = other.traceContext_;
     cryptoAuthToken_ = other.cryptoAuthToken_;
+    clientIdentifier_ = other.clientIdentifier_;
   }
   RequestCommon& operator=(const RequestCommon& other) {
     if (this != &other) {
       traceContext_ = other.traceContext_;
       cryptoAuthToken_ = other.cryptoAuthToken_;
+      clientIdentifier_ = other.clientIdentifier_;
     }
     return *this;
   }
@@ -83,6 +85,14 @@ class RequestCommon : public MessageCommon {
     return cryptoAuthToken_;
   }
 
+  const std::optional<std::string>& getClientIdentifier() const noexcept {
+    return clientIdentifier_;
+  }
+
+  void setClientIdentifier(folly::StringPiece clientIdentifier) noexcept {
+    clientIdentifier_ = clientIdentifier.str();
+  }
+
  protected:
   void markBufferAsDirty() {
     serializedBuffer_ = nullptr;
@@ -92,6 +102,8 @@ class RequestCommon : public MessageCommon {
   const folly::IOBuf* serializedBuffer_{nullptr};
   // cat token(s) in string serialzed format
   std::optional<std::string> cryptoAuthToken_;
+  // Hash string of primary (non-host) tls client identities
+  std::optional<std::string> clientIdentifier_;
 };
 
 } // namespace carbon

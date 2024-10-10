@@ -21,7 +21,7 @@ namespace py.asyncio apache_thrift_asyncio.metadata
 namespace py3 apache.thrift
 namespace js apache.thrift
 namespace php tmeta
-namespace go thrift.lib.thrift.metadata
+namespace go 'github.com/facebook/fbthrift/thrift/lib/thrift/metadata'
 
 /*
  * 'metadata.thrift' is currently frozen in favor of 'schema.thrift'.
@@ -29,6 +29,8 @@ namespace go thrift.lib.thrift.metadata
  * Keep synced with : thrift/compiler/generate/t_hack_generator.cc
  */
 include "thrift/annotation/cpp.thrift"
+
+package "facebook.com/thrift/metadata"
 
 enum ThriftPrimitiveType {
   THRIFT_BOOL_TYPE = 1,

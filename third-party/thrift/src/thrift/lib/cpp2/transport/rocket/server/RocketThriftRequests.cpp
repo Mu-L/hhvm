@@ -29,12 +29,11 @@
 #include <thrift/lib/cpp2/SerializationSwitch.h>
 #include <thrift/lib/cpp2/async/ServerSinkBridge.h>
 #include <thrift/lib/cpp2/async/StreamCallbacks.h>
-#include <thrift/lib/cpp2/protocol/CompactProtocol.h>
 #include <thrift/lib/cpp2/server/LoggingEvent.h>
 #include <thrift/lib/cpp2/transport/core/RpcMetadataUtil.h>
 #include <thrift/lib/cpp2/transport/core/SendCallbacks.h>
-#include <thrift/lib/cpp2/transport/rocket/PayloadUtils.h>
 #include <thrift/lib/cpp2/transport/rocket/framing/Flags.h>
+#include <thrift/lib/cpp2/transport/rocket/payload/PayloadSerializer.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketServerConnection.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketSinkClientCallback.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketStreamClientCallback.h>
@@ -45,9 +44,7 @@
 #define THRIFT_ANY_AVAILABLE
 #endif
 
-namespace apache {
-namespace thrift {
-namespace rocket {
+namespace apache::thrift::rocket {
 
 namespace {
 ResponseRpcError makeResponseRpcError(
@@ -105,7 +102,9 @@ RocketException makeRocketException(const ResponseRpcError& responseRpcError) {
     }
   }();
 
-  return RocketException(rocketCategory, packCompact(responseRpcError));
+  return RocketException(
+      rocketCategory,
+      PayloadSerializer::getInstance().packCompact(responseRpcError));
 }
 
 template <typename Serializer>
@@ -290,7 +289,9 @@ FOLLY_NODISCARD std::optional<ResponseRpcError> processFirstResponseHelper(
                        {kUnimplementedMethodErrorCode,
                         ResponseRpcErrorCode::UNIMPLEMENTED_METHOD},
                        {kTenantQuotaExceededErrorCode,
-                        ResponseRpcErrorCode::TENANT_QUOTA_EXCEEDED}});
+                        ResponseRpcErrorCode::TENANT_QUOTA_EXCEEDED},
+                       {kTenantBlocklistedErrorCode,
+                        ResponseRpcErrorCode::TENANT_BLOCKLISTED}});
                   if (auto errorCode = folly::get_ptr(errorCodeMap, *exPtr)) {
                     return *errorCode;
                   }
@@ -480,7 +481,7 @@ void ThriftServerRequestResponse::sendThriftResponse(
     context_.sendError(std::move(ex), std::move(cb));
     return;
   }
-  auto payload = packWithFds(
+  auto payload = PayloadSerializer::getInstance().packWithFds(
       &metadata,
       std::move(data),
       std::move(getRequestContext()->getHeader()->fds),
@@ -820,6 +821,4 @@ void ThriftServerRequestSink::closeConnection(
   context_.connection().close(std::move(ew));
 }
 
-} // namespace rocket
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::rocket

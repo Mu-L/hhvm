@@ -253,6 +253,12 @@ struct Func final {
    */
   FuncId getFuncId() const;
 
+#ifndef USE_LOWPTR
+  static constexpr size_t funcIdOffset() {
+    return offsetof(Func, m_funcId);
+  }
+#endif
+
 private:
   /*
    * Reserve the next available FuncId for `this', and add `this' to the
@@ -725,7 +731,6 @@ public:
     NoIC = 0,
     KeyedByIC = 1,
     MakeICInaccessible = 2,
-    SoftMakeICInaccessible = 3,
   };
 
   MemoizeICType memoizeICType() const;
@@ -735,8 +740,6 @@ public:
   bool isKeyedByImplicitContextMemoize() const;
 
   bool isMakeICInaccessibleMemoize() const;
-
-  bool isSoftMakeICInaccessibleMemoize() const;
 
   /*
    * Is this string the name of a memoize implementation.
@@ -1649,6 +1652,9 @@ public:
     Locked           = 1 << 1,
     MaybeIntercepted = 1 << 2,
     LockedForPrologueGen = 1 << 3,
+    // A function is marked zombie before the unit or the class of the function
+    // is treadmilled for destruction.
+    Zombie = 1 << 4,
   };
 
  /*
@@ -1734,6 +1740,29 @@ private:
   static constexpr intptr_t kNeedsFullName = 0x1;
 
 public:
+  enum class FuncLookupResult {
+    None,
+    Exact,
+    Maybe,
+  };
+
+  struct FuncLookup {
+    FuncLookupResult tag;
+    const Func* func;
+  };
+  static const FuncLookup lookupKnownMaybe(const StringData* name, const Unit*  unit);
+  static const Func* lookupKnown(const StringData* name, const Unit* unit);
+  static const FuncLookup maybe(const Func* func) {
+    return FuncLookup { FuncLookupResult::Maybe, func };
+  }
+  static const FuncLookup exact(const Func* func) {
+    return FuncLookup { FuncLookupResult::Exact, func };
+  }
+  static const FuncLookup& none() {
+      static FuncLookup lookup { FuncLookupResult::None, nullptr };
+      return lookup;
+  }
+
   // Use by m_inoutBits
   static constexpr uint32_t kInoutFastCheckBits = 31;
 

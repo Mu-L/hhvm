@@ -507,6 +507,7 @@ class HTTPSession
   }
   size_t sendChunkHeader(HTTPTransaction* txn, size_t length) noexcept override;
   size_t sendChunkTerminator(HTTPTransaction* txn) noexcept override;
+  size_t sendPadding(HTTPTransaction* txn, uint16_t bytes) noexcept override;
   size_t sendEOM(HTTPTransaction* txn,
                  const HTTPHeaders* trailers) noexcept override;
   size_t sendAbort(HTTPTransaction* txn,
@@ -998,14 +999,7 @@ class HTTPSession
     ~ShutdownTransportCallback() override {
     }
 
-    void runLoopCallback() noexcept override {
-      VLOG(4) << *session_ << " shutdown from onEgressMessageFinished";
-      bool shutdownReads =
-          session_->isDownstream() && !session_->ingressUpgraded_;
-      auto dg = dg_.release();
-      session_->shutdownTransport(shutdownReads, true);
-      delete dg;
-    }
+    void runLoopCallback() noexcept override;
 
    private:
     HTTPSession* session_;
@@ -1053,6 +1047,7 @@ class HTTPSession
     HTTPSession* session_;
   };
   DrainTimeout drainTimeout_;
+  std::chrono::milliseconds getDrainTimeout() const;
 
   class PingProber : public folly::HHWheelTimer::Callback {
    public:

@@ -35,22 +35,29 @@ let default_genv =
   {
     options = ServerArgs.default_options ~root:"";
     config = ServerConfig.default_config;
-    local_config = ServerLocalConfig.default;
+    local_config = ServerLocalConfigLoad.default;
     workers = None;
     notifier = ServerNotifier.init_null ();
     indexer = (fun _ () -> []);
     debug_channels = None;
   }
 
-let make_env ~init_id ~deps_mode config : ServerEnv.env =
+let make_env ~init_id ~deps_mode ?errorl ?package_info config : ServerEnv.env =
+  let tcopt = ServerConfig.typechecker_options config in
+  let tcopt =
+    match package_info with
+    | None -> tcopt
+    | Some package_info ->
+      { tcopt with GlobalOptions.tco_package_info = package_info }
+  in
   {
-    tcopt = ServerConfig.typechecker_options config;
+    tcopt;
     popt = ServerConfig.parser_options config;
     gleanopt = ServerConfig.glean_options config;
     swriteopt = ServerConfig.symbol_write_options config;
     naming_table = Naming_table.empty;
     deps_mode;
-    errorl = Errors.empty;
+    errorl = Option.value errorl ~default:Errors.empty;
     failed_naming = Relative_path.Set.empty;
     last_command_time = 0.0;
     last_notifier_check_time = 0.0;
@@ -74,10 +81,10 @@ let make_env ~init_id ~deps_mode config : ServerEnv.env =
         init_start_t = Unix.gettimeofday ();
         init_type = "";
         mergebase = None;
-        mergebase_warning_hashes = Warnings_saved_state.empty;
+        mergebase_warning_hashes = None;
         why_needed_full_check = None;
         recheck_id = None;
-        saved_state_delta = None;
+        saved_state_revs_info = None;
         naming_table_manifold_path = None;
       };
     last_recheck_loop_stats = RecheckLoopStats.empty ~recheck_id:"<none>";

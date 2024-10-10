@@ -38,14 +38,12 @@
 #include <thrift/compiler/ast/t_type.h>
 #include <thrift/compiler/ast/t_typedef.h>
 #include <thrift/compiler/ast/t_union.h>
-#include <thrift/compiler/gen/cpp/reference_type.h>
-#include <thrift/compiler/gen/cpp/type_resolver.h>
+#include <thrift/compiler/generate/cpp/name_resolver.h>
+#include <thrift/compiler/generate/cpp/reference_type.h>
 #include <thrift/compiler/lib/cpp2/util.h>
-#include <thrift/compiler/lib/reserved_identifier_name.h>
+#include <thrift/compiler/lib/reserved_identifier.h>
 #include <thrift/compiler/lib/uri.h>
-#include <thrift/compiler/sema/const_checker.h>
 #include <thrift/compiler/sema/explicit_include_validator.h>
-#include <thrift/compiler/sema/scope_validator.h>
 
 namespace apache {
 namespace thrift {
@@ -59,7 +57,7 @@ const t_structured* get_mixin_type(const t_field& field) {
   return nullptr;
 }
 
-bool has_experimental_annotation(diagnostic_context& ctx, const t_named& node) {
+bool has_experimental_annotation(sema_context& ctx, const t_named& node) {
   if (node.find_structured_annotation_or_null(kExperimentalUri)) {
     return true;
   }
@@ -170,7 +168,7 @@ class redef_checker {
 // Helper for validating the adapters
 class adapter_or_wrapper_checker {
  public:
-  explicit adapter_or_wrapper_checker(diagnostic_context& ctx) : ctx_(ctx) {}
+  explicit adapter_or_wrapper_checker(sema_context& ctx) : ctx_(ctx) {}
 
   // Checks if adapter name is provided
   // Do not allow composing two structured annotations on typedef
@@ -293,7 +291,7 @@ class adapter_or_wrapper_checker {
   }
 
  private:
-  diagnostic_context& ctx_;
+  sema_context& ctx_;
 };
 
 struct service_metadata {
@@ -332,32 +330,46 @@ struct structured_metadata {
   }
 };
 
-void validate_identifier_name_is_not_reserved(
-    diagnostic_context& ctx, const t_named& node) {
-  static const std::string reserved_idl_string = "fbthrift";
+void validate_identifier_is_not_reserved(
+    sema_context& ctx, const t_named& node) {
   // Bypass the check any of the cases below.
   //  1. the node was generated.
-  //  2. @thrift.AllowedReservedIdentifierName is present.
+  //  2. @thrift.AllowedReservedIdentifier is present.
   if (node.generated() ||
-      node.find_structured_annotation_or_null(
-          kAllowReservedIdentifierNameUri) != nullptr) {
+      node.find_structured_annotation_or_null(kAllowReservedIdentifierUri) !=
+          nullptr) {
     return;
   }
   ctx.check(
-      !is_reserved_identifier_name(node.name()),
-      "`{}` is a reserved identifier name. Choose a different name that does not contain `fbthrift`.",
+      !is_reserved_identifier(node.name()),
+      "`{}` is a reserved identifier. Choose a different identifier that does not contain `fbthrift`.",
+      node.name());
+}
+
+void validate_filename_is_not_reserved(sema_context& ctx, const t_named& node) {
+  // Bypass the check any of the cases below.
+  //  1. the node was generated.
+  //  2. @thrift.AllowReservedFilename is present.
+  if (node.generated() ||
+      node.find_structured_annotation_or_null(kAllowReservedFilenameUri) !=
+          nullptr) {
+    return;
+  }
+  ctx.check(
+      !is_reserved_identifier(node.name()),
+      "`{}` is a reserved filename. Choose a different filename that does not contain `fbthrift`.",
       node.name());
 }
 
 void validate_interface_function_name_uniqueness(
-    diagnostic_context& ctx, const t_interface& node) {
+    sema_context& ctx, const t_interface& node) {
   // Check for a redefinition of a function in the same interface.
   redef_checker(ctx, "Function", node).check_all(node.functions());
 }
 
 // Checks for a redefinition of an inherited function.
 void validate_extends_service_function_name_uniqueness(
-    diagnostic_context& ctx, const t_service& node) {
+    sema_context& ctx, const t_service& node) {
   if (node.extends() == nullptr) {
     return;
   }
@@ -378,7 +390,7 @@ void validate_extends_service_function_name_uniqueness(
   }
 }
 
-void validate_throws_exceptions(diagnostic_context& ctx, const t_throws& node) {
+void validate_throws_exceptions(sema_context& ctx, const t_throws& node) {
   for (const auto& except : node.fields()) {
     auto except_type = except.type()->get_true_type();
     ctx.check(
@@ -392,7 +404,7 @@ void validate_throws_exceptions(diagnostic_context& ctx, const t_throws& node) {
 // Checks for a redefinition of a field in the same t_structured, including
 // those inherited via mixin fields.
 void validate_field_names_uniqueness(
-    diagnostic_context& ctx, const t_structured& node) {
+    sema_context& ctx, const t_structured& node) {
   redef_checker checker(ctx, "Field", node);
   for (const auto& field : node.fields()) {
     // Check the directly defined field.
@@ -412,7 +424,7 @@ void validate_field_names_uniqueness(
 // This validator checks if the node that contains any field
 // with that annotation is an exception definiton.
 void validate_exception_message_annotation_is_only_in_exceptions(
-    diagnostic_context& ctx, const t_structured& node) {
+    sema_context& ctx, const t_structured& node) {
   for (const auto& f : node.fields()) {
     if (f.find_structured_annotation_or_null(kExceptionMessageUri)) {
       ctx.check(
@@ -425,8 +437,7 @@ void validate_exception_message_annotation_is_only_in_exceptions(
 }
 
 // Checks the attributes of fields in a union.
-void validate_union_field_attributes(
-    diagnostic_context& ctx, const t_union& node) {
+void validate_union_field_attributes(sema_context& ctx, const t_union& node) {
   for (const auto& field : node.fields()) {
     if (field.qualifier() == t_field_qualifier::optional ||
         field.qualifier() == t_field_qualifier::required) {
@@ -446,8 +457,7 @@ void validate_union_field_attributes(
   }
 }
 
-void validate_boxed_field_attributes(
-    diagnostic_context& ctx, const t_field& node) {
+void validate_boxed_field_attributes(sema_context& ctx, const t_field& node) {
   if (gen::cpp::find_ref_type(node) == gen::cpp::reference_type::none) {
     return;
   }
@@ -506,8 +516,7 @@ void validate_boxed_field_attributes(
 }
 
 // Checks the attributes of a mixin field.
-void validate_mixin_field_attributes(
-    diagnostic_context& ctx, const t_field& node) {
+void validate_mixin_field_attributes(sema_context& ctx, const t_field& node) {
   if (!cpp2::is_mixin(node)) {
     return;
   }
@@ -533,7 +542,7 @@ void validate_mixin_field_attributes(
   }
 }
 
-void validate_required_field(diagnostic_context& ctx, const t_field& field) {
+void validate_required_field(sema_context& ctx, const t_field& field) {
   if (field.qualifier() == t_field_qualifier::required) {
     ctx.warning(
         field,
@@ -543,12 +552,11 @@ void validate_required_field(diagnostic_context& ctx, const t_field& field) {
 }
 
 void validate_enum_value_name_uniqueness(
-    diagnostic_context& ctx, const t_enum& node) {
+    sema_context& ctx, const t_enum& node) {
   redef_checker(ctx, "Enum value", node).check_all(node.values());
 }
 
-void validate_enum_value_uniqueness(
-    diagnostic_context& ctx, const t_enum& node) {
+void validate_enum_value_uniqueness(sema_context& ctx, const t_enum& node) {
   std::unordered_map<int32_t, const t_enum_value*> values;
   for (const auto& value : node.values()) {
     auto prev = values.emplace(value.get_value(), &value);
@@ -563,7 +571,7 @@ void validate_enum_value_uniqueness(
   }
 }
 
-void validate_enum_value(diagnostic_context& ctx, const t_enum_value& node) {
+void validate_enum_value(sema_context& ctx, const t_enum_value& node) {
   if (!node.has_value()) {
     ctx.error(
         "The enum value, `{}`, must have an explicitly assigned value.",
@@ -571,9 +579,8 @@ void validate_enum_value(diagnostic_context& ctx, const t_enum_value& node) {
   }
 }
 
-void validate_const_type_and_value(
-    diagnostic_context& ctx, const t_const& node) {
-  check_const_rec(ctx, node, node.type(), node.value());
+void validate_const_type_and_value(sema_context& ctx, const t_const& node) {
+  detail::check_initializer(ctx, node, node.type(), node.value());
   ctx.check(
       !node.find_structured_annotation_or_null(kCppAdapterUri) ||
           has_experimental_annotation(ctx, node),
@@ -581,14 +588,14 @@ void validate_const_type_and_value(
       node.name());
 }
 
-void validate_field_default_value(
-    diagnostic_context& ctx, const t_field& field) {
+void validate_field_default_value(sema_context& ctx, const t_field& field) {
   if (field.get_default_value() != nullptr) {
-    check_const_rec(ctx, field, &field.type().deref(), field.default_value());
+    detail::check_initializer(
+        ctx, field, &field.type().deref(), field.default_value());
   }
 }
 
-void validate_field_name(diagnostic_context& ctx, const t_field& field) {
+void validate_field_name(sema_context& ctx, const t_field& field) {
   const auto* strct = dynamic_cast<const t_structured*>(ctx.parent());
   if (field.get_name() == strct->get_name()) {
     std::string parent_structure;
@@ -606,8 +613,7 @@ void validate_field_name(diagnostic_context& ctx, const t_field& field) {
   }
 }
 
-void validate_structured_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+void validate_structured_annotation(sema_context& ctx, const t_named& node) {
   std::unordered_map<const t_type*, const t_const*> seen;
   for (const t_const& annot : node.structured_annotations()) {
     auto [it, inserted] = seen.emplace(annot.type(), &annot);
@@ -624,11 +630,11 @@ void validate_structured_annotation(
   }
 }
 
-void validate_uri_uniqueness(diagnostic_context& ctx, const t_program& prog) {
+void validate_uri_uniqueness(sema_context& ctx, const t_program& prog) {
   // TODO: use string_view as map key
   std::unordered_map<std::string, const t_named*> uri_to_node;
   basic_ast_visitor<true> visit;
-  visit.add_definition_visitor([&](const t_named& node) {
+  visit.add_named_visitor([&](const t_named& node) {
     const auto& uri = node.uri();
     if (uri.empty() || uri == kTransitiveUri) {
       return;
@@ -646,7 +652,7 @@ void validate_uri_uniqueness(diagnostic_context& ctx, const t_program& prog) {
 }
 
 void limit_terse_write_on_experimental_mode(
-    diagnostic_context& ctx, const t_named& node) {
+    sema_context& ctx, const t_named& node) {
   ctx.check(
       !node.find_structured_annotation_or_null(kTerseWriteUri) ||
           has_experimental_annotation(ctx, node),
@@ -654,13 +660,17 @@ void limit_terse_write_on_experimental_mode(
       node.name());
 }
 
-void validate_field_id(diagnostic_context& ctx, const t_field& node) {
+void validate_field_id(sema_context& ctx, const t_field& node) {
   if (node.explicit_id() != node.id()) {
-    ctx.warning(
-        node,
-        "No field id specified for `{}`, resulting protocol may have conflicts "
-        "or not be backwards compatible!",
-        node.name());
+    if (ctx.sema_parameters().forbid_implicit_field_ids) {
+      ctx.error(node, "No field id specified for `{}`", node.name());
+    } else {
+      ctx.warning(
+          node,
+          "No field id specified for `{}`, resulting protocol may have conflicts "
+          "or not be backwards compatible!",
+          node.name());
+    }
   }
 
   ctx.check(
@@ -677,7 +687,7 @@ void validate_field_id(diagnostic_context& ctx, const t_field& node) {
 }
 
 void validate_compatibility_with_lazy_field(
-    diagnostic_context& ctx, const t_structured& node) {
+    sema_context& ctx, const t_structured& node) {
   if (has_lazy_field(node) && node.has_annotation("cpp.methods")) {
     ctx.error(
         "cpp.methods is incompatible with lazy deserialization in struct `{}`",
@@ -685,7 +695,7 @@ void validate_compatibility_with_lazy_field(
   }
 }
 
-void validate_ref_annotation(diagnostic_context& ctx, const t_field& node) {
+void validate_ref_annotation(sema_context& ctx, const t_field& node) {
   if (node.find_structured_annotation_or_null(kCppRefUri) &&
       node.has_annotation(
           {"cpp.ref", "cpp2.ref", "cpp.ref_type", "cpp2.ref_type"})) {
@@ -696,50 +706,45 @@ void validate_ref_annotation(diagnostic_context& ctx, const t_field& node) {
   }
 }
 
-void validate_cpp_adapter_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+void validate_cpp_adapter_annotation(sema_context& ctx, const t_named& node) {
   adapter_or_wrapper_checker(ctx).check(
       node, kCppAdapterUri, "@cpp.Adapter", "name");
 }
 
-void validate_hack_adapter_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+void validate_hack_adapter_annotation(sema_context& ctx, const t_named& node) {
   adapter_or_wrapper_checker(ctx).check(
       node, kHackAdapterUri, "@hack.Adapter", "name");
 }
 
-void validate_hack_wrapper_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+void validate_hack_wrapper_annotation(sema_context& ctx, const t_named& node) {
   adapter_or_wrapper_checker(ctx).check(
       node, kHackWrapperUri, "@hack.Wrapper", "name");
 }
 // Do not adapt a wrapped type
 void validate_hack_wrapper_and_adapter_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+    sema_context& ctx, const t_named& node) {
   adapter_or_wrapper_checker(ctx).check(
       node, kHackAdapterUri, kHackWrapperUri, "@hack.Adapter", "@hack.Wrapper");
 }
 
-void validate_java_adapter_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+void validate_java_adapter_annotation(sema_context& ctx, const t_named& node) {
   adapter_or_wrapper_checker(ctx).check(
       node, kJavaAdapterUri, "@java.Adapter", "adapterClassName");
 }
 
-void validate_java_wrapper_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+void validate_java_wrapper_annotation(sema_context& ctx, const t_named& node) {
   adapter_or_wrapper_checker(ctx).check(
       node, kJavaWrapperUri, "@java.Wrapper", "wrapperClassName");
 }
 
 void validate_java_wrapper_and_adapter_annotation(
-    diagnostic_context& ctx, const t_named& node) {
+    sema_context& ctx, const t_named& node) {
   adapter_or_wrapper_checker(ctx).check(
       node, kJavaAdapterUri, kJavaWrapperUri, "@java.Adapter", "@java.Wrapper");
 }
 
 void validate_ref_unique_and_box_annotation(
-    diagnostic_context& ctx, const t_field& node) {
+    sema_context& ctx, const t_field& node) {
   const t_const* adapter_annotation =
       node.find_structured_annotation_or_null(kCppAdapterUri);
 
@@ -788,7 +793,7 @@ void validate_ref_unique_and_box_annotation(
 }
 
 void validate_function_priority_annotation(
-    diagnostic_context& ctx, const t_node& node) {
+    sema_context& ctx, const t_node& node) {
   if (auto* priority = node.find_annotation_or_null("priority")) {
     const std::string choices[] = {
         "HIGH_IMPORTANT", "HIGH", "IMPORTANT", "NORMAL", "BEST_EFFORT"};
@@ -802,7 +807,7 @@ void validate_function_priority_annotation(
 }
 
 void validate_exception_message_annotation(
-    diagnostic_context& ctx, const t_exception& node) {
+    sema_context& ctx, const t_exception& node) {
   // Check that value of "message" annotation is
   // - a valid member of struct
   // - of type STRING
@@ -841,7 +846,7 @@ void validate_exception_message_annotation(
 }
 
 void validate_interaction_nesting(
-    diagnostic_context& ctx, const t_interaction& node) {
+    sema_context& ctx, const t_interaction& node) {
   for (auto* func : node.get_functions()) {
     if (func->interaction()) {
       ctx.error(*func, "Nested interactions are forbidden: {}", func->name());
@@ -850,7 +855,7 @@ void validate_interaction_nesting(
 }
 
 void validate_interaction_annotations(
-    diagnostic_context& ctx, const t_interaction& node) {
+    sema_context& ctx, const t_interaction& node) {
   for (auto* func : node.get_functions()) {
     ctx.check(
         !func->has_annotation("thread") &&
@@ -868,7 +873,7 @@ void validate_interaction_annotations(
 }
 
 void validate_cpp_field_interceptor_annotation(
-    diagnostic_context& ctx, const t_field& field) {
+    sema_context& ctx, const t_field& field) {
   if (const t_const* annot =
           field.find_structured_annotation_or_null(kCppFieldInterceptorUri)) {
     try {
@@ -882,7 +887,7 @@ void validate_cpp_field_interceptor_annotation(
   }
 }
 
-void validate_cpp_enum_type(diagnostic_context& ctx, const t_enum& e) {
+void validate_cpp_enum_type(sema_context& ctx, const t_enum& e) {
   if (const t_const* annot =
           e.find_structured_annotation_or_null(kCppEnumTypeUri)) {
     try {
@@ -897,7 +902,7 @@ void validate_cpp_enum_type(diagnostic_context& ctx, const t_enum& e) {
 }
 
 void validate_cpp_field_adapter_annotation(
-    diagnostic_context& ctx, const t_field& field) {
+    sema_context& ctx, const t_field& field) {
   adapter_or_wrapper_checker(ctx).check(
       field,
       kCppAdapterUri,
@@ -906,7 +911,7 @@ void validate_cpp_field_adapter_annotation(
 }
 
 void validate_hack_field_adapter_annotation(
-    diagnostic_context& ctx, const t_field& field) {
+    sema_context& ctx, const t_field& field) {
   adapter_or_wrapper_checker(ctx).check(
       field,
       kHackAdapterUri,
@@ -915,7 +920,7 @@ void validate_hack_field_adapter_annotation(
 }
 
 void validate_java_field_adapter_annotation(
-    diagnostic_context& ctx, const t_field& field) {
+    sema_context& ctx, const t_field& field) {
   adapter_or_wrapper_checker(ctx).check(
       field,
       kJavaAdapterUri,
@@ -925,7 +930,7 @@ void validate_java_field_adapter_annotation(
 
 class reserved_ids_checker {
  public:
-  explicit reserved_ids_checker(diagnostic_context& ctx) : ctx_(ctx) {}
+  explicit reserved_ids_checker(sema_context& ctx) : ctx_(ctx) {}
 
   void check(const t_structured& node) {
     auto reserved_ids = get_reserved_ids(node);
@@ -951,7 +956,7 @@ class reserved_ids_checker {
   }
 
  private:
-  diagnostic_context& ctx_;
+  sema_context& ctx_;
 
   // Gets all the reserved ids annotated on this node. Returns
   // empty set if the annotation is not present.
@@ -1033,11 +1038,11 @@ class reserved_ids_checker {
 };
 
 void validate_reserved_ids_structured(
-    diagnostic_context& ctx, const t_structured& node) {
+    sema_context& ctx, const t_structured& node) {
   reserved_ids_checker(ctx).check(node);
 }
 
-void validate_reserved_ids_enum(diagnostic_context& ctx, const t_enum& node) {
+void validate_reserved_ids_enum(sema_context& ctx, const t_enum& node) {
   reserved_ids_checker(ctx).check(node);
 }
 
@@ -1061,7 +1066,7 @@ bool owns_annotations(t_type_ref type) {
 }
 
 void validate_custom_cpp_type_annotations(
-    diagnostic_context& ctx, const t_named& node) {
+    sema_context& ctx, const t_named& node) {
   const bool hasAdapter =
       node.find_structured_annotation_or_null(kCppAdapterUri);
   bool hasCppType = node.has_annotation(
@@ -1115,7 +1120,7 @@ void validate_custom_cpp_type_annotations(
 }
 
 template <typename Node>
-void validate_cpp_type_annotation(diagnostic_context& ctx, const Node& node) {
+void validate_cpp_type_annotation(sema_context& ctx, const Node& node) {
   if (const t_const* annot =
           node.find_structured_annotation_or_null(kCppTypeUri)) {
     auto type = annot->get_value_from_structured_annotation_or_null("name");
@@ -1137,12 +1142,12 @@ void validate_cpp_type_annotation(diagnostic_context& ctx, const Node& node) {
 }
 
 struct ValidateAnnotationPositions {
-  void operator()(diagnostic_context& ctx, const t_const& node) {
+  void operator()(sema_context& ctx, const t_const& node) {
     if (owns_annotations(node.type())) {
       err(ctx);
     }
   }
-  void operator()(diagnostic_context& ctx, const t_function& node) {
+  void operator()(sema_context& ctx, const t_function& node) {
     if (owns_annotations(node.return_type())) {
       err(ctx);
     }
@@ -1165,7 +1170,7 @@ struct ValidateAnnotationPositions {
       }
     }
   }
-  void operator()(diagnostic_context& ctx, const t_container& type) {
+  void operator()(sema_context& ctx, const t_container& type) {
     switch (type.get_type_value()) {
       case t_type::type::t_list:
         if (owns_annotations(static_cast<const t_list&>(type).elem_type())) {
@@ -1188,15 +1193,27 @@ struct ValidateAnnotationPositions {
         assert(false && "Unknown container type");
     }
   }
+  void operator()(sema_context& ctx, const t_field& node) {
+    if (ctx.sema_parameters().forbid_unstructured_annotations_on_field_types &&
+        owns_annotations(node.type()) &&
+        std::any_of(
+            node.type()->annotations().begin(),
+            node.type()->annotations().end(),
+            [](const auto& pair) {
+              return pair.second.src_range.begin != source_location{};
+            })) {
+      err(ctx);
+    }
+  }
 
  private:
-  static void err(diagnostic_context& ctx) {
+  static void err(sema_context& ctx) {
     ctx.error(
         "Annotations are not allowed in this position. Extract the type into a named typedef instead.");
   }
 };
 
-void deprecate_annotations(diagnostic_context& ctx, const t_named& node) {
+void deprecate_annotations(sema_context& ctx, const t_named& node) {
   auto erlang = [](std::string_view name) {
     return fmt::format("facebook.com/thrift/annotation/erlang/{}", name);
   };
@@ -1269,7 +1286,7 @@ void deprecate_annotations(diagnostic_context& ctx, const t_named& node) {
 template <typename Node>
 bool has_cursor_serialization_adapter(const Node& node) {
   try {
-    if (auto* adapter = gen::cpp::type_resolver::find_first_adapter(node)) {
+    if (auto* adapter = cpp_name_resolver::find_first_adapter(node)) {
       return adapter->find("apache::thrift::CursorSerializationAdapter") !=
           adapter->npos;
     }
@@ -1280,14 +1297,14 @@ bool has_cursor_serialization_adapter(const Node& node) {
 }
 
 void validate_cursor_serialization_adapter_on_field(
-    diagnostic_context& ctx, const t_field& node) {
+    sema_context& ctx, const t_field& node) {
   ctx.check(
       !has_cursor_serialization_adapter(node),
       "CursorSerializationAdapter is not supported on fields. Place it on the top-level struct/union instead.");
 }
 
 void validate_cursor_serialization_adapter_on_function(
-    diagnostic_context& ctx, const t_function& node) {
+    sema_context& ctx, const t_function& node) {
   if (node.params().fields().size() <= 1) {
     return;
   }
@@ -1300,7 +1317,7 @@ void validate_cursor_serialization_adapter_on_function(
 }
 
 void validate_cursor_serialization_adapter_in_container(
-    diagnostic_context& ctx, const t_container& node) {
+    sema_context& ctx, const t_container& node) {
   auto check = [&](const t_type& type) {
     ctx.check(
         !has_cursor_serialization_adapter(type),
@@ -1318,7 +1335,7 @@ void validate_cursor_serialization_adapter_in_container(
 
 // TODO (T191018859): forbid as field type too
 void forbid_exception_as_method_type(
-    diagnostic_context& ctx, const t_function& node) {
+    sema_context& ctx, const t_function& node) {
   ctx.check(
       !node.return_type()->get_true_type()->is_exception(),
       "Exceptions cannot be used as function return types");
@@ -1328,8 +1345,7 @@ void forbid_exception_as_method_type(
         "Exceptions cannot be used as function arguments");
   }
 }
-void forbid_exception_as_const_type(
-    diagnostic_context& ctx, const t_const& node) {
+void forbid_exception_as_const_type(sema_context& ctx, const t_const& node) {
   ctx.check(
       !node.type()->get_true_type()->is_exception(),
       "Exceptions cannot be used as const types");
@@ -1339,7 +1355,8 @@ void forbid_exception_as_const_type(
 
 ast_validator standard_validator() {
   ast_validator validator;
-  validator.add_definition_visitor(&validate_identifier_name_is_not_reserved);
+  validator.add_definition_visitor(&validate_identifier_is_not_reserved);
+  validator.add_program_visitor(&validate_filename_is_not_reserved);
 
   validator.add_interface_visitor(&validate_interface_function_name_uniqueness);
   validator.add_interface_visitor(&validate_function_priority_annotation);
@@ -1374,26 +1391,25 @@ ast_validator standard_validator() {
   validator.add_field_visitor(&validate_required_field);
   validator.add_field_visitor(&validate_cpp_type_annotation<t_field>);
   validator.add_field_visitor(&validate_field_name);
+  validator.add_field_visitor(ValidateAnnotationPositions{});
 
   validator.add_enum_visitor(&validate_enum_value_name_uniqueness);
   validator.add_enum_visitor(&validate_enum_value_uniqueness);
   validator.add_enum_visitor(&validate_reserved_ids_enum);
   validator.add_enum_value_visitor(&validate_enum_value);
 
-  validator.add_definition_visitor(&validate_structured_annotation);
-  validator.add_definition_visitor(&validate_annotation_scopes);
-  validator.add_definition_visitor(&validate_cpp_adapter_annotation);
-  validator.add_definition_visitor(&validate_hack_adapter_annotation);
-  validator.add_definition_visitor(&validate_hack_wrapper_annotation);
-  validator.add_definition_visitor(
-      &validate_hack_wrapper_and_adapter_annotation);
-  validator.add_definition_visitor(&validate_java_adapter_annotation);
-  validator.add_definition_visitor(&validate_java_wrapper_annotation);
-  validator.add_definition_visitor(
-      &validate_java_wrapper_and_adapter_annotation);
-  validator.add_definition_visitor(&limit_terse_write_on_experimental_mode);
-  validator.add_definition_visitor(&validate_custom_cpp_type_annotations);
-  validator.add_definition_visitor(&deprecate_annotations);
+  validator.add_named_visitor(&validate_structured_annotation);
+  validator.add_named_visitor(&detail::validate_annotation_scopes);
+  validator.add_named_visitor(&validate_cpp_adapter_annotation);
+  validator.add_named_visitor(&validate_hack_adapter_annotation);
+  validator.add_named_visitor(&validate_hack_wrapper_annotation);
+  validator.add_named_visitor(&validate_hack_wrapper_and_adapter_annotation);
+  validator.add_named_visitor(&validate_java_adapter_annotation);
+  validator.add_named_visitor(&validate_java_wrapper_annotation);
+  validator.add_named_visitor(&validate_java_wrapper_and_adapter_annotation);
+  validator.add_named_visitor(&limit_terse_write_on_experimental_mode);
+  validator.add_named_visitor(&validate_custom_cpp_type_annotations);
+  validator.add_named_visitor(&deprecate_annotations);
 
   validator.add_typedef_visitor(&validate_cpp_type_annotation<t_typedef>);
 

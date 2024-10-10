@@ -117,6 +117,17 @@ let parse_without_command options usage command =
   | x :: rest when String.(lowercase x = lowercase command) -> rest
   | args -> args
 
+let is_interactive = List.mem [""; "[sh]"] ~equal:String.equal
+
+let validate_check_args ~invalid_warning_codes =
+  if not (List.is_empty invalid_warning_codes) then (
+    Printf.printf
+      "Unknown warning codes: %s"
+      (String.concat ~sep:", "
+      @@ List.map invalid_warning_codes ~f:Int.to_string);
+    exit 2
+  )
+
 (* *** *** NB *** *** ***
  * Commonly-used options are documented in hphp/hack/man/hh_client.1 --
  * if you are making significant changes you need to update the manpage as
@@ -128,7 +139,7 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
   let config = ref [] in
   let custom_telemetry_data = ref [] in
   let custom_hhi_path = ref None in
-  let error_format = ref Errors.Highlighted in
+  let error_format = ref None in
   let force_dormant_start = ref false in
   let from = ref from_default in
   let show_spinner = ref None in
@@ -138,7 +149,6 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
   let save_64bit = ref None in
   let save_human_readable_64bit_dep_map = ref None in
   let saved_state_ignore_hhconfig = ref false in
-  let log_inference_constraints = ref false in
   let max_errors = ref None in
   let mode = ref None in
   let logname = ref false in
@@ -159,6 +169,8 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
   let watchman_debug_logging = ref false in
   let allow_non_opt_build = ref false in
   let preexisting_warnings = ref false in
+  let warning_switches = ref [] in
+  let invalid_warning_codes = ref [] in
   let desc = ref (ClientCommand.command_name cmd) in
   (* custom behaviors *)
   let current_option = ref None in
@@ -174,6 +186,12 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
     end
   in
   let add_single x = single_files := x :: !single_files in
+  let add_warning_switch switch =
+    warning_switches := switch :: !warning_switches
+  in
+  let add_invalid_warning_code i =
+    invalid_warning_codes := i :: !invalid_warning_codes
+  in
   let set_mode_from_single_files (show_tast : bool) preexisting_warnings =
     match !single_files with
     | [] -> ()
@@ -294,11 +312,11 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
         Arg.String
           (fun s ->
             match s with
-            | "raw" -> error_format := Errors.Raw
-            | "plain" -> error_format := Errors.Plain
-            | "context" -> error_format := Errors.Context
-            | "highlighted" -> error_format := Errors.Highlighted
-            | "extended" -> error_format := Errors.Extended
+            | "raw" -> error_format := Some Errors.Raw
+            | "plain" -> error_format := Some Errors.Plain
+            | "context" -> error_format := Some Errors.Context
+            | "highlighted" -> error_format := Some Errors.Highlighted
+            | "extended" -> error_format := Some Errors.Extended
             | _ -> print_string "Warning: unrecognized error format.\n"),
         "<raw|context|highlighted|plain> Error formatting style; (default: highlighted)"
       );
@@ -319,14 +337,6 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
         ^ "; use ExplicitClass instead of Class to exclude references via self/static/parent"
       );
       Common_argspecs.force_dormant_start force_dormant_start;
-      ( "--format",
-        (let format_from = ref 0 in
-         Arg.Tuple
-           [
-             Arg.Int (( := ) format_from);
-             Arg.Int (fun x -> set_mode (MODE_FORMAT (!format_from, x)));
-           ]),
-        "" );
       Common_argspecs.from from;
       ( "--from-arc-diff",
         Arg.Unit (set_from "arc_diff"),
@@ -502,10 +512,6 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
         Arg.Unit (fun () -> set_mode MODE_LIST_FILES),
         " (mode) list files with errors" );
       ("--lock-file", Arg.Set lock_file, " (mode) show lock file name and exit");
-      ( "--log-inference-constraints",
-        Arg.Set log_inference_constraints,
-        "  (for hh debugging purpose only) log type"
-        ^ " inference constraints into external logger (e.g. Scuba)" );
       ( "--max-errors",
         Arg.Int (fun num_errors -> max_errors := Some num_errors),
         " Maximum number of errors to display" );
@@ -524,6 +530,11 @@ let parse_check_args cmd ~from_default : ClientEnv.client_check_env =
         Arg.Set lsp_logname,
         " (mode) show client lsp log filename and exit" );
       ("--no-load", Arg.Set no_load, " start from a fresh state");
+      ( "--notebook-to-hack",
+        Arg.String
+          (fun notebook_name -> set_mode (MODE_NOTEBOOK_TO_HACK notebook_name)),
+        "Convert notebook to a Hack file. Arg: notebook_name. Pass notebook in .ipynb format to stdin"
+      );
       ( "--outline",
         Arg.Unit (fun () -> set_mode MODE_OUTLINE),
         " (mode) prints an outline of the text on stdin" );
@@ -676,10 +687,37 @@ rewrite to the function names to something like `foo_1` and `foo_2`.
         Arg.Unit (fun () -> set_mode (MODE_VERBOSE false)),
         " (mode) turn off verbose server log" );
       ("--version", Arg.Set version, " (mode) show version and exit");
+      ( "-Wall",
+        Arg.Unit (fun () -> add_warning_switch Filter_errors.WAll),
+        " show all warnings" );
+      ( "-Wnone",
+        Arg.Unit (fun () -> add_warning_switch Filter_errors.WNone),
+        " hide all warnings" );
+      ( "-W",
+        Arg.Int
+          (fun code ->
+            match Filter_errors.Code.of_enum code with
+            | None -> add_invalid_warning_code code
+            | Some code -> add_warning_switch @@ Filter_errors.Code_on code),
+        " show all warnings with a given code, e.g. -W 12001" );
+      ( "-Wno",
+        Arg.Int
+          (fun code ->
+            match Filter_errors.Code.of_enum code with
+            | None -> add_invalid_warning_code code
+            | Some code -> add_warning_switch @@ Filter_errors.Code_off code),
+        " hide all warnings with a given code, e.g. -Wno 12001" );
+      ( "-Wignore-files",
+        Arg.String
+          (fun regexp ->
+            add_warning_switch (Filter_errors.Ignored_files (Str.regexp regexp))),
+        " hide warnings in files matching a regexp" );
+      ( "-Wgenerated",
+        Arg.Unit (fun () -> add_warning_switch Filter_errors.Generated_files_on),
+        " show warnings in generated files (the ones specified by .hhconfig flag warnings_generated_files). "
+        ^ "To ignore more files, use -Wignore-files, avoid modifying warnings_generated_files"
+      );
       Common_argspecs.watchman_debug_logging watchman_debug_logging;
-      ( "--xhp-autocomplete-snippet",
-        Arg.String (fun x -> set_mode (MODE_XHP_AUTOCOMPLETE_SNIPPET x)),
-        "(mode) Look up for XHP component and return its snippet" );
       (* Please keep these sorted in the alphabetical order *)
     ]
   in
@@ -717,6 +755,9 @@ rewrite to the function names to something like `foo_1` and `foo_2`.
   let args =
     parse_without_command options usage (ClientCommand.command_name cmd)
   in
+
+  validate_check_args ~invalid_warning_codes:!invalid_warning_codes;
+
   if !version then (
     if !output_json then
       ServerArgs.print_json_version ()
@@ -774,23 +815,21 @@ rewrite to the function names to something like `foo_1` and `foo_2`.
 
   if String.equal !from "emacs" then
     Printf.fprintf stdout "-*- mode: compilation -*-\n%!";
+
+  let is_interactive = is_interactive !from in
   {
-    autostart = !autostart;
+    ClientEnv.autostart = !autostart;
     config = !config;
     custom_hhi_path = !custom_hhi_path;
     custom_telemetry_data = !custom_telemetry_data;
     error_format = !error_format;
     force_dormant_start = !force_dormant_start;
     from = !from;
-    show_spinner =
-      Option.value
-        ~default:(String.is_empty !from || String.equal !from "[sh]")
-        !show_spinner;
+    show_spinner = Option.value ~default:is_interactive !show_spinner;
     gen_saved_ignore_type_errors = !gen_saved_ignore_type_errors;
     ignore_hh_version = !ignore_hh_version;
     saved_state_ignore_hhconfig = !saved_state_ignore_hhconfig;
     paths;
-    log_inference_constraints = !log_inference_constraints;
     max_errors = !max_errors;
     preexisting_warnings = !preexisting_warnings;
     mode;
@@ -812,6 +851,8 @@ rewrite to the function names to something like `foo_1` and `foo_2`.
     watchman_debug_logging = !watchman_debug_logging;
     allow_non_opt_build = !allow_non_opt_build;
     desc = !desc;
+    is_interactive;
+    warning_switches = List.rev !warning_switches;
   }
 
 let parse_start_env command ~from_default =
@@ -822,7 +863,6 @@ let parse_start_env command ~from_default =
       command
       (String.capitalize command)
   in
-  let log_inference_constraints = ref false in
   let no_load = ref false in
   let watchman_debug_logging = ref false in
   let ignore_hh_version = ref false in
@@ -848,10 +888,6 @@ let parse_start_env command ~from_default =
       Common_argspecs.custom_telemetry_data custom_telemetry_data;
       Common_argspecs.from from;
       Common_argspecs.ignore_hh_version ignore_hh_version;
-      ( "--log-inference-constraints",
-        Arg.Set log_inference_constraints,
-        " (for hh debugging purpose only) log type"
-        ^ " inference constraints into external logger (e.g. Scuba)" );
       ("--no-load", Arg.Set no_load, " start from a fresh state");
       Common_argspecs.no_prechecked prechecked;
       Common_argspecs.prechecked prechecked;
@@ -880,7 +916,6 @@ let parse_start_env command ~from_default =
     saved_state_ignore_hhconfig = !saved_state_ignore_hhconfig;
     save_64bit = None;
     save_human_readable_64bit_dep_map = None;
-    log_inference_constraints = !log_inference_constraints;
     no_load = !no_load;
     prechecked = !prechecked;
     mini_state = !mini_state;
@@ -891,7 +926,7 @@ let parse_start_env command ~from_default =
     preexisting_warnings = !preexisting_warnings;
   }
 
-let parse_saved_state_project_metadata_args ~from_default : command =
+let parse_saved_state_project_metadata_args ~from_default =
   CSavedStateProjectMetadata
     (parse_check_args CKSavedStateProjectMetadata ~from_default)
 
@@ -921,22 +956,31 @@ let parse_lsp_args () =
   in
   let from = ref "" in
   let config = ref [] in
+  let disable_format_on_save = ref false in
   let notebook_mode = ref false in
   let verbose = ref false in
   let ignore_hh_version = ref false in
   let naming_table = ref None in
+  let warnings_saved_state_path = ref None in
   let options =
     [
       Common_argspecs.from from;
       Common_argspecs.config config;
+      ( "--disable-format-on-save",
+        Arg.Set disable_format_on_save,
+        " disable `textDocument/willSaveWaitUntil` handling of format-on-save"
+      );
       (* Please keep these sorted in the alphabetical order *)
       ("--enhanced-hover", Arg.Unit (fun () -> ()), " [legacy] no-op");
       ("--ffp-autocomplete", Arg.Unit (fun () -> ()), " [legacy] no-op");
       Common_argspecs.ignore_hh_version ignore_hh_version;
       Common_argspecs.naming_table naming_table;
+      ( "--warnings-saved-state",
+        Arg.String (fun s -> warnings_saved_state_path := Some (Path.make s)),
+        " path to the warnings saved state" );
       ( "--notebook-mode",
         Arg.Set notebook_mode,
-        "Enable notebook mode, which is designed for use in notebooks. For example, this mode enables top-level statements."
+        " enable notebook mode, which is designed for use in notebooks. For example, this mode enables top-level statements."
       );
       ("--ranked-autocomplete", Arg.Unit (fun () -> ()), " [legacy] no-op");
       ("--serverless-ide", Arg.Unit (fun () -> ()), " [legacy] no-op");
@@ -952,8 +996,10 @@ let parse_lsp_args () =
     {
       ClientLsp.from = !from;
       config = !config;
+      disable_format_on_save = !disable_format_on_save;
       ignore_hh_version = !ignore_hh_version;
       naming_table = !naming_table;
+      warnings_saved_state_path = !warnings_saved_state_path;
       notebook_mode = !notebook_mode;
       verbose = !verbose;
       root_from_cli = root;
@@ -1166,16 +1212,16 @@ let parse_args ~(from_default : string) : command =
   match parse_command () with
   | CKNone
   | CKCheck ->
-    CCheck (parse_check_args CKCheck ~from_default)
-  | CKStart -> parse_start_args ~from_default
-  | CKStop -> parse_stop_args ~from_default
-  | CKRestart -> parse_restart_args ~from_default
-  | CKLsp -> parse_lsp_args ()
-  | CKRage -> parse_rage_args ()
+    With_config (CCheck (parse_check_args CKCheck ~from_default))
+  | CKStart -> With_config (parse_start_args ~from_default)
+  | CKStop -> With_config (parse_stop_args ~from_default)
+  | CKRestart -> With_config (parse_restart_args ~from_default)
+  | CKLsp -> With_config (parse_lsp_args ())
+  | CKRage -> With_config (parse_rage_args ())
   | CKSavedStateProjectMetadata ->
-    parse_saved_state_project_metadata_args ~from_default
-  | CKDownloadSavedState -> parse_download_saved_state_args ()
-  | CKDecompressZhhdg -> parse_decompress_zhhdg_args ()
+    With_config (parse_saved_state_project_metadata_args ~from_default)
+  | CKDownloadSavedState -> With_config (parse_download_saved_state_args ())
+  | CKDecompressZhhdg -> Without_config (parse_decompress_zhhdg_args ())
 
 let root = function
   | CCheck { ClientEnv.root; _ }
@@ -1185,9 +1231,8 @@ let root = function
   | CRage { ClientRage.root; _ }
   | CSavedStateProjectMetadata { ClientEnv.root; _ }
   | CDownloadSavedState { ClientDownloadSavedState.root; _ } ->
-    Some root
-  | CLsp { ClientLsp.root_from_cli; _ } -> Some root_from_cli
-  | CDecompressZhhdg _ -> None
+    root
+  | CLsp { ClientLsp.root_from_cli; _ } -> root_from_cli
 
 let config = function
   | CCheck { ClientEnv.config; _ }
@@ -1198,8 +1243,7 @@ let config = function
     Some config
   | CStop _
   | CDownloadSavedState _
-  | CRage _
-  | CDecompressZhhdg _ ->
+  | CRage _ ->
     None
 
 let from = function
@@ -1210,6 +1254,7 @@ let from = function
   | CSavedStateProjectMetadata { ClientEnv.from; _ }
   | CStop { ClientStop.from; _ }
   | CDownloadSavedState { ClientDownloadSavedState.from; _ }
-  | CRage { ClientRage.from; _ }
-  | CDecompressZhhdg { ClientDecompressZhhdg.from; _ } ->
+  | CRage { ClientRage.from; _ } ->
     from
+
+let is_interactive cmd = from cmd |> is_interactive

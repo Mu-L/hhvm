@@ -1,7 +1,7 @@
 # pyre-unsafe
 import os
 
-import common_tests
+import hphp.hack.test.integration.common_tests as common_tests
 
 
 class TestSafeRenameSoundDynamic(common_tests.CommonTestDriver):
@@ -18,6 +18,7 @@ class TestSafeRenameSoundDynamic(common_tests.CommonTestDriver):
         with open(os.path.join(self.repo_dir, ".hhconfig"), "w") as f:
             f.write(
                 """
+enable_experimental_stx_features = {"like_type_hints": "Unstable"}
 enable_sound_dynamic_type = true
 union_intersection_type_hints = true
 everything_sdt = true

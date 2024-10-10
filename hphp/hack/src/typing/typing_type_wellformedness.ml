@@ -183,10 +183,17 @@ and hint_ ~in_signature env p h_ =
     Lint.option_mixed p;
     []
   | Hvec_or_dict (ty1, ty2) -> hint_opt env ty1 @ hint env ty2
-  | Htuple hl
   | Hunion hl
   | Hintersection hl ->
     hints env hl
+  | Htuple { tup_required; tup_extra } ->
+    hints env tup_required
+    @ begin
+        match tup_extra with
+        | Hextra { tup_optional; tup_variadic } ->
+          hints env tup_optional @ hint_opt env tup_variadic
+        | Hsplat h -> hint env h
+      end
   | Hclass_args h
   | Hoption h
   | Hsoft h
@@ -477,9 +484,9 @@ let typedef tenv (t : (_, _) typedef) =
     t_name = _;
     t_as_constraint;
     t_super_constraint;
-    t_kind;
+    t_assignment;
+    t_runtime_type = _;
     t_mode = _;
-    t_vis;
     t_namespace = _;
     t_user_attributes = _;
     t_span = _;
@@ -492,6 +499,27 @@ let typedef tenv (t : (_, _) typedef) =
     t_doc_comment = _;
   } =
     t
+  in
+  let ( should_check_internal_signature,
+        typedef_tparams,
+        hints,
+        where_constraints ) =
+    match t_assignment with
+    (* We only need to check that the type alias as a public API if it's transparent, since
+       an opaque type alias is inherently internal *)
+    (* Since type aliases cannot have constraints we shouldn't check
+       if its type params satisfy the constraints of any tapply it
+       references. *)
+    | SimpleTypeDef { tvh_vis = Transparent; tvh_hint } ->
+      (true, t_tparams, [tvh_hint], [])
+    | SimpleTypeDef { tvh_vis = _; tvh_hint } -> (false, [], [tvh_hint], [])
+    | CaseType (variant, variants) ->
+      let variants = variant :: variants in
+      let hints = List.map variants ~f:(fun v -> v.tctv_hint) in
+      let where_constraints =
+        List.map variants ~f:(fun v -> v.tctv_where_constraints)
+      in
+      (false, [], hints, List.concat where_constraints)
   in
   (* We don't allow constraints on typdef parameters, but we still
      need to record their kinds in the generic var environment *)
@@ -506,11 +534,6 @@ let typedef tenv (t : (_, _) typedef) =
     in
     Option.iter ~f:(Typing_error_utils.add_typing_error ~env) ty_err_opt;
     env
-  in
-  (* We only need to check that the type alias as a public API if it's transparent, since
-     an opaque type alias is inherently internal *)
-  let should_check_internal_signature =
-    Aast.equal_typedef_visibility t_vis Transparent
   in
 
   (* For typdefs, we do want to do the simple kind checks on the body
@@ -530,35 +553,21 @@ let typedef tenv (t : (_, _) typedef) =
        ~ignore_package_errors:false)
     tenv_with_typedef_tparams
     t_super_constraint;
-  Typing_type_integrity.Simple.check_well_kinded_hint
-    ~in_signature:should_check_internal_signature
-    ~ignore_package_errors:false
-    tenv_with_typedef_tparams
-    t_kind;
-  let env =
-    {
-      typedef_tparams =
-        (match t_vis with
-        | Transparent ->
-          (* Since type aliases cannot have constraints we shouldn't check
-           * if its type params satisfy the constraints of any tapply it
-           * references.
-           *)
-          t.t_tparams
-        | CaseType
-        | Opaque
-        | OpaqueModule ->
-          []);
-      tenv;
-    }
-  in
+  List.iter hints ~f:(fun hint ->
+      Typing_type_integrity.Simple.check_well_kinded_hint
+        ~in_signature:should_check_internal_signature
+        ~ignore_package_errors:false
+        tenv_with_typedef_tparams
+        hint);
+  let env = { typedef_tparams; tenv } in
   (* We checked the kinds already above.  *)
   Option.value_map ~default:[] ~f:(hint_no_kind_check env) t.t_as_constraint
   @ Option.value_map
       ~default:[]
       ~f:(hint_no_kind_check env)
       t.t_super_constraint
-  @ hint_no_kind_check env t_kind
+  @ List.concat_map hints ~f:(hint_no_kind_check env)
+  @ where_constrs env where_constraints
 
 let global_constant tenv gconst =
   let env = { typedef_tparams = []; tenv } in
@@ -585,7 +594,7 @@ let hint ?(ignore_package_errors = false) tenv h =
 let expr tenv ((), _p, e) =
   (* We don't recurse on expressions here because this is called by Typing.expr *)
   match e with
-  | Is (_, h)
+  | Is (_, h) -> hint tenv h ~ignore_package_errors:true
   | As { expr = _; hint = h; is_nullable = _; enforce_deep = _ }
   | Upcast (_, h)
   | Cast (h, _) ->

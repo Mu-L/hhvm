@@ -16,7 +16,7 @@
 
 #include <thrift/conformance/stresstest/client/StressTestClient.h>
 
-#include <folly/experimental/coro/Sleep.h>
+#include <folly/coro/Sleep.h>
 
 namespace apache {
 namespace thrift {
@@ -47,8 +47,13 @@ folly::coro::Task<void> ThriftStressTestClient::co_ping() {
 folly::coro::Task<std::string> ThriftStressTestClient::co_echo(
     const std::string& x) {
   std::string ret;
-  co_await timedExecute(
-      [&]() -> folly::coro::Task<void> { ret = co_await client_->co_echo(x); });
+  co_await timedExecute([&]() -> folly::coro::Task<void> {
+    RpcOptions rpcOptions;
+    if (enableChecksum_) {
+      rpcOptions.setChecksum(RpcOptions::Checksum::XXH3_64);
+    }
+    ret = co_await client_->co_echo(rpcOptions, x);
+  });
   co_return ret;
 }
 
@@ -101,6 +106,15 @@ folly::coro::Task<void> ThriftStressTestClient::co_sinkTm(
         }());
     // (void)finalResponse; // we don't care about this
   });
+}
+
+folly::coro::Task<double> ThriftStressTestClient::co_calculateSquares(
+    int32_t count) {
+  double ret;
+  co_await timedExecute([&]() -> folly::coro::Task<void> {
+    ret = co_await client_->co_calculateSquares(count);
+  });
+  co_return ret;
 }
 
 template <class Fn>

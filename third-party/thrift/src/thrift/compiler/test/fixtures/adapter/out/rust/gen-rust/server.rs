@@ -28,6 +28,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait Service: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn func(
@@ -82,8 +83,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for Service's methods.
 #[derive(Clone, Debug)]
 pub struct ServiceProcessor<P, H, R, RS> {
@@ -91,6 +90,7 @@ pub struct ServiceProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_Service_func {
     arg1: <crate::types::adapters::StringWithAdapter as ::fbthrift::adapter::ThriftAdapter>::AdaptedType,
@@ -130,7 +130,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Se
         })
     }
 }
-
 
 impl<P, H, R, RS> ServiceProcessor<P, H, R, RS>
 where
@@ -199,7 +198,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "Service.func", exception = ?exn);
+                ::tracing::error!(method = "Service.func", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -405,6 +404,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait AdapterService: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn count(
@@ -471,8 +471,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for AdapterService's methods.
 #[derive(Clone, Debug)]
 pub struct AdapterServiceProcessor<P, H, R, RS> {
@@ -480,6 +478,7 @@ pub struct AdapterServiceProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_AdapterService_count {
 }
@@ -504,6 +503,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ad
         })
     }
 }
+
 
 struct Args_AdapterService_adaptedTypes {
     arg: crate::types::HeapAllocated,
@@ -533,7 +533,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ad
         })
     }
 }
-
 
 impl<P, H, R, RS> AdapterServiceProcessor<P, H, R, RS>
 where
@@ -599,7 +598,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "AdapterService.count", exception = ?exn);
+                ::tracing::error!(method = "AdapterService.count", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -661,7 +660,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "AdapterService.adaptedTypes", exception = ?exn);
+                ::tracing::error!(method = "AdapterService.adaptedTypes", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

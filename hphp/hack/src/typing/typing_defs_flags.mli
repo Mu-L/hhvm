@@ -95,37 +95,43 @@ module FunParam : sig
   type record = {
     accept_disposable: bool;
     inout: bool;
-    has_default: bool;
-    readonly: bool;
+    is_optional: bool;  (** Parameter is marked optional in function type *)
+    readonly: bool;  (** Parameter is marked readonly in function type *)
     ignore_readonly_error: bool;
+    splat: bool;
   }
 
   val accept_disposable : t -> bool
 
   val inout : t -> bool
 
-  val has_default : t -> bool
+  val is_optional : t -> bool
 
   val readonly : t -> bool
 
   val ignore_readonly_error : t -> bool
 
+  val splat : t -> bool
+
   val set_accept_disposable : bool -> t -> t
 
   val set_inout : bool -> t -> t
 
-  val set_has_default : bool -> t -> t
+  val set_is_optional : bool -> t -> t
 
   val set_readonly : bool -> t -> t
 
   val set_ignore_readonly_error : bool -> t -> t
 
+  val set_splat : bool -> t -> t
+
   val make :
     inout:bool ->
     accept_disposable:bool ->
-    has_default:bool ->
+    is_optional:bool ->
     readonly:bool ->
     ignore_readonly_error:bool ->
+    splat:bool ->
     t
 
   val as_record : t -> record

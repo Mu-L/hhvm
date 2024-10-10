@@ -24,8 +24,7 @@
 #include <thrift/lib/cpp2/async/ReplyInfo.h>
 #include <thrift/lib/cpp2/server/IResourcePoolAcceptor.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 thread_local RequestParams ServerInterface::requestParams_;
 
@@ -1106,7 +1105,9 @@ bool HandlerCallbackBase::shouldProcessServiceInterceptorsOnResponse() const {
 folly::coro::Task<void>
 HandlerCallbackBase::processServiceInterceptorsOnRequest(
     detail::ServiceInterceptorOnRequestArguments arguments) {
-  DCHECK(shouldProcessServiceInterceptorsOnRequest());
+  if (!shouldProcessServiceInterceptorsOnRequest()) {
+    co_return;
+  }
   const apache::thrift::server::ServerConfigs* server =
       reqCtx_->getConnectionContext()->getWorkerContext()->getServerContext();
   DCHECK(server);
@@ -1148,8 +1149,11 @@ HandlerCallbackBase::processServiceInterceptorsOnRequest(
 }
 
 folly::coro::Task<void>
-HandlerCallbackBase::processServiceInterceptorsOnResponse() {
-  DCHECK(shouldProcessServiceInterceptorsOnResponse());
+HandlerCallbackBase::processServiceInterceptorsOnResponse(
+    detail::ServiceInterceptorOnResponseResult resultOrActiveException) {
+  if (!shouldProcessServiceInterceptorsOnResponse()) {
+    co_return;
+  }
   const apache::thrift::server::ServerConfigs* server =
       reqCtx_->getConnectionContext()->getWorkerContext()->getServerContext();
   DCHECK(server);
@@ -1164,7 +1168,11 @@ HandlerCallbackBase::processServiceInterceptorsOnResponse() {
         connectionCtx,
         connectionCtx->getStorageForServiceInterceptorOnConnectionByIndex(i)};
     auto responseInfo = ServiceInterceptorBase::ResponseInfo{
-        reqCtx_, reqCtx_->getStorageForServiceInterceptorOnRequestByIndex(i)};
+        reqCtx_,
+        reqCtx_->getStorageForServiceInterceptorOnRequestByIndex(i),
+        resultOrActiveException,
+        serviceName_,
+        methodName_};
     try {
       co_await serviceInterceptorsInfo[i].interceptor->internal_onResponse(
           std::move(connectionInfo), std::move(responseInfo));
@@ -1209,5 +1217,4 @@ folly::coro::Task<void> processServiceInterceptorsOnRequest(
 #endif // FOLLY_HAS_COROUTINES
 } // namespace detail
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

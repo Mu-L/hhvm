@@ -6,104 +6,72 @@
  *
  *)
 
-module Set_relation = struct
-  type t =
-    | Equal
-    | Subset
-    | Superset
-    | Disjoint
-    | Unknown
-end
-
-module type DomainType = sig
-  type 'a t
-
-  type ctx
-
-  val relation : 'a t -> ctx:ctx -> 'a t -> Set_relation.t
-end
-
-module type S = sig
-  module Domain : DomainType
-
-  type 'a t
-
-  val empty : 'a t
-
-  val singleton : 'a Domain.t -> 'a t
-
-  val union : 'a t -> 'a t -> 'a t
-
-  val inter : 'a t -> 'a t -> 'a t
-
-  val diff : 'a t -> 'a t -> 'a t
-
-  val of_list : 'a Domain.t list -> 'a t
-
-  type 'a disjoint =
-    | Sat
-    | Unsat of {
-        left: 'a Domain.t;
-        relation: Set_relation.t;
-        right: 'a Domain.t;
-      }
-
-  val disjoint : Domain.ctx -> 'a t -> 'a t -> 'a disjoint
-
-  val are_disjoint : Domain.ctx -> 'a t -> 'a t -> bool
-end
+include ApproxSet_intf
 
 module Make (Domain : DomainType) : S with module Domain := Domain = struct
-  type 'a disjoint =
+  type disjoint =
     | Sat
     | Unsat of {
-        left: 'a Domain.t;
-        relation: Set_relation.t;
-        right: 'a Domain.t;
+        left: Domain.t;
+        relation: SetRelation.t;
+        right: Domain.t;
       }
 
   (* Sets over [Domain.t]; representation is in NNF by construction *)
   module Impl = struct
-    type 'a atom = {
+    (* Represents an individual atom in our abstract domain. [elt] is the particular element in
+       the domain that is uniquely indentified by [Domain.t]. [comp] indicates whether it is the
+       complement of the [Domain.t]. i.e.
+
+         {
+           comp = false;
+           elt = [A]
+         }
+       Means all elements represented by A, while:
+         {
+           comp = true;
+           elt = [A]
+         }
+       Means all elements not represented by A
+    *)
+    type atom = {
       comp: bool;
-      elt: 'a Domain.t;
+      elt: Domain.t;
     }
 
-    type 'a t =
-      | Set of 'a atom
-      | Union of 'a t * 'a t
-      | Inter of 'a t * 'a t
+    type t =
+      | Set of atom
+      | Union of t * t
+      | Inter of t * t
 
     let singleton elt = Set { comp = false; elt }
 
-    let rec disjoint_atom atom1 atom2 ~ctx =
-      match (atom1, atom2) with
-      | ({ comp = false; elt = elt1 }, { comp = false; elt = elt2 }) ->
-        Set_relation.(
-          (match Domain.relation ~ctx elt1 elt2 with
-          | Disjoint -> Sat
-          | (Equal | Subset | Superset | Unknown) as relation ->
-            Unsat { left = elt1; relation; right = elt2 }))
-      | ({ comp = false; elt = elt1 }, { comp = true; elt = elt2 }) ->
-        Set_relation.(
-          (* (A disj !B) if A ⊆ B *)
-          (match Domain.relation ~ctx elt1 elt2 with
-          | Equal
-          | Subset ->
-            Sat
-          | (Superset | Unknown | Disjoint) as relation ->
-            Unsat { left = elt1; relation; right = elt2 }))
-      | ({ comp = true; elt = elt1 }, { comp = true; elt = elt2 }) ->
-        (* Approximation:
+    let rec relate ctx set1 set2 =
+      match (set1, set2) with
+      | (Set { comp = false; elt = elt1 }, Set { comp = false; elt = elt2 }) ->
+        Domain.relation ~ctx elt1 elt2
+      | (Union (left, right), set) ->
+        SetRelation.union (relate ctx left set) (relate ctx right set)
+      | (Inter (left, right), set) ->
+        SetRelation.inter (relate ctx left set) (relate ctx right set)
+      | (Set { comp = true; elt }, set) ->
+        SetRelation.complement (relate ctx (singleton elt) set)
+      | ( Set { comp = false; elt },
+          ((Union _ | Inter _ | Set { comp = true; elt = _ }) as set) ) ->
+        SetRelation.flip (relate ctx set (singleton elt))
 
-           (!A disj !B) iff (A ∪ B) = U && A = !B
-             where U := Universal Set (Set Containing All Elements in the Domain)
+    let flip_unsat = function
+      | Sat -> Sat
+      | Unsat { left; relation; right } ->
+        Unsat
+          { left = right; relation = SetRelation.flip relation; right = left }
 
-           There is no way in our model to determine if (A ∪ B) = U holds
-           so we are forced to approximate the result. The safest approximation
-           is to assume the sets are not disjoint *)
-        Unsat { left = elt1; relation = Set_relation.Unknown; right = elt2 }
-      | _ -> disjoint_atom atom2 atom1 ~ctx
+    let disjoint_atom atom1 atom2 ~ctx =
+      let relation = relate ctx (Set atom1) (Set atom2) in
+      if SetRelation.is_disjoint relation then
+        Sat
+      else
+        Unsat { left = atom1.elt; relation; right = atom2.elt }
 
     let rec disjoint ctx set1 set2 =
       match (set1, set2) with
@@ -120,7 +88,7 @@ module Make (Domain : DomainType) : S with module Domain := Domain = struct
         | Unsat _ -> disjoint ctx r set
       end
       | (Set atom1, Set atom2) -> disjoint_atom atom1 atom2 ~ctx
-      | (Set _, (Union _ | Inter _)) -> disjoint ctx set2 set1
+      | (Set _, (Union _ | Inter _)) -> disjoint ctx set2 set1 |> flip_unsat
 
     let union l r = Union (l, r)
 
@@ -142,7 +110,7 @@ module Make (Domain : DomainType) : S with module Domain := Domain = struct
   open Impl
 
   (* We encode an empty set using [Option.None] *)
-  type nonrec 'a t = 'a t option
+  type nonrec t = t option
 
   let empty = None
 
@@ -182,4 +150,13 @@ module Make (Domain : DomainType) : S with module Domain := Domain = struct
     match disjoint ctx set1 set2 with
     | Sat -> true
     | Unsat _ -> false
+
+  let relate ctx set1 set2 =
+    match (set1, set2) with
+    | (None, None) -> SetRelation.all
+    | (None, Some _) ->
+      SetRelation.make ~subset:true ~superset:false ~disjoint:true
+    | (Some _, None) ->
+      SetRelation.make ~subset:false ~superset:true ~disjoint:true
+    | (Some set1, Some set2) -> relate ctx set1 set2
 end

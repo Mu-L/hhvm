@@ -9,10 +9,10 @@ package test
 import (
     "context"
     "fmt"
-    "strings"
+    "reflect"
 
     test0 "my/namespacing/test"
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
@@ -20,11 +20,9 @@ var _ = test0.GoUnusedProtection__
 // (needed to ensure safety because of naive import list construction)
 var _ = context.Background
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 var _ = metadata.GoUnusedProtection__
-
-
 
 type ExtendTestService interface {
     // Inherited/extended service
@@ -112,321 +110,19 @@ func (c *ExtendTestServiceClient) CheckContext(ctx context.Context, struct1 *tes
     return c.chClient.Check(ctx, struct1)
 }
 
-type reqExtendTestServiceCheck struct {
-    Struct1 *test0.HsFoo `thrift:"struct1,1" json:"struct1" db:"struct1"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqExtendTestServiceCheck)(nil)
-
-// Deprecated: ExtendTestServiceCheckArgsDeprecated is deprecated, since it is supposed to be internal.
-type ExtendTestServiceCheckArgsDeprecated = reqExtendTestServiceCheck
-
-func newReqExtendTestServiceCheck() *reqExtendTestServiceCheck {
-    return (&reqExtendTestServiceCheck{}).
-        SetStruct1NonCompat(*test0.NewHsFoo())
-}
-
-func (x *reqExtendTestServiceCheck) GetStruct1() *test0.HsFoo {
-    if !x.IsSetStruct1() {
-        return nil
-    }
-
-    return x.Struct1
-}
-
-func (x *reqExtendTestServiceCheck) SetStruct1NonCompat(value test0.HsFoo) *reqExtendTestServiceCheck {
-    x.Struct1 = &value
-    return x
-}
-
-func (x *reqExtendTestServiceCheck) SetStruct1(value *test0.HsFoo) *reqExtendTestServiceCheck {
-    x.Struct1 = value
-    return x
-}
-
-func (x *reqExtendTestServiceCheck) IsSetStruct1() bool {
-    return x != nil && x.Struct1 != nil
-}
-
-func (x *reqExtendTestServiceCheck) writeField1(p thrift.Format) error {  // Struct1
-    if !x.IsSetStruct1() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("struct1", thrift.STRUCT, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Struct1
-    if err := item.Write(p); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqExtendTestServiceCheck) readField1(p thrift.Format) error {  // Struct1
-    result := *test0.NewHsFoo()
-err := result.Read(p)
-if err != nil {
-    return err
-}
-
-    x.Struct1 = &result
-    return nil
-}
-
-func (x *reqExtendTestServiceCheck) toString1() string {  // Struct1
-    return fmt.Sprintf("%v", x.Struct1)
-}
-
-// Deprecated: Use newReqExtendTestServiceCheck().GetStruct1() instead.
-func (x *reqExtendTestServiceCheck) DefaultGetStruct1() *test0.HsFoo {
-    if !x.IsSetStruct1() {
-        return test0.NewHsFoo()
-    }
-    return x.Struct1
-}
-
-
-
-func (x *reqExtendTestServiceCheck) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqExtendTestServiceCheck"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqExtendTestServiceCheck) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.STRUCT)):  // struct1
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqExtendTestServiceCheck) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqExtendTestServiceCheck({")
-    sb.WriteString(fmt.Sprintf("Struct1:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respExtendTestServiceCheck struct {
-    Success *bool `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respExtendTestServiceCheck)(nil)
-var _ thrift.WritableResult = (*respExtendTestServiceCheck)(nil)
-
-// Deprecated: ExtendTestServiceCheckResultDeprecated is deprecated, since it is supposed to be internal.
-type ExtendTestServiceCheckResultDeprecated = respExtendTestServiceCheck
-
-func newRespExtendTestServiceCheck() *respExtendTestServiceCheck {
-    return (&respExtendTestServiceCheck{})
-}
-
-func (x *respExtendTestServiceCheck) GetSuccess() bool {
-    if !x.IsSetSuccess() {
-        return false
-    }
-
-    return *x.Success
-}
-
-func (x *respExtendTestServiceCheck) SetSuccessNonCompat(value bool) *respExtendTestServiceCheck {
-    x.Success = &value
-    return x
-}
-
-func (x *respExtendTestServiceCheck) SetSuccess(value *bool) *respExtendTestServiceCheck {
-    x.Success = value
-    return x
-}
-
-func (x *respExtendTestServiceCheck) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respExtendTestServiceCheck) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.BOOL, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := *x.Success
-    if err := p.WriteBool(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respExtendTestServiceCheck) readField0(p thrift.Format) error {  // Success
-    result, err := p.ReadBool()
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respExtendTestServiceCheck) toString0() string {  // Success
-    if x.IsSetSuccess() {
-        return fmt.Sprintf("%v", *x.Success)
-    }
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-
-func (x *respExtendTestServiceCheck) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respExtendTestServiceCheck) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respExtendTestServiceCheck"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respExtendTestServiceCheck) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.BOOL)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respExtendTestServiceCheck) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respExtendTestServiceCheck({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-
 
 type ExtendTestServiceProcessor struct {
     // Inherited/extended processor
     *test0.HsTestServiceProcessor
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorContext = (*ExtendTestServiceProcessor)(nil)
+var _ thrift.Processor = (*ExtendTestServiceProcessor)(nil)
 
 func NewExtendTestServiceProcessor(handler ExtendTestService) *ExtendTestServiceProcessor {
     p := &ExtendTestServiceProcessor{
         test0.NewHsTestServiceProcessor(handler),
     }
-    p.AddToProcessorMap("check", &procFuncExtendTestServiceCheck{handler: handler})
+    p.AddToProcessorFunctionMap("check", &procFuncExtendTestServiceCheck{handler: handler})
     p.AddToFunctionServiceMap("check", "ExtendTestService")
 
     return p
@@ -441,9 +137,9 @@ type procFuncExtendTestServiceCheck struct {
     handler ExtendTestService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncExtendTestServiceCheck)(nil)
+var _ thrift.ProcessorFunction = (*procFuncExtendTestServiceCheck)(nil)
 
-func (p *procFuncExtendTestServiceCheck) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncExtendTestServiceCheck) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqExtendTestServiceCheck()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -452,7 +148,7 @@ func (p *procFuncExtendTestServiceCheck) Read(iprot thrift.Format) (thrift.Struc
     return args, nil
 }
 
-func (p *procFuncExtendTestServiceCheck) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncExtendTestServiceCheck) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {

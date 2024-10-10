@@ -16,11 +16,11 @@
   ],
   "location": {
     "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "line": "94",
+    "line": "95",
     "column": "1",
     "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "bodystart": "94",
-    "bodyend": "96"
+    "bodystart": "95",
+    "bodyend": "97"
   },
   "namespacednames_html": [
     "apache",
@@ -39,17 +39,18 @@
       "static": "yes",
       "constexpr": "yes",
       "mutable": "no",
-      "type_html": "constexpr TType",
-      "definition_html": "constexpr TType apache::thrift::op::detail::TypeTagToTType&lt; type::list&lt; Tag &gt; &gt;::value",
+      "type_html": "TType",
+      "definition_html": "TType apache::thrift::op::detail::TypeTagToTType&lt; type::list&lt; Tag &gt; &gt;::value",
       "argsstring_html": "",
       "name_html": "value",
+      "qualifiedname_html": "apache::thrift::op::detail::TypeTagToTType&lt; type::list&lt; Tag &gt; &gt;::value",
       "initializer_html": "= TType::T_LIST",
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "95",
+        "line": "96",
         "column": "26",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "95",
+        "bodystart": "96",
         "bodyend": "-1"
       }
     }

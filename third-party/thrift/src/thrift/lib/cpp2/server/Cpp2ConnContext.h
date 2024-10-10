@@ -42,8 +42,7 @@
 
 using apache::thrift::concurrency::PriorityThreadManager;
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 namespace rocket {
 class ThriftRocketServerHandler;
@@ -766,6 +765,12 @@ class Cpp2RequestContext : public apache::thrift::server::TConnectionContext {
     return nullptr;
   }
 
+  void setWiredRequestBytes(size_t wiredRequestBytes) {
+    wiredRequestBytes_ = wiredRequestBytes;
+  }
+
+  size_t getWiredRequestBytes() const { return wiredRequestBytes_; }
+
   detail::ServiceInterceptorOnRequestStorage*
   getStorageForServiceInterceptorOnRequestByIndex(std::size_t index) {
     DCHECK_NE(serviceInterceptorsStorage_.onRequest.get(), nullptr);
@@ -793,9 +798,9 @@ class Cpp2RequestContext : public apache::thrift::server::TConnectionContext {
   apache::thrift::detail::ServiceInterceptorRequestStorageContext
       serviceInterceptorsStorage_;
   detail::RequestInternalFieldsT internalFields_;
+  size_t wiredRequestBytes_{0};
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift
 
 #endif // #ifndef THRIFT_ASYNC_CPP2CONNCONTEXT_H_

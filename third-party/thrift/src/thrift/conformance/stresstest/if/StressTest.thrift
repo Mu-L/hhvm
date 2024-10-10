@@ -15,6 +15,7 @@
  */
 
 namespace cpp2 apache.thrift.stress
+namespace hack thrift_stress
 
 include "thrift/annotation/cpp.thrift"
 
@@ -76,4 +77,6 @@ service StressTest {
   BasicResponse, sink<BasicResponse, BasicResponse> sinkTm(
     1: StreamRequest req,
   );
+
+  double calculateSquares(1: i32 count);
 }

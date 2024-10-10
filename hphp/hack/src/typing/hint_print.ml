@@ -39,8 +39,9 @@ let rec pp_hint ~is_ctx ppf (pos, hint_) =
     Fmt.(prefix (const string "~") @@ pp_hint ~is_ctx:false) ppf hint
   | Aast.Hsoft hint ->
     Fmt.(prefix (const string "@") @@ pp_hint ~is_ctx:false) ppf hint
-  | Aast.Htuple hints ->
-    Fmt.(parens @@ list ~sep:comma @@ pp_hint ~is_ctx:false) ppf hints
+  (* TODO optional and variadic components T201398626 T201398652 *)
+  | Aast.(Htuple { tup_required; tup_extra = _ }) ->
+    Fmt.(parens @@ list ~sep:comma @@ pp_hint ~is_ctx:false) ppf tup_required
   | Aast.Hunion hints ->
     Fmt.(parens @@ list ~sep:vbar @@ pp_hint ~is_ctx:false) ppf hints
   | Aast.Hintersection hints when is_ctx ->
@@ -195,8 +196,10 @@ and pp_shape_field ppf Aast.{ sfi_optional; sfi_name; sfi_hint } =
     ((sfi_optional, sfi_name), sfi_hint)
 
 and pp_shape_field_name ppf = function
-  | Ast_defs.SFlit_int (_, s) -> Fmt.string ppf s
+  | Ast_defs.SFregex_group (_, s) -> Fmt.string ppf s
   | Ast_defs.SFlit_str (_, s) -> Fmt.(quote string) ppf s
+  | Ast_defs.SFclassname (_, s) ->
+    Fmt.(prefix (const string "nameof") string) ppf s
   | Ast_defs.SFclass_const ((_, c), (_, s)) ->
     Fmt.(pair ~sep:dbl_colon string string) ppf (c, s)
 

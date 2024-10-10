@@ -89,7 +89,6 @@
   serverDepsUtil
   serverError
   serverFileDependents
-  serverFormat
   serverFunDepsBatch
   serverGlobalState
   serverIdentifyFunction
@@ -236,6 +235,16 @@
   (pps lwt_ppx ppx_deriving.std)))
 
 (library
+ (name filter_errors)
+ (modules
+  filter_errors)
+ (libraries
+  error_codes
+  errors
+  user_error
+  utils_core))
+
+(library
  (name server_command_types)
  (wrapped false)
  (modules
@@ -249,7 +258,6 @@
   serverCommandTypes
   serverCommandTypesUtils
   serverFormatTypes
-  serverGlobalInferenceTypes
   serverLintTypes
   serverRageTypes
   serverRenameTypes
@@ -257,6 +265,7 @@
  (libraries
   base64
   connection_tracker
+  filter_errors
   full_fidelity
   hh_json
   ide_rpc_api_types
@@ -328,7 +337,10 @@
 (library
   (name server_config)
   (wrapped false)
-  (modules serverConfig serverLocalConfig)
+  (modules
+   serverConfig
+   serverLocalConfig
+   serverLocalConfigLoad)
   (libraries
    custom_error_config
    server_args
@@ -343,7 +355,7 @@
    parser_options
    procs_bucket
    server_local_config_knobs_stubs
-   utils_config_file
+   config_file
    )
  (preprocess
   (pps lwt_ppx ppx_deriving.std)))
@@ -358,7 +370,10 @@
   server_config
   server_notifier)
  (preprocess
-  (pps lwt_ppx ppx_deriving.std)))
+  (pps
+   lwt_ppx
+   ppx_deriving.std
+   ppx_yojson_conv)))
 
 (library
  (name client_provider)

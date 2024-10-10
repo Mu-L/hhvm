@@ -22,41 +22,8 @@ let force_break_recheck_loop_for_test_ref = ref false
 let force_break_recheck_loop_for_test x =
   force_break_recheck_loop_for_test_ref := x
 
-module MainInit : sig
-  val go :
-    genv ->
-    ServerArgs.options ->
-    (unit -> env) ->
-    (* init function to run while we have init lock *)
-    env
-end = struct
-  (* This code is only executed when the options --check is NOT present *)
-  let go genv options init_fun =
-    let root = ServerArgs.root options in
-    let t = Unix.gettimeofday () in
-    let pid = Unix.getpid () in
-    begin
-      match ProcFS.first_cgroup_for_pid pid with
-      | Ok cgroup ->
-        Hh_logger.log "Server Pid: %d" pid;
-        Hh_logger.log "Server cGroup: %s" cgroup
-      | _ -> ()
-    end;
-    Hh_logger.log "Initializing Server (This might take some time)";
-
-    (* note: we only run periodical tasks on the root, not extras *)
-    let env = init_fun () in
-    Hh_logger.log "Server is partially ready";
-    ServerIdle.init genv root;
-    let t' = Unix.gettimeofday () in
-    Hh_logger.log "Took %f seconds." (t' -. t);
-    HackEventLogger.server_is_partially_ready ();
-
-    env
-end
-
 module Program = struct
-  let preinit () =
+  let set_signals () =
     (* Warning: Global references inited in this function, should
          be 'restored' in the workers, because they are not 'forked'
          anymore. See `ServerWorker.{save/restore}_state`. *)
@@ -71,7 +38,12 @@ module Program = struct
            Exit.exit
              ~msg:
                "Hh_server received a stop signal. This can happen from a large rebase/update"
-             Exit_status.Server_shutting_down_due_to_sigusr2))
+             Exit_status.Server_shutting_down_due_to_sigusr2));
+    (* this is to transform SIGPIPE in an exception. A SIGPIPE can happen when
+     * someone C-c the client.
+     *)
+    Sys_utils.set_signal Sys.sigpipe Sys.Signal_ignore;
+    ()
 
   let run_once_and_exit
       genv
@@ -86,7 +58,7 @@ module Program = struct
       stdout
       ~stale_msg:None
       ~output_json:(ServerArgs.json_mode genv.options)
-      ~error_format:Errors.Raw
+      ~error_format:(Some Errors.Raw)
       ~error_list:
         (List.map (Errors.get_error_list env.errorl) ~f:User_error.to_absolute)
       ~save_state_result
@@ -120,7 +92,13 @@ module Program = struct
         (Relative_path.to_absolute ServerConfig.repo_config_path)
     in
     if hhconfig_in_updates then begin
-      let (new_config, _) = ServerConfig.load ~silent:false genv.options in
+      let (new_config, _) =
+        ServerConfig.load
+          ~silent:false
+          ~from:(ServerArgs.from genv.options)
+          ~ai_options:None
+          ~cli_config_overrides:(ServerArgs.config genv.options)
+      in
       if not (ServerConfig.is_compatible genv.config new_config) then (
         Hh_logger.log
           "%s changed in an incompatible way; please restart %s.\n"
@@ -992,9 +970,12 @@ let program_init genv env =
         { env.init_env with ci_info = Some (Ci_util.begin_get_info ()) };
     }
   in
+
   let (init_approach, approach_name) = resolve_init_approach genv in
   Hh_logger.log "Initing with approach: %s" approach_name;
-  let (env, init_type, init_error, init_error_telemetry, saved_state_delta) =
+
+  let (env, init_type, init_error, init_error_telemetry, saved_state_revs_info)
+      =
     let (env, init_result) = ServerInit.init ~init_approach genv env in
     match init_approach with
     | ServerInit.Write_symbol_info
@@ -1004,7 +985,7 @@ let program_init genv env =
     | ServerInit.Write_symbol_info_with_state _
     | ServerInit.Saved_state_init _ -> begin
       match init_result with
-      | ServerInit.Load_state_succeeded saved_state_delta ->
+      | ServerInit.Load_state_succeeded saved_state_revs_info ->
         let init_type =
           match
             Naming_table.get_forward_naming_fallback_path env.naming_table
@@ -1012,7 +993,7 @@ let program_init genv env =
           | None -> "state_load_blob"
           | Some _ -> "state_load_sqlite"
         in
-        (env, init_type, None, None, saved_state_delta)
+        (env, init_type, None, None, Some saved_state_revs_info)
       | ServerInit.Load_state_failed (err, telemetry) ->
         (env, "state_load_failed", Some err, Some telemetry, None)
       | ServerInit.Load_state_declined reason ->
@@ -1025,7 +1006,7 @@ let program_init genv env =
       init_env =
         {
           env.init_env with
-          saved_state_delta;
+          saved_state_revs_info;
           approach_name;
           init_error;
           init_type;
@@ -1082,14 +1063,8 @@ let num_workers options local_config =
       nbr_procs
     )
 
-let setup_server ~informant_managed ~monitor_pid options config local_config =
-  let num_workers = num_workers options local_config in
-  let handle =
-    SharedMem.init ~num_workers (ServerConfig.sharedmem_config config)
-  in
-  let init_id = Random_id.short_string () in
-  let pid = Unix.getpid () in
-
+(** Setup files for IPC. These are used to transmit status messages and errors. *)
+let setup_ipc root =
   (* There are three files which are used for IPC.
      1. server_finale_file - we unlink it now upon startup,
         and upon clean exit we'll write finale-date to it.
@@ -1099,7 +1074,8 @@ let setup_server ~informant_managed ~monitor_pid options config local_config =
         and upon clean exit we'll write "shutting down" to it.
      In both case of clean exit and abrupt exit there'll be leftover files.
      We'll rely upon tmpclean to eventually clean them up. *)
-  Server_progress.set_root (ServerArgs.root options);
+  let pid = Unix.getpid () in
+  Server_progress.set_root root;
   let server_finale_file = ServerFiles.server_finale_file pid in
   let server_receipt_to_monitor_file =
     ServerFiles.server_receipt_to_monitor_file pid
@@ -1108,7 +1084,6 @@ let setup_server ~informant_managed ~monitor_pid options config local_config =
   | _ -> ());
   (try Unix.unlink server_receipt_to_monitor_file with
   | _ -> ());
-  Server_progress.write "starting up";
   Exit.add_hook_upon_clean_exit (fun finale_data ->
       begin
         try Unix.unlink server_receipt_to_monitor_file with
@@ -1127,76 +1102,72 @@ let setup_server ~informant_managed ~monitor_pid options config local_config =
         try Server_progress.write "shutting down" with
         | _ -> ()
       end;
-      ());
+      ())
 
-  Hh_logger.log "Version: %s" Hh_version.version;
-  Hh_logger.log "Hostname: %s" (Unix.gethostname ());
-  let root = ServerArgs.root options in
+let configure_gc () =
+  Stdlib.Gc.set
+    {
+      (Stdlib.Gc.get ()) with
+      Stdlib.Gc.max_overhead =
+        (* The OCaml default is 500, but we care about minimizing the memory
+           overhead *)
+        200;
+    }
 
-  let deps_mode =
-    match ServerArgs.save_64bit options with
-    | Some new_edges_dir ->
-      let human_readable_dep_map_dir =
-        ServerArgs.save_human_readable_64bit_dep_map options
-      in
-      Typing_deps_mode.SaveToDiskMode
-        { graph = None; new_edges_dir; human_readable_dep_map_dir }
-    | None -> Typing_deps_mode.InMemoryMode None
-  in
-
-  (* The OCaml default is 500, but we care about minimizing the memory
-   * overhead *)
-  let gc_control = Stdlib.Gc.get () in
-  Stdlib.Gc.set { gc_control with Stdlib.Gc.max_overhead = 200 };
-  let { ServerLocalConfig.cpu_priority; io_priority; enable_on_nfs; _ } =
+let initialize_logging
+    ~informant_managed
+    ~is_worker
+    ~num_workers
+    ~init_id
+    options
+    config
     local_config
-  in
+    ~root : unit =
+  Hh_logger.Level.set_min_level local_config.ServerLocalConfig.min_log_level;
+  Hh_logger.Level.set_categories local_config.ServerLocalConfig.log_categories;
+
   let hhconfig_version =
     config |> ServerConfig.version |> Config_file.version_to_string_opt
   in
-  List.iter (ServerConfig.ignored_paths config) ~f:FilesToIgnore.ignore_path;
-  let logging_init init_id ~is_worker =
-    Hh_logger.Level.set_min_level local_config.ServerLocalConfig.min_log_level;
-    Hh_logger.Level.set_categories local_config.ServerLocalConfig.log_categories;
+  if not (Sys_utils.enable_telemetry ()) then
+    EventLogger.init_fake ()
+  else if is_worker then
+    HackEventLogger.init_worker
+      ~root
+      ~hhconfig_version
+      ~init_id
+      ~custom_columns:(ServerArgs.custom_telemetry_data options)
+      ~rollout_flags:(ServerLocalConfigLoad.to_rollout_flags local_config)
+      ~rollout_group:local_config.ServerLocalConfig.rollout_group
+      ~time:(Unix.gettimeofday ())
+      ~per_file_profiling:local_config.ServerLocalConfig.per_file_profiling
+  else
+    HackEventLogger.init
+      ~root
+      ~hhconfig_version
+      ~init_id
+      ~custom_columns:(ServerArgs.custom_telemetry_data options)
+      ~informant_managed
+      ~rollout_flags:(ServerLocalConfigLoad.to_rollout_flags local_config)
+      ~rollout_group:local_config.ServerLocalConfig.rollout_group
+      ~time:(Unix.gettimeofday ())
+      ~max_workers:num_workers
+      ~per_file_profiling:local_config.ServerLocalConfig.per_file_profiling
 
-    if not (Sys_utils.enable_telemetry ()) then
-      EventLogger.init_fake ()
-    else if is_worker then
-      HackEventLogger.init_worker
-        ~root
-        ~hhconfig_version
-        ~init_id
-        ~custom_columns:(ServerArgs.custom_telemetry_data options)
-        ~rollout_flags:(ServerLocalConfig.to_rollout_flags local_config)
-        ~rollout_group:local_config.ServerLocalConfig.rollout_group
-        ~time:(Unix.gettimeofday ())
-        ~per_file_profiling:local_config.ServerLocalConfig.per_file_profiling
-    else
-      HackEventLogger.init
-        ~root
-        ~hhconfig_version
-        ~init_id
-        ~custom_columns:(ServerArgs.custom_telemetry_data options)
-        ~informant_managed
-        ~rollout_flags:(ServerLocalConfig.to_rollout_flags local_config)
-        ~rollout_group:local_config.ServerLocalConfig.rollout_group
-        ~time:(Unix.gettimeofday ())
-        ~max_workers:num_workers
-        ~per_file_profiling:local_config.ServerLocalConfig.per_file_profiling
-  in
-  logging_init init_id ~is_worker:false;
-  HackEventLogger.init_start
-    ~experiments_config_meta:
-      local_config.ServerLocalConfig.experiments_config_meta
-    (Memory_stats.get_host_hw_telemetry ());
+let check_nfs ~root options local_config =
   let root_s = Path.to_string root in
   let check_mode = ServerArgs.check_mode options in
-  if (not check_mode) && Sys_utils.is_nfs root_s && not enable_on_nfs then (
+  if
+    (not check_mode)
+    && Sys_utils.is_nfs root_s
+    && not local_config.ServerLocalConfig.enable_on_nfs
+  then (
     Hh_logger.log "Refusing to run on %s: root is on NFS!" root_s;
     HackEventLogger.nfs_root ();
     Exit.exit Exit_status.Nfs_root
-  );
+  )
 
+let warn_on_non_opt_build options config =
   if
     ServerConfig.warn_on_non_opt_build config && not Build_id.is_build_optimized
   then begin
@@ -1220,45 +1191,149 @@ let setup_server ~informant_managed ~monitor_pid options config local_config =
       in
       Hh_logger.log "%s" msg;
       Exit.exit ~msg Exit_status.Server_non_opt_build_mode
-  end;
+  end
 
-  Program.preinit ();
-  Sys_utils.set_priorities ~cpu_priority ~io_priority;
+let get_deps_mode options =
+  match ServerArgs.save_64bit options with
+  | Some new_edges_dir ->
+    let human_readable_dep_map_dir =
+      ServerArgs.save_human_readable_64bit_dep_map options
+    in
+    Typing_deps_mode.SaveToDiskMode
+      { graph = None; new_edges_dir; human_readable_dep_map_dir }
+  | None -> Typing_deps_mode.InMemoryMode None
 
-  (* this is to transform SIGPIPE in an exception. A SIGPIPE can happen when
-   * someone C-c the client.
-   *)
-  Sys_utils.set_signal Sys.sigpipe Sys.Signal_ignore;
-  PidLog.init (ServerFiles.pids_file root);
-  Option.iter monitor_pid ~f:(fun monitor_pid ->
-      PidLog.log ~reason:"monitor" monitor_pid);
-  PidLog.log ~reason:"main" (Unix.getpid ());
-
+let make_workers
+    ~num_workers
+    ~informant_managed
+    ~init_id
+    ~root
+    shmem_handle
+    options
+    config
+    local_config : MultiWorker.worker list =
   (* Make a sub-init_id because we use it to name temporary files for piping to
      scuba logging processes. *)
   let worker_logging_init () =
-    logging_init (init_id ^ "." ^ Random_id.short_string ()) ~is_worker:true
+    initialize_logging
+      ~num_workers
+      ~informant_managed
+      ~init_id:(init_id ^ "." ^ Random_id.short_string ())
+      ~is_worker:true
+      ~root
+      options
+      config
+      local_config
   in
   let gc_control = ServerConfig.gc_control config in
+  ServerWorker.make
+    ~longlived_workers:local_config.ServerLocalConfig.longlived_workers
+    ~nbr_procs:num_workers
+    gc_control
+    shmem_handle
+    ~logging_init:worker_logging_init
+
+let log_pids root ~monitor_pid =
+  PidLog.init (ServerFiles.pids_file root);
+  Option.iter monitor_pid ~f:(fun monitor_pid ->
+      PidLog.log ~reason:"monitor" monitor_pid);
+  PidLog.log ~reason:"main" (Unix.getpid ())
+
+(** Does a bunch of operations to get the server up and running, among other things:
+  - Initialize shared memory
+  - Create a unique init ID
+  - Creates a bunch of files for IPC, e.g. for errors and status transmission.
+  - Configure GC
+  - initialize logging
+  - initialize workers
+  - load and parse package config *)
+let setup_server
+    ~(informant_managed : bool)
+    ~(monitor_pid : int option)
+    (options : ServerArgs.options)
+    (config : ServerConfig.t)
+    (local_config : ServerLocalConfig.t) : MultiWorker.worker list * env =
+  let num_workers = num_workers options local_config in
+  let shmem_handle =
+    SharedMem.init ~num_workers (ServerConfig.sharedmem_config config)
+  in
+  let init_id = Random_id.short_string () in
+  let root = ServerArgs.root options in
+
+  setup_ipc root;
+
+  Server_progress.write "starting up";
+  Hh_logger.log "Version: %s" Hh_version.version;
+  Hh_logger.log "Hostname: %s" (Unix.gethostname ());
+
+  configure_gc ();
+
+  List.iter (ServerConfig.ignored_paths config) ~f:FilesToIgnore.ignore_path;
+
+  initialize_logging
+    ~is_worker:false
+    ~init_id
+    ~informant_managed
+    ~num_workers
+    ~root
+    options
+    config
+    local_config;
+
+  HackEventLogger.init_start
+    ~experiments_config_meta:
+      local_config.ServerLocalConfig.experiments_config_meta
+    (Memory_stats.get_host_hw_telemetry ());
+
+  check_nfs ~root options local_config;
+  warn_on_non_opt_build options config;
+
+  Program.set_signals ();
+
+  let { ServerLocalConfig.cpu_priority; io_priority; _ } = local_config in
+  Sys_utils.set_priorities ~cpu_priority ~io_priority;
+
+  log_pids root ~monitor_pid;
+
   let workers =
-    ServerWorker.make
-      ~longlived_workers:local_config.ServerLocalConfig.longlived_workers
-      ~nbr_procs:num_workers
-      gc_control
-      handle
-      ~logging_init:worker_logging_init
+    make_workers
+      ~num_workers
+      ~informant_managed
+      ~init_id
+      ~root
+      shmem_handle
+      options
+      config
+      local_config
   in
-  let env = ServerEnvBuild.make_env config ~init_id ~deps_mode in
-  (* Load and parse PACKAGES.toml if it exists at the root. *)
-  let (errors, package_info) = PackageConfig.load_and_parse () in
-  let tcopt =
-    { env.ServerEnv.tcopt with GlobalOptions.tco_package_info = package_info }
+  let package_v2 =
+    (ServerConfig.typechecker_options config).GlobalOptions.tco_package_v2
   in
+  let (errorl, package_info) = PackageConfig.load_and_parse ~package_v2 () in
   let env =
-    ServerEnv.{ env with tcopt; errorl = Errors.merge env.errorl errors }
+    ServerEnvBuild.make_env
+      config
+      ~init_id
+      ~errorl
+      ~package_info
+      ~deps_mode:(get_deps_mode options)
   in
 
   (workers, env)
+
+let possibly_save_naming_table env genv =
+  match ServerArgs.save_naming_filename genv.options with
+  | None -> ()
+  | Some filename ->
+    Disk.mkdir_p (Filename.dirname filename);
+    let save_result = Naming_table.save env.naming_table filename in
+    Hh_logger.log
+      "Inserted symbols into the naming table:\n%s"
+      (Naming_sqlite.show_save_result save_result);
+    if not (List.is_empty save_result.Naming_sqlite.errors) then (
+      Sys_utils.rm_dir_tree filename;
+      failwith "Naming table state had errors - deleting output file!"
+    )
 
 let run_once options config local_config =
   assert (ServerArgs.check_mode options);
@@ -1282,24 +1357,29 @@ let run_once options config local_config =
     | None -> (env, None)
     | Some filename -> (env, ServerInit.save_state genv env filename)
   in
-  let _naming_table_rows_changed =
-    match ServerArgs.save_naming_filename genv.options with
-    | None -> None
-    | Some filename ->
-      Disk.mkdir_p (Filename.dirname filename);
-      let save_result = Naming_table.save env.naming_table filename in
-      Hh_logger.log
-        "Inserted symbols into the naming table:\n%s"
-        (Naming_sqlite.show_save_result save_result);
-      if not (List.is_empty save_result.Naming_sqlite.errors) then begin
-        Sys_utils.rm_dir_tree filename;
-        failwith "Naming table state had errors - deleting output file!"
-      end else
-        Some save_result
-  in
+  possibly_save_naming_table env genv;
   (* Finish up by generating the output and the exit code *)
   Hh_logger.log "Running in check mode";
   Program.run_once_and_exit genv env save_state_results
+
+let log_pid_cgroup () =
+  let pid = Unix.getpid () in
+  match ProcFS.first_cgroup_for_pid pid with
+  | Ok cgroup ->
+    Hh_logger.log "Server Pid: %d" pid;
+    Hh_logger.log "Server cGroup: %s" cgroup
+  | _ -> ()
+
+let log_server_ready () =
+  Hh_logger.log "Server is partially ready";
+  HackEventLogger.server_is_partially_ready ()
+
+let time f =
+  let t = Unix.gettimeofday () in
+  let res = f () in
+  let t' = Unix.gettimeofday () in
+  Hh_logger.log "Took %f seconds." (t' -. t);
+  res
 
 (*
  * The server monitor will pass client connections to this process
@@ -1312,7 +1392,13 @@ let daemon_main_exn ~informant_managed options monitor_pid in_fds =
 
   Hh_logger.log "ServerMain daemon starting.";
 
-  let (config, local_config) = ServerConfig.load ~silent:false options in
+  let (config, local_config) =
+    ServerConfig.load
+      ~silent:false
+      ~from:(ServerArgs.from options)
+      ~cli_config_overrides:(ServerArgs.config options)
+      ~ai_options:None
+  in
   Option.iter local_config.ServerLocalConfig.memtrace_dir ~f:(fun dir ->
       Daemon.start_memtracing (Filename.concat dir "memtrace.server.ctf"));
   let (workers, env) =
@@ -1324,8 +1410,16 @@ let daemon_main_exn ~informant_managed options monitor_pid in_fds =
       ~monitor_pid:(Some monitor_pid)
   in
   let genv = ServerEnvBuild.make_genv options config local_config workers in
+
   HackEventLogger.with_id ~stage:`Init env.init_env.init_id @@ fun () ->
-  let env = MainInit.go genv options (fun () -> program_init genv env) in
+  log_pid_cgroup ();
+  Hh_logger.log "Initializing Server (This might take some time)";
+
+  let env = time @@ fun () -> program_init genv env in
+
+  ServerIdle.init genv (ServerArgs.root options);
+  log_server_ready ();
+
   serve genv env in_fds
 
 type params = {
@@ -1336,6 +1430,21 @@ type params = {
   priority_in_fd: Unix.file_descr;
   force_dormant_start_only_in_fd: Unix.file_descr;
 }
+
+let setup_hhi_root options =
+  match ServerArgs.custom_hhi_path options with
+  | None ->
+    (* Restore hhi files every time the server restarts
+       in case the tmp folder changes *)
+    ignore (Hhi.get_hhi_root ())
+  | Some path ->
+    if Disk.file_exists path && Disk.is_directory path then (
+      Hh_logger.log "Custom hhi directory set to %s." path;
+      Hhi.set_custom_hhi_root (Path.make path)
+    ) else (
+      Hh_logger.log "Custom hhi directory %s not found." path;
+      Exit.exit Exit_status.Input_error
+    )
 
 let daemon_main
     {
@@ -1355,19 +1464,7 @@ let daemon_main
   (* Restore the root directory and other global states from monitor *)
   ServerGlobalState.restore state ~worker_id:0;
 
-  (match ServerArgs.custom_hhi_path options with
-  | None ->
-    (* Restore hhi files every time the server restarts
-       in case the tmp folder changes *)
-    ignore (Hhi.get_hhi_root ())
-  | Some path ->
-    if Disk.file_exists path && Disk.is_directory path then (
-      Hh_logger.log "Custom hhi directory set to %s." path;
-      Hhi.set_custom_hhi_root (Path.make path)
-    ) else (
-      Hh_logger.log "Custom hhi directory %s not found." path;
-      Exit.exit Exit_status.Input_error
-    ));
+  setup_hhi_root options;
 
   ServerUtils.with_exit_on_exception @@ fun () ->
   daemon_main_exn

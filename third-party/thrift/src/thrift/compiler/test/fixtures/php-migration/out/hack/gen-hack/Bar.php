@@ -71,131 +71,73 @@ interface BarClientIf extends \IThriftSyncIf {
 trait BarClientBase {
   require extends \ThriftClientBase;
 
+  /**
+   * Original thrift definition:-
+   * string
+   *   baz(1: set<i32> a,
+   *       2: list<map<i32, set<string>>> b,
+   *       3: i64 c,
+   *       4: Foo d,
+   *       5: i64 e);
+   */
+  public async function baz(?dict<int, bool> $a, ?KeyedContainer<int, KeyedContainer<int, dict<string, bool>>> $b, ?int $c, ?Foo $d, ?int $e): Awaitable<string> {
+    $hh_frame_metadata = $this->getHHFrameMetadata();
+    if ($hh_frame_metadata !== null) {
+      \HH\set_frame_metadata($hh_frame_metadata);
+    }
+    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
+    $args = Bar_baz_args::fromShape(shape(
+      'a' => $a === null ? null : $a,
+      'b' => $b === null ? null : Vec\map($b, 
+        $_val0 ==> dict($_val0)
+      ),
+      'c' => $c === null ? null : $c,
+      'd' => $d === null ? null : $d,
+      'e' => $e === null ? null : $e,
+    ));
+    await $this->asyncHandler_->genBefore("Bar", "baz", $args);
+    $currentseqid = $this->sendImplHelper($args, "baz", false, "Bar" );
+    return await $this->genAwaitResponse(Bar_baz_result::class, "baz", false, $currentseqid, $rpc_options);
+  }
+
+  /**
+   * Original thrift definition:-
+   * string
+   *   baz(1: set<i32> a,
+   *       2: list<map<i32, set<string>>> b,
+   *       3: i64 c,
+   *       4: Foo d,
+   *       5: i64 e);
+   */
+  public async function baz__LEGACY_ARRAYS(?dict<int, bool> $a, ?KeyedContainer<int, KeyedContainer<int, dict<string, bool>>> $b, ?int $c, ?Foo $d, ?int $e): Awaitable<string> {
+    $hh_frame_metadata = $this->getHHFrameMetadata();
+    if ($hh_frame_metadata !== null) {
+      \HH\set_frame_metadata($hh_frame_metadata);
+    }
+    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
+    $args = Bar_baz_args::fromShape(shape(
+      'a' => $a === null ? null : $a,
+      'b' => $b === null ? null : Vec\map($b, 
+        $_val0 ==> dict($_val0)
+      ),
+      'c' => $c === null ? null : $c,
+      'd' => $d === null ? null : $d,
+      'e' => $e === null ? null : $e,
+    ));
+    await $this->asyncHandler_->genBefore("Bar", "baz", $args);
+    $currentseqid = $this->sendImplHelper($args, "baz", false, "Bar" );
+    return await $this->genAwaitResponse(Bar_baz_result::class, "baz", false, $currentseqid, $rpc_options, shape('read_options' => \THRIFT_MARK_LEGACY_ARRAYS));
+  }
+
 }
 
 class BarAsyncClient extends \ThriftClientBase implements BarAsyncClientIf {
   use BarClientBase;
 
-  /**
-   * Original thrift definition:-
-   * string
-   *   baz(1: set<i32> a,
-   *       2: list<map<i32, set<string>>> b,
-   *       3: i64 c,
-   *       4: Foo d,
-   *       5: i64 e);
-   */
-  public async function baz(?dict<int, bool> $a, ?KeyedContainer<int, KeyedContainer<int, dict<string, bool>>> $b, ?int $c, ?Foo $d, ?int $e): Awaitable<string> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Bar_baz_args::fromShape(shape(
-      'a' => $a === null ? null : $a,
-      'b' => $b === null ? null : Vec\map($b, 
-        $_val0 ==> dict($_val0)
-      ),
-      'c' => $c === null ? null : $c,
-      'd' => $d === null ? null : $d,
-      'e' => $e === null ? null : $e,
-    ));
-    await $this->asyncHandler_->genBefore("Bar", "baz", $args);
-    $currentseqid = $this->sendImplHelper($args, "baz", false);
-    return await $this->genAwaitResponse(Bar_baz_result::class, "baz", false, $currentseqid, $rpc_options);
-  }
-
-  /**
-   * Original thrift definition:-
-   * string
-   *   baz(1: set<i32> a,
-   *       2: list<map<i32, set<string>>> b,
-   *       3: i64 c,
-   *       4: Foo d,
-   *       5: i64 e);
-   */
-  public async function baz__LEGACY_ARRAYS(?dict<int, bool> $a, ?KeyedContainer<int, KeyedContainer<int, dict<string, bool>>> $b, ?int $c, ?Foo $d, ?int $e): Awaitable<string> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Bar_baz_args::fromShape(shape(
-      'a' => $a === null ? null : $a,
-      'b' => $b === null ? null : Vec\map($b, 
-        $_val0 ==> dict($_val0)
-      ),
-      'c' => $c === null ? null : $c,
-      'd' => $d === null ? null : $d,
-      'e' => $e === null ? null : $e,
-    ));
-    await $this->asyncHandler_->genBefore("Bar", "baz", $args);
-    $currentseqid = $this->sendImplHelper($args, "baz", false);
-    return await $this->genAwaitResponse(Bar_baz_result::class, "baz", false, $currentseqid, $rpc_options, shape('read_options' => \THRIFT_MARK_LEGACY_ARRAYS));
-  }
-
 }
 
 class BarClient extends \ThriftClientBase implements BarClientIf {
   use BarClientBase;
-
-  /**
-   * Original thrift definition:-
-   * string
-   *   baz(1: set<i32> a,
-   *       2: list<map<i32, set<string>>> b,
-   *       3: i64 c,
-   *       4: Foo d,
-   *       5: i64 e);
-   */
-  public async function baz(?dict<int, bool> $a, ?KeyedContainer<int, KeyedContainer<int, dict<string, bool>>> $b, ?int $c, ?Foo $d, ?int $e): Awaitable<string> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Bar_baz_args::fromShape(shape(
-      'a' => $a === null ? null : $a,
-      'b' => $b === null ? null : Vec\map($b, 
-        $_val0 ==> dict($_val0)
-      ),
-      'c' => $c === null ? null : $c,
-      'd' => $d === null ? null : $d,
-      'e' => $e === null ? null : $e,
-    ));
-    await $this->asyncHandler_->genBefore("Bar", "baz", $args);
-    $currentseqid = $this->sendImplHelper($args, "baz", false);
-    return await $this->genAwaitResponse(Bar_baz_result::class, "baz", false, $currentseqid, $rpc_options);
-  }
-
-  /**
-   * Original thrift definition:-
-   * string
-   *   baz(1: set<i32> a,
-   *       2: list<map<i32, set<string>>> b,
-   *       3: i64 c,
-   *       4: Foo d,
-   *       5: i64 e);
-   */
-  public async function baz__LEGACY_ARRAYS(?dict<int, bool> $a, ?KeyedContainer<int, KeyedContainer<int, dict<string, bool>>> $b, ?int $c, ?Foo $d, ?int $e): Awaitable<string> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Bar_baz_args::fromShape(shape(
-      'a' => $a === null ? null : $a,
-      'b' => $b === null ? null : Vec\map($b, 
-        $_val0 ==> dict($_val0)
-      ),
-      'c' => $c === null ? null : $c,
-      'd' => $d === null ? null : $d,
-      'e' => $e === null ? null : $e,
-    ));
-    await $this->asyncHandler_->genBefore("Bar", "baz", $args);
-    $currentseqid = $this->sendImplHelper($args, "baz", false);
-    return await $this->genAwaitResponse(Bar_baz_result::class, "baz", false, $currentseqid, $rpc_options, shape('read_options' => \THRIFT_MARK_LEGACY_ARRAYS));
-  }
 
   /* send and recv functions */
   public function send_baz(dict<int, bool> $a, KeyedContainer<int, KeyedContainer<int, dict<string, bool>>> $b, int $c, ?Foo $d, int $e): int {
@@ -208,7 +150,7 @@ class BarClient extends \ThriftClientBase implements BarClientIf {
       'd' => $d === null ? null : $d,
       'e' => $e === null ? null : $e,
     ));
-    return $this->sendImplHelper($args, "baz", false);
+    return $this->sendImplHelper($args, "baz", false, "Bar" );
   }
   public function recv_baz(?int $expectedsequenceid = null): string {
     return $this->recvImplHelper(Bar_baz_result::class, "baz", false, $expectedsequenceid);
@@ -338,8 +280,8 @@ class Bar_baz_args implements \IThriftSyncStruct, \IThriftStructMetadata {
   ];
 
   const type TConstructorShape = shape(
-    ?'a' => ?darray<int, bool>,
-    ?'b' => ?varray<darray<int, darray<string, bool>>>,
+    ?'a' => ?dict<int, bool>,
+    ?'b' => ?vec<dict<int, dict<string, bool>>>,
     ?'c' => ?int,
     ?'d' => ?Foo,
     ?'e' => ?int,

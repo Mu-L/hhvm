@@ -18,10 +18,9 @@
 
 #include <Python.h>
 
+#include <folly/Executor.h>
+#include <folly/coro/AsyncGenerator.h>
 #include <folly/futures/Future.h>
-#include <folly/python/AsyncioExecutor.h>
-#include <folly/python/async_generator.h>
-#include <folly/python/executor.h>
 
 #if FOLLY_HAS_COROUTINES
 
@@ -65,8 +64,8 @@ folly::coro::AsyncGenerator<TChunk&&> toAsyncGenerator(
               folly::makePromiseContract<std::optional<TChunk>>(executor);
           folly::via(
               executor,
-              [&genNext, iter, promise = std::move(promise)]() mutable {
-                genNext(iter, std::move(promise));
+              [&genNext, iter, promise_ = std::move(promise)]() mutable {
+                genNext(iter, std::move(promise_));
               });
           auto val = co_await std::move(future);
           if (!val) {

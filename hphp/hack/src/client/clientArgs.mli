@@ -8,8 +8,10 @@
 
 val parse_args : from_default:string -> ClientCommand.command
 
-val root : ClientCommand.command -> Path.t option
+val root : ClientCommand.heavy_command -> Path.t
 
-val from : ClientCommand.command -> string
+val from : ClientCommand.heavy_command -> string
 
-val config : ClientCommand.command -> (string * string) list option
+val is_interactive : ClientCommand.heavy_command -> bool
+
+val config : ClientCommand.heavy_command -> (string * string) list option

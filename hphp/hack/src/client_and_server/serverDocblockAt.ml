@@ -11,34 +11,22 @@ open Hh_prelude
 module Cls = Folded_class
 
 let get_all_ancestors ctx class_name =
-  let rec helper classes_to_check cinfos seen_classes =
-    match classes_to_check with
-    | [] -> cinfos
-    | class_name :: classes when SSet.mem class_name seen_classes ->
-      helper classes cinfos seen_classes
-    | class_name :: classes -> begin
-      match Decl_provider.get_class ctx class_name with
-      | Decl_entry.DoesNotExist
-      | Decl_entry.NotYetAvailable ->
-        helper classes cinfos seen_classes
-      | Decl_entry.Found class_info ->
-        let ancestors =
-          Cls.all_ancestor_names class_info
-          |> List.fold ~init:classes ~f:(fun acc cid -> cid :: acc)
-        in
-        helper
-          ancestors
-          (class_info :: cinfos)
-          (SSet.add class_name seen_classes)
-    end
+  let get_cinfo cname =
+    match Decl_provider.get_class ctx cname with
+    | Decl_entry.DoesNotExist
+    | Decl_entry.NotYetAvailable ->
+      None
+    | Decl_entry.Found class_info -> Some class_info
   in
-  helper [class_name] [] SSet.empty
+  Option.value_map ~default:[] (get_cinfo class_name) ~f:(fun cinfo ->
+      Cls.all_ancestor_names cinfo |> List.filter_map ~f:get_cinfo)
 
 let get_docblock_for_member ctx class_info member_name =
   let open Option.Monad_infix in
   Cls.get_method class_info member_name >>= fun member ->
   match Typing_defs.get_node @@ Lazy.force member.Typing_defs.ce_type with
-  | Typing_defs.Tfun _ ->
+  | Typing_defs.Tfun _
+    when String.equal (Cls.name class_info) member.Typing_defs.ce_origin ->
     let pos =
       Lazy.force member.Typing_defs.ce_pos
       |> Naming_provider.resolve_position ctx

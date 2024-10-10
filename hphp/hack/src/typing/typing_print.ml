@@ -121,7 +121,6 @@ let show_supportdyn env =
 (*****************************************************************************)
 (* Pretty-printer of the "full" type.                                        *)
 (* This is used in server/symbolTypeService and elsewhere                    *)
-(* With debug_mode set it is used for hh_show_env                            *)
 (*****************************************************************************)
 
 module Full = struct
@@ -135,8 +134,6 @@ module Full = struct
 
   let ( ^^ ) a b = Concat [a; b]
 
-  let debug_mode = ref false
-
   let show_verbose penv =
     match penv with
     | Loclenv env -> Typing_env_types.get_log_level env "show" > 1
@@ -149,8 +146,6 @@ module Full = struct
     match penv with
     | Loclenv env -> show_supportdyn env
     | Declenv -> false
-
-  let blank_tyvars = ref false
 
   let comma_sep = Concat [text ","; Space]
 
@@ -386,9 +381,10 @@ module Full = struct
     let {
       Typing_defs_flags.FunParam.accept_disposable;
       inout;
-      has_default;
+      is_optional;
       readonly;
       ignore_readonly_error = _;
+      splat;
     } =
       Typing_defs_flags.FunParam.as_record fp_flags
     in
@@ -411,7 +407,7 @@ module Full = struct
             text "<<__AcceptDisposable>>" ^^ Space
           else
             Nothing);
-          (if has_default then
+          (if is_optional then
             text "optional" ^^ Space
           else
             Nothing);
@@ -421,6 +417,10 @@ module Full = struct
             Nothing);
           (if readonly then
             text "readonly" ^^ Space
+          else
+            Nothing);
+          (if splat then
+            text "..."
           else
             Nothing);
           d;
@@ -505,7 +505,38 @@ module Full = struct
     in
     (fuel, tfun_doc)
 
-  let ttuple ~fuel k tyl = list ~fuel "(" k tyl ")"
+  let ttuple ~fuel k t_required t_extra =
+    let tuple_elem ~fuel (is_optional, is_variadic, is_splat, ty) =
+      let (fuel, doc) = k ~fuel ty in
+      ( fuel,
+        if is_optional then
+          Concat [text "optional "; doc]
+        else if is_variadic then
+          Concat [doc; text "..."]
+        else if is_splat then
+          Concat [text "..."; doc]
+        else
+          doc )
+    in
+    let extra =
+      match t_extra with
+      | Tsplat t_splat -> [(false, false, true, t_splat)]
+      | Textra { t_optional; t_variadic } ->
+        let optional =
+          List.map t_optional ~f:(fun ty -> (true, false, false, ty))
+        in
+        let variadic =
+          if Typing_defs.is_nothing t_variadic then
+            []
+          else
+            [(false, true, false, t_variadic)]
+        in
+        optional @ variadic
+    in
+    let required =
+      List.map t_required ~f:(fun ty -> (false, false, false, ty))
+    in
+    list ~fuel "(" tuple_elem (required @ extra) ")"
 
   let tshape ~fuel k to_doc penv s is_open_mixed =
     let { s_origin = _; s_unknown_value = shape_kind; s_fields = fdm } = s in
@@ -799,10 +830,6 @@ module Full = struct
         ~verbose:verbose_fun
         ft
         (fun_decl_implicit_params ~verbose_fun)
-    | Tnewtype (n, _, ty)
-      when String.equal n SN.Classes.cSupportDyn
-           && not (show_supportdyn_penv penv) ->
-      k ~fuel ty
     | Tapply ((_, n), [ty])
       when String.equal n SN.Classes.cSupportDyn
            && not (show_supportdyn_penv penv) ->
@@ -810,15 +837,24 @@ module Full = struct
     (* Don't strip_ns here! We want the FULL type, including the initial slash.
       *)
     | Tapply ((_, s), tyl)
-    | Tnewtype (s, tyl, _)
     | Tgeneric (s, tyl) ->
       let (fuel, tys_doc) = list ~fuel "<" k tyl ">" in
       let generic_doc = to_doc s ^^ tys_doc in
       (fuel, generic_doc)
-    | Ttuple tyl -> ttuple ~fuel k tyl
+    | Ttuple { t_required; t_extra } -> ttuple ~fuel k t_required t_extra
     | Tunion [] -> (fuel, text "nothing")
     | Tunion tyl ->
-      let (fuel, tys_doc) = ttuple ~fuel k tyl in
+      let (fuel, tys_doc) =
+        ttuple
+          ~fuel
+          k
+          tyl
+          (Textra
+             {
+               t_optional = [];
+               t_variadic = Typing_make_type.nothing Reason.none;
+             })
+      in
       let union_doc = Concat [text "|"; tys_doc] in
       (fuel, union_doc)
     | Tintersection [] -> (fuel, text "mixed")
@@ -888,13 +924,15 @@ module Full = struct
 
   (* Prints a locl_ty. If there isn't enough fuel, the type is omitted. Each
      recursive call to print a type depletes the fuel by one. *)
-  let rec locl_ty ~fuel : _ -> _ -> _ -> locl_ty -> Fuel.t * Doc.t =
+  let rec locl_ty ~fuel ~hide_internals :
+      _ -> _ -> _ -> locl_ty -> Fuel.t * Doc.t =
    fun to_doc st penv ty ->
     Fuel.provide fuel (fun ~fuel ->
         let (_r, x) = deref ty in
-        locl_ty_ ~fuel to_doc st penv x)
+        locl_ty_ ~fuel ~hide_internals to_doc st penv x)
 
-  and locl_ty_ ~fuel : _ -> _ -> penv -> locl_phase ty_ -> Fuel.t * Doc.t =
+  and locl_ty_ ~fuel ~hide_internals :
+      _ -> _ -> penv -> locl_phase ty_ -> Fuel.t * Doc.t =
    fun to_doc st penv x ->
     let ty = locl_ty in
     let verbose = show_verbose penv in
@@ -903,7 +941,7 @@ module Full = struct
       | Declenv -> failwith "must provide a locl-env here"
       | Loclenv env -> env
     in
-    let k ~fuel x = ty ~fuel to_doc st (Loclenv env) x in
+    let k ~fuel x = ty ~fuel ~hide_internals to_doc st (Loclenv env) x in
     match x with
     | Tany _ -> (fuel, text "_")
     | Tdynamic -> (fuel, text "dynamic")
@@ -921,9 +959,7 @@ module Full = struct
         (fuel, Concat [text "?"; d])
     end
     | Tprim x -> (fuel, tprim x)
-    | Tneg (Neg_class c) -> (fuel, Concat [text "not "; to_doc (snd c)])
-    | Tneg (Neg_predicate predicate) ->
-      type_predicate ~fuel ~negate:true predicate
+    | Tneg predicate -> type_predicate ~fuel ~negate:true to_doc predicate
     | Tvar n ->
       let (_, ety) =
         Typing_inference_env.expand_type
@@ -937,7 +973,7 @@ module Full = struct
           let tvar_doc =
             if Tvid.Set.mem n' st then
               text "[rec]"
-            else if !blank_tyvars then
+            else if hide_internals then
               text "_"
             else
               text ("#" ^ Tvid.show n')
@@ -956,11 +992,19 @@ module Full = struct
               Nothing
           in
           let st = Tvid.Set.add n st in
-          let (fuel, ty_doc) = ty ~fuel to_doc st penv ety in
+          let (fuel, ty_doc) = ty ~fuel ~hide_internals to_doc st penv ety in
           (fuel, Concat [prepend; ty_doc])
       end
     | Tfun ft ->
-      tfun ~fuel ~ty to_doc st penv ~verbose:false ft fun_locl_implicit_params
+      tfun
+        ~fuel
+        ~ty:(ty ~hide_internals)
+        to_doc
+        st
+        penv
+        ~verbose:false
+        ft
+        (fun_locl_implicit_params ~hide_internals)
     | Tclass ((_, s), exact, tyl) ->
       let (fuel, targs_doc) =
         if List.is_empty tyl then
@@ -972,7 +1016,8 @@ module Full = struct
       let class_doc = to_doc s ^^ targs_doc ^^ with_doc in
       let class_doc =
         match exact with
-        | Exact when !debug_mode -> Concat [text "exact"; Space; class_doc]
+        | Exact when not hide_internals ->
+          Concat [text "exact"; Space; class_doc]
         | _ -> class_doc
       in
       (fuel, class_doc)
@@ -985,7 +1030,7 @@ module Full = struct
         (* Generic replacement type for parameter used for dependent context *)
         match get_constraints_on_tparam env s with
         | [(_, Ast_defs.Constraint_as, ty)] ->
-          locl_ty ~fuel to_doc st (Loclenv env) ty
+          locl_ty ~fuel ~hide_internals to_doc st (Loclenv env) ty
         | _ -> (* this case shouldn't occur *) (fuel, to_doc s)
       end
       | _ -> (fuel, to_doc s)
@@ -1012,7 +1057,7 @@ module Full = struct
       (fuel, dependent_doc)
     (* Don't strip_ns here! We want the FULL type, including the initial slash.
       *)
-    | Ttuple tyl -> ttuple ~fuel k tyl
+    | Ttuple { t_required; t_extra } -> ttuple ~fuel k t_required t_extra
     | Tunion [] -> (fuel, text "nothing")
     | Tunion tyl ->
       let tyl =
@@ -1163,21 +1208,52 @@ module Full = struct
       let label_doc = Concat [text "#"; text name] in
       (fuel, label_doc)
 
-  and type_predicate ~fuel ~negate predicate =
+  and type_predicate ~fuel ~negate to_doc predicate =
+    let tag_doc tag =
+      match tag with
+      | BoolTag -> text "bool"
+      | IntTag -> text "int"
+      | StringTag -> text "string"
+      | ArraykeyTag -> text "arraykey"
+      | FloatTag -> text "float"
+      | NumTag -> text "num"
+      | ResourceTag -> text "resource"
+      | NullTag -> text "null"
+      | ClassTag s -> to_doc s
+    in
     let rec predicate_doc predicate =
-      match predicate with
-      | IsBool -> text "bool"
-      | IsInt -> text "int"
-      | IsString -> text "string"
-      | IsArraykey -> text "arraykey"
-      | IsFloat -> text "float"
-      | IsNum -> text "num"
-      | IsResource -> text "resource"
-      | IsNull -> text "null"
-      | IsTupleOf predicates ->
-        let texts = List.map predicates ~f:predicate_doc in
+      match snd predicate with
+      | IsTag tag -> tag_doc tag
+      | IsTupleOf { tp_required } ->
+        let texts = List.map tp_required ~f:predicate_doc in
         Concat
           ([text "("] @ List.intersperse texts ~sep:(text ", ") @ [text ")"])
+      | IsShapeOf { sp_fields } ->
+        let texts =
+          List.map
+            (TShapeMap.elements sp_fields)
+            ~f:(fun (key, { sfp_predicate }) ->
+              let key_delim =
+                match key with
+                | Typing_defs.TSFlit_str _ -> text "'"
+                | _ -> Nothing
+              in
+              Concat
+                [
+                  key_delim;
+                  text_strip_ns @@ Typing_defs.TShapeField.name key;
+                  key_delim;
+                  Space;
+                  text "=>";
+                  Space;
+                  predicate_doc sfp_predicate;
+                ])
+        in
+        Concat
+          ([text "shape("]
+          @ List.intersperse texts ~sep:(text ", ")
+          @ [text ")"])
+      (* TODO: T196048813 optional, open, fuel? *)
     in
     let doc =
       Concat
@@ -1193,14 +1269,14 @@ module Full = struct
     in
     (fuel, doc)
 
-  and fun_locl_implicit_params ~fuel =
+  and fun_locl_implicit_params ~fuel ~hide_internals =
     fun_implicit_params
-      locl_ty
+      (locl_ty ~hide_internals)
       (Typing_make_type.default_capability Pos_or_decl.none)
       ~fuel
 
-  let rec constraint_type_ ~fuel to_doc st penv x =
-    let k ~fuel lty = locl_ty ~fuel to_doc st penv lty in
+  let rec constraint_type_ ~fuel ~hide_internals to_doc st penv x =
+    let k ~fuel lty = locl_ty ~fuel ~hide_internals to_doc st penv lty in
     match x with
     | Thas_member hm -> thas_member ~fuel k hm
     | Thas_type_member htm ->
@@ -1226,7 +1302,7 @@ module Full = struct
     | Tcan_traverse ct -> tcan_traverse ~fuel k ct
     | Ttype_switch { predicate; ty_true; ty_false } ->
       let (fuel, predicate_doc) =
-        type_predicate ~fuel ~negate:false predicate
+        type_predicate ~fuel ~negate:false to_doc predicate
       in
       let (fuel, ty_true_doc) = k ~fuel ty_true in
       let (fuel, ty_false_doc) = k ~fuel ty_false in
@@ -1250,14 +1326,15 @@ module Full = struct
       in
       (fuel, has_const_doc)
 
-  and constraint_type ~fuel to_doc st penv ty =
+  and constraint_type ~fuel ~hide_internals to_doc st penv ty =
     let (_r, x) = deref_constraint_type ty in
-    constraint_type_ ~fuel to_doc st penv x
+    constraint_type_ ~fuel ~hide_internals to_doc st penv x
 
-  let internal_type ~fuel to_doc st penv ty =
+  let internal_type ~fuel ~hide_internals to_doc st penv ty =
     match ty with
-    | LoclType ty -> locl_ty ~fuel to_doc st penv ty
-    | ConstraintType ty -> constraint_type ~fuel to_doc st penv ty
+    | LoclType ty -> locl_ty ~fuel ~hide_internals to_doc st penv ty
+    | ConstraintType ty ->
+      constraint_type ~fuel ~hide_internals to_doc st penv ty
 
   let to_string ~fuel ~ty to_doc env x =
     let (fuel, doc) = ty ~fuel to_doc Tvid.Set.empty env x in
@@ -1267,7 +1344,7 @@ module Full = struct
   (** Print a suffix for type parameters in [typ] that have constraints
       If the type itself is a type parameter with a single constraint, just
       represent this as `as t` or `super t`, otherwise use full `where` syntax *)
-  let constraints_for_type ~fuel to_doc env typ =
+  let constraints_for_type ~fuel ~hide_internals to_doc env typ =
     let tparams =
       SSet.elements
         (Typing_env_types.get_tparams_in_ty_and_acc env SSet.empty typ)
@@ -1281,13 +1358,19 @@ module Full = struct
     | (_, []) -> (fuel, Nothing)
     | (Tgeneric (tparam, []), [(tparam', ck, typ)])
       when String.equal tparam tparam' ->
-      tparam_constraint ~fuel ~ty:locl_ty to_doc Tvid.Set.empty penv (ck, typ)
+      tparam_constraint
+        ~fuel
+        ~ty:(locl_ty ~hide_internals)
+        to_doc
+        Tvid.Set.empty
+        penv
+        (ck, typ)
     | _ ->
       let to_tparam_constraint_doc ~fuel (tparam, ck, typ) =
         let (fuel, tparam_constraint_doc) =
           tparam_constraint
             ~fuel
-            ~ty:locl_ty
+            ~ty:(locl_ty ~hide_internals)
             to_doc
             Tvid.Set.empty
             penv
@@ -1310,9 +1393,15 @@ module Full = struct
       in
       (fuel, doc)
 
-  let to_string_rec ~fuel penv n x =
+  let to_string_rec ~fuel ~hide_internals penv n x =
     let (fuel, doc) =
-      locl_ty ~fuel text_strip_ns (Tvid.Set.add n Tvid.Set.empty) penv x
+      locl_ty
+        ~fuel
+        ~hide_internals
+        text_strip_ns
+        (Tvid.Set.add n Tvid.Set.empty)
+        penv
+        x
     in
     let str = Libhackfmt.format_doc_unbroken format_env doc |> String.strip in
     (fuel, str)
@@ -1340,9 +1429,10 @@ module Full = struct
     let str = Libhackfmt.format_doc_unbroken format_env doc |> String.strip in
     (fuel, str)
 
-  let to_string_with_identity ~fuel env x occurrence definition_opt =
+  let to_string_with_identity
+      ~fuel ~hide_internals env x occurrence definition_opt =
     let open SymbolOccurrence in
-    let ty = locl_ty in
+    let ty = locl_ty ~hide_internals in
     let penv = Loclenv env in
     let prefix =
       SymbolDefinition.(
@@ -1404,7 +1494,7 @@ module Full = struct
             penv
             ~verbose:false
             ft
-            fun_locl_implicit_params
+            (fun_locl_implicit_params ~hide_internals)
         in
         let fun_doc =
           Concat [text "function"; Space; text_strip_all_ns name; fun_ty_doc]
@@ -1442,7 +1532,9 @@ module Full = struct
         (fuel, doc)
       | _ -> ty ~fuel text_strip_ns Tvid.Set.empty penv x
     in
-    let (fuel, constraints) = constraints_for_type ~fuel text_strip_ns env x in
+    let (fuel, constraints) =
+      constraints_for_type ~fuel ~hide_internals text_strip_ns env x
+    in
     let str =
       Concat [prefix; body_doc; constraints]
       |> Libhackfmt.format_doc format_env
@@ -1450,12 +1542,6 @@ module Full = struct
     in
     (fuel, str)
 end
-
-let with_blank_tyvars f =
-  Full.blank_tyvars := true;
-  let res = f () in
-  Full.blank_tyvars := false;
-  res
 
 (*****************************************************************************)
 (* Computes the string representing a type in an error message.              *)
@@ -1476,8 +1562,11 @@ module ErrorString = struct
 
   let rec type_ ~fuel ?(ignore_dynamic = false) env ety =
     let ety_to_string ety =
-      with_blank_tyvars (fun () ->
-          Full.to_string_strip_ns ~fuel ~ty:Full.locl_ty (Loclenv env) ety)
+      Full.to_string_strip_ns
+        ~fuel
+        ~ty:(Full.locl_ty ~hide_internals:true)
+        (Loclenv env)
+        ety
     in
     match get_node ety with
     | Tany _ -> (fuel, "an untyped value")
@@ -1488,7 +1577,16 @@ module ErrorString = struct
     | Tintersection [] -> (fuel, "a mixed value")
     | Tintersection l -> intersection ~fuel env l
     | Tvec_or_dict _ -> (fuel, "a vec_or_dict")
-    | Ttuple l -> (fuel, "a tuple of size " ^ string_of_int (List.length l))
+    | Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } } ->
+      ( fuel,
+        (if List.is_empty t_optional && is_nothing t_variadic then
+          "a tuple of size "
+        else
+          "a tuple of size at least ")
+        ^ string_of_int (List.length t_required) )
+    | Ttuple { t_required; t_extra = Tsplat _ } ->
+      ( fuel,
+        "a tuple of size at least " ^ string_of_int (List.length t_required) )
     | Tnonnull -> (fuel, "a nonnull value")
     | Toption x ->
       let str =
@@ -1534,23 +1632,49 @@ module ErrorString = struct
       failwith "Tunapplied_alias is not a type"
     | Taccess (_ty, _id) -> (fuel, "a type constant")
     | Tlabel name -> (fuel, Printf.sprintf "a label (#%s)" name)
-    | Tneg (Neg_class (_, c)) -> (fuel, "anything but a " ^ strip_ns c)
-    | Tneg (Neg_predicate predicate) ->
+    | Tneg predicate ->
+      let tag_str tag =
+        match tag with
+        | BoolTag -> "a bool"
+        | IntTag -> "an int"
+        | StringTag -> "a string"
+        | ArraykeyTag -> "an arraykey"
+        | FloatTag -> "a float"
+        | NumTag -> "a num"
+        | ResourceTag -> "a resource"
+        | NullTag -> "null"
+        | ClassTag s -> "a " ^ strip_ns s
+      in
       let rec str predicate =
         match predicate with
-        | IsBool -> "a bool"
-        | IsInt -> "an int"
-        | IsString -> "a string"
-        | IsArraykey -> "an arraykey"
-        | IsFloat -> "a float"
-        | IsNum -> "a num"
-        | IsResource -> "a resource"
-        | IsNull -> "null"
-        | IsTupleOf predicates ->
-          let strings = List.map predicates ~f:str in
+        | IsTag tag -> tag_str tag
+        | IsTupleOf { tp_required } ->
+          let strings = List.map tp_required ~f:(fun (_, pred) -> str pred) in
           "(" ^ String.concat ~sep:", " strings ^ ")"
+        | IsShapeOf { sp_fields } ->
+          let texts =
+            List.map
+              (TShapeMap.elements sp_fields)
+              ~f:(fun (key, { sfp_predicate }) ->
+                let key_delim =
+                  match key with
+                  | Typing_defs.TSFlit_str _ -> "'"
+                  | _ -> ""
+                in
+                String.concat
+                  ~sep:""
+                  [
+                    key_delim;
+                    Typing_defs.TShapeField.name key;
+                    key_delim;
+                    " => ";
+                    str (snd sfp_predicate);
+                  ])
+          in
+          "shape(" ^ String.concat texts ~sep:", " ^ ")"
+        (* TODO: T196048813, dedupe?, optional, open, fuel? *)
       in
-      (fuel, "is not " ^ str predicate)
+      (fuel, "anything but " ^ str @@ snd predicate)
 
   and dependent dep =
     let x = strip_ns @@ DependentKind.to_string dep in
@@ -1671,15 +1795,15 @@ module Json = struct
     let name x = [("name", JSON_String x)] in
     let optional x = [("optional", JSON_Bool x)] in
     let is_array x = [("is_array", JSON_Bool x)] in
+    let shape_field_name_to_json shape_field =
+      (* TODO: need to update userland tooling? *)
+      match shape_field with
+      | Typing_defs.TSFregex_group (_, s) -> Hh_json.JSON_Number s
+      | Typing_defs.TSFlit_str (_, s) -> Hh_json.JSON_String s
+      | Typing_defs.TSFclass_const ((_, s1), (_, s2)) ->
+        Hh_json.JSON_Array [Hh_json.JSON_String s1; Hh_json.JSON_String s2]
+    in
     let make_field (k, v) =
-      let shape_field_name_to_json shape_field =
-        (* TODO: need to update userland tooling? *)
-        match shape_field with
-        | Typing_defs.TSFlit_int (_, s) -> Hh_json.JSON_Number s
-        | Typing_defs.TSFlit_str (_, s) -> Hh_json.JSON_String s
-        | Typing_defs.TSFclass_const ((_, s1), (_, s2)) ->
-          Hh_json.JSON_Array [Hh_json.JSON_String s1; Hh_json.JSON_String s2]
-      in
       obj
       @@ [("name", shape_field_name_to_json k)]
       @ optional v.sft_optional
@@ -1699,7 +1823,20 @@ module Json = struct
         | (p, Tvar _) -> obj @@ kind p "var"
         | _ -> from_type env ~show_like_ty ty
       end
-    | (p, Ttuple tys) -> obj @@ kind p "tuple" @ is_array false @ args tys
+    | (p, Ttuple { t_required; t_extra = Textra { t_optional = _; t_variadic } })
+      ->
+      let fields_known = is_nothing t_variadic in
+      obj
+      @@ kind p "tuple"
+      @ is_array false
+      @ [("fields_known", JSON_Bool fields_known)]
+      @ args t_required
+    | (p, Ttuple { t_required; t_extra = Tsplat _ }) ->
+      obj
+      @@ kind p "tuple"
+      @ is_array false
+      @ [("fields_known", JSON_Bool false)]
+      @ args t_required
     | (p, Tany _) -> obj @@ kind p "any"
     | (p, Tnonnull) -> obj @@ kind p "nonnull"
     | (p, Tdynamic) -> obj @@ kind p "dynamic"
@@ -1729,23 +1866,42 @@ module Json = struct
     end
     | (p, Tprim tp) ->
       obj @@ kind p "primitive" @ name (Aast_defs.string_of_tprim tp)
-    | (p, Tneg (Neg_class (_, c))) -> obj @@ kind p "negation" @ name c
-    | (p, Tneg (Neg_predicate predicate)) ->
+    | (p, Tneg predicate) ->
+      let tag_json tag =
+        match tag with
+        | BoolTag -> name "isbool"
+        | IntTag -> name "isint"
+        | StringTag -> name "isstring"
+        | ArraykeyTag -> name "isarraykey"
+        | FloatTag -> name "isfloat"
+        | NumTag -> name "isnum"
+        | ResourceTag -> name "isresource"
+        | NullTag -> name "isnull"
+        | ClassTag s -> name s
+      in
       let rec predicate_json predicate =
-        match predicate with
-        | IsBool -> name "isbool"
-        | IsInt -> name "isint"
-        | IsString -> name "isstring"
-        | IsArraykey -> name "isarraykey"
-        | IsFloat -> name "isfloat"
-        | IsNum -> name "isnum"
-        | IsResource -> name "isresource"
-        | IsNull -> name "isnull"
-        | IsTupleOf predicates ->
+        match snd predicate with
+        | IsTag tag -> tag_json tag
+        | IsTupleOf { tp_required } ->
           let predicates_json =
-            List.map predicates ~f:(fun p -> obj @@ predicate_json p)
+            List.map tp_required ~f:(fun p -> obj @@ predicate_json p)
           in
           name "istuple" @ [("args", JSON_Array predicates_json)]
+        | IsShapeOf { sp_fields } ->
+          name "isshape"
+          @ [
+              ( "fields",
+                JSON_Array
+                  (List.map
+                     ~f:(fun (field, { sfp_predicate }) ->
+                       obj
+                       @@ [
+                            ("name", shape_field_name_to_json field);
+                            ("predicate", obj @@ predicate_json sfp_predicate);
+                          ])
+                     (TShapeMap.bindings sp_fields)) );
+            ]
+        (* TODO: T196048813 optional, open, fuel? *)
       in
       obj @@ kind p "negation" @ predicate_json predicate
     | (p, Tclass ((_, cid), e, tys)) ->
@@ -1799,7 +1955,7 @@ module Json = struct
         obj
         @@ callconv (get_fp_mode fp)
         @ readonly_param (get_fp_readonly fp)
-        @ optional_param (get_fp_has_default fp)
+        @ optional_param (get_fp_is_optional fp)
         @ typ fp.fp_type
       in
       let readonly_this ro =
@@ -1956,7 +2112,21 @@ module Json = struct
           end
         | "tuple" ->
           get_array "args" (json, keytrace) >>= fun (args, args_keytrace) ->
-          aux_args args ~keytrace:args_keytrace >>= fun args -> ty (Ttuple args)
+          aux_args args ~keytrace:args_keytrace >>= fun args ->
+          get_bool "fields_known" (json, keytrace)
+          >>= fun (fields_known, _fields_known_keytrace) ->
+          let t_variadic =
+            if fields_known then
+              Typing_make_type.nothing Reason.none
+            else
+              Typing_make_type.mixed Reason.none
+          in
+          ty
+            (Ttuple
+               {
+                 t_required = args;
+                 t_extra = Textra { t_optional = []; t_variadic };
+               })
         | "nullable" ->
           get_array "args" (json, keytrace) >>= fun (args, keytrace) ->
           begin
@@ -2030,7 +2200,7 @@ module Json = struct
             begin
               match name with
               | Hh_json.JSON_Number name ->
-                Ok (Typing_defs.TSFlit_int (dummy_pos, name))
+                Ok (Typing_defs.TSFregex_group (dummy_pos, name))
               | Hh_json.JSON_String name ->
                 Ok (Typing_defs.TSFlit_str (dummy_pos, name))
               | Hh_json.JSON_Array
@@ -2128,9 +2298,10 @@ module Json = struct
                       make_fp_flags
                         ~mode:callconv
                         ~accept_disposable:false
-                        ~has_default:optional
+                        ~is_optional:optional
                         ~readonly:false
-                        ~ignore_readonly_error:false;
+                        ~ignore_readonly_error:false
+                        ~splat:false;
                     (* Dummy values: these aren't currently serialized. *)
                     fp_pos = Pos_or_decl.none;
                     fp_name = None;
@@ -2554,55 +2725,65 @@ module PrintClass = struct
 end
 
 module PrintTypedef = struct
-  let typedef ~fuel = function
-    | {
+  let typedef
+      ~fuel
+      {
         td_pos;
         td_module = _;
-        td_vis = _;
         td_attributes = _;
         td_tparams;
         td_as_constraint;
         td_super_constraint;
-        td_type;
+        td_type_assignment;
         td_is_ctx;
         td_internal = _;
         td_docs_url = _;
         td_package_override = _;
-      } ->
-      let (fuel, tparaml_s) = PrintClass.tparam_list ~fuel td_tparams in
-      let constr_s fuel cnstr str =
-        match cnstr with
-        | None -> (fuel, str ^ " [None]")
-        | Some constr ->
-          let (fuel, res) = Full.to_string_decl ~fuel constr in
-          (fuel, str ^ " " ^ res)
-      in
-      let (fuel, as_constr_s) = constr_s fuel td_as_constraint "as" in
-      let (fuel, super_constr_s) = constr_s fuel td_super_constraint "super" in
-      let (fuel, ty_s) = Full.to_string_decl ~fuel td_type in
-      let pos_s = PrintClass.pos_or_decl td_pos in
-      let is_ctx_s = Bool.to_string td_is_ctx in
-      let typedef_str =
-        "ty: "
-        ^ ty_s
-        ^ "\n"
-        ^ "tparaml: "
-        ^ tparaml_s
-        ^ "\n"
-        ^ "constraints: "
-        ^ as_constr_s
-        ^ " "
-        ^ super_constr_s
-        ^ "\n"
-        ^ "pos: "
-        ^ pos_s
-        ^ "\n"
-        ^ "is_ctx: "
-        ^ is_ctx_s
-        ^ "\n"
-        ^ ""
-      in
-      (fuel, typedef_str)
+      } =
+    let (fuel, tparaml_s) = PrintClass.tparam_list ~fuel td_tparams in
+    let constr_s fuel cnstr str =
+      match cnstr with
+      | None -> (fuel, str ^ " [None]")
+      | Some constr ->
+        let (fuel, res) = Full.to_string_decl ~fuel constr in
+        (fuel, str ^ " " ^ res)
+    in
+    let (fuel, as_constr_s) = constr_s fuel td_as_constraint "as" in
+    let (fuel, super_constr_s) = constr_s fuel td_super_constraint "super" in
+    (* TODO T201569125 - print where constraints here? *)
+    let td_type =
+      match td_type_assignment with
+      | SimpleTypeDef (_, td_type)
+      | CaseType ((td_type, _), []) ->
+        td_type
+      | CaseType (variant, variants) ->
+        Typing_make_type.union Reason.none
+        @@ List.map (variant :: variants) ~f:fst
+    in
+    let (fuel, ty_s) = Full.to_string_decl ~fuel td_type in
+    let pos_s = PrintClass.pos_or_decl td_pos in
+    let is_ctx_s = Bool.to_string td_is_ctx in
+    let typedef_str =
+      "ty: "
+      ^ ty_s
+      ^ "\n"
+      ^ "tparaml: "
+      ^ tparaml_s
+      ^ "\n"
+      ^ "constraints: "
+      ^ as_constr_s
+      ^ " "
+      ^ super_constr_s
+      ^ "\n"
+      ^ "pos: "
+      ^ pos_s
+      ^ "\n"
+      ^ "is_ctx: "
+      ^ is_ctx_s
+      ^ "\n"
+      ^ ""
+    in
+    (fuel, typedef_str)
 end
 
 let supply_fuel ?(msg = true) tcopt printer =
@@ -2624,28 +2805,44 @@ let supply_fuel ?(msg = true) tcopt printer =
 let error ?(ignore_dynamic = false) env ty =
   supply_fuel env.genv.tcopt (ErrorString.to_string ~ignore_dynamic env ty)
 
-let full env ty =
+let full ~hide_internals env ty =
   supply_fuel
     env.genv.tcopt
-    (Full.to_string ~ty:Full.locl_ty Doc.text (Loclenv env) ty)
+    (Full.to_string
+       ~ty:(Full.locl_ty ~hide_internals)
+       Doc.text
+       (Loclenv env)
+       ty)
 
-let full_i env ty =
+let full_i ~hide_internals env ty =
   supply_fuel
     env.genv.tcopt
-    (Full.to_string ~ty:Full.internal_type Doc.text (Loclenv env) ty)
+    (Full.to_string
+       ~ty:(Full.internal_type ~hide_internals)
+       Doc.text
+       (Loclenv env)
+       ty)
 
-let full_rec env n ty =
-  supply_fuel env.genv.tcopt (Full.to_string_rec (Loclenv env) n ty)
-
-let full_strip_ns env ty =
+let full_rec ~hide_internals env n ty =
   supply_fuel
     env.genv.tcopt
-    (Full.to_string_strip_ns ~ty:Full.locl_ty (Loclenv env) ty)
+    (Full.to_string_rec ~hide_internals (Loclenv env) n ty)
 
-let full_strip_ns_i env ty =
+let full_strip_ns ~hide_internals env ty =
   supply_fuel
     env.genv.tcopt
-    (Full.to_string_strip_ns ~ty:Full.internal_type (Loclenv env) ty)
+    (Full.to_string_strip_ns
+       ~ty:(Full.locl_ty ~hide_internals)
+       (Loclenv env)
+       ty)
+
+let full_strip_ns_i ~hide_internals env ty =
+  supply_fuel
+    env.genv.tcopt
+    (Full.to_string_strip_ns
+       ~ty:(Full.internal_type ~hide_internals)
+       (Loclenv env)
+       ty)
 
 let full_strip_ns_decl ?(msg = true) ~verbose_fun env ty =
   supply_fuel
@@ -2653,31 +2850,24 @@ let full_strip_ns_decl ?(msg = true) ~verbose_fun env ty =
     env.genv.tcopt
     (Full.to_string_strip_ns ~ty:(Full.decl_ty ~verbose_fun) (Loclenv env) ty)
 
-let full_with_identity env x occurrence definition_opt =
+let full_with_identity ~hide_internals env x occurrence definition_opt =
   supply_fuel
     env.genv.tcopt
-    (Full.to_string_with_identity env x occurrence definition_opt)
+    (Full.to_string_with_identity
+       ~hide_internals
+       env
+       x
+       occurrence
+       definition_opt)
 
 let full_decl ?(msg = true) tcopt ty =
   supply_fuel ~msg tcopt (Full.to_string_decl ty)
 
-let debug env ty =
-  Full.debug_mode := true;
-  let f_str = full_strip_ns env ty in
-  Full.debug_mode := false;
-  f_str
+let debug env ty = full_strip_ns ~hide_internals:false env ty
 
-let debug_decl env ty =
-  Full.debug_mode := true;
-  let f_str = full_strip_ns_decl ~verbose_fun:true env ty in
-  Full.debug_mode := false;
-  f_str
+let debug_decl env ty = full_strip_ns_decl ~verbose_fun:true env ty
 
-let debug_i env ty =
-  Full.debug_mode := true;
-  let f_str = full_strip_ns_i env ty in
-  Full.debug_mode := false;
-  f_str
+let debug_i env ty = full_strip_ns_i ~hide_internals:false env ty
 
 let class_ ctx c =
   supply_fuel (Provider_context.get_tcopt ctx) (PrintClass.class_type ctx c)
@@ -2690,10 +2880,15 @@ let fun_type tcopt f = supply_fuel tcopt (Full.fun_to_string f)
 
 let typedef tcopt td = supply_fuel tcopt (PrintTypedef.typedef td)
 
-let constraints_for_type env ty =
+let constraints_for_type ~hide_internals env ty =
   supply_fuel env.genv.tcopt (fun ~fuel ->
       let (fuel, doc) =
-        Full.constraints_for_type ~fuel Full.text_strip_ns env ty
+        Full.constraints_for_type
+          ~fuel
+          ~hide_internals
+          Full.text_strip_ns
+          env
+          ty
       in
       let str =
         Libhackfmt.format_doc_unbroken Full.format_env doc |> String.strip
@@ -2725,13 +2920,12 @@ let subtype_prop env prop =
 let coeffects env ty =
   supply_fuel env.genv.tcopt @@ fun ~fuel ->
   let to_string ~fuel ty =
-    with_blank_tyvars (fun () ->
-        Full.to_string
-          ~fuel
-          ~ty:Full.locl_ty
-          (fun s -> Doc.text (Utils.strip_all_ns s))
-          (Loclenv env)
-          ty)
+    Full.to_string
+      ~fuel
+      ~ty:(Full.locl_ty ~hide_internals:true)
+      (fun s -> Doc.text (Utils.strip_all_ns s))
+      (Loclenv env)
+      ty
   in
   let exception UndesugarableCoeffect of locl_ty in
   let rec desugar_simple_intersection ~fuel (ty : locl_ty) :

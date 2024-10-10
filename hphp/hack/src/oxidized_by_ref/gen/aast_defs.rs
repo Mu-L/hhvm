@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<90c5b15cae43c2069df96efbe7563a06>>
+// @generated SignedSource<<0f84feb37db358624cbafdf719a24b5d>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -1801,6 +1801,9 @@ pub struct FunParam<'a, Ex, En> {
     pub readonly: Option<oxidized::ast_defs::ReadonlyKind>,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(attr = "transform.opaque")]
+    pub splat: Option<&'a oxidized::ast_defs::SplatKind>,
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    #[rust_to_ocaml(attr = "transform.opaque")]
     pub callconv: ast_defs::ParamKind<'a>,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     pub user_attributes: &'a UserAttributes<'a, Ex, En>,
@@ -2651,6 +2654,92 @@ pub type Nsenv<'a> = namespace_env::Env<'a>;
 
 #[derive(
     Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tvh_")]
+#[repr(C)]
+pub struct TypedefVisibilityAndHint<'a> {
+    #[rust_to_ocaml(attr = "transform.opaque")]
+    pub vis: oxidized::aast_defs::TypedefVisibility,
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    #[rust_to_ocaml(attr = "transform.explicit")]
+    pub hint: &'a Hint<'a>,
+}
+impl<'a> TrivialDrop for TypedefVisibilityAndHint<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TypedefVisibilityAndHint<'arena>);
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tctv_")]
+#[repr(C)]
+pub struct TypedefCaseTypeVariant<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub hint: &'a Hint<'a>,
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub where_constraints: &'a [&'a WhereConstraintHint<'a>],
+}
+impl<'a> TrivialDrop for TypedefCaseTypeVariant<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TypedefCaseTypeVariant<'arena>);
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C, u8)]
+pub enum TypedefAssignment<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    SimpleTypeDef(&'a TypedefVisibilityAndHint<'a>),
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    #[rust_to_ocaml(inline_tuple)]
+    CaseType(
+        &'a (
+            &'a TypedefCaseTypeVariant<'a>,
+            &'a [&'a TypedefCaseTypeVariant<'a>],
+        ),
+    ),
+}
+impl<'a> TrivialDrop for TypedefAssignment<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TypedefAssignment<'arena>);
+
+#[derive(
+    Clone,
     Debug,
     Deserialize,
     Eq,
@@ -2680,10 +2769,12 @@ pub struct Typedef<'a, Ex, En> {
     pub as_constraint: Option<&'a Hint<'a>>,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     pub super_constraint: Option<&'a Hint<'a>>,
-    /// The RHS of `=` in the type definition.
+    /// The visibility and RHS of `=` in the type definition.
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    #[rust_to_ocaml(attr = "transform.explicit")]
-    pub kind: &'a Hint<'a>,
+    pub assignment: TypedefAssignment<'a>,
+    /// Always a single type -- excludes where clauses for case types
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub runtime_type: &'a Hint<'a>,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     pub user_attributes: &'a UserAttributes<'a, Ex, En>,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
@@ -2691,8 +2782,6 @@ pub struct Typedef<'a, Ex, En> {
     #[rust_to_ocaml(attr = "visitors.opaque")]
     #[rust_to_ocaml(attr = "transform.opaque")]
     pub mode: oxidized::file_info::Mode,
-    #[rust_to_ocaml(attr = "transform.opaque")]
-    pub vis: oxidized::aast_defs::TypedefVisibility,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     pub namespace: &'a Nsenv<'a>,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
@@ -2914,6 +3003,8 @@ pub enum Def<'a, Ex, En> {
     NamespaceUse(&'a [(&'a oxidized::aast_defs::NsKind, Sid<'a>, Sid<'a>)]),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     SetNamespaceEnv(&'a Nsenv<'a>),
+    /// NB: these are only there at the AAST level.
+    /// From NAST onwards, they've been copied to each top-level def and discarded.
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     FileAttributes(&'a FileAttribute<'a, Ex, En>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
@@ -3067,6 +3158,8 @@ pub struct HfParamInfo<'a> {
     pub kind: ast_defs::ParamKind<'a>,
     pub readonlyness: Option<oxidized::ast_defs::ReadonlyKind>,
     pub optional: Option<oxidized::ast_defs::OptionalKind>,
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub splat: Option<&'a oxidized::ast_defs::SplatKind>,
 }
 impl<'a> TrivialDrop for HfParamInfo<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(HfParamInfo<'arena>);
@@ -3138,7 +3231,7 @@ pub enum Hint_<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     Hfun(&'a HintFun<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    Htuple(&'a [&'a Hint<'a>]),
+    Htuple(&'a TupleInfo<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "Hclass_args")]
     HclassArgs(&'a Hint<'a>),
@@ -3171,6 +3264,7 @@ pub enum Hint_<'a> {
     Hmixed,
     Hwildcard,
     Hnonnull,
+    /// A type parameter
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(inline_tuple)]
     Habstr(&'a (&'a str, &'a [&'a Hint<'a>])),
@@ -3378,6 +3472,84 @@ pub struct NastShapeInfo<'a> {
 }
 impl<'a> TrivialDrop for NastShapeInfo<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(NastShapeInfo<'arena>);
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tup_")]
+#[repr(C)]
+pub struct TupleInfo<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub required: &'a [&'a Hint<'a>],
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub extra: TupleExtra<'a>,
+}
+impl<'a> TrivialDrop for TupleInfo<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TupleInfo<'arena>);
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tup_")]
+#[repr(C)]
+pub struct TupleExtraInfo<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub optional: &'a [&'a Hint<'a>],
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    pub variadic: Option<&'a Hint<'a>>,
+}
+impl<'a> TrivialDrop for TupleExtraInfo<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TupleExtraInfo<'arena>);
+
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRepIn,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C, u8)]
+pub enum TupleExtra<'a> {
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    Hextra(&'a TupleExtraInfo<'a>),
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    Hsplat(&'a Hint<'a>),
+}
+impl<'a> TrivialDrop for TupleExtra<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(TupleExtra<'arena>);
 
 pub use oxidized::aast_defs::KvcKind;
 pub use oxidized::aast_defs::VcKind;

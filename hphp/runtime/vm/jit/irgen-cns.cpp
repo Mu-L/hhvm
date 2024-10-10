@@ -69,45 +69,140 @@ void exactClsCns(IRGS& env,
                 const StringData* cnsNameStr,
                 const StringData* clsNameStr) {
   auto const clsCnsName = ClsCnsName { clsNameStr, cnsNameStr };
+  // If we passed in a Class*, this means we have better information 
+  // about what the Class* must be since this information is local and 
+  // comes from inspecting the top of the stack to see if we have an 
+  // exact type.
+  auto const lookup = [&]() {
+    if (cls != nullptr) {
+      return Class::ClassLookup { Class::ClassLookupResult::Exact, cls };
+    } else {
+      return lookupKnownMaybe(env, clsNameStr);
+    }
+  }();
 
-  if (cls &&
-      (will_symbol_raise_module_boundary_violation(cls, curFunc(env))
-      || env.unit.packageInfo().violatesDeploymentBoundary(*cls))) {
+  if (lookup.cls &&
+      (will_symbol_raise_module_boundary_violation(lookup.cls, curFunc(env))
+      || env.unit.packageInfo().violatesDeploymentBoundary(*lookup.cls))) {
     auto const cns = gen(env, InitClsCns, TInitCell, clsCnsName);
     pushIncRef(env, cns);
     return;
   }
 
-  // If the class is already defined in this request, the class is persistent
-  // or a parent of the current context, and this constant is a scalar
-  // constant, we can just compile it to a literal.
-  auto cnsType = TInitCell;
-  if (lookupKnown(env, cls)) {
-    Slot ignore;
-    if (auto const tv = cls->cnsNameToTV(cnsNameStr, ignore)) {
-      if (type(tv) != KindOfUninit) {
-        if (auto const val = Type::tryCns(*tv)) {
-          push(env, cns(env, *val));
-          return;
+
+  // If we can't prove we know the Class* at jit-time, we need to 
+  // load the constant out of out RDS.
+  auto const getCnsWithType = [&](jit::Type ty) {
+    auto const cns = cond(
+      env,
+      [&] (Block* taken) {
+        return gen(env, LdClsCns, ty, clsCnsName, taken);
+      },
+      [&] (SSATmp* cns) { return cns; },
+      [&] {
+        hint(env, Block::Hint::Unlikely);
+        return gen(env, InitClsCns, ty, clsCnsName);
+      }
+    );
+    pushIncRef(env, cns);
+  };
+
+  auto const data = [&](uint32_t id, bool success) {
+    return LoggingSpeculateData {
+      clsNameStr,
+      curClass(env) ? curClass(env)->name() : nullptr,
+      cnsNameStr,
+      Op::ClsCnsD,
+      id,
+      success,
+    };
+  };
+
+  switch (lookup.tag) {
+    case Class::ClassLookupResult::Exact: {
+      Slot ignore;
+      auto cnsType = TInitCell;
+      if (auto const tv = lookup.cls->cnsNameToTV(cnsNameStr, ignore)) {
+        if (type(tv) != KindOfUninit) {
+          // If the class is known and this constant is a scalar constant,
+          // we can just compile it to a literal.
+          if (auto const val = Type::tryCns(*tv)) {
+            push(env, cns(env, *val));
+            return;
+          }
+          cnsType = typeFromTV(tv, curClass(env));
         }
-        cnsType = typeFromTV(tv, curClass(env));
+      }
+      getCnsWithType(TInitCell);
+      return;
+    }
+    case Class::ClassLookupResult::None: {
+      if (RO::SandboxSpeculate) {
+        if (RO::EvalLogClsSpeculation) {
+          gen(env, LogClsSpeculation, data(ClassId::Invalid, false));
+        }
+        gen(env, LdClsCached, LdClsFallbackData::Fatal(), cns(env, clsNameStr));
+        gen(env, Jmp, makeExit(env));
+        return;
+      } else {
+        getCnsWithType(TInitCell);
+        return;
       }
     }
-  }
+    case Class::ClassLookupResult::Maybe: {
+      // TODO: Remove after fixing modules
+      // I believe the above case where we push a literal is broken, in
+      // sandbox mode since when we push a constant, we just trust 
+      // that the class doesn't violate the module boundary.
+      // This was probably fine so far, since in sandbox mode, we usually
+      // don't know the exact Class*, especially one that is in a different 
+      // file/module. Therefore, in practice we probably always do a InitClsCns
+      // before accessing a constant. That is about to change as sandbox
+      // mode becomes more performant, and we emit cheap runtime-checks
+      // and if our runtime Class* matches the jit-time Class*, we may 
+      // be able to push the literal directly, without doing the boundary
+      // check in InitClsCns.
+      if (RO::EvalEnforceModules) return getCnsWithType(TInitCell);
 
-  // Otherwise, load the constant out of RDS.
-  auto const cns = cond(
-    env,
-    [&] (Block* taken) {
-      return gen(env, LdClsCns, cnsType, clsCnsName, taken);
-    },
-    [&] (SSATmp* cns) { return cns; },
-    [&] {
-      hint(env, Block::Hint::Unlikely);
-      return gen(env, InitClsCns, cnsType, clsCnsName);
+      // If we have a Class* at jit-time, but cannot trust it, we can emit
+      // a check to confirm the runtime Class* matches and then use the 
+      // constant we burned in at jit-time.
+      Slot ignore;
+      if (auto const tv = lookup.cls->cnsNameToTV(cnsNameStr, ignore)) {
+        if (type(tv) != KindOfUninit) {
+          if (auto const val = Type::tryCns(*tv)) {
+            gen(env, LdClsCached, LdClsFallbackData::Fatal(), cns(env, clsNameStr));
+            auto const isEqual = gen(env, EqClassId, ClassIdData(lookup.cls));
+            ifThenElse(
+              env,
+              [&] (Block* taken) {
+                gen(env, JmpZero, taken, isEqual);
+              },
+              [&] {
+                if (RO::EvalLogClsSpeculation) {
+                  gen(env, LogClsSpeculation, data(lookup.cls->classId().id(), true));
+                }
+                push(env, cns(env, *val));
+              },
+              [&] {
+                hint(env, Block::Hint::Unlikely);
+                if (RO::EvalLogClsSpeculation) {
+                  gen(env, LogClsSpeculation, data(lookup.cls->classId().id(), false));
+                }
+                getCnsWithType(TInitCell);
+                gen(env, Jmp, makeExit(env, nextSrcKey(env)));
+              }
+            );
+            return;
+          }
+        }
+      }
+      getCnsWithType(TInitCell);
+      break;
     }
-  );
-  pushIncRef(env, cns);
+    not_reached();
+  };
+
 }
 
 StaticString clsCnsProfileKey { "ClsCnsProfile" };
@@ -119,7 +214,7 @@ StaticString clsCnsProfileKey { "ClsCnsProfile" };
 void emitClsCnsD(IRGS& env,
                  const StringData* cnsNameStr,
                  const StringData* clsNameStr) {
-  exactClsCns(env, Class::lookup(clsNameStr), cnsNameStr, clsNameStr);
+  exactClsCns(env, nullptr, cnsNameStr, clsNameStr);
 }
 
 void emitClsCns(IRGS& env, const StringData* cnsNameStr) {

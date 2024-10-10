@@ -19,12 +19,11 @@
 #include <forward_list>
 
 #include <folly/ExceptionWrapper.h>
-#include <folly/experimental/coro/Task.h>
+#include <folly/coro/Task.h>
 #include <folly/io/async/EventBase.h>
 #include <thrift/lib/cpp/concurrency/ThreadManager.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 namespace detail {
 
 enum class InternalPriority;
@@ -245,5 +244,4 @@ class InteractionTask {
   }
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

@@ -368,24 +368,6 @@ void adjustCodeForRelocation(RelocationInfo& rel, CGMeta& fixups) {
   }
 }
 
-void findFixups(TCA start, TCA end, CGMeta& meta) {
-  while (start != end) {
-    assertx(start < end);
-    DecodedInstruction di(start);
-    start += di.size();
-
-    if (di.isCall()) {
-      if (auto fixup = FixupMap::findFixup(start)) {
-        meta.fixups.emplace_back(start, *fixup);
-      }
-      if (auto ct = getCatchTrace(start)) {
-        meta.catches.emplace_back(start, *ct);
-      }
-    }
-  }
-}
-
-
 /*
  * Relocate code in the range start, end into dest, and record
  * information about what was done to rel.
@@ -406,7 +388,7 @@ size_t relocate(RelocationInfo& rel,
     try {
       return relocateImpl(rel, destBlock, start, end, srcBlock,
                           fixups, exitAddr, wideJmps, codeArea);
-    } catch (JmpOutOfRange& j) {
+    } catch (JmpOutOfRange&) {
     }
   }
 }

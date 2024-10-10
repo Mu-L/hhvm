@@ -118,10 +118,9 @@ fn oxidize_shape_field_name<'a, P: Pos>(
         SfnPos::ClassConst(..) => panic!("expected ShapeFieldNamePos::Simple"),
     };
     match name {
-        TshapeFieldName::TSFlitInt(x) => Obr::TSFlitInt(arena.alloc(obr::typing_defs::PosString(
-            simple_pos(),
-            x.to_oxidized(arena),
-        ))),
+        TshapeFieldName::TSFregexGroup(x) => Obr::TSFregexGroup(arena.alloc(
+            obr::typing_defs::PosString(simple_pos(), x.to_oxidized(arena)),
+        )),
         TshapeFieldName::TSFlitStr(x) => Obr::TSFlitStr(arena.alloc(
             obr::typing_defs::PosByteString(simple_pos(), x.to_oxidized(arena).into()),
         )),
@@ -157,7 +156,15 @@ impl<'a, R: Reason> ToOxidized<'a> for Ty_<R> {
             Ty_::Toption(x) => typing_defs::Ty_::Toption(x.to_oxidized(arena)),
             Ty_::Tprim(x) => typing_defs::Ty_::Tprim(arena.alloc(*x)),
             Ty_::Tfun(x) => typing_defs::Ty_::Tfun(x.to_oxidized(arena)),
-            Ty_::Ttuple(x) => typing_defs::Ty_::Ttuple(x.to_oxidized(arena)),
+            Ty_::Ttuple(tuple) => {
+                let TupleType(required, extra) = &**tuple;
+                let required = required.to_oxidized(arena);
+                let extra = extra.to_oxidized(arena);
+                typing_defs::Ty_::Ttuple(arena.alloc(typing_defs::TupleType {
+                    required,
+                    extra: *extra,
+                }))
+            }
             Ty_::Tshape(shape) => {
                 let mut shape_fields = arena_collections::AssocListMut::new_in(arena);
                 let ShapeType(shape_kind, shape_field_type_map) = &**shape;
@@ -202,6 +209,22 @@ impl<'a, R: Reason> ToOxidized<'a> for RefinedConstBound<Ty<R>> {
         arena.alloc(match self {
             Self::Exact(ty) => TRexact(ty.to_oxidized(arena)),
             Self::Loose(bounds) => TRloose(bounds.to_oxidized(arena)),
+        })
+    }
+}
+
+impl<'a, R: Reason> ToOxidized<'a> for TupleExtra<R> {
+    type Output = &'a obr::typing_defs::TupleExtra<'a>;
+
+    fn to_oxidized(&self, arena: &'a bumpalo::Bump) -> Self::Output {
+        use obr::typing_defs::TupleExtra::Textra;
+        use obr::typing_defs::TupleExtra::*;
+        arena.alloc(match self {
+            Self::Textra(optional, variadic) => Textra {
+                optional: optional.to_oxidized(arena),
+                variadic: variadic.to_oxidized(arena),
+            },
+            Self::Tsplat(splat) => Tsplat(splat.to_oxidized(arena)),
         })
     }
 }
@@ -806,11 +829,10 @@ impl<'a, R: Reason> ToOxidized<'a> for shallow::TypedefDecl<R> {
         let Self {
             module,
             pos,
-            vis,
             tparams,
             as_constraint,
             super_constraint,
-            ty,
+            type_assignment,
             is_ctx,
             attributes,
             internal,
@@ -823,17 +845,47 @@ impl<'a, R: Reason> ToOxidized<'a> for shallow::TypedefDecl<R> {
                 obr::ast_defs::Id(pos, id)
             }),
             pos: pos.to_oxidized(arena),
-            vis: *vis,
             tparams: tparams.to_oxidized(arena),
             as_constraint: as_constraint.as_ref().map(|t| t.to_oxidized(arena)),
             super_constraint: super_constraint.as_ref().map(|t| t.to_oxidized(arena)),
-            type_: ty.to_oxidized(arena),
+            type_assignment: *type_assignment.to_oxidized(arena),
             is_ctx: *is_ctx,
             attributes: attributes.to_oxidized(arena),
             internal: *internal,
             docs_url: docs_url.as_deref().to_oxidized(arena),
             package_override: package_override.as_deref().to_oxidized(arena),
         })
+    }
+}
+
+impl<'a, R: Reason> ToOxidized<'a> for TypedefTypeAssignment<R> {
+    type Output = &'a obr::typing_defs::TypedefTypeAssignment<'a>;
+
+    fn to_oxidized(&self, arena: &'a bumpalo::Bump) -> Self::Output {
+        use obr::decl_defs::TypedefTypeAssignment as Obr;
+        match self {
+            TypedefTypeAssignment::SimpleTypeDef(vis, ty) => arena.alloc(Obr::SimpleTypeDef(
+                arena.alloc((*vis, ty.to_oxidized(arena))),
+            )),
+            TypedefTypeAssignment::CaseType(variant, variants) => arena.alloc(Obr::CaseType(
+                arena.alloc((variant.to_oxidized(arena), variants.to_oxidized(arena))),
+            )),
+        }
+    }
+}
+
+impl<'a, R: Reason> ToOxidized<'a> for TypedefCaseTypeVariant<R> {
+    type Output = &'a obr::typing_defs::TypedefCaseTypeVariant<'a>;
+
+    fn to_oxidized(&self, arena: &'a bumpalo::Bump) -> Self::Output {
+        let Self {
+            hint,
+            where_constraints,
+        } = self;
+        arena.alloc(obr::typing_defs::TypedefCaseTypeVariant(
+            hint.to_oxidized(arena),
+            where_constraints.to_oxidized(arena),
+        ))
     }
 }
 

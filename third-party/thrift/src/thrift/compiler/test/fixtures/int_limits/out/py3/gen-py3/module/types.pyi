@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class Limits(thrift.py3.types.Struct, _typing.Hashable):
@@ -31,21 +27,14 @@ class Limits(thrift.py3.types.Struct, _typing.Hashable):
         min_byte_field: bool
         pass
 
-    max_i64_field: Final[int] = ...
-
-    min_i64_field: Final[int] = ...
-
-    max_i32_field: Final[int] = ...
-
-    min_i32_field: Final[int] = ...
-
-    max_i16_field: Final[int] = ...
-
-    min_i16_field: Final[int] = ...
-
-    max_byte_field: Final[int] = ...
-
-    min_byte_field: Final[int] = ...
+    max_i64_field: _typing.Final[int] = ...
+    min_i64_field: _typing.Final[int] = ...
+    max_i32_field: _typing.Final[int] = ...
+    min_i32_field: _typing.Final[int] = ...
+    max_i16_field: _typing.Final[int] = ...
+    min_i16_field: _typing.Final[int] = ...
+    max_byte_field: _typing.Final[int] = ...
+    min_byte_field: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -61,14 +50,14 @@ class Limits(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        max_i64_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        min_i64_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        max_i32_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        min_i32_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        max_i16_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        min_i16_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        max_byte_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        min_byte_field: _typing.Union[int, '__NotSet', None]=NOTSET
+        max_i64_field: _typing.Union[int, None]=None,
+        min_i64_field: _typing.Union[int, None]=None,
+        max_i32_field: _typing.Union[int, None]=None,
+        min_i32_field: _typing.Union[int, None]=None,
+        max_i16_field: _typing.Union[int, None]=None,
+        min_i16_field: _typing.Union[int, None]=None,
+        max_byte_field: _typing.Union[int, None]=None,
+        min_byte_field: _typing.Union[int, None]=None
     ) -> Limits: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Limits'], bytes]]: ...

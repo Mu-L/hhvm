@@ -318,7 +318,12 @@ let schema : schema_node list =
       description = "case_type_variant";
       prefix = "case_type_variant";
       aggregates = [];
-      fields = [("bar", ZeroOrOne Token); ("type", Aggregate Specifier)];
+      fields =
+        [
+          ("bar", ZeroOrOne Token);
+          ("type", Aggregate Specifier);
+          ("where_clause", ZeroOrOne (Just "WhereClause"));
+        ];
     };
     {
       kind_name = "PropertyDeclaration";
@@ -704,7 +709,10 @@ let schema : schema_node list =
           ("optional", ZeroOrOne Token);
           ("call_convention", ZeroOrOne Token);
           ("readonly", ZeroOrOne Token);
+          (* This is for type splats e.g. ...Targs $x *)
+          ("pre_ellipsis", ZeroOrOne Token);
           ("type", ZeroOrOne (Aggregate Specifier));
+          (* This is for variadics e.g. mixed... $v *)
           ("ellipsis", ZeroOrOne Token);
           ("name", Aggregate Expression);
           ("default_value", ZeroOrOne (Just "SimpleInitializer"));
@@ -2186,6 +2194,23 @@ let schema : schema_node list =
           ("optional", ZeroOrOne Token);
           ("call_convention", ZeroOrOne Token);
           ("readonly", ZeroOrOne Token);
+          ("pre_ellipsis", ZeroOrOne Token);
+          ("type", Aggregate Specifier);
+          ("ellipsis", ZeroOrOne Token);
+        ];
+    };
+    {
+      kind_name = "TupleOrUnionOrIntersectionElementTypeSpecifier";
+      type_name = "tuple_or_union_or_intersection_element_type_specifier";
+      func_name = "tuple_or_union_or_intersection_element_type_specifier";
+      description = "tuple_or_union_or_intersection_element_type_specifier";
+      prefix = "tuple_or_union_or_intersection_element";
+      aggregates = [Specifier];
+      fields =
+        [
+          ("optional", ZeroOrOne Token);
+          (* This is for type splats e.g. ...Targs $x *)
+          ("pre_ellipsis", ZeroOrOne Token);
           ("type", Aggregate Specifier);
           ("ellipsis", ZeroOrOne Token);
         ];
@@ -2447,7 +2472,9 @@ let schema : schema_node list =
       fields =
         [
           ("left_paren", Token);
-          ("types", ZeroOrMore (Aggregate Specifier));
+          ( "types",
+            ZeroOrMore (Just "TupleOrUnionOrIntersectionElementTypeSpecifier")
+          );
           ("right_paren", Token);
         ];
     };

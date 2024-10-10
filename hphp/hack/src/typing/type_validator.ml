@@ -69,25 +69,31 @@ class virtual type_validator =
       List.fold tyl ~init:acc ~f:(fun acc ty ->
           let (env, ty) = Env.expand_type env ty in
           match get_node ty with
-          | Tclass ((_, class_name), _, _) ->
+          | Tclass ((_, receiver_name), _, _) ->
             let ( >>= ) = Option.( >>= ) in
             Option.value
               ~default:acc
-              ( Env.get_class env class_name |> Decl_entry.to_option
+              ( Env.get_class env receiver_name |> Decl_entry.to_option
               >>= fun class_ ->
-                let (id_pos, id_name) = id in
-                Folded_class.get_typeconst class_ id_name >>= fun typeconst ->
-                let (ety_env, has_cycle) =
+                let (id_pos, type_const_name) = id in
+                Folded_class.get_typeconst class_ type_const_name
+                >>= fun typeconst ->
+                match
                   Typing_defs.add_type_expansion_check_cycles
                     { acc.ety_env with this_ty = ty }
-                    (id_pos, class_name ^ "::" ^ id_name)
-                in
-                match has_cycle with
-                | Some _ ->
+                    {
+                      Type_expansions.name =
+                        Type_expansions.Expandable.Type_constant
+                          { receiver_name; type_const_name };
+                      use_pos = id_pos;
+                      def_pos = None;
+                    }
+                with
+                | Error _ ->
                   (* This type is cyclic, give up checking it. We've
                      already reported an error. *)
                   None
-                | None ->
+                | Ok ety_env ->
                   Some (this#on_typeconst { acc with ety_env } class_ typeconst)
               )
           | _ -> acc)
@@ -100,10 +106,9 @@ class virtual type_validator =
         | Decl_entry.Found (Env.TypedefResult td) ->
           let {
             td_pos = _;
-            td_vis = _;
             td_module = _;
             td_tparams;
-            td_type;
+            td_type_assignment;
             td_as_constraint;
             td_super_constraint;
             td_is_ctx = _;
@@ -113,6 +118,12 @@ class virtual type_validator =
             td_package_override = _;
           } =
             td
+          in
+          let td_type =
+            match td_type_assignment with
+            | SimpleTypeDef (_, td_type) -> td_type
+            | CaseType (variant, variants) ->
+              Typing_utils.get_case_type_variants_as_type variant variants
           in
           if SSet.mem name acc.expanded_typedefs then
             acc

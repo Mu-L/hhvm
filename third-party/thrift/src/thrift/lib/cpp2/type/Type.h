@@ -30,9 +30,7 @@
 #include <thrift/lib/thrift/gen-cpp2/type_rep_types.h>
 #include <thrift/lib/thrift/gen-cpp2/type_rep_types_custom_protocol.h>
 
-namespace apache {
-namespace thrift {
-namespace type {
+namespace apache::thrift::type {
 
 // A class that can represent any concrete Thrift type.
 //
@@ -209,8 +207,13 @@ class Type : public detail::Wrap<TypeStruct> {
   struct Helper<cpp_type<T, Tag>> : Helper<Tag> {};
 };
 
-} // namespace type
-} // namespace thrift
-} // namespace apache
+// TODO(dokwon): Consider moving this to either op::equal or op::identical
+bool identicalTypeStruct(const TypeStruct& lhs, const TypeStruct& rhs);
+
+inline bool identicalType(const Type& lhs, const Type& rhs) {
+  return identicalTypeStruct(lhs.toThrift(), rhs.toThrift());
+}
+
+} // namespace apache::thrift::type
 
 FBTHRIFT_STD_HASH_WRAP_DATA(apache::thrift::type::Type)

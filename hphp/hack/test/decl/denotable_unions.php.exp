@@ -42,8 +42,8 @@
                        ]));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [9:10-11]) };
@@ -77,8 +77,8 @@
                        ]));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [10:10-11]) };

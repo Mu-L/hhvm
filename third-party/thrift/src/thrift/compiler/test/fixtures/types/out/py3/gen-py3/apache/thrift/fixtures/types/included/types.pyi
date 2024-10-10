@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class std_unordered_map__Map__i32_string(_typing.Mapping[int, str], _typing.Hashable):

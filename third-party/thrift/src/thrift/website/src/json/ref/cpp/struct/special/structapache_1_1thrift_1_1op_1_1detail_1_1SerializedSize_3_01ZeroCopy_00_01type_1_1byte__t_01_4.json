@@ -34,6 +34,7 @@
       "definition_html": "uint32_t apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
       "argsstring_html": "(Protocol &amp;prot, int8_t i) const",
       "name_html": "operator()",
+      "qualifiedname_html": "apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
       "param": [
         {
           "type_html": "Protocol &amp;",
@@ -46,11 +47,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "148",
+        "line": "149",
         "column": "12",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "148",
-        "bodyend": "150"
+        "bodystart": "149",
+        "bodyend": "151"
       },
       "definition": {
         "simple_html": "template &lt;typename Protocol&gt;\nuint32_t operator()(Protocol&amp; prot, int8_t i) const",
@@ -80,6 +81,7 @@
       "definition_html": "uint32_t apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
       "argsstring_html": "(Protocol &amp;prot, uint8_t i) const",
       "name_html": "operator()",
+      "qualifiedname_html": "apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
       "param": [
         {
           "type_html": "Protocol &amp;",
@@ -92,11 +94,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "152",
+        "line": "153",
         "column": "12",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "152",
-        "bodyend": "154"
+        "bodystart": "153",
+        "bodyend": "155"
       },
       "definition": {
         "simple_html": "template &lt;typename Protocol&gt;\nuint32_t operator()(Protocol&amp; prot, uint8_t i) const",
@@ -112,11 +114,11 @@
   ],
   "location": {
     "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "line": "146",
+    "line": "147",
     "column": "1",
     "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "bodystart": "146",
-    "bodyend": "155"
+    "bodystart": "147",
+    "bodyend": "156"
   },
   "namespacednames_html": [
     "apache",
@@ -159,6 +161,7 @@
               "definition_html": "uint32_t apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
               "argsstring_html": "(Protocol &amp;prot, int8_t i) const",
               "name_html": "operator()",
+              "qualifiedname_html": "apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
               "param": [
                 {
                   "type_html": "Protocol &amp;",
@@ -171,11 +174,11 @@
               ],
               "location": {
                 "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "line": "148",
+                "line": "149",
                 "column": "12",
                 "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "bodystart": "148",
-                "bodyend": "150"
+                "bodystart": "149",
+                "bodyend": "151"
               },
               "definition": {
                 "simple_html": "template &lt;typename Protocol&gt;\nuint32_t operator()(Protocol&amp; prot, int8_t i) const",
@@ -207,6 +210,7 @@
               "definition_html": "uint32_t apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
               "argsstring_html": "(Protocol &amp;prot, uint8_t i) const",
               "name_html": "operator()",
+              "qualifiedname_html": "apache::thrift::op::detail::SerializedSize&lt; ZeroCopy, type::byte_t &gt;::operator()",
               "param": [
                 {
                   "type_html": "Protocol &amp;",
@@ -219,11 +223,11 @@
               ],
               "location": {
                 "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "line": "152",
+                "line": "153",
                 "column": "12",
                 "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "bodystart": "152",
-                "bodyend": "154"
+                "bodystart": "153",
+                "bodyend": "155"
               },
               "definition": {
                 "simple_html": "template &lt;typename Protocol&gt;\nuint32_t operator()(Protocol&amp; prot, uint8_t i) const",

@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<37a23d2314e25862dffaf73a55d59477>>
+// @generated SignedSource<<14355173e5f80ba7eecfcb922ca27913>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -105,8 +105,32 @@ pub enum AllOrSome<A> {
 )]
 #[rust_to_ocaml(attr = "deriving (eq, show)")]
 #[repr(C, u8)]
+pub enum NoneOrAllExcept<A> {
+    NNone,
+    #[rust_to_ocaml(name = "All_except")]
+    AllExcept(Vec<A>),
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(attr = "deriving (eq, show)")]
+#[repr(C, u8)]
 pub enum ExtendedReasonsConfig {
     Extended(isize),
+    Legacy,
     Debug,
 }
 
@@ -162,6 +186,7 @@ pub struct GlobalOptions {
     pub tco_custom_error_config: custom_error_config::CustomErrorConfig,
     pub tco_const_attribute: bool,
     pub tco_check_attribute_locations: bool,
+    pub tco_type_refinement_partition_shapes: bool,
     pub glean_reponame: String,
     pub symbol_write_index_inherited_members: bool,
     pub symbol_write_ownership: bool,
@@ -210,7 +235,6 @@ pub struct GlobalOptions {
     pub tco_record_fine_grained_dependencies: bool,
     pub tco_loop_iteration_upper_bound: Option<isize>,
     pub tco_populate_dead_unsafe_cast_heap: bool,
-    pub tco_rust_elab: bool,
     pub dump_tast_hashes: bool,
     pub dump_tasts: Vec<String>,
     pub tco_autocomplete_mode: bool,
@@ -220,13 +244,17 @@ pub struct GlobalOptions {
     pub tco_lsp_invalidation: bool,
     pub tco_autocomplete_sort_text: bool,
     pub tco_extended_reasons: Option<ExtendedReasonsConfig>,
-    pub hack_warnings: AllOrSome<isize>,
+    pub tco_disable_physical_equality: bool,
+    pub hack_warnings: NoneOrAllExcept<isize>,
+    pub warnings_default_all: bool,
     pub tco_strict_switch: bool,
     pub tco_allowed_files_for_ignore_readonly: Vec<String>,
     pub tco_package_v2: bool,
+    pub tco_package_v2_support_multifile_tests: bool,
     pub tco_package_v2_bypass_package_check_for_class_const: bool,
-    pub preexisting_warnings: bool,
     pub re_no_cache: bool,
     pub hh_distc_should_disable_trace_store: bool,
+    pub hh_distc_exponential_backoff_num_retries: isize,
     pub tco_enable_abstract_method_optional_parameters: bool,
+    pub recursive_case_types: bool,
 }

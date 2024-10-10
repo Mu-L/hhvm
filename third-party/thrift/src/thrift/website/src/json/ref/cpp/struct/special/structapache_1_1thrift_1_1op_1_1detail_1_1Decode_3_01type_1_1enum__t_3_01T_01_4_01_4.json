@@ -32,6 +32,7 @@
       "definition_html": "void apache::thrift::op::detail::Decode&lt; type::enum_t&lt; T &gt; &gt;::operator()",
       "argsstring_html": "(Protocol &amp;prot, T &amp;t) const",
       "name_html": "operator()",
+      "qualifiedname_html": "apache::thrift::op::detail::Decode&lt; type::enum_t&lt; T &gt; &gt;::operator()",
       "param": [
         {
           "type_html": "Protocol &amp;",
@@ -44,11 +45,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "818",
+        "line": "821",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "818",
-        "bodyend": "822"
+        "bodystart": "821",
+        "bodyend": "825"
       },
       "definition": {
         "simple_html": "template &lt;typename Protocol&gt;\nvoid operator()(Protocol&amp; prot, T&amp; t) const",
@@ -64,11 +65,11 @@
   ],
   "location": {
     "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "line": "816",
+    "line": "819",
     "column": "1",
     "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-    "bodystart": "816",
-    "bodyend": "823"
+    "bodystart": "819",
+    "bodyend": "826"
   },
   "namespacednames_html": [
     "apache",
@@ -111,6 +112,7 @@
               "definition_html": "void apache::thrift::op::detail::Decode&lt; type::enum_t&lt; T &gt; &gt;::operator()",
               "argsstring_html": "(Protocol &amp;prot, T &amp;t) const",
               "name_html": "operator()",
+              "qualifiedname_html": "apache::thrift::op::detail::Decode&lt; type::enum_t&lt; T &gt; &gt;::operator()",
               "param": [
                 {
                   "type_html": "Protocol &amp;",
@@ -123,11 +125,11 @@
               ],
               "location": {
                 "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "line": "818",
+                "line": "821",
                 "column": "8",
                 "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-                "bodystart": "818",
-                "bodyend": "822"
+                "bodystart": "821",
+                "bodyend": "825"
               },
               "definition": {
                 "simple_html": "template &lt;typename Protocol&gt;\nvoid operator()(Protocol&amp; prot, T&amp; t) const",

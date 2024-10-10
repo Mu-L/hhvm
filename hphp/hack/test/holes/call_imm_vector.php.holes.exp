@@ -11,8 +11,8 @@
          m_params =
          [{ param_annotation = (ImmVector<int>); param_type_hint = ((ImmVector<int>), (Some ([4:21-35], (Happly (([4:21-30], "\\HH\\ImmVector"), [([4:31-34], (Hprim Tint))])))));
             param_pos = [4:36-38]; param_name = "$k"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          m_ctxs = None; m_unsafe_ctxs = None; m_body = { fb_ast = [([Pos.none], Noop)] }; 
          m_fun_kind = FSync; m_user_attributes = []; m_readonly_ret = None; 
@@ -39,8 +39,8 @@
          f_params =
          [{ param_annotation = (ImmVector<int>); param_type_hint = ((ImmVector<int>), (Some ([7:12-26], (Happly (([7:12-21], "\\HH\\ImmVector"), [([7:22-25], (Hprim Tint))])))));
             param_pos = [7:27-29]; param_name = "$k"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None; f_body = { fb_ast = [([Pos.none], Noop)] }; 
          f_fun_kind = FSync; f_user_attributes = [{ ua_name = ([7:10-11], "__SupportDynamicType"); ua_params = [] }]; 
@@ -58,8 +58,8 @@
          f_params =
          [{ param_annotation = (ImmVector<float>); param_type_hint = ((ImmVector<float>), (Some ([10:3-19], (Happly (([10:3-12], "\\HH\\ImmVector"), [([10:13-18], (Hprim Tfloat))])))));
             param_pos = [10:20-22]; param_name = "$k"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -73,17 +73,17 @@
                       unpacked_arg = None }))));
              ([15:3-30],
               (Expr
-                 ((TestImmVector), [15:3-29],
+                 ((exact TestImmVector), [15:3-29],
                   (Binop
-                     { bop = (Eq None); lhs = ((TestImmVector), [15:3-7], (Lvar ([15:3-7], $foo)));
-                       rhs = ((TestImmVector), [15:10-29], (New (((TestImmVector), [15:14-27], (CI ([15:14-27], "\\TestImmVector"))), [], [], None, ((function(): void))))) }))));
+                     { bop = (Eq None); lhs = ((exact TestImmVector), [15:3-7], (Lvar ([15:3-7], $foo)));
+                       rhs = ((exact TestImmVector), [15:10-29], (New (((exact TestImmVector), [15:14-27], (CI ([15:14-27], "\\TestImmVector"))), [], [], None, ((function(): void))))) }))));
              ([18:3-15],
               (Expr
                  ((void), [18:3-14],
                   (Call
                      { func =
                        (((function(ImmVector<int> $k): void)), [18:3-10],
-                        (Obj_get (((TestImmVector), [18:3-7], (Lvar ([18:3-7], $foo))), (((function(ImmVector<int> $k): void)), [18:9-10], (Id ([18:9-10], "k"))), OG_nullthrows, Is_method)));
+                        (Obj_get (((exact TestImmVector), [18:3-7], (Lvar ([18:3-7], $foo))), (((function(ImmVector<int> $k): void)), [18:9-10], (Id ([18:9-10], "k"))), OG_nullthrows, Is_method)));
                        targs = [];
                        args = [(Pnormal, ((ImmVector<float>), [18:11-13], (Hole (((ImmVector<float>), [18:11-13], (Lvar ([18:11-13], $k))), (ImmVector<float>), (ImmVector<int>), Typing))))];
                        unpacked_arg = None }))))
@@ -104,8 +104,8 @@
          f_params =
          [{ param_annotation = (ImmVector<float>); param_type_hint = ((ImmVector<float>), (Some ([22:3-19], (Happly (([22:3-12], "\\HH\\ImmVector"), [([22:13-18], (Hprim Tfloat))])))));
             param_pos = [22:20-22]; param_name = "$k"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -128,17 +128,17 @@
                       unpacked_arg = None }))));
              ([27:3-30],
               (Expr
-                 ((TestImmVector), [27:3-29],
+                 ((exact TestImmVector), [27:3-29],
                   (Binop
-                     { bop = (Eq None); lhs = ((TestImmVector), [27:3-7], (Lvar ([27:3-7], $foo)));
-                       rhs = ((TestImmVector), [27:10-29], (New (((TestImmVector), [27:14-27], (CI ([27:14-27], "\\TestImmVector"))), [], [], None, ((function(): void))))) }))));
+                     { bop = (Eq None); lhs = ((exact TestImmVector), [27:3-7], (Lvar ([27:3-7], $foo)));
+                       rhs = ((exact TestImmVector), [27:10-29], (New (((exact TestImmVector), [27:14-27], (CI ([27:14-27], "\\TestImmVector"))), [], [], None, ((function(): void))))) }))));
              ([30:3-71],
               (Expr
                  ((~void), [30:3-70],
                   (Call
                      { func =
                        (((function(ImmVector<int> $k): void)), [30:3-10],
-                        (Obj_get (((TestImmVector), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(ImmVector<int> $k): void)), [30:9-10], (Id ([30:9-10], "k"))), OG_nullthrows, Is_method)));
+                        (Obj_get (((exact TestImmVector), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(ImmVector<int> $k): void)), [30:9-10], (Id ([30:9-10], "k"))), OG_nullthrows, Is_method)));
                        targs = [];
                        args =
                        [(Pnormal,
@@ -168,8 +168,8 @@
           m_params =
           [{ param_annotation = (dynamic); param_type_hint = ((dynamic), (Some ([4:21-35], (Happly (([4:21-30], "\\HH\\ImmVector"), [([4:31-34], (Hprim Tint))]))))); 
              param_pos = [4:36-38]; param_name = "$k"; param_info = Param_required; 
-             param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-             param_visibility = None }
+             param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+             param_user_attributes = []; param_visibility = None }
             ];
           m_ctxs = None; m_unsafe_ctxs = None; m_body = { fb_ast = [([Pos.none], Noop)] }; 
           m_fun_kind = FSync; m_user_attributes = []; m_readonly_ret = None; 
@@ -196,8 +196,8 @@
          f_params =
          [{ param_annotation = (dynamic); param_type_hint = ((dynamic), (Some ([7:12-26], (Happly (([7:12-21], "\\HH\\ImmVector"), [([7:22-25], (Hprim Tint))]))))); 
             param_pos = [7:27-29]; param_name = "$k"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None; f_body = { fb_ast = [([Pos.none], Noop)] }; 
          f_fun_kind = FSync; f_user_attributes = [{ ua_name = ([7:10-11], "__SupportDynamicType"); ua_params = [] }]; 
@@ -215,8 +215,8 @@
          f_params =
          [{ param_annotation = (dynamic); param_type_hint = ((dynamic), (Some ([22:3-19], (Happly (([22:3-12], "\\HH\\ImmVector"), [([22:13-18], (Hprim Tfloat))]))))); 
             param_pos = [22:20-22]; param_name = "$k"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -239,17 +239,17 @@
                       unpacked_arg = None }))));
              ([27:3-30],
               (Expr
-                 ((TestImmVector), [27:3-29],
+                 ((exact TestImmVector), [27:3-29],
                   (Binop
-                     { bop = (Eq None); lhs = ((TestImmVector), [27:3-7], (Lvar ([27:3-7], $foo)));
-                       rhs = ((TestImmVector), [27:10-29], (New (((TestImmVector), [27:14-27], (CI ([27:14-27], "\\TestImmVector"))), [], [], None, ((function(): void))))) }))));
+                     { bop = (Eq None); lhs = ((exact TestImmVector), [27:3-7], (Lvar ([27:3-7], $foo)));
+                       rhs = ((exact TestImmVector), [27:10-29], (New (((exact TestImmVector), [27:14-27], (CI ([27:14-27], "\\TestImmVector"))), [], [], None, ((function(): void))))) }))));
              ([30:3-71],
               (Expr
                  ((~void), [30:3-70],
                   (Call
                      { func =
                        (((function(ImmVector<int> $k): void)), [30:3-10],
-                        (Obj_get (((TestImmVector), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(ImmVector<int> $k): void)), [30:9-10], (Id ([30:9-10], "k"))), OG_nullthrows, Is_method)));
+                        (Obj_get (((exact TestImmVector), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(ImmVector<int> $k): void)), [30:9-10], (Id ([30:9-10], "k"))), OG_nullthrows, Is_method)));
                        targs = [];
                        args =
                        [(Pnormal,

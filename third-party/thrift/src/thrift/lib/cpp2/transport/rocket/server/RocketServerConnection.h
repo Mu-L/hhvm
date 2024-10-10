@@ -42,10 +42,12 @@
 
 #include <thrift/lib/cpp2/async/MessageChannel.h>
 #include <thrift/lib/cpp2/server/MemoryTracker.h>
+#include <thrift/lib/cpp2/server/metrics/StreamMetricCallback.h>
 #include <thrift/lib/cpp2/transport/core/ManagedConnectionIf.h>
 #include <thrift/lib/cpp2/transport/rocket/RocketException.h>
 #include <thrift/lib/cpp2/transport/rocket/Types.h>
 #include <thrift/lib/cpp2/transport/rocket/framing/Parser.h>
+#include <thrift/lib/cpp2/transport/rocket/payload/PayloadSerializer.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketServerConnectionObserver.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketServerFrameContext.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketServerHandler.h>
@@ -53,8 +55,7 @@
 
 THRIFT_FLAG_DECLARE_bool(enable_rocket_connection_observers);
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 class Cpp2ConnContext;
 class RocketSinkClientCallback;
@@ -92,6 +93,7 @@ class RocketServerConnection final
       std::unique_ptr<RocketServerHandler> frameHandler,
       MemoryTracker& ingressMemoryTracker,
       MemoryTracker& egressMemoryTracker,
+      StreamMetricCallback& streamMetricCallback,
       const Config& cfg = {});
 
   void send(
@@ -204,6 +206,13 @@ class RocketServerConnection final
   void setOnWriteQuiescenceCallback(
       folly::Function<void(ReadPausableHandle)> cb) {
     onWriteQuiescence_ = std::move(cb);
+  }
+
+  bool isDecodingMetadataUsingBinaryProtocol() {
+    // NOTE: state check in RocketServerConnection::handleFrame should
+    // guarantee decodeMetadataUsingBinary_ has value when this method is
+    // invoked.
+    return decodeMetadataUsingBinary_.value();
   }
 
   bool incMemoryUsage(uint32_t memSize);
@@ -322,6 +331,8 @@ class RocketServerConnection final
   Parser<RocketServerConnection> parser_;
   std::unique_ptr<RocketServerHandler> frameHandler_;
   bool setupFrameReceived_{false};
+  std::optional<bool> decodeMetadataUsingBinary_;
+
   folly::F14NodeMap<
       StreamId,
       std::variant<
@@ -551,6 +562,7 @@ class RocketServerConnection final
 
   MemoryTracker& ingressMemoryTracker_;
   MemoryTracker& egressMemoryTracker_;
+  StreamMetricCallback& streamMetricCallback_;
 
   ~RocketServerConnection();
 
@@ -638,5 +650,4 @@ class RocketServerConnection final
 };
 
 } // namespace rocket
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

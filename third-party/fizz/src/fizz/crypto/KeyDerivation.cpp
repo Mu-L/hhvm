@@ -10,20 +10,6 @@
 
 namespace fizz {
 
-KeyDerivationImpl::KeyDerivationImpl(
-    const std::string& labelPrefix,
-    size_t hashLength,
-    HashFunc hashFunc,
-    HmacFunc hmacFunc,
-    HkdfImpl hkdf,
-    folly::ByteRange blankHash)
-    : labelPrefix_(labelPrefix),
-      hashLength_(hashLength),
-      hashFunc_(hashFunc),
-      hmacFunc_(hmacFunc),
-      hkdf_(hkdf),
-      blankHash_(blankHash) {}
-
 Buf KeyDerivationImpl::expandLabel(
     folly::ByteRange secret,
     folly::StringPiece label,
@@ -32,7 +18,7 @@ Buf KeyDerivationImpl::expandLabel(
   HkdfLabel hkdfLabel = {
       length, std::string(label.begin(), label.end()), std::move(hashValue)};
   return hkdf_.expand(
-      secret, *encodeHkdfLabel(std::move(hkdfLabel), labelPrefix_), length);
+      secret, *encodeHkdfLabel(std::move(hkdfLabel), kHkdfLabelPrefix), length);
 }
 
 Buf KeyDerivationImpl::hkdfExpand(
@@ -47,8 +33,9 @@ std::vector<uint8_t> KeyDerivationImpl::deriveSecret(
     folly::StringPiece label,
     folly::ByteRange messageHash,
     uint16_t length) {
-  CHECK_EQ(secret.size(), hashLength_);
-  CHECK_EQ(messageHash.size(), hashLength_);
+  auto hlen = hkdf_.hasher()->hashLength();
+  CHECK_EQ(secret.size(), hlen);
+  CHECK_EQ(messageHash.size(), hlen);
   CHECK_GT(length, 0);
   // Copying the buffer to avoid violating constness of the data.
   auto hashBuf = folly::IOBuf::copyBuffer(messageHash);

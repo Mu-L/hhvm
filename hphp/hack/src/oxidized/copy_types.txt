@@ -14,6 +14,7 @@ aast_defs::PropOrMethod
 aast_defs::ReadonlyKind
 aast_defs::ReifyKind
 aast_defs::RequireKind
+aast_defs::SplatKind
 aast_defs::Tprim
 aast_defs::TypedefVisibility
 aast_defs::Uop
@@ -38,6 +39,7 @@ aast::PropOrMethod
 aast::ReadonlyKind
 aast::ReifyKind
 aast::RequireKind
+aast::SplatKind
 aast::TypedefVisibility
 aast::Uop
 aast::Variance
@@ -54,6 +56,7 @@ ast_defs::OptionalKind
 ast_defs::PropOrMethod
 ast_defs::ReadonlyKind
 ast_defs::ReifyKind
+ast_defs::SplatKind
 ast_defs::Tprim
 ast_defs::TypedefVisibility
 ast_defs::Uop
@@ -65,8 +68,10 @@ error_codes::Naming
 error_codes::NastCheck
 error_codes::Parsing
 error_codes::Typing
+error_codes::Warning
 error_codes::GlobalAccessCheck
 errors::ErrorCode
+errors::FixmeIssue
 errors::Format
 errors::NameContext
 errors::Phase
@@ -109,12 +114,12 @@ typing_defs_core::ParamMode
 typing_defs_core::ShapeKind
 typing_defs_core::ValKind
 typing_reason::ArgPosition
+typing_reason::Axiom
 typing_reason::BlameSource
 typing_reason::CtorKind
 typing_reason::CstrVariance
 typing_reason::Direction
 typing_reason::FieldKind
-typing_reason::FlowKind
 typing_reason::PrjAsymm
 typing_reason::Side
 typing_reason::VarianceDir

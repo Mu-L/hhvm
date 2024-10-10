@@ -71,15 +71,15 @@
                  fp_type = (Rhint ([11:29-32]), (Tprim Tint));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None };
                 { fp_pos = [11:46-51]; fp_name = (Some "$arg2");
                   fp_type = (Rhint ([11:40-45]), (Tprim Tfloat));
                   fp_flags =
                   { Typing_defs_flags.FunParam.accept_disposable = false;
-                    inout = false; has_default = false; readonly = false;
-                    ignore_readonly_error = false };
+                    inout = false; is_optional = false; readonly = false;
+                    ignore_readonly_error = false; splat = false };
                   fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [11:10-28]) };
@@ -96,12 +96,13 @@
         fe_no_auto_likes = false }));
   ("\\Typedef",
    (Shallow_decl_defs.Typedef
-      { Typing_defs.td_module = None; td_pos = [13:6-13];
-        td_vis = Transparent; td_tparams = []; td_as_constraint = None;
-        td_super_constraint = None;
-        td_type = (Rhint ([13:16-22]), (Tprim Tstring)); td_is_ctx = false;
-        td_attributes = []; td_internal = false; td_docs_url = None;
-        td_package_override = None }));
+      { Typing_defs.td_module = None; td_pos = [13:6-13]; td_tparams = [];
+        td_as_constraint = None; td_super_constraint = None;
+        td_type_assignment =
+        (Typing_defs.SimpleTypeDef (Transparent,
+           (Rhint ([13:16-22]), (Tprim Tstring))));
+        td_is_ctx = false; td_attributes = []; td_internal = false;
+        td_docs_url = None; td_package_override = None }));
   ("\\function_with_non_primitive_args",
    (Shallow_decl_defs.Fun
       { Typing_defs.fe_deprecated = None; fe_module = None;
@@ -117,8 +118,8 @@
                   (Tapply (([14:43-50], "\\Typedef"), [])));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [14:10-42]) };
@@ -153,8 +154,8 @@
                  fp_type = (Rhint ([18:30-31]), (Tgeneric ("T", [])));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [18:10-26]) };
@@ -194,15 +195,15 @@
                  fp_type = (Rhint ([23:3-5]), (Tgeneric ("T1", [])));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None };
                 { fp_pos = [24:6-11]; fp_name = (Some "$arg2");
                   fp_type = (Rhint ([24:3-5]), (Tgeneric ("T2", [])));
                   fp_flags =
                   { Typing_defs_flags.FunParam.accept_disposable = false;
-                    inout = false; has_default = false; readonly = false;
-                    ignore_readonly_error = false };
+                    inout = false; is_optional = false; readonly = false;
+                    ignore_readonly_error = false; splat = false };
                   fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [22:10-38]) };
@@ -255,8 +256,8 @@
                   (Toption (Rhint ([33:26-29]), (Tprim Tint))));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [33:10-24]) };
@@ -284,8 +285,8 @@
                  fp_type = (Rhint ([35:23-26]), (Tprim Tint));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = true; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = true; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [35:10-16]) };
@@ -319,8 +320,8 @@
                  fp_type = (Rhint ([38:3-5]), (Tgeneric ("Tu", [])));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None };
                 { fp_pos = [39:24-31]; fp_name = (Some "$unused");
                   fp_type =
@@ -333,9 +334,9 @@
                            (Rhint ([39:13-15]), (Tgeneric ("Tu", [])));
                            fp_flags =
                            { Typing_defs_flags.FunParam.accept_disposable =
-                             false; inout = false; has_default = false;
-                             readonly = false; ignore_readonly_error = false
-                             };
+                             false; inout = false; is_optional = false;
+                             readonly = false; ignore_readonly_error = false;
+                             splat = false };
                            fp_def_value = None }
                           ];
                         ft_implicit_params =
@@ -351,8 +352,8 @@
                         ft_cross_package = None }));
                   fp_flags =
                   { Typing_defs_flags.FunParam.accept_disposable = false;
-                    inout = false; has_default = false; readonly = false;
-                    ignore_readonly_error = false };
+                    inout = false; is_optional = false; readonly = false;
+                    ignore_readonly_error = false; splat = false };
                   fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [37:10-37]) };
@@ -372,9 +373,10 @@
                                 (Rhint ([40:24-26]), (Tgeneric ("Tu", [])));
                                 fp_flags =
                                 { Typing_defs_flags.FunParam.accept_disposable =
-                                  false; inout = false; has_default = false;
+                                  false; inout = false; is_optional = false;
                                   readonly = false;
-                                  ignore_readonly_error = false };
+                                  ignore_readonly_error = false;
+                                  splat = false };
                                 fp_def_value = None }
                                ];
                              ft_implicit_params =
@@ -391,8 +393,9 @@
                              ft_cross_package = None }));
                        fp_flags =
                        { Typing_defs_flags.FunParam.accept_disposable = false;
-                         inout = false; has_default = false;
-                         readonly = false; ignore_readonly_error = false };
+                         inout = false; is_optional = false;
+                         readonly = false; ignore_readonly_error = false;
+                         splat = false };
                        fp_def_value = None }
                       ];
                     ft_implicit_params =
@@ -433,8 +436,8 @@
                      )));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [46:10-28]) };
@@ -490,8 +493,8 @@
                   (Toption (Rhint ([52:40-41]), (Tgeneric ("T", [])))));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [52:10-24]) };
@@ -519,8 +522,8 @@
                  fp_type = (Rhint ([56:29-37]), (Tprim Tresource));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [56:10-28]) };
@@ -568,8 +571,8 @@
                  fp_type = (Rvar_param_from_decl ([65:37-42]), Tmixed);
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [65:10-27]) };

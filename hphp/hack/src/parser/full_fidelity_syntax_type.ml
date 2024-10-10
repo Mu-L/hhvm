@@ -277,6 +277,7 @@ struct
     | CaseTypeVariant of {
         case_type_variant_bar: t;
         case_type_variant_type: t;
+        case_type_variant_where_clause: t;
       }
     | PropertyDeclaration of {
         property_attribute_spec: t;
@@ -444,6 +445,7 @@ struct
         parameter_optional: t;
         parameter_call_convention: t;
         parameter_readonly: t;
+        parameter_pre_ellipsis: t;
         parameter_type: t;
         parameter_ellipsis: t;
         parameter_name: t;
@@ -1069,8 +1071,15 @@ struct
         closure_parameter_optional: t;
         closure_parameter_call_convention: t;
         closure_parameter_readonly: t;
+        closure_parameter_pre_ellipsis: t;
         closure_parameter_type: t;
         closure_parameter_ellipsis: t;
+      }
+    | TupleOrUnionOrIntersectionElementTypeSpecifier of {
+        tuple_or_union_or_intersection_element_optional: t;
+        tuple_or_union_or_intersection_element_pre_ellipsis: t;
+        tuple_or_union_or_intersection_element_type: t;
+        tuple_or_union_or_intersection_element_ellipsis: t;
       }
     | TypeRefinement of {
         type_refinement_type: t;

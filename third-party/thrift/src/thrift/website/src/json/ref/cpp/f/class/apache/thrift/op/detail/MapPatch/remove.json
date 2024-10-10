@@ -21,6 +21,7 @@
       "definition_html": "void apache::thrift::op::detail::MapPatch&lt; Patch &gt;::remove",
       "argsstring_html": "(C &amp;&amp;keys)",
       "name_html": "remove",
+      "qualifiedname_html": "apache::thrift::op::detail::MapPatch::remove",
       "param": [
         {
           "type_html": "C &amp;&amp;",
@@ -29,11 +30,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "line": "324",
+        "line": "325",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "bodystart": "324",
-        "bodyend": "335"
+        "bodystart": "325",
+        "bodyend": "336"
       },
       "definition": {
         "simple_html": "template &lt;typename C = std::unordered_set&lt;typename T::key_type&gt;&gt;\nvoid remove(C&amp;&amp; keys)",

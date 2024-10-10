@@ -63,12 +63,12 @@ func main() {
 	os.Exit(0)
 }
 
-func newServer(processor thrift.ProcessorContext, addr string) (thrift.Server, net.Addr, error) {
+func newServer(processor thrift.Processor, addr string) (thrift.Server, net.Addr, error) {
 	socket, err := thrift.NewServerSocket(addr)
 	if err != nil {
 		return nil, nil, err
 	}
-	return thrift.NewSimpleServer(processor, socket, thrift.TransportIDHeader), socket.Addr(), nil
+	return thrift.NewSimpleServer(processor, socket, thrift.TransportIDUpgradeToRocket), socket.Addr(), nil
 }
 
 type rpcConformanceServiceHandler struct {

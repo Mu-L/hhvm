@@ -24,6 +24,8 @@
 #include <thrift/lib/cpp/protocol/TType.h>
 #include <thrift/lib/cpp2/op/Encode.h>
 #include <thrift/lib/cpp2/protocol/BinaryProtocol.h>
+#include <thrift/lib/cpp2/protocol/FieldMask.h>
+#include <thrift/lib/cpp2/protocol/detail/FieldMaskUtil.h>
 #include <thrift/lib/cpp2/protocol/detail/Object.h>
 #include <thrift/lib/thrift/gen-cpp2/protocol_types.h>
 
@@ -33,12 +35,7 @@ namespace apache::thrift::protocol {
 //
 // TT: The thrift type to use, for example
 // apache::thrift::type::binary_t.
-template <typename TT, typename T = type::native_type<TT>>
-Value asValueStruct(T&& value) {
-  Value result;
-  detail::ValueHelper<TT>::set(result, std::forward<T>(value));
-  return result;
-}
+using detail::asValueStruct;
 
 // Creates a Object struct for the given structured.
 template <typename T>
@@ -106,19 +103,7 @@ MaskedDecodeResult parseObject(
 // protocol Protocol: protocol to use eg. apache::thrift::BinaryProtocolWriter
 // val: Value to be serialized Serialized output is same as schema based
 // serialization except when struct contains an empty list, set or map
-template <class Protocol>
-void serializeValue(const Value& val, folly::IOBufQueue& queue) {
-  Protocol prot;
-  prot.setOutput(&queue);
-  detail::serializeValue(prot, val);
-}
-
-template <class Protocol>
-std::unique_ptr<folly::IOBuf> serializeValue(const Value& val) {
-  folly::IOBufQueue queue(folly::IOBufQueue::cacheChainLength());
-  serializeValue<Protocol>(val, queue);
-  return queue.move();
-}
+using detail::serializeValue;
 
 // Schemaless serialization of protocol::Object into thrift serialization
 // protocol Protocol: protocol to use eg. apache::thrift::BinaryProtocolWriter

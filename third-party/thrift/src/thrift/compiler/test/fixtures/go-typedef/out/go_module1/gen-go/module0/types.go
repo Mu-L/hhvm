@@ -7,16 +7,15 @@ package module0
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
-
 
 type Accessory struct {
     InventoryId int32 `thrift:"InventoryId,1" json:"InventoryId" db:"InventoryId"`
@@ -26,9 +25,7 @@ type Accessory struct {
 var _ thrift.Struct = (*Accessory)(nil)
 
 func NewAccessory() *Accessory {
-    return (&Accessory{}).
-        SetInventoryIdNonCompat(0).
-        SetNameNonCompat("")
+    return (&Accessory{}).setDefaults()
 }
 
 func (x *Accessory) GetInventoryId() int32 {
@@ -59,7 +56,7 @@ func (x *Accessory) SetName(value string) *Accessory {
     return x
 }
 
-func (x *Accessory) writeField1(p thrift.Format) error {  // InventoryId
+func (x *Accessory) writeField1(p thrift.Encoder) error {  // InventoryId
     if err := p.WriteFieldBegin("InventoryId", thrift.I32, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -75,7 +72,7 @@ func (x *Accessory) writeField1(p thrift.Format) error {  // InventoryId
     return nil
 }
 
-func (x *Accessory) writeField2(p thrift.Format) error {  // Name
+func (x *Accessory) writeField2(p thrift.Encoder) error {  // Name
     if err := p.WriteFieldBegin("Name", thrift.STRING, 2); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -91,7 +88,7 @@ func (x *Accessory) writeField2(p thrift.Format) error {  // Name
     return nil
 }
 
-func (x *Accessory) readField1(p thrift.Format) error {  // InventoryId
+func (x *Accessory) readField1(p thrift.Decoder) error {  // InventoryId
     result, err := p.ReadI32()
 if err != nil {
     return err
@@ -101,7 +98,7 @@ if err != nil {
     return nil
 }
 
-func (x *Accessory) readField2(p thrift.Format) error {  // Name
+func (x *Accessory) readField2(p thrift.Decoder) error {  // Name
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -111,17 +108,9 @@ if err != nil {
     return nil
 }
 
-func (x *Accessory) toString1() string {  // InventoryId
-    return fmt.Sprintf("%v", x.InventoryId)
-}
-
-func (x *Accessory) toString2() string {  // Name
-    return fmt.Sprintf("%v", x.Name)
-}
 
 
-
-func (x *Accessory) Write(p thrift.Format) error {
+func (x *Accessory) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Accessory"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -129,7 +118,6 @@ func (x *Accessory) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
@@ -144,7 +132,7 @@ func (x *Accessory) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Accessory) Read(p thrift.Format) error {
+func (x *Accessory) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -159,19 +147,18 @@ func (x *Accessory) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.I32)):  // InventoryId
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // Name
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -187,18 +174,13 @@ func (x *Accessory) Read(p thrift.Format) error {
 }
 
 func (x *Accessory) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Accessory({")
-    sb.WriteString(fmt.Sprintf("InventoryId:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("Name:%s", x.toString2()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Accessory) setDefaults() *Accessory {
+    return x.
+        SetInventoryIdNonCompat(0).
+        SetNameNonCompat("")
 }
 
 type PartName struct {
@@ -209,9 +191,7 @@ type PartName struct {
 var _ thrift.Struct = (*PartName)(nil)
 
 func NewPartName() *PartName {
-    return (&PartName{}).
-        SetInventoryIdNonCompat(0).
-        SetNameNonCompat("")
+    return (&PartName{}).setDefaults()
 }
 
 func (x *PartName) GetInventoryId() int32 {
@@ -242,7 +222,7 @@ func (x *PartName) SetName(value string) *PartName {
     return x
 }
 
-func (x *PartName) writeField1(p thrift.Format) error {  // InventoryId
+func (x *PartName) writeField1(p thrift.Encoder) error {  // InventoryId
     if err := p.WriteFieldBegin("InventoryId", thrift.I32, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -258,7 +238,7 @@ func (x *PartName) writeField1(p thrift.Format) error {  // InventoryId
     return nil
 }
 
-func (x *PartName) writeField2(p thrift.Format) error {  // Name
+func (x *PartName) writeField2(p thrift.Encoder) error {  // Name
     if err := p.WriteFieldBegin("Name", thrift.STRING, 2); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -274,7 +254,7 @@ func (x *PartName) writeField2(p thrift.Format) error {  // Name
     return nil
 }
 
-func (x *PartName) readField1(p thrift.Format) error {  // InventoryId
+func (x *PartName) readField1(p thrift.Decoder) error {  // InventoryId
     result, err := p.ReadI32()
 if err != nil {
     return err
@@ -284,7 +264,7 @@ if err != nil {
     return nil
 }
 
-func (x *PartName) readField2(p thrift.Format) error {  // Name
+func (x *PartName) readField2(p thrift.Decoder) error {  // Name
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -294,17 +274,9 @@ if err != nil {
     return nil
 }
 
-func (x *PartName) toString1() string {  // InventoryId
-    return fmt.Sprintf("%v", x.InventoryId)
-}
-
-func (x *PartName) toString2() string {  // Name
-    return fmt.Sprintf("%v", x.Name)
-}
 
 
-
-func (x *PartName) Write(p thrift.Format) error {
+func (x *PartName) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("PartName"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -312,7 +284,6 @@ func (x *PartName) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
@@ -327,7 +298,7 @@ func (x *PartName) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *PartName) Read(p thrift.Format) error {
+func (x *PartName) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -342,19 +313,18 @@ func (x *PartName) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.I32)):  // InventoryId
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // Name
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -370,19 +340,16 @@ func (x *PartName) Read(p thrift.Format) error {
 }
 
 func (x *PartName) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("PartName({")
-    sb.WriteString(fmt.Sprintf("InventoryId:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("Name:%s", x.toString2()))
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *PartName) setDefaults() *PartName {
+    return x.
+        SetInventoryIdNonCompat(0).
+        SetNameNonCompat("")
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

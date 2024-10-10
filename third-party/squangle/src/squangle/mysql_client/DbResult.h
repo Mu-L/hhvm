@@ -6,8 +6,7 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#ifndef COMMON_ASYNC_MYSQL_RESULT_H
-#define COMMON_ASYNC_MYSQL_RESULT_H
+#pragma once
 
 #include "squangle/base/Base.h"
 #include "squangle/base/ConnectionKey.h"
@@ -20,9 +19,7 @@
 #include <folly/fibers/Baton.h>
 #include <chrono>
 
-namespace facebook {
-namespace common {
-namespace mysql_client {
+namespace facebook::common::mysql_client {
 
 enum class OperationResult;
 
@@ -30,11 +27,14 @@ enum class OperationResult;
 // common between failure and success should come here.
 class OperationResultBase {
  public:
-  OperationResultBase(ConnectionKey conn_key, Duration elapsed_time)
+  OperationResultBase(
+      std::shared_ptr<const ConnectionKey> conn_key,
+      Duration elapsed_time)
       : conn_key_(std::move(conn_key)), elapsed_time_(elapsed_time) {}
+  virtual ~OperationResultBase() = default;
 
-  const ConnectionKey* getConnectionKey() const {
-    return &conn_key_;
+  std::shared_ptr<const ConnectionKey> getConnectionKey() const {
+    return conn_key_;
   }
 
   Duration elapsed() const {
@@ -42,8 +42,8 @@ class OperationResultBase {
   }
 
  private:
-  const ConnectionKey conn_key_;
-  const Duration elapsed_time_;
+  std::shared_ptr<const ConnectionKey> conn_key_;
+  Duration elapsed_time_;
 };
 
 // This exception represents a basic mysql error, either during a connection
@@ -55,7 +55,7 @@ class MysqlException : public db::Exception, public OperationResultBase {
       OperationResult failure_type,
       unsigned int mysql_errno,
       const std::string& mysql_error,
-      ConnectionKey conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       Duration elapsed_time);
 
   unsigned int mysql_errno() const {
@@ -90,7 +90,7 @@ class QueryException : public MysqlException {
       OperationResult failure_type,
       unsigned int mysql_errno,
       const std::string& mysql_error,
-      ConnectionKey conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       Duration elapsed_time)
       : MysqlException(
             failure_type,
@@ -116,8 +116,17 @@ class DbResult : public OperationResultBase {
   DbResult(
       std::unique_ptr<Connection>&& conn,
       OperationResult result,
-      ConnectionKey conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       Duration elapsed_time);
+  virtual ~DbResult() override;
+
+  // Default move constructors
+  DbResult(DbResult&& other) noexcept;
+  DbResult& operator=(DbResult&& other) noexcept;
+
+  // Disable copy constructor
+  DbResult(const DbResult&) = delete;
+  DbResult& operator=(const DbResult&) = delete;
 
   bool ok() const;
 
@@ -140,7 +149,7 @@ class ConnectResult : public DbResult {
   ConnectResult(
       std::unique_ptr<Connection>&& conn,
       OperationResult result,
-      ConnectionKey conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       Duration elapsed_time,
       uint32_t num_attempts);
 
@@ -161,7 +170,7 @@ class FetchResult : public DbResult {
       uint64_t result_size,
       std::unique_ptr<Connection>&& conn,
       OperationResult result,
-      ConnectionKey conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       Duration elapsed)
       : DbResult(std::move(conn), result, std::move(conn_key), elapsed),
         fetch_result_(std::move(query_result)),
@@ -339,6 +348,14 @@ class QueryResult {
     resp_attrs_ = std::move(resp_attrs);
   }
 
+  unsigned int warningsCount() const {
+    return warnings_count_;
+  }
+
+  void setWarningsCount(unsigned int warnings_count) {
+    warnings_count_ = warnings_count;
+  }
+
   // This can be called for complete or partial results. It's going to return
   // the total of rows stored in the QueryResult.
   size_t numRows() const {
@@ -444,6 +461,7 @@ class QueryResult {
   uint64_t last_insert_id_;
   std::string recv_gtid_;
   RespAttrs resp_attrs_;
+  unsigned int warnings_count_;
 
   OperationResult operation_result_;
 
@@ -481,6 +499,12 @@ class StreamedQueryResult {
     // Will throw exception if there was an error
     checkAccessToResult();
     return resp_attrs_;
+  }
+
+  unsigned int warningsCount() {
+    // Will throw exception if there was an error
+    checkAccessToResult();
+    return warnings_count_;
   }
 
   class Iterator;
@@ -541,7 +565,8 @@ class StreamedQueryResult {
       int64_t affected_rows,
       int64_t last_insert_id,
       const std::string& recv_gtid,
-      const RespAttrs& resp_attrs);
+      const RespAttrs& resp_attrs,
+      unsigned int warnings_count);
   void setException(folly::exception_wrapper ex);
   void freeHandler();
 
@@ -562,6 +587,7 @@ class StreamedQueryResult {
   int64_t last_insert_id_ = 0;
   std::string recv_gtid_;
   RespAttrs resp_attrs_;
+  unsigned int warnings_count_ = 0;
 
   folly::exception_wrapper exception_wrapper_;
 };
@@ -616,7 +642,7 @@ class MultiQueryStreamHandler {
   // escapeString will the connection is running a query.  Please do not use
   // this for other purposes.
   template <typename Func>
-  auto accessConn(Func func) const {
+  auto& accessConn(Func func) const {
     return func(connection());
   }
 
@@ -633,7 +659,7 @@ class MultiQueryStreamHandler {
   // process
   void start();
 
-  void streamCallback(FetchOperation* op, StreamState state);
+  void streamCallback(FetchOperation& op, StreamState state);
 
   std::atomic<State> state_{State::RunQuery};
 
@@ -650,7 +676,7 @@ class MultiQueryStreamHandler {
   // sanity checks on StreamedQueryResult
   void checkStreamedQueryResult(StreamedQueryResult* result);
 
-  Connection* connection() const;
+  Connection& connection() const;
 
   folly::exception_wrapper exception_wrapper_;
 
@@ -666,10 +692,7 @@ class MultiQueryStreamHandler {
   std::shared_ptr<MultiQueryStreamOperation> operation_;
 };
 
-typedef FetchResult<std::vector<QueryResult>> DbMultiQueryResult;
-typedef FetchResult<QueryResult> DbQueryResult;
-} // namespace mysql_client
-} // namespace common
-} // namespace facebook
+using DbMultiQueryResult = FetchResult<std::vector<QueryResult>>;
+using DbQueryResult = FetchResult<QueryResult>;
 
-#endif // COMMON_ASYNC_MYSQL_ROW_H
+} // namespace facebook::common::mysql_client

@@ -16,7 +16,6 @@
 
 #ifndef THRIFT_SERVER_H_
 #define THRIFT_SERVER_H_ 1
-
 #include <array>
 #include <atomic>
 #include <chrono>
@@ -38,10 +37,10 @@
 #include <folly/Synchronized.h>
 #include <folly/TokenBucket.h>
 #include <folly/concurrency/memory/PrimaryPtr.h>
+#include <folly/coro/AsyncScope.h>
 #include <folly/dynamic.h>
 #include <folly/executors/IOThreadPoolExecutor.h>
 #include <folly/executors/VirtualExecutor.h>
-#include <folly/experimental/coro/AsyncScope.h>
 #include <folly/io/ShutdownSocketSet.h>
 #include <folly/io/SocketOptionMap.h>
 #include <folly/io/async/AsyncServerSocket.h>
@@ -90,9 +89,10 @@
 #include <thrift/lib/cpp2/server/ThreadManagerLoggingWrapper.h>
 #include <thrift/lib/cpp2/server/ThriftServerConfig.h>
 #include <thrift/lib/cpp2/server/TransportRoutingHandler.h>
-#include <thrift/lib/cpp2/transport/rocket/PayloadUtils.h>
+#include <thrift/lib/cpp2/server/metrics/StreamMetricCallback.h>
 #include <thrift/lib/cpp2/transport/rocket/Types.h>
 #include <thrift/lib/cpp2/transport/rocket/framing/parser/AllocatingParserStrategy.h>
+#include <thrift/lib/cpp2/transport/rocket/payload/PayloadSerializer.h>
 #include <thrift/lib/thrift/gen-cpp2/RpcMetadata_constants.h>
 #include <wangle/acceptor/ServerSocketConfig.h>
 #include <wangle/acceptor/SharedSSLContextManager.h>
@@ -114,8 +114,7 @@ namespace wangle {
 class ConnectionManager;
 }
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 // Forward declaration of classes
 class Cpp2Connection;
@@ -123,6 +122,9 @@ class Cpp2Worker;
 class ThriftServer;
 class ThriftProcessor;
 class ThriftQuicServer;
+namespace detail {
+class ThriftServerInternals;
+}
 namespace rocket {
 class ThriftRocketServerHandler;
 }
@@ -235,14 +237,6 @@ namespace detail {
  * dynamic Server Attributes
  */
 ThriftServerConfig& getThriftServerConfig(ThriftServer&);
-/**
- * The set of service interceptors are not fully known until
- * ThriftServer::setup(). However, unit tests can mock objects such that the
- * setup is bypassed. This is a safe alternative to
- * ThriftServer::getServiceInterceptors() which returns 0 for such unit tests.
- */
-const std::vector<server::ServerConfigs::ServiceInterceptorInfo>&
-getServiceInterceptorsIfServerIsSetUp(ThriftServer&);
 } // namespace detail
 
 /**
@@ -320,6 +314,7 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
     bool resourcePoolDisabledGflag{false};
 
     bool checkComplete{false};
+    bool isProcessorFactoryThriftGenerated{false};
 
     std::string explain() const;
   };
@@ -444,16 +439,9 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
   }
 
   /**
-   * DEPRECATED! Use setInterface instead.
-   */
-  void setProcessorFactory(std::shared_ptr<AsyncProcessorFactory> pFac);
-
-  /**
    * Sets the main server interface that exposes user-defined methods.
    */
-  void setInterface(std::shared_ptr<AsyncProcessorFactory> iface) {
-    setProcessorFactory(std::move(iface));
-  }
+  void setInterface(std::shared_ptr<AsyncProcessorFactory> iface);
 
   const std::shared_ptr<apache::thrift::AsyncProcessorFactory>&
   getProcessorFactory() const {
@@ -543,9 +531,33 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
 
   std::string getLoadInfo(int64_t load) const;
 
+  /**
+  -----------------------------------------------------------------
+  |                      RESOURCE POOLS BEGIN                     |
+  -----------------------------------------------------------------
+   */
+ public:
+  /**
+   * Apply various runtime checks to determine whether we can use resource pools
+   * in this service. Returns true if resource pools is permitted by runtime
+   * checks.
+   */
+  bool runtimeResourcePoolsChecks();
+  /**
+   * Ensure that this Thrift Server has ResourcePools set up. If there is
+   * already a non-empty ResourcePoolSet, nothing will be done. Otherwise, the
+   * default setup of ResourcePools will be created.
+   */
+  void ensureResourcePools();
+
   bool resourcePoolEnabled() const override {
     return getRuntimeServerActions().resourcePoolEnabled;
   }
+
+  /**
+   * Returns debug information regarding ResourcePool setup on this server.
+   **/
+  serverdbginfo::ResourcePoolsDbgInfo getResourcePoolsDbgInfo() const;
 
   /**
    * Get the ResourcePoolSet used by this ThriftServer. There is always one, but
@@ -622,6 +634,23 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
     return runtimeServerActions_.resourcePoolEnabled;
   }
 
+ private:
+  /**
+   * Ensures no further changes can be made to the ResourcePoolSet.
+   */
+  void lockResourcePoolSet();
+
+  //! The ResourcePoolsSet used by this ThriftServer (if in ResourcePools
+  //! are enabled).
+  ResourcePoolSet resourcePoolSet_;
+  std::optional<std::string> resourcePoolsOptOutExplanation_;
+  /**
+  -----------------------------------------------------------------
+  |                      RESOURCE POOLS END                       |
+  -----------------------------------------------------------------
+   */
+
+ public:
   /**
    * Set Thread Manager (for queuing mode).
    * If not set, defaults to the number of worker threads.
@@ -873,8 +902,6 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
 
  private:
   friend ThriftServerConfig& detail::getThriftServerConfig(ThriftServer&);
-  friend const std::vector<ServiceInterceptorInfo>&
-  detail::getServiceInterceptorsIfServerIsSetUp(ThriftServer&);
 
   ThriftServerConfig thriftConfig_;
 
@@ -930,6 +957,10 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
   folly::Synchronized<std::shared_ptr<server::TServerObserver>> observer_;
   std::atomic<server::TServerObserver*> observerPtr_{nullptr};
 
+  // Interface for instrumenting streams
+  std::shared_ptr<StreamMetricCallback> streamMetricCallback_{
+      std::make_shared<NoopStreamMetricCallback>()};
+
   //! The type of thread manager to create.
   ThreadManagerType threadManagerType_{ThreadManagerType::PRIORITY};
 
@@ -974,10 +1005,6 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
   // PRIORITY_QUEUE ThreadManagerType and if no threadFactory supplied)
   std::optional<concurrency::PosixThreadFactory::THREAD_PRIORITY>
       threadPriority_;
-
-  //! The ResourcePoolsSet used by this ThriftServer (if in ResourcePools
-  //! are enabled).
-  ResourcePoolSet resourcePoolSet_;
 
   AdaptiveConcurrencyController adaptiveConcurrencyController_;
 
@@ -1290,6 +1317,9 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
 
   /** Set maximum number of milliseconds we'll wait for data (0 = infinity).
    *  Note: existing connections are unaffected by this call.
+   *
+   * WARNING: Idle timeout will not work for Rocket connections unless the
+   * rocket_set_idle_connection_timeout Thrift Flag is set to true.
    *
    *  @param timeout number of milliseconds, or 0 to disable timeouts.
    */
@@ -1849,10 +1879,10 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
   int nAcceptors_ = 1;
   uint16_t socketMaxReadsPerEvent_{16};
 
-  mutable std::mutex ioGroupMutex_;
+  mutable folly::SharedMutex ioGroupMutex_;
 
   std::shared_ptr<folly::IOThreadPoolExecutorBase> getIOGroupSafe() const {
-    std::lock_guard<std::mutex> lock(ioGroupMutex_);
+    std::shared_lock lock(ioGroupMutex_);
     return getIOGroup();
   }
 
@@ -2284,6 +2314,8 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
         [observer = std::move(contextObserver),
          tlsRevocationObserver = enableTLSCertRevocation(),
          tlsRevocationEnforcementObserver = enforceTLSCertRevocation(),
+         tlsCertRevocationInitializeObserver =
+             migrateTLSCertRevocationInitializer(),
          hybridKexObserver = enableHybridKex(),
          aegisObserver = enableAegis(),
          pskModeObserver = preferPskKe(),
@@ -2291,6 +2323,7 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
          dcObserver = enablePresentingDelegatedCredentials()]() {
           (void)**tlsRevocationObserver;
           (void)**tlsRevocationEnforcementObserver;
+          (void)**tlsCertRevocationInitializeObserver;
           (void)**hybridKexObserver;
           (void)**aegisObserver;
           (void)**pskModeObserver;
@@ -2498,6 +2531,7 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
 
   static folly::observer::Observer<bool> enableTLSCertRevocation();
   static folly::observer::Observer<bool> enforceTLSCertRevocation();
+  static folly::observer::Observer<bool> migrateTLSCertRevocationInitializer();
 
   static folly::observer::Observer<bool> enableReceivingDelegatedCreds();
 
@@ -2611,37 +2645,11 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
   void setupThreadManager();
 
   /**
-   * Apply various runtime checks to determine whether we can use resource pools
-   * in this service. Returns true if resource pools is permitted by runtime
-   * checks.
-   */
-  bool runtimeResourcePoolsChecks();
-
-  /**
    * Adds resource pools for any priorities not specified in allocated to this
    * server.
    */
   void ensureResourcePoolsDefaultPrioritySetup(
       std::vector<concurrency::PRIORITY> allocated = {concurrency::NORMAL});
-
-  /**
-   * Ensure that this Thrift Server has ResourcePools set up. If there is
-   * already a non-empty ResourcePoolSet, nothing will be done. Otherwise, the
-   * default setup of ResourcePools will be created.
-   */
-  void ensureResourcePools();
-
- private:
-  /**
-   * Ensures no further changes can be made to the ResourcePoolSet.
-   */
-  void lockResourcePoolSet();
-
- public:
-  /**
-   * Returns debug information regarding ResourcePool setup on this server.
-   **/
-  serverdbginfo::ResourcePoolsDbgInfo getResourcePoolsDbgInfo() const;
 
   /**
    * Kill the workers and wait for listeners to quit
@@ -2774,9 +2782,9 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
    * Logically, this is an apache::thrift::MultiplexAsyncProcessorFactory with
    * the following composition:
    *
-   *    ┌────────────────────���───┐
+   *    ┌────────────────────────┐
    *    │      User Service      │
-   *    │ (setProcessorFactory)  │  │
+   *    │     (setInterface)     │  │
    *    └────────────────────────┘  │
    *                                │
    *    ┌────────────────────────┐  │
@@ -2827,9 +2835,12 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
    */
   const std::vector<ServiceInterceptorInfo>& getServiceInterceptors()
       const override {
-    CHECK(processedServiceDescription_)
-        << "Server must be set up before calling this method";
-    return processedServiceDescription_->modules.coalescedServiceInterceptors;
+    if (auto* description = processedServiceDescription_.get()) {
+      return description->modules.coalescedServiceInterceptors;
+    }
+    static const folly::Indestructible<std::vector<ServiceInterceptorInfo>>
+        kEmpty;
+    return kEmpty;
   }
 
   /**
@@ -2893,7 +2904,9 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
           rootRequestContextId_(stub.getRootRequestContextId()),
           reqId_(RequestsRegistry::getRequestId(rootRequestContextId_)),
           reqDebugLog_(collectRequestDebugLog(stub)) {
-      auto requestPayload = rocket::unpack<RequestPayload>(stub.clonePayload());
+      auto requestPayload =
+          rocket::PayloadSerializer::getInstance().unpack<RequestPayload>(
+              stub.clonePayload());
       payload_ = std::move(*requestPayload->payload);
       auto& metadata = requestPayload->metadata;
       if (metadata.otherMetadata()) {
@@ -3103,6 +3116,8 @@ class ThriftServer : public apache::thrift::concurrency::Runnable,
   InjectedFailure maybeInjectFailure() const {
     return failureInjection_.test();
   }
+
+  friend class detail::ThriftServerInternals;
 };
 
 template <typename AcceptorClass, typename SharedSSLContextManagerClass>
@@ -3161,20 +3176,8 @@ inline ThriftServerConfig& getThriftServerConfig(ThriftServer& server) {
   return server.thriftConfig_;
 }
 
-inline const std::vector<server::ServerConfigs::ServiceInterceptorInfo>&
-getServiceInterceptorsIfServerIsSetUp(ThriftServer& server) {
-  if (auto* description = server.processedServiceDescription_.get()) {
-    return description->modules.coalescedServiceInterceptors;
-  }
-  static const folly::Indestructible<
-      std::vector<server::ServerConfigs::ServiceInterceptorInfo>>
-      kEmpty;
-  return *kEmpty;
-}
-
 } // namespace detail
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift
 
 #endif // #ifndef THRIFT_SERVER_H_

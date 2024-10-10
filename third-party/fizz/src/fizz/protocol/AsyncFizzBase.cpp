@@ -316,6 +316,8 @@ void AsyncFizzBase::deliverError(
     bool closeTransport) {
   DelayedDestruction::DestructorGuard dg(this);
 
+  bool readCallbackDelivered = false;
+
   if (readCallback_) {
     auto readCallback = readCallback_;
     readCallback_ = nullptr;
@@ -324,7 +326,8 @@ void AsyncFizzBase::deliverError(
     } else {
       readCallback->readErr(ex);
     }
-  } else {
+    readCallbackDelivered = true;
+  } else if (!pendingReadEx_) {
     pendingReadEx_ = ex;
   }
 
@@ -343,6 +346,12 @@ void AsyncFizzBase::deliverError(
 
   if (closeTransport) {
     transport_->close();
+  }
+
+  if (readCallbackDelivered) {
+    // The transport close or other callbacks may have generated another read
+    // exception. If we already delivered a more relevant exception, clear it.
+    pendingReadEx_ = folly::none;
   }
 }
 
@@ -548,15 +557,8 @@ void AsyncFizzBase::endOfTLS(std::unique_ptr<folly::IOBuf> endOfData) noexcept {
     // The end of TLS callback may not want the socket to be closed but by
     // default read callbacks often close on EOF, as such we defer to the setter
     // of the end of tls callback to apply the appropriate behaviour if it's set
-    if (readCallback_) {
-      auto readCallback = readCallback_;
-      readCallback_ = nullptr;
-      readCallback->readEOF();
-    } else if (!pendingReadEx_) {
-      pendingReadEx_ =
-          AsyncSocketException(AsyncSocketException::END_OF_FILE, "readEOF()");
-    }
-    transport_->close();
+    AsyncSocketException eof(AsyncSocketException::END_OF_FILE, "readEOF()");
+    transportError(eof);
   }
 }
 

@@ -221,11 +221,12 @@ ss.serialize_field("case_type_variants", &self.with(variants))?;
 ss.serialize_field("case_type_semicolon", &self.with(semicolon))?;
       ss.end()
 } 
-SyntaxVariant::CaseTypeVariant (CaseTypeVariantChildren{bar,type_} ) => {
-      let mut ss = s.serialize_struct("", 3)?;
+SyntaxVariant::CaseTypeVariant (CaseTypeVariantChildren{bar,type_,where_clause} ) => {
+      let mut ss = s.serialize_struct("", 4)?;
       ss.serialize_field("kind", "case_type_variant")?;
       ss.serialize_field("case_type_variant_bar", &self.with(bar))?;
 ss.serialize_field("case_type_variant_type", &self.with(type_))?;
+ss.serialize_field("case_type_variant_where_clause", &self.with(where_clause))?;
       ss.end()
 } 
 SyntaxVariant::PropertyDeclaration (PropertyDeclarationChildren{attribute_spec,modifiers,type_,declarators,semicolon} ) => {
@@ -465,14 +466,15 @@ SyntaxVariant::DecoratedExpression (DecoratedExpressionChildren{decorator,expres
 ss.serialize_field("decorated_expression_expression", &self.with(expression))?;
       ss.end()
 } 
-SyntaxVariant::ParameterDeclaration (ParameterDeclarationChildren{attribute,visibility,optional,call_convention,readonly,type_,ellipsis,name,default_value,parameter_end} ) => {
-      let mut ss = s.serialize_struct("", 11)?;
+SyntaxVariant::ParameterDeclaration (ParameterDeclarationChildren{attribute,visibility,optional,call_convention,readonly,pre_ellipsis,type_,ellipsis,name,default_value,parameter_end} ) => {
+      let mut ss = s.serialize_struct("", 12)?;
       ss.serialize_field("kind", "parameter_declaration")?;
       ss.serialize_field("parameter_attribute", &self.with(attribute))?;
 ss.serialize_field("parameter_visibility", &self.with(visibility))?;
 ss.serialize_field("parameter_optional", &self.with(optional))?;
 ss.serialize_field("parameter_call_convention", &self.with(call_convention))?;
 ss.serialize_field("parameter_readonly", &self.with(readonly))?;
+ss.serialize_field("parameter_pre_ellipsis", &self.with(pre_ellipsis))?;
 ss.serialize_field("parameter_type", &self.with(type_))?;
 ss.serialize_field("parameter_ellipsis", &self.with(ellipsis))?;
 ss.serialize_field("parameter_name", &self.with(name))?;
@@ -1422,14 +1424,24 @@ ss.serialize_field("closure_return_type", &self.with(return_type))?;
 ss.serialize_field("closure_outer_right_paren", &self.with(outer_right_paren))?;
       ss.end()
 } 
-SyntaxVariant::ClosureParameterTypeSpecifier (ClosureParameterTypeSpecifierChildren{optional,call_convention,readonly,type_,ellipsis} ) => {
-      let mut ss = s.serialize_struct("", 6)?;
+SyntaxVariant::ClosureParameterTypeSpecifier (ClosureParameterTypeSpecifierChildren{optional,call_convention,readonly,pre_ellipsis,type_,ellipsis} ) => {
+      let mut ss = s.serialize_struct("", 7)?;
       ss.serialize_field("kind", "closure_parameter_type_specifier")?;
       ss.serialize_field("closure_parameter_optional", &self.with(optional))?;
 ss.serialize_field("closure_parameter_call_convention", &self.with(call_convention))?;
 ss.serialize_field("closure_parameter_readonly", &self.with(readonly))?;
+ss.serialize_field("closure_parameter_pre_ellipsis", &self.with(pre_ellipsis))?;
 ss.serialize_field("closure_parameter_type", &self.with(type_))?;
 ss.serialize_field("closure_parameter_ellipsis", &self.with(ellipsis))?;
+      ss.end()
+} 
+SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier (TupleOrUnionOrIntersectionElementTypeSpecifierChildren{optional,pre_ellipsis,type_,ellipsis} ) => {
+      let mut ss = s.serialize_struct("", 5)?;
+      ss.serialize_field("kind", "tuple_or_union_or_intersection_element_type_specifier")?;
+      ss.serialize_field("tuple_or_union_or_intersection_element_optional", &self.with(optional))?;
+ss.serialize_field("tuple_or_union_or_intersection_element_pre_ellipsis", &self.with(pre_ellipsis))?;
+ss.serialize_field("tuple_or_union_or_intersection_element_type", &self.with(type_))?;
+ss.serialize_field("tuple_or_union_or_intersection_element_ellipsis", &self.with(ellipsis))?;
       ss.end()
 } 
 SyntaxVariant::TypeRefinement (TypeRefinementChildren{type_,keyword,left_brace,members,right_brace} ) => {

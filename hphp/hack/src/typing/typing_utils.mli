@@ -13,7 +13,10 @@ type expand_typedef =
   Typing_reason.t ->
   string ->
   Typing_defs.locl_ty list ->
-  (Typing_env_types.env * Typing_error.t option) * Typing_defs.locl_ty
+  (Typing_env_types.env
+  * Typing_error.t option
+  * Type_expansions.cycle_reporter list)
+  * Typing_defs.locl_ty
 
 val expand_typedef_ref : expand_typedef ref
 
@@ -131,11 +134,11 @@ type localize =
 
 val localize_ref : localize ref
 
-val localize :
-  Typing_env_types.env ->
-  ety_env:Typing_defs.expand_env ->
-  Typing_defs.decl_ty ->
-  (Typing_env_types.env * Typing_error.t option) * Typing_defs.locl_ty
+val localize : localize
+
+val localize_disjoint_union_ref : localize ref
+
+val localize_disjoint_union : localize
 
 val is_class_i : Typing_defs.internal_type -> bool
 
@@ -228,20 +231,15 @@ type expand_typeconst =
   Typing_defs.locl_ty ->
   Typing_defs.pos_id ->
   allow_abstract_tconst:bool ->
-  (Typing_env_types.env * Typing_error.t option) * Typing_defs.locl_ty
+  (Typing_env_types.env
+  * Typing_error.t option
+  * Type_expansions.cycle_reporter list)
+  * Typing_defs.locl_ty
 
 val expand_typeconst_ref : expand_typeconst ref
 
 (** Expands a type constant access like A::T to its definition. *)
-val expand_typeconst :
-  Typing_defs.expand_env ->
-  Typing_env_types.env ->
-  ?ignore_errors:bool ->
-  ?as_tyvar_with_cnstr:Pos.t option ->
-  Typing_defs.locl_ty ->
-  Typing_defs.pos_id ->
-  allow_abstract_tconst:bool ->
-  (Typing_env_types.env * Typing_error.t option) * Typing_defs.locl_ty
+val expand_typeconst : expand_typeconst
 
 type union =
   Typing_env_types.env ->
@@ -435,26 +433,6 @@ val has_ancestor_including_req_refl :
 val has_ancestor_including_req :
   Typing_env_types.env -> Folded_class.t -> string -> bool
 
-(* If input is dynamic | t or t | dynamic then return Some t.
- * Otherwise return None.
- *)
-val try_strip_dynamic :
-  ?accept_intersections:bool ->
-  Typing_env_types.env ->
-  Typing_defs.locl_ty ->
-  Typing_defs.locl_ty option
-
-val try_strip_dynamic_from_union :
-  ?accept_intersections:bool ->
-  Typing_env_types.env ->
-  Typing_defs.locl_ty list ->
-  (Typing_defs.locl_ty * Typing_defs.locl_ty list) option
-
-(* If input is dynamic | t or t | dynamic then return t,
- * otherwise return type unchanged. *)
-val strip_dynamic :
-  Typing_env_types.env -> Typing_defs.locl_ty -> Typing_defs.locl_ty
-
 (* Wrap supportdyn<_> around a type. Push through intersections
  * and unions, and leave type alone if it is a subtype of dynamic.
  *)
@@ -516,20 +494,7 @@ val no_upper_bound :
   Typing_defs.locl_ty list ->
   Typing_env_types.env * bool
 
-val recompose_like_type :
-  Typing_env_types.env ->
-  Typing_defs.locl_ty ->
-  Typing_env_types.env * Typing_defs.locl_ty
-
-val make_simplify_typed_expr :
-  Typing_env_types.env ->
-  Pos.t ->
-  Typing_defs.locl_ty ->
-  (Typing_defs.locl_ty, Tast.saved_env) Aast_defs.expr_ ->
-  Typing_env_types.env * Tast.expr
-
-val partition_union :
-  f:(Typing_defs.locl_ty -> bool) ->
-  Typing_env_types.env ->
-  Typing_defs.locl_ty list ->
-  Typing_defs.locl_ty list * Typing_defs.locl_ty list
+val get_case_type_variants_as_type :
+  Typing_defs.typedef_case_type_variant ->
+  Typing_defs.typedef_case_type_variant list ->
+  Typing_defs.decl_ty

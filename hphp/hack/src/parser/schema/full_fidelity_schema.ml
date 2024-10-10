@@ -9,7 +9,7 @@
 
 (* If you make changes to the schema that cause it to serialize / deserialize
    differently, please update this version number *)
-let full_fidelity_schema_version_number = "2024-07-19-0000"
+let full_fidelity_schema_version_number = "2024-07-30-0000"
 
 (* TODO: Consider basing the version number on an auto-generated
    hash of a file rather than relying on people remembering to update it. *)
@@ -160,6 +160,7 @@ let trivia_kinds =
       ["DelimitedComment"; "delimited_comment"];
       ["SingleLineComment"; "single_line_comment"];
       ["FixMe"; "fix_me"];
+      ["Ignore"; "ignore"];
       ["IgnoreError"; "ignore_error"];
       ["FallThrough"; "fall_through"];
       ["ExtraTokenError"; "extra_token_error"];

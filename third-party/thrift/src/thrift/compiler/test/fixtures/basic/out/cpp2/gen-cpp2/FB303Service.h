@@ -46,6 +46,7 @@ class ServiceHandler<::test::fixtures::basic::FB303Service> : public apache::thr
   typedef ::test::fixtures::basic::FB303ServiceAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -69,6 +70,7 @@ class ServiceHandler<::test::fixtures::basic::FB303Service> : public apache::thr
 namespace test::fixtures::basic {
 using FB303ServiceSvIf [[deprecated("Use apache::thrift::ServiceHandler<FB303Service> instead")]] = ::apache::thrift::ServiceHandler<FB303Service>;
 } // namespace test::fixtures::basic
+
 namespace test::fixtures::basic {
 class FB303ServiceSvNull : public ::apache::thrift::ServiceHandler<FB303Service> {
  public:

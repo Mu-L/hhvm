@@ -40,14 +40,13 @@ type feature_name =
   | TypeConstMultipleBounds
   | TypeConstSuperBound
   | ClassConstDefault
-  | TypeRefinements
   | MethodTraitDiamond
   | UpcastExpression
   | RequireClass
   | NewtypeSuperBounds
-  | ExpressionTreeBlocks
   | Package
   | CaseTypes
+  | CaseTypeWhereClauses
   | ModuleLevelTraits
   | ModuleLevelTraitsExtensions
   | TypedLocalVariables
@@ -57,10 +56,13 @@ type feature_name =
   | ClassType
   | FunctionReferences
   | FunctionTypeOptionalParams
-  | ExpressionTreeMap
   | ExpressionTreeNest
   | SealedMethods
   | AwaitInSplice
+  | OpenTuples
+  | TypeSplat
+  | ExpressionTreeNestedBindings
+  | LikeTypeHints
 [@@deriving eq, ord, show]
 
 let feature_name_map =
@@ -77,14 +79,13 @@ let feature_name_map =
       ("type_const_multiple_bounds", TypeConstMultipleBounds);
       ("type_const_super_bound", TypeConstSuperBound);
       ("class_const_default", ClassConstDefault);
-      ("type_refinements", TypeRefinements);
       ("method_trait_diamond", MethodTraitDiamond);
       ("upcast_expression", UpcastExpression);
       ("require_class", RequireClass);
       ("newtype_super_bounds", NewtypeSuperBounds);
-      ("expression_tree_blocks", ExpressionTreeBlocks);
       ("package", Package);
       ("case_types", CaseTypes);
+      ("case_type_where_clauses", CaseTypeWhereClauses);
       ("module_level_traits", ModuleLevelTraits);
       ("module_level_traits_extensions", ModuleLevelTraitsExtensions);
       ("typed_local_variables", TypedLocalVariables);
@@ -94,47 +95,31 @@ let feature_name_map =
       ("class_type", ClassType);
       ("function_references", FunctionReferences);
       ("function_type_optional_params", FunctionTypeOptionalParams);
-      ("expression_tree_map", ExpressionTreeMap);
       ("expression_tree_nest", ExpressionTreeNest);
       ("sealed_methods", SealedMethods);
       ("await_in_splice", AwaitInSplice);
+      ("open_tuples", OpenTuples);
+      ("type_splat", TypeSplat);
+      ("expression_tree_nested_bindings", ExpressionTreeNestedBindings);
+      ("like_type_hints", LikeTypeHints);
     ]
 
 let feature_name_from_string s = SMap.find_opt s feature_name_map
 
 (** Return the hard-coded status of the feature. This information will be moved to configuration. *)
-let get_feature_status_deprecated name =
-  match name with
-  | UnionIntersectionTypeHints -> Unstable
-  | ExpressionTrees -> Unstable
-  | Readonly -> Preview
-  | ModuleReferences -> Unstable
-  | ContextAliasDeclaration -> Unstable
-  | ContextAliasDeclarationShort -> Preview
-  | TypeConstMultipleBounds -> Preview
-  | TypeConstSuperBound -> Unstable
-  | ClassConstDefault -> Migration
-  | TypeRefinements -> OngoingRelease
-  | MethodTraitDiamond -> OngoingRelease
-  | UpcastExpression -> Unstable
-  | RequireClass -> OngoingRelease
-  | NewtypeSuperBounds -> Unstable
-  | ExpressionTreeBlocks -> OngoingRelease
-  | Package -> OngoingRelease
-  | CaseTypes -> Preview
-  | ModuleLevelTraits -> OngoingRelease
-  | ModuleLevelTraitsExtensions -> OngoingRelease
-  | TypedLocalVariables -> Preview
-  | PipeAwait -> Preview
-  | MatchStatements -> Unstable
-  | StrictSwitch -> Unstable
-  | ClassType -> Unstable
-  | FunctionReferences -> Unstable
-  | FunctionTypeOptionalParams -> OngoingRelease
-  | ExpressionTreeMap -> OngoingRelease
-  | ExpressionTreeNest -> Preview
-  | SealedMethods -> Unstable
-  | AwaitInSplice -> Preview
+external get_feature_status_deprecated : feature_name -> feature_status
+  = "get_feature_status_deprecated"
+
+let feature_more_restrictive ~more ~less =
+  match (more, less) with
+  | (Unstable, Preview)
+  | (Unstable, OngoingRelease)
+  | (Preview, OngoingRelease) ->
+    true
+  | _ -> false
+
+let feature_more_restrictive_or_eq ~more ~less =
+  equal_feature_status more less || feature_more_restrictive ~more ~less
 
 let parse_experimental_feature (name_string, status_json) =
   let status_string = Hh_json.get_string_exn status_json in
@@ -145,12 +130,12 @@ let parse_experimental_feature (name_string, status_json) =
   | (Some name, Some status) ->
     let hard_coded_status = get_feature_status_deprecated name in
     (* For now, force the config to be consistent with the hard coded status. *)
-    if equal_feature_status status hard_coded_status then
-      (name, status)
+    if feature_more_restrictive_or_eq ~more:status ~less:hard_coded_status then
+      (name_string, status)
     else
       failwith
         (Format.sprintf
-           "Experimental feature status mismatch for feature %s: %s in config must be %s during experimental feature config roll-out"
+           "Experimental feature status mismatch for feature %s: %s in config must be %s (or more restrictive) during experimental feature config roll-out"
            name_string
            status_string
            (show_feature_status hard_coded_status))

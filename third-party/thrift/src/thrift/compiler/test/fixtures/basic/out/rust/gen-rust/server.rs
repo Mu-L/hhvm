@@ -40,6 +40,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait FooService: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn simple_rpc(
@@ -79,8 +80,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for FooService's methods.
 #[derive(Clone, Debug)]
 pub struct FooServiceProcessor<P, H, R, RS> {
@@ -88,6 +87,7 @@ pub struct FooServiceProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_FooService_simple_rpc {
 }
@@ -112,7 +112,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Fo
         })
     }
 }
-
 
 impl<P, H, R, RS> FooServiceProcessor<P, H, R, RS>
 where
@@ -178,7 +177,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "FooService.simple_rpc", exception = ?exn);
+                ::tracing::error!(method = "FooService.simple_rpc", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -384,6 +383,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait FB303Service: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn simple_rpc(
@@ -428,8 +428,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for FB303Service's methods.
 #[derive(Clone, Debug)]
 pub struct FB303ServiceProcessor<P, H, R, RS> {
@@ -437,6 +435,7 @@ pub struct FB303ServiceProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_FB303Service_simple_rpc {
     int_parameter: ::std::primitive::i32,
@@ -466,7 +465,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_FB
         })
     }
 }
-
 
 impl<P, H, R, RS> FB303ServiceProcessor<P, H, R, RS>
 where
@@ -533,7 +531,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "FB303Service.simple_rpc", exception = ?exn);
+                ::tracing::error!(method = "FB303Service.simple_rpc", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -738,6 +736,7 @@ where
         }
     }
 }
+
 
 #[::async_trait::async_trait]
 pub trait MyService: ::std::marker::Send + ::std::marker::Sync + 'static {
@@ -1016,8 +1015,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for MyService's methods.
 #[derive(Clone, Debug)]
 pub struct MyServiceProcessor<P, H, R, RS> {
@@ -1025,6 +1022,7 @@ pub struct MyServiceProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_MyService_ping {
 }
@@ -1050,6 +1048,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
     }
 }
 
+
 struct Args_MyService_getRandomData {
 }
 
@@ -1073,6 +1072,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
+
 
 struct Args_MyService_sink {
     sink: ::std::primitive::i64,
@@ -1102,6 +1102,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
+
 
 struct Args_MyService_putDataById {
     id: ::std::primitive::i64,
@@ -1137,6 +1138,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
     }
 }
 
+
 struct Args_MyService_hasDataById {
     id: ::std::primitive::i64,
 }
@@ -1165,6 +1167,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
+
 
 struct Args_MyService_getDataById {
     id: ::std::primitive::i64,
@@ -1195,6 +1198,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
     }
 }
 
+
 struct Args_MyService_deleteDataById {
     id: ::std::primitive::i64,
 }
@@ -1223,6 +1227,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
+
 
 struct Args_MyService_lobDataById {
     id: ::std::primitive::i64,
@@ -1258,6 +1263,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
     }
 }
 
+
 struct Args_MyService_invalid_return_for_hack {
 }
 
@@ -1282,6 +1288,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
     }
 }
 
+
 struct Args_MyService_rpc_skipped_codegen {
 }
 
@@ -1305,7 +1312,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
-
 
 impl<P, H, R, RS> MyServiceProcessor<P, H, R, RS>
 where
@@ -1371,7 +1377,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.ping", exception = ?exn);
+                ::tracing::error!(method = "MyService.ping", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1432,7 +1438,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.getRandomData", exception = ?exn);
+                ::tracing::error!(method = "MyService.getRandomData", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1494,7 +1500,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.sink", exception = ?exn);
+                ::tracing::error!(method = "MyService.sink", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1557,7 +1563,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.putDataById", exception = ?exn);
+                ::tracing::error!(method = "MyService.putDataById", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1619,7 +1625,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.hasDataById", exception = ?exn);
+                ::tracing::error!(method = "MyService.hasDataById", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1681,7 +1687,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.getDataById", exception = ?exn);
+                ::tracing::error!(method = "MyService.getDataById", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1743,7 +1749,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.deleteDataById", exception = ?exn);
+                ::tracing::error!(method = "MyService.deleteDataById", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1806,7 +1812,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.lobDataById", exception = ?exn);
+                ::tracing::error!(method = "MyService.lobDataById", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1867,7 +1873,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.invalid_return_for_hack", exception = ?exn);
+                ::tracing::error!(method = "MyService.invalid_return_for_hack", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1928,7 +1934,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyService.rpc_skipped_codegen", exception = ?exn);
+                ::tracing::error!(method = "MyService.rpc_skipped_codegen", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -2179,6 +2185,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait DbMixedStackArguments: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn getDataByKey0(
@@ -2250,8 +2257,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for DbMixedStackArguments's methods.
 #[derive(Clone, Debug)]
 pub struct DbMixedStackArgumentsProcessor<P, H, R, RS> {
@@ -2259,6 +2264,7 @@ pub struct DbMixedStackArgumentsProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_DbMixedStackArguments_getDataByKey0 {
     key: ::std::string::String,
@@ -2289,6 +2295,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Db
     }
 }
 
+
 struct Args_DbMixedStackArguments_getDataByKey1 {
     key: ::std::string::String,
 }
@@ -2317,7 +2324,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Db
         })
     }
 }
-
 
 impl<P, H, R, RS> DbMixedStackArgumentsProcessor<P, H, R, RS>
 where
@@ -2384,7 +2390,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "DbMixedStackArguments.getDataByKey0", exception = ?exn);
+                ::tracing::error!(method = "DbMixedStackArguments.getDataByKey0", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -2446,7 +2452,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "DbMixedStackArguments.getDataByKey1", exception = ?exn);
+                ::tracing::error!(method = "DbMixedStackArguments.getDataByKey1", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

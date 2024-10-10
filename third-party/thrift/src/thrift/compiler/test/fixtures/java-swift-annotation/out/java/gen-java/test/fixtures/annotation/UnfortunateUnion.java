@@ -47,6 +47,12 @@ public final class UnfortunateUnion implements com.facebook.thrift.payload.Thrif
     private java.lang.Object value;
     private short id;
 
+    public enum TypeEnum {
+      __FBTHRIFT_EMPTY_UNION__,
+      AN_SNAKE_STRING,
+      A_CAMEL_I32,
+    }
+
     public static UnfortunateUnion from(int _id, java.lang.Object _field) {
         return from((short) _id, _field);
     }
@@ -143,6 +149,19 @@ public final class UnfortunateUnion implements com.facebook.thrift.payload.Thrif
     @ThriftUnionId
     public short getThriftId() {
         return this.id;
+    }
+
+    public TypeEnum getThriftUnionType() {
+      switch(this.id) {
+        case 0:
+          return TypeEnum.__FBTHRIFT_EMPTY_UNION__;
+        case 1:
+          return TypeEnum.AN_SNAKE_STRING;
+        case 2:
+          return TypeEnum.A_CAMEL_I32;
+        default:
+          throw new IllegalStateException("unreachable");
+      }
     }
 
     public String getThriftName() {

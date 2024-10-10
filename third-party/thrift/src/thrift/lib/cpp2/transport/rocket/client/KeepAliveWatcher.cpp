@@ -41,7 +41,7 @@ void KeepAliveWatcher::start(SetupFrame* setupFrame) {
     DCHECK(setupFrame == nullptr);
     return;
   }
-  if (!evb_) {
+  if (!evb_ || !socket_ || !socket_->good()) {
     return;
   }
   started_ = true;
@@ -99,8 +99,14 @@ void KeepAliveWatcher::checkTimeoutToCloseOrSchedule() {
 }
 
 void KeepAliveWatcher::timeoutExpired() noexcept {
-  sendKeepAliveFrame(nullptr);
+  if (!socket_ || !socket_->good()) {
+    stop();
+    return;
+  }
   checkTimeoutToCloseOrSchedule();
+  if (!closeConnection_) {
+    sendKeepAliveFrame(nullptr);
+  }
 }
 
 std::unique_ptr<folly::IOBuf> KeepAliveWatcher::makeKeepAliveFrame(

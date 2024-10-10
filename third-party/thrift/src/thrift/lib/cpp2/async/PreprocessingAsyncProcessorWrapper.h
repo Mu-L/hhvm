@@ -20,8 +20,7 @@
 #include <folly/CppAttributes.h>
 #include <thrift/lib/cpp2/async/AsyncProcessor.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 /**
  * PreprocessingAsyncProcessorWrapper should be considered whenever you need to
@@ -65,6 +64,12 @@ class PreprocessingAsyncProcessorWrapper : public AsyncProcessor {
 
   const char* getServiceName() override final;
 
+  void processInteraction(ServerRequest&&) override {
+    LOG(FATAL)
+        << "This AsyncProcessor doesn't support Thrift interactions. "
+        << "Please implement processInteraction to support interactions.";
+  }
+
  protected:
   using ProcessSerializedCompressedRequestReturnT = std::
       tuple<ResponseChannelRequest::UniquePtr, SerializedCompressedRequest>;
@@ -87,5 +92,4 @@ class PreprocessingAsyncProcessorWrapper : public AsyncProcessor {
   std::unique_ptr<AsyncProcessor> innerProcessor_;
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

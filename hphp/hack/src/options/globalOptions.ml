@@ -52,6 +52,11 @@ type 'a all_or_some =
   | ASome of 'a list
 [@@deriving eq, show]
 
+type 'a none_or_all_except =
+  | NNone
+  | All_except of 'a list
+[@@deriving eq, show]
+
 let default_saved_state =
   {
     loading = default_saved_state_loading;
@@ -73,6 +78,7 @@ let with_zstd_decompress_by_file zstd_decompress_by_file ss =
 
 type extended_reasons_config =
   | Extended of int
+  | Legacy
   | Debug
 [@@deriving eq, show]
 
@@ -117,6 +123,7 @@ type t = {
   tco_custom_error_config: Custom_error_config.t;
   tco_const_attribute: bool;
   tco_check_attribute_locations: bool;
+  tco_type_refinement_partition_shapes: bool;
   glean_reponame: string;
   symbol_write_index_inherited_members: bool;
   symbol_write_ownership: bool;
@@ -165,7 +172,6 @@ type t = {
   tco_record_fine_grained_dependencies: bool;
   tco_loop_iteration_upper_bound: int option;
   tco_populate_dead_unsafe_cast_heap: bool;
-  tco_rust_elab: bool;
   dump_tast_hashes: bool;
   dump_tasts: string list;
   tco_autocomplete_mode: bool;
@@ -175,15 +181,19 @@ type t = {
   tco_lsp_invalidation: bool;
   tco_autocomplete_sort_text: bool;
   tco_extended_reasons: extended_reasons_config option;
-  hack_warnings: int all_or_some;
+  tco_disable_physical_equality: bool;
+  hack_warnings: int none_or_all_except;
+  warnings_default_all: bool;
   tco_strict_switch: bool;
   tco_allowed_files_for_ignore_readonly: string list;
   tco_package_v2: bool;
+  tco_package_v2_support_multifile_tests: bool;
   tco_package_v2_bypass_package_check_for_class_const: bool;
-  preexisting_warnings: bool;
   re_no_cache: bool;
   hh_distc_should_disable_trace_store: bool;
+  hh_distc_exponential_backoff_num_retries: int;
   tco_enable_abstract_method_optional_parameters: bool;
+  recursive_case_types: bool;
 }
 [@@deriving eq, show]
 
@@ -224,6 +234,7 @@ let default =
     tco_custom_error_config = Custom_error_config.empty;
     tco_const_attribute = false;
     tco_check_attribute_locations = true;
+    tco_type_refinement_partition_shapes = false;
     glean_reponame = "www.hack.light";
     symbol_write_index_inherited_members = true;
     symbol_write_ownership = false;
@@ -272,7 +283,6 @@ let default =
     tco_record_fine_grained_dependencies = false;
     tco_loop_iteration_upper_bound = None;
     tco_populate_dead_unsafe_cast_heap = false;
-    tco_rust_elab = false;
     dump_tast_hashes = false;
     dump_tasts = [];
     tco_autocomplete_mode = false;
@@ -282,15 +292,19 @@ let default =
     tco_lsp_invalidation = false;
     tco_autocomplete_sort_text = false;
     tco_extended_reasons = None;
-    hack_warnings = ASome [];
+    tco_disable_physical_equality = false;
+    hack_warnings = All_except [];
+    warnings_default_all = false;
     tco_strict_switch = false;
     tco_allowed_files_for_ignore_readonly = [];
     tco_package_v2 = false;
+    tco_package_v2_support_multifile_tests = false;
     tco_package_v2_bypass_package_check_for_class_const = true;
-    preexisting_warnings = false;
     re_no_cache = false;
     hh_distc_should_disable_trace_store = false;
+    hh_distc_exponential_backoff_num_retries = 10;
     tco_enable_abstract_method_optional_parameters = false;
+    recursive_case_types = false;
   }
 
 let set
@@ -329,6 +343,7 @@ let set
     ?tco_custom_error_config
     ?tco_const_attribute
     ?tco_check_attribute_locations
+    ?tco_type_refinement_partition_shapes
     ?glean_reponame
     ?symbol_write_index_inherited_members
     ?symbol_write_ownership
@@ -377,7 +392,6 @@ let set
     ?tco_record_fine_grained_dependencies
     ?tco_loop_iteration_upper_bound
     ?tco_populate_dead_unsafe_cast_heap
-    ?tco_rust_elab
     ?dump_tast_hashes
     ?dump_tasts
     ?tco_autocomplete_mode
@@ -387,15 +401,19 @@ let set
     ?tco_lsp_invalidation
     ?tco_autocomplete_sort_text
     ?tco_extended_reasons
+    ?tco_disable_physical_equality
     ?hack_warnings
+    ?warnings_default_all
     ?tco_strict_switch
     ?tco_allowed_files_for_ignore_readonly
     ?tco_package_v2
+    ?tco_package_v2_support_multifile_tests
     ?tco_package_v2_bypass_package_check_for_class_const
-    ?preexisting_warnings
     ?re_no_cache
     ?hh_distc_should_disable_trace_store
+    ?hh_distc_exponential_backoff_num_retries
     ?tco_enable_abstract_method_optional_parameters
+    ?recursive_case_types
     options =
   let setting setting option =
     match setting with
@@ -490,6 +508,10 @@ let set
       setting
         tco_check_attribute_locations
         options.tco_check_attribute_locations;
+    tco_type_refinement_partition_shapes =
+      setting
+        tco_type_refinement_partition_shapes
+        options.tco_type_refinement_partition_shapes;
     glean_reponame = setting glean_reponame options.glean_reponame;
     symbol_write_index_inherited_members =
       setting
@@ -629,7 +651,6 @@ let set
       setting
         tco_populate_dead_unsafe_cast_heap
         options.tco_populate_dead_unsafe_cast_heap;
-    tco_rust_elab = setting tco_rust_elab options.tco_rust_elab;
     dump_tast_hashes = setting dump_tast_hashes options.dump_tast_hashes;
     dump_tasts = setting dump_tasts options.dump_tasts;
     tco_autocomplete_mode =
@@ -645,28 +666,42 @@ let set
       setting tco_autocomplete_sort_text options.tco_autocomplete_sort_text;
     tco_extended_reasons =
       setting_opt tco_extended_reasons options.tco_extended_reasons;
+    tco_disable_physical_equality =
+      setting
+        tco_disable_physical_equality
+        options.tco_disable_physical_equality;
     hack_warnings = setting hack_warnings options.hack_warnings;
+    warnings_default_all =
+      setting warnings_default_all options.warnings_default_all;
     tco_strict_switch = setting tco_strict_switch options.tco_strict_switch;
     tco_allowed_files_for_ignore_readonly =
       setting
         tco_allowed_files_for_ignore_readonly
         options.tco_allowed_files_for_ignore_readonly;
     tco_package_v2 = setting tco_package_v2 options.tco_package_v2;
+    tco_package_v2_support_multifile_tests =
+      setting
+        tco_package_v2_support_multifile_tests
+        options.tco_package_v2_support_multifile_tests;
     tco_package_v2_bypass_package_check_for_class_const =
       setting
         tco_package_v2_bypass_package_check_for_class_const
         options.tco_package_v2_bypass_package_check_for_class_const;
-    preexisting_warnings =
-      setting preexisting_warnings options.preexisting_warnings;
     re_no_cache = setting re_no_cache options.re_no_cache;
     hh_distc_should_disable_trace_store =
       setting
         hh_distc_should_disable_trace_store
         options.hh_distc_should_disable_trace_store;
+    hh_distc_exponential_backoff_num_retries =
+      setting
+        hh_distc_exponential_backoff_num_retries
+        options.hh_distc_exponential_backoff_num_retries;
     tco_enable_abstract_method_optional_parameters =
       setting
         tco_enable_abstract_method_optional_parameters
         options.tco_enable_abstract_method_optional_parameters;
+    recursive_case_types =
+      setting recursive_case_types options.recursive_case_types;
   }
 
 let so_naming_sqlite_path t = t.so_naming_sqlite_path

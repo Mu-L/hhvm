@@ -20,6 +20,8 @@ import (
 	"compress/zlib"
 	"io"
 	"log"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // ZlibTransport is a Transport implementation that makes use of zlib compression.
@@ -64,17 +66,14 @@ func (z *ZlibTransport) Flush() error {
 	if err := z.writer.Flush(); err != nil {
 		return err
 	}
-	if flusher, ok := z.buffer.(Flusher); ok {
-		return flusher.Flush()
-	}
-	return nil
+	return flush(z.buffer)
 }
 
 func (z *ZlibTransport) Read(p []byte) (int, error) {
 	if z.reader == nil {
 		r, err := zlib.NewReader(z.buffer)
 		if err != nil {
-			return 0, NewTransportExceptionFromError(err)
+			return 0, types.NewTransportExceptionFromError(err)
 		}
 		z.reader = r
 	}

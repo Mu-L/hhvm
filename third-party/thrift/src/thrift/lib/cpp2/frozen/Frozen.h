@@ -39,7 +39,7 @@
 #include <folly/container/F14Map-fwd.h>
 #include <folly/container/F14Set-fwd.h>
 #include <folly/container/heap_vector_types.h>
-#include <folly/experimental/Bits.h>
+#include <folly/lang/BitsClass.h>
 #include <folly/hash/Hash.h>
 #include <folly/lang/Bits.h>
 #include <folly/sorted_vector_types.h>
@@ -50,9 +50,9 @@
 #include <thrift/lib/cpp2/frozen/schema/MemorySchema.h>
 #include <thrift/lib/thrift/gen-cpp2/frozen_types.h>
 
-namespace apache {
-namespace thrift {
-namespace frozen {
+
+
+namespace apache::thrift::frozen {
 /**
  *          \__  __/             \__  __/             \__  __/
  *          /_/  \_\             /_/  \_\             /_/  \_\
@@ -1101,9 +1101,9 @@ void thawField(
 template <class T>
 using View = typename Layout<T>::View;
 
-} // namespace frozen
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::frozen
+
+
 
 #include <thrift/lib/cpp2/frozen/FrozenFixedSizeString-inl.h> // @nolint
 #include <thrift/lib/cpp2/frozen/FrozenTrivial-inl.h> // @nolint

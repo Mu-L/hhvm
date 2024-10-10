@@ -20,15 +20,28 @@ impl Ord for ShapeField {
     fn cmp(&self, other: &Self) -> Ordering {
         use ShapeFieldName as SFN;
         match (&self.0, &other.0) {
-            (SFN::SFlitInt((_, s1)), SFN::SFlitInt((_, s2))) => s1.cmp(s2),
+            (SFN::SFregexGroup((_, s1)), SFN::SFregexGroup((_, s2))) => s1.cmp(s2),
             (SFN::SFlitStr((_, s1)), SFN::SFlitStr((_, s2))) => s1.cmp(s2),
+            (SFN::SFclassname(Id(_, s1)), SFN::SFclassname(Id(_, s2))) => s1.cmp(s2),
             (SFN::SFclassConst(Id(_, c1), (_, m1)), SFN::SFclassConst(Id(_, c2), (_, m2))) => {
                 (c1, m1).cmp(&(c2, m2))
             }
-            (SFN::SFlitInt(_), _) => Ordering::Less,
-            (SFN::SFlitStr(_), SFN::SFlitInt(_)) => Ordering::Greater,
-            (SFN::SFlitStr(_), _) => Ordering::Less,
-            (SFN::SFclassConst(_, _), _) => Ordering::Greater,
+
+            (SFN::SFregexGroup(_), SFN::SFlitStr(_))
+            | (SFN::SFregexGroup(_), SFN::SFclassname(_))
+            | (SFN::SFregexGroup(_), SFN::SFclassConst(_, _)) => Ordering::Less,
+
+            (SFN::SFlitStr(_), SFN::SFregexGroup(_)) => Ordering::Greater,
+            (SFN::SFlitStr(_), SFN::SFclassname(_))
+            | (SFN::SFlitStr(_), SFN::SFclassConst(_, _)) => Ordering::Less,
+
+            (SFN::SFclassname(_), SFN::SFregexGroup(_))
+            | (SFN::SFclassname(_), SFN::SFlitStr(_)) => Ordering::Greater,
+            (SFN::SFclassname(_), SFN::SFclassConst(_, _)) => Ordering::Less,
+
+            (SFN::SFclassConst(_, _), SFN::SFregexGroup(_))
+            | (SFN::SFclassConst(_, _), SFN::SFlitStr(_))
+            | (SFN::SFclassConst(_, _), SFN::SFclassname(_)) => Ordering::Greater,
         }
     }
 }

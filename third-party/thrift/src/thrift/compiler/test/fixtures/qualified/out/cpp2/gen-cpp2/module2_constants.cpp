@@ -12,6 +12,7 @@
 #include "thrift/compiler/test/fixtures/qualified/gen-cpp2/module0_constants.h"
 #include "thrift/compiler/test/fixtures/qualified/gen-cpp2/module1_constants.h"
 
+
 namespace module2 {
 namespace module2_constants {
 
@@ -29,6 +30,8 @@ namespace module2_constants {
   static folly::Indestructible<::module2::Struct> const instance{ ::module2::module2_constants::c2() };
   return *instance;
 }
+
+
 
 } // namespace module2_constants
 } // namespace module2

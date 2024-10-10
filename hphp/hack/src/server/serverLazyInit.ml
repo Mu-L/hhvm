@@ -67,7 +67,7 @@ let run_saved_state_future
     (ctx : Provider_context.t)
     (dependency_table_saved_state_future :
       (Saved_state_loader.load_result, ServerInitTypes.load_state_error) result
-      Future.t) : (loaded_info, load_state_error) result =
+      Future.t) : (ServerInitTypes.loaded_info, load_state_error) result =
   let t = Unix.gettimeofday () in
   match Future.get dependency_table_saved_state_future ~timeout:300 with
   | Error error ->
@@ -86,10 +86,8 @@ let run_saved_state_future
     let {
       Saved_state_loader.main_artifacts;
       additional_info;
-      changed_files;
+      changed_files_according_to_watchman;
       manifold_path;
-      corresponding_rev;
-      mergebase_rev;
       is_cached = _;
     } =
       deptable_result
@@ -106,10 +104,8 @@ let run_saved_state_future
       main_artifacts
     in
     let {
-      Saved_state_loader.Naming_and_dep_table_info.mergebase_global_rev;
-      dirty_files_promise;
-      saved_state_distance;
-      saved_state_age;
+      Saved_state_loader.Naming_and_dep_table_info.dirty_files_promise;
+      saved_state_revs_info;
     } =
       additional_info
     in
@@ -153,32 +149,24 @@ let run_saved_state_future
           local_changes = dirty_local_files;
         } ->
       let () = HackEventLogger.state_loader_dirty_files t in
-      let dirty_naming_files = Relative_path.Set.of_list changed_files in
-      let dirty_master_files = dirty_master_files in
-      let dirty_local_files = dirty_local_files in
-      let naming_table_manifold_path = Some manifold_path in
-      let saved_state_delta =
-        match (saved_state_distance, saved_state_age) with
-        | (_, None)
-        | (None, _) ->
-          None
-        | (Some distance, Some age) -> Some { distance; age }
+      let changed_files_according_to_watchman =
+        Relative_path.Set.of_list changed_files_according_to_watchman
       in
+      let naming_table_manifold_path = Some manifold_path in
       Ok
         {
-          naming_table_fn = Path.to_string naming_sqlite_table_path;
+          ServerInitTypes.naming_table_fn =
+            Path.to_string naming_sqlite_table_path;
           naming_table_fallback_fn = naming_table_fallback_path;
           deptable_fn;
-          corresponding_rev = Hg.Hg_rev corresponding_rev;
-          mergebase_rev = mergebase_global_rev;
-          mergebase = Some mergebase_rev;
-          dirty_naming_files;
+          changed_files_since_saved_state_rev =
+            changed_files_according_to_watchman;
           dirty_master_files;
           dirty_local_files;
           old_naming_table;
           old_errors;
           old_warnings;
-          saved_state_delta;
+          saved_state_revs_info;
           naming_table_manifold_path;
         })
 
@@ -251,42 +239,53 @@ let download_and_load_state_exn
   run_saved_state_future genv ctx dependency_table_saved_state_future
 
 let calculate_state_distance_and_age_from_hg
-    (root : Path.t) (corresponding_base_revision : Hg.Rev.t) :
-    Hg.Rev.t option * Hg.global_rev option * ServerEnv.saved_state_delta option
-    =
-  let root = Path.to_string root in
+    (root_path : Path.t) (saved_state_rev : Hg.Rev.t) :
+    ServerEnv.saved_state_revs_info =
+  let root_path = Path.to_string root_path in
   let future =
-    Future.continue_with_future (Hg.current_mergebase_hg_rev root)
+    Future.continue_with_future (Hg.current_mergebase_hg_rev root_path)
     @@ fun mergebase_rev ->
     Future.continue_with_future
-      (Hg.get_closest_global_ancestor mergebase_rev root)
-    @@ fun mergebase_global_rev ->
+      (Hg.get_closest_global_ancestor mergebase_rev root_path)
+    @@ fun mergebase_globalrev ->
     Future.continue_with_future
-      (Hg.get_closest_global_ancestor corresponding_base_revision root)
+      (Hg.get_closest_global_ancestor saved_state_rev root_path)
     @@ fun corresponding_base_global_rev ->
     Future.continue_with_future
-      (Hg.get_hg_revision_time (Hg.Hg_rev corresponding_base_revision) root)
-    @@ fun corresponding_time ->
-    Future.continue_with_future
-      (Hg.get_hg_revision_time (Hg.Hg_rev mergebase_rev) root)
+      (Hg.get_hg_revision_time (Hg.Hg_rev mergebase_rev) root_path)
     @@ fun mergebase_time ->
+    Future.continue_with_future
+      (Hg.get_hg_revision_time (Hg.Hg_rev saved_state_rev) root_path)
+    @@ fun corresponding_time ->
     let state_distance =
-      abs (mergebase_global_rev - corresponding_base_global_rev)
+      abs (mergebase_globalrev - corresponding_base_global_rev)
     in
     let state_age = abs (mergebase_time - corresponding_time) in
-    let saved_state_delta = { age = state_age; distance = state_distance } in
-    Future.of_value (mergebase_rev, mergebase_global_rev, saved_state_delta)
+    let saved_state_revs_info =
+      {
+        age = Some state_age;
+        distance = Some state_distance;
+        saved_state_rev;
+        saved_state_globalrev = Some corresponding_base_global_rev;
+        saved_state_rev_timestamp = Some corresponding_time;
+        mergebase_rev = Some mergebase_rev;
+        mergebase_globalrev = Some mergebase_globalrev;
+        mergebase_rev_timestamp = Some mergebase_time;
+      }
+    in
+    Future.of_value saved_state_revs_info
   in
   match Future.get future with
-  | Ok (a, b, c) -> (Some a, Some b, Some c)
+  | Ok x -> x
   | Error e ->
     Hh_logger.log
       "[serverLazyInit]: calculate_state_distance_and_age_from_hg failed: %s"
       (Future.error_to_string e);
-    (None, None, None)
+    ServerEnv.SavedStateRevsInfo.default ~saved_state_rev
 
 let use_precomputed_state_exn
     ~(root : Path.t)
+    (env : ServerEnv.env)
     (genv : ServerEnv.genv)
     (ctx : Provider_context.t)
     (info : ServerArgs.saved_state_target_info)
@@ -342,26 +341,28 @@ let use_precomputed_state_exn
     |> Provider_context.get_tcopt
     |> TypecheckerOptions.log_saved_state_age_and_distance
   in
-  let (mergebase, mergebase_rev, saved_state_delta) =
+  let saved_state_revs_info =
     if log_saved_state_age_and_distance then
       calculate_state_distance_and_age_from_hg root corresponding_base_revision
     else
-      (None, None, None)
+      {
+        (ServerEnv.SavedStateRevsInfo.default
+           ~saved_state_rev:corresponding_base_revision)
+        with
+        mergebase_rev = env.init_env.mergebase;
+      }
   in
   {
     naming_table_fn = naming_table_path;
     naming_table_fallback_fn = naming_table_fallback_path;
     deptable_fn;
-    corresponding_rev = Hg.Hg_rev corresponding_base_revision;
-    mergebase_rev;
-    mergebase;
-    dirty_naming_files = naming_changes;
+    changed_files_since_saved_state_rev = naming_changes;
     dirty_master_files = prechecked_changes;
     dirty_local_files = changes;
     old_naming_table;
     old_errors;
     old_warnings;
-    saved_state_delta;
+    saved_state_revs_info;
     naming_table_manifold_path = None;
   }
 
@@ -434,7 +435,6 @@ let remove_items_from_reverse_naming_table_or_build_new_reverse_naming_table
  * of saved state modes. *)
 let use_prechecked_files (genv : ServerEnv.genv) : bool =
   ServerPrecheckedFiles.should_use genv.options genv.local_config
-  && Option.is_none (ServerArgs.ai_mode genv.options)
   && (not (ServerArgs.check_mode genv.options))
   && Option.is_none (ServerArgs.save_filename genv.options)
 
@@ -489,9 +489,7 @@ let log_fanout_information to_recheck_deps files_to_recheck =
                   bool_ (Relative_path.Set.cardinal files_to_recheck > max) );
               ])
 
-(** Compare declarations loaded from the saved state to declarations based on
-  the current versions of dirty files. This lets us check a smaller set of
-  files than the set we'd check if old declarations were not available. *)
+(** Compute fanout for saved state init *)
 let get_files_to_recheck
     (genv : ServerEnv.genv)
     (env : ServerEnv.env)
@@ -649,8 +647,11 @@ let calculate_fanout_and_defer_or_do_type_check
       files_to_redeclare
   in
   let (env, to_recheck) =
-    if use_prechecked_files genv then
+    if use_prechecked_files genv then (
       (* Start with dirty files and fan-out of local changes only *)
+      Hh_logger.log
+        "Using prechecked algorithm. Computing fanout from %d files with changed decls since the mergebase."
+        (Relative_path.Set.cardinal dirty_local_files_changed_decls);
       let to_recheck =
         if genv.local_config.SLC.fetch_remote_old_decls then
           get_files_to_recheck dirty_local_files_changed_decls
@@ -667,8 +668,11 @@ let calculate_fanout_and_defer_or_do_type_check
           ~dirty_master_deps:master_deps
       in
       (env, to_recheck)
-    else
+    ) else (
       (* Start with full fan-out immediately *)
+      Hh_logger.log
+        "Prechecked algorithm is disabled. Computing the full fanout from %d changed files since the saved state revision."
+        (Relative_path.Set.cardinal dirty_files_changed_decls);
       let to_recheck =
         if genv.local_config.SLC.fetch_remote_old_decls then
           get_files_to_recheck dirty_files_changed_decls
@@ -680,6 +684,7 @@ let calculate_fanout_and_defer_or_do_type_check
           files
       in
       (env, to_recheck)
+    )
   in
   (* We still need to typecheck files whose declarations did not change *)
   let to_recheck =
@@ -721,11 +726,6 @@ let calculate_fanout_and_defer_or_do_type_check
                dirty_files_unchanged_decls
                dirty_files_changed_decls)
     in
-    let (state_distance, state_age) =
-      match env.init_env.saved_state_delta with
-      | None -> (None, None)
-      | Some { distance; age } -> (Some distance, Some age)
-    in
     let init_telemetry =
       ServerEnv.Init_telemetry.make
         ServerEnv.Init_telemetry.Init_lazy_dirty
@@ -755,8 +755,12 @@ let calculate_fanout_and_defer_or_do_type_check
         |> Telemetry.int_
              ~key:"to_recheck"
              ~value:(Relative_path.Set.cardinal to_recheck)
-        |> Telemetry.int_opt ~key:"state_distance" ~value:state_distance
-        |> Telemetry.int_opt ~key:"state_age" ~value:state_age)
+        |> Telemetry.object_opt
+             ~key:"saved_state_revs_info"
+             ~value:
+               (Option.map
+                  ~f:ServerEnv.SavedStateRevsInfo.to_telemetry
+                  env.init_env.saved_state_revs_info))
     in
     let result =
       ServerInitCommon.defer_or_do_type_check
@@ -799,6 +803,9 @@ let get_updates_exn ~(genv : ServerEnv.genv) ~(root : Path.t) :
       SSet.filter updates ~f:filter
       |> Relative_path.relativize_set Relative_path.Root
   in
+  Hh_logger.log
+    "Found %d files changed while parsing"
+    (Relative_path.Set.cardinal files_changed_while_parsing);
   ignore
     (Hh_logger.log_duration
        "Finished getting files changed while parsing"
@@ -1010,18 +1017,15 @@ let update_naming_table
   let trace = genv.local_config.SLC.trace_parsing in
   let {
     naming_table_fallback_fn;
-    dirty_naming_files;
+    changed_files_since_saved_state_rev;
     dirty_local_files;
     dirty_master_files;
     old_naming_table;
-    mergebase_rev = _;
-    mergebase = _;
     old_errors;
     old_warnings = _;
     deptable_fn = _;
     naming_table_fn = _;
-    corresponding_rev = _;
-    saved_state_delta = _;
+    saved_state_revs_info = _;
     naming_table_manifold_path = _;
   } =
     loaded_info
@@ -1033,13 +1037,17 @@ let update_naming_table
       ~init:Relative_path.Set.empty
       ~f:Relative_path.Set.union
       [
-        dirty_naming_files;
+        changed_files_since_saved_state_rev;
         dirty_master_files;
         dirty_local_files;
         changed_while_parsing;
       ]
     |> Relative_path.Set.filter ~f:FindUtils.path_filter
   in
+  let file_count = Relative_path.Set.cardinal naming_files in
+  Hh_logger.log
+    "Among the changed files, %d are hack/php files (that are not ignored according to ignore_paths flag)."
+    file_count;
   ( CgroupProfiler.step_start_end cgroup_steps "remove fixmes"
   @@ fun _cgroup_step -> Fixme_provider.remove_batch naming_files );
   (* Parse dirty files only *)
@@ -1051,7 +1059,7 @@ let update_naming_table
         (MultiWorker.next
            genv.workers
            (Relative_path.Set.elements naming_files))
-      ~count:(Relative_path.Set.cardinal naming_files)
+      ~count:file_count
       t
       ~trace
       ~cache_decls:false (* Don't overwrite old decls loaded from saved state *)
@@ -1095,6 +1103,29 @@ let update_naming_table
       }
     in
     (env, t, Some new_naming_table)
+
+let log_changed_files_counts
+    ~dirty_local_files_unchanged_decls
+    ~dirty_local_files_changed_decls
+    ~dirty_master_files_unchanged_decls
+    ~dirty_master_files_changed_decls
+    ~dirty_master_files
+    ~dirty_local_files =
+  Hh_logger.log
+    "Number of files changed between saved state revision and mergebase: %d"
+    (Relative_path.Set.cardinal dirty_master_files);
+  Hh_logger.log
+    "Out of which %d have changed decls, and the rest (%d) have unchanged decls"
+    (Relative_path.Set.cardinal dirty_master_files_changed_decls)
+    (Relative_path.Set.cardinal dirty_master_files_unchanged_decls);
+  Hh_logger.log
+    "Number of files changed since mergebase: %d"
+    (Relative_path.Set.cardinal dirty_local_files);
+  Hh_logger.log
+    "Out of which %d have changed decls, and the rest (%d) have unchanged decls"
+    (Relative_path.Set.cardinal dirty_local_files_changed_decls)
+    (Relative_path.Set.cardinal dirty_local_files_unchanged_decls);
+  ()
 
 (** What files should be checked?
 
@@ -1148,6 +1179,13 @@ let compute_fanout
   let (dirty_local_files_unchanged_decls, dirty_local_files_changed_decls) =
     partition_unchanged_hash dirty_local_files
   in
+  log_changed_files_counts
+    ~dirty_local_files_unchanged_decls
+    ~dirty_local_files_changed_decls
+    ~dirty_master_files_unchanged_decls
+    ~dirty_master_files_changed_decls
+    ~dirty_master_files
+    ~dirty_local_files;
 
   let (env, t) =
     calculate_fanout_and_defer_or_do_type_check
@@ -1178,18 +1216,15 @@ let post_saved_state_initialization
   in
   let {
     naming_table_fallback_fn = _;
-    dirty_naming_files = _;
+    changed_files_since_saved_state_rev = _;
     dirty_local_files;
     dirty_master_files;
     old_naming_table;
-    mergebase_rev;
-    mergebase;
     old_errors;
     old_warnings;
     deptable_fn;
     naming_table_fn = _;
-    corresponding_rev = _;
-    saved_state_delta;
+    saved_state_revs_info;
     naming_table_manifold_path;
   } =
     loaded_info
@@ -1201,17 +1236,21 @@ let post_saved_state_initialization
       Hh_logger.log
         "Warning: disabling restart on rebase (server was started with precomputed saved-state)"
     end else
-      Option.iter mergebase_rev ~f:ServerRevisionTracker.initialize;
+      Option.iter
+        saved_state_revs_info.ServerEnv.mergebase_globalrev
+        ~f:ServerRevisionTracker.initialize;
   let env =
     {
       env with
       init_env =
         {
           env.init_env with
-          mergebase;
-          mergebase_warning_hashes = old_warnings;
+          mergebase_warning_hashes =
+            Option.some_if
+              (not (ServerArgs.preexisting_warnings genv.ServerEnv.options))
+              old_warnings;
           naming_table_manifold_path;
-          saved_state_delta;
+          saved_state_revs_info = Some saved_state_revs_info;
         };
       deps_mode =
         (match ServerArgs.save_64bit genv.options with
@@ -1296,6 +1335,31 @@ let post_saved_state_initialization
       ~dirty_master_files
       ~dirty_local_files
 
+let check_credentials genv =
+  let t = Unix.gettimeofday () in
+  let attempt_fix = genv.local_config.SLC.attempt_fix_credentials in
+  match Security.check_credentials ~attempt_fix with
+  | Ok success ->
+    HackEventLogger.credentials_check_end
+      (Printf.sprintf "saved_state_init: %s" (Security.show_success success))
+      t
+  | Error error ->
+    let kind = Security.to_error_kind_string error in
+    let message = Security.to_error_message_string error in
+    Hh_logger.log "Error kind: %s\nError message: %s" kind message;
+    HackEventLogger.credentials_check_failure
+      (Printf.sprintf "saved_state_init: [%s]" kind)
+      t
+
+let load_saved_state_exn env genv load_state_approach root cgroup_steps =
+  CgroupProfiler.step_start_end cgroup_steps "load saved state"
+  @@ fun _cgroup_step ->
+  let ctx = Provider_utils.ctx_from_server_env env in
+  match load_state_approach with
+  | Precomputed info ->
+    Ok (use_precomputed_state_exn ~root env genv ctx info cgroup_steps)
+  | Load_state_natively -> download_and_load_state_exn ~genv ~ctx ~root
+
 let saved_state_init
     ~(do_indexing : bool)
     ~(load_state_approach : load_state_approach)
@@ -1306,45 +1370,16 @@ let saved_state_init
     ( (ServerEnv.env * float) * (loaded_info * Relative_path.Set.t),
       load_state_error )
     result =
-  let t = Unix.gettimeofday () in
-  let attempt_fix = genv.local_config.SLC.attempt_fix_credentials in
-  let () =
-    match Security.check_credentials ~attempt_fix with
-    | Ok success ->
-      HackEventLogger.credentials_check_end
-        (Printf.sprintf "saved_state_init: %s" (Security.show_success success))
-        t
-    | Error error ->
-      let kind = Security.to_error_kind_string error in
-      let message = Security.to_error_message_string error in
-      Hh_logger.log "Error kind: %s\nError message: %s" kind message;
-      HackEventLogger.credentials_check_failure
-        (Printf.sprintf "saved_state_init: [%s]" kind)
-        t
-  in
-
+  check_credentials genv;
   Server_progress.write "loading saved state";
-
-  let ctx = Provider_utils.ctx_from_server_env env in
-  let do_ () : (loaded_info, load_state_error) result =
-    let state_result =
-      CgroupProfiler.step_start_end cgroup_steps "load saved state"
-      @@ fun _cgroup_step ->
-      match load_state_approach with
-      | Precomputed info ->
-        Ok (use_precomputed_state_exn ~root genv ctx info cgroup_steps)
-      | Load_state_natively -> download_and_load_state_exn ~genv ~ctx ~root
-    in
-    state_result
-  in
   let t = Unix.gettimeofday () in
+  let open Result.Monad_infix in
   let state_result =
     try
-      match do_ () with
-      | Error error -> Error error
-      | Ok loaded_info ->
-        let (changed_while_parsing, clock) = get_updates_exn ~genv ~root in
-        Ok (loaded_info, changed_while_parsing, clock)
+      load_saved_state_exn env genv load_state_approach root cgroup_steps
+      >>| fun loaded_info ->
+      let (changed_while_parsing, clock) = get_updates_exn ~genv ~root in
+      (loaded_info, changed_while_parsing, clock)
     with
     | exn ->
       let e = Exception.wrap exn in
@@ -1356,19 +1391,17 @@ let saved_state_init
     ~state_result:
       (match state_result with
       | Error _ -> None
-      | Ok (i, _, _) -> Some (show_loaded_info i))
+      | Ok (i, _, _) -> Some (yojson_of_loaded_info i))
     t;
-  match state_result with
-  | Error err -> Error err
-  | Ok (loaded_info, changed_while_parsing, clock) ->
-    Server_progress.write "loading saved state succeeded";
-    Hh_logger.log "Watchclock: %s" (ServerEnv.show_clock clock);
-    let (env, t) =
-      post_saved_state_initialization
-        ~do_indexing
-        ~state_result:(loaded_info, changed_while_parsing, clock)
-        ~env
-        ~genv
-        cgroup_steps
-    in
-    Ok ((env, t), (loaded_info, changed_while_parsing))
+  state_result >>| fun (loaded_info, changed_while_parsing, clock) ->
+  Server_progress.write "loading saved state succeeded";
+  Hh_logger.log "Watchclock: %s" (ServerEnv.show_clock clock);
+  let (env, t) =
+    post_saved_state_initialization
+      ~do_indexing
+      ~state_result:(loaded_info, changed_while_parsing, clock)
+      ~env
+      ~genv
+      cgroup_steps
+  in
+  ((env, t), (loaded_info, changed_while_parsing))

@@ -9,20 +9,18 @@ package module
 import (
     "context"
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = context.Background
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 var _ = metadata.GoUnusedProtection__
-
-
 
 type FooService interface {
     SimpleRPC(ctx context.Context) (error)
@@ -97,200 +95,41 @@ func (c *FooServiceClient) SimpleRPCContext(ctx context.Context) (error) {
     return c.chClient.SimpleRPC(ctx)
 }
 
-type reqFooServiceSimpleRPC struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqFooServiceSimpleRPC)(nil)
-
-// Deprecated: FooServiceSimpleRPCArgsDeprecated is deprecated, since it is supposed to be internal.
-type FooServiceSimpleRPCArgsDeprecated = reqFooServiceSimpleRPC
-
-func newReqFooServiceSimpleRPC() *reqFooServiceSimpleRPC {
-    return (&reqFooServiceSimpleRPC{})
-}
-
-
-
-func (x *reqFooServiceSimpleRPC) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqFooServiceSimpleRPC"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFooServiceSimpleRPC) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqFooServiceSimpleRPC) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqFooServiceSimpleRPC({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respFooServiceSimpleRPC struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respFooServiceSimpleRPC)(nil)
-var _ thrift.WritableResult = (*respFooServiceSimpleRPC)(nil)
-
-// Deprecated: FooServiceSimpleRPCResultDeprecated is deprecated, since it is supposed to be internal.
-type FooServiceSimpleRPCResultDeprecated = respFooServiceSimpleRPC
-
-func newRespFooServiceSimpleRPC() *respFooServiceSimpleRPC {
-    return (&respFooServiceSimpleRPC{})
-}
-
-
-
-func (x *respFooServiceSimpleRPC) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respFooServiceSimpleRPC) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respFooServiceSimpleRPC"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFooServiceSimpleRPC) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respFooServiceSimpleRPC) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respFooServiceSimpleRPC({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-
 
 type FooServiceProcessor struct {
-    processorMap       map[string]thrift.ProcessorFunctionContext
-    functionServiceMap map[string]string
+    processorFunctionMap map[string]thrift.ProcessorFunction
+    functionServiceMap   map[string]string
     handler            FooService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorContext = (*FooServiceProcessor)(nil)
+var _ thrift.Processor = (*FooServiceProcessor)(nil)
 
 func NewFooServiceProcessor(handler FooService) *FooServiceProcessor {
     p := &FooServiceProcessor{
-        handler:            handler,
-        processorMap:       make(map[string]thrift.ProcessorFunctionContext),
-        functionServiceMap: make(map[string]string),
+        handler:              handler,
+        processorFunctionMap: make(map[string]thrift.ProcessorFunction),
+        functionServiceMap:   make(map[string]string),
     }
-    p.AddToProcessorMap("simple_rpc", &procFuncFooServiceSimpleRPC{handler: handler})
+    p.AddToProcessorFunctionMap("simple_rpc", &procFuncFooServiceSimpleRPC{handler: handler})
     p.AddToFunctionServiceMap("simple_rpc", "FooService")
 
     return p
 }
 
-func (p *FooServiceProcessor) AddToProcessorMap(key string, processor thrift.ProcessorFunctionContext) {
-    p.processorMap[key] = processor
+func (p *FooServiceProcessor) AddToProcessorFunctionMap(key string, processorFunction thrift.ProcessorFunction) {
+    p.processorFunctionMap[key] = processorFunction
 }
 
 func (p *FooServiceProcessor) AddToFunctionServiceMap(key, service string) {
     p.functionServiceMap[key] = service
 }
 
-func (p *FooServiceProcessor) GetProcessorFunctionContext(key string) (processor thrift.ProcessorFunctionContext, err error) {
-    if processor, ok := p.processorMap[key]; ok {
-        return processor, nil
-    }
-    return nil, nil
+func (p *FooServiceProcessor) GetProcessorFunction(key string) (processor thrift.ProcessorFunction) {
+    return p.processorFunctionMap[key]
 }
 
-func (p *FooServiceProcessor) ProcessorMap() map[string]thrift.ProcessorFunctionContext {
-    return p.processorMap
+func (p *FooServiceProcessor) ProcessorFunctionMap() map[string]thrift.ProcessorFunction {
+    return p.processorFunctionMap
 }
 
 func (p *FooServiceProcessor) FunctionServiceMap() map[string]string {
@@ -306,9 +145,9 @@ type procFuncFooServiceSimpleRPC struct {
     handler FooService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncFooServiceSimpleRPC)(nil)
+var _ thrift.ProcessorFunction = (*procFuncFooServiceSimpleRPC)(nil)
 
-func (p *procFuncFooServiceSimpleRPC) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncFooServiceSimpleRPC) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqFooServiceSimpleRPC()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -317,7 +156,7 @@ func (p *procFuncFooServiceSimpleRPC) Read(iprot thrift.Format) (thrift.Struct, 
     return args, nil
 }
 
-func (p *procFuncFooServiceSimpleRPC) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncFooServiceSimpleRPC) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -350,8 +189,6 @@ func (p *procFuncFooServiceSimpleRPC) RunContext(ctx context.Context, reqStruct 
 
     return result, nil
 }
-
-
 
 
 type FB303Service interface {
@@ -428,330 +265,41 @@ func (c *FB303ServiceClient) SimpleRPCContext(ctx context.Context, intParameter 
     return c.chClient.SimpleRPC(ctx, intParameter)
 }
 
-type reqFB303ServiceSimpleRPC struct {
-    IntParameter int32 `thrift:"int_parameter,1" json:"int_parameter" db:"int_parameter"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqFB303ServiceSimpleRPC)(nil)
-
-// Deprecated: FB303ServiceSimpleRPCArgsDeprecated is deprecated, since it is supposed to be internal.
-type FB303ServiceSimpleRPCArgsDeprecated = reqFB303ServiceSimpleRPC
-
-func newReqFB303ServiceSimpleRPC() *reqFB303ServiceSimpleRPC {
-    return (&reqFB303ServiceSimpleRPC{}).
-        SetIntParameterNonCompat(0)
-}
-
-func (x *reqFB303ServiceSimpleRPC) GetIntParameter() int32 {
-    return x.IntParameter
-}
-
-func (x *reqFB303ServiceSimpleRPC) SetIntParameterNonCompat(value int32) *reqFB303ServiceSimpleRPC {
-    x.IntParameter = value
-    return x
-}
-
-func (x *reqFB303ServiceSimpleRPC) SetIntParameter(value int32) *reqFB303ServiceSimpleRPC {
-    x.IntParameter = value
-    return x
-}
-
-func (x *reqFB303ServiceSimpleRPC) writeField1(p thrift.Format) error {  // IntParameter
-    if err := p.WriteFieldBegin("int_parameter", thrift.I32, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.IntParameter
-    if err := p.WriteI32(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFB303ServiceSimpleRPC) readField1(p thrift.Format) error {  // IntParameter
-    result, err := p.ReadI32()
-if err != nil {
-    return err
-}
-
-    x.IntParameter = result
-    return nil
-}
-
-func (x *reqFB303ServiceSimpleRPC) toString1() string {  // IntParameter
-    return fmt.Sprintf("%v", x.IntParameter)
-}
-
-
-
-func (x *reqFB303ServiceSimpleRPC) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqFB303ServiceSimpleRPC"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFB303ServiceSimpleRPC) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I32)):  // int_parameter
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqFB303ServiceSimpleRPC) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqFB303ServiceSimpleRPC({")
-    sb.WriteString(fmt.Sprintf("IntParameter:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respFB303ServiceSimpleRPC struct {
-    Success *ReservedKeyword `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respFB303ServiceSimpleRPC)(nil)
-var _ thrift.WritableResult = (*respFB303ServiceSimpleRPC)(nil)
-
-// Deprecated: FB303ServiceSimpleRPCResultDeprecated is deprecated, since it is supposed to be internal.
-type FB303ServiceSimpleRPCResultDeprecated = respFB303ServiceSimpleRPC
-
-func newRespFB303ServiceSimpleRPC() *respFB303ServiceSimpleRPC {
-    return (&respFB303ServiceSimpleRPC{})
-}
-
-func (x *respFB303ServiceSimpleRPC) GetSuccess() *ReservedKeyword {
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    return x.Success
-}
-
-func (x *respFB303ServiceSimpleRPC) SetSuccessNonCompat(value ReservedKeyword) *respFB303ServiceSimpleRPC {
-    x.Success = &value
-    return x
-}
-
-func (x *respFB303ServiceSimpleRPC) SetSuccess(value *ReservedKeyword) *respFB303ServiceSimpleRPC {
-    x.Success = value
-    return x
-}
-
-func (x *respFB303ServiceSimpleRPC) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respFB303ServiceSimpleRPC) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRUCT, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Success
-    if err := item.Write(p); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFB303ServiceSimpleRPC) readField0(p thrift.Format) error {  // Success
-    result := *NewReservedKeyword()
-err := result.Read(p)
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respFB303ServiceSimpleRPC) toString0() string {  // Success
-    return fmt.Sprintf("%v", x.Success)
-}
-
-// Deprecated: Use newRespFB303ServiceSimpleRPC().GetSuccess() instead.
-func (x *respFB303ServiceSimpleRPC) DefaultGetSuccess() *ReservedKeyword {
-    if !x.IsSetSuccess() {
-        return NewReservedKeyword()
-    }
-    return x.Success
-}
-
-
-
-func (x *respFB303ServiceSimpleRPC) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respFB303ServiceSimpleRPC) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respFB303ServiceSimpleRPC"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFB303ServiceSimpleRPC) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRUCT)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respFB303ServiceSimpleRPC) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respFB303ServiceSimpleRPC({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-
 
 type FB303ServiceProcessor struct {
-    processorMap       map[string]thrift.ProcessorFunctionContext
-    functionServiceMap map[string]string
+    processorFunctionMap map[string]thrift.ProcessorFunction
+    functionServiceMap   map[string]string
     handler            FB303Service
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorContext = (*FB303ServiceProcessor)(nil)
+var _ thrift.Processor = (*FB303ServiceProcessor)(nil)
 
 func NewFB303ServiceProcessor(handler FB303Service) *FB303ServiceProcessor {
     p := &FB303ServiceProcessor{
-        handler:            handler,
-        processorMap:       make(map[string]thrift.ProcessorFunctionContext),
-        functionServiceMap: make(map[string]string),
+        handler:              handler,
+        processorFunctionMap: make(map[string]thrift.ProcessorFunction),
+        functionServiceMap:   make(map[string]string),
     }
-    p.AddToProcessorMap("simple_rpc", &procFuncFB303ServiceSimpleRPC{handler: handler})
+    p.AddToProcessorFunctionMap("simple_rpc", &procFuncFB303ServiceSimpleRPC{handler: handler})
     p.AddToFunctionServiceMap("simple_rpc", "FB303Service")
 
     return p
 }
 
-func (p *FB303ServiceProcessor) AddToProcessorMap(key string, processor thrift.ProcessorFunctionContext) {
-    p.processorMap[key] = processor
+func (p *FB303ServiceProcessor) AddToProcessorFunctionMap(key string, processorFunction thrift.ProcessorFunction) {
+    p.processorFunctionMap[key] = processorFunction
 }
 
 func (p *FB303ServiceProcessor) AddToFunctionServiceMap(key, service string) {
     p.functionServiceMap[key] = service
 }
 
-func (p *FB303ServiceProcessor) GetProcessorFunctionContext(key string) (processor thrift.ProcessorFunctionContext, err error) {
-    if processor, ok := p.processorMap[key]; ok {
-        return processor, nil
-    }
-    return nil, nil
+func (p *FB303ServiceProcessor) GetProcessorFunction(key string) (processor thrift.ProcessorFunction) {
+    return p.processorFunctionMap[key]
 }
 
-func (p *FB303ServiceProcessor) ProcessorMap() map[string]thrift.ProcessorFunctionContext {
-    return p.processorMap
+func (p *FB303ServiceProcessor) ProcessorFunctionMap() map[string]thrift.ProcessorFunction {
+    return p.processorFunctionMap
 }
 
 func (p *FB303ServiceProcessor) FunctionServiceMap() map[string]string {
@@ -767,9 +315,9 @@ type procFuncFB303ServiceSimpleRPC struct {
     handler FB303Service
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncFB303ServiceSimpleRPC)(nil)
+var _ thrift.ProcessorFunction = (*procFuncFB303ServiceSimpleRPC)(nil)
 
-func (p *procFuncFB303ServiceSimpleRPC) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncFB303ServiceSimpleRPC) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqFB303ServiceSimpleRPC()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -778,7 +326,7 @@ func (p *procFuncFB303ServiceSimpleRPC) Read(iprot thrift.Format) (thrift.Struct
     return args, nil
 }
 
-func (p *procFuncFB303ServiceSimpleRPC) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncFB303ServiceSimpleRPC) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -813,8 +361,6 @@ func (p *procFuncFB303ServiceSimpleRPC) RunContext(ctx context.Context, reqStruc
     result.Success = retval
     return result, nil
 }
-
-
 
 
 type MyService interface {
@@ -1091,2327 +637,31 @@ func (c *MyServiceClient) RpcSkippedCodegenContext(ctx context.Context) (error) 
     return c.chClient.RpcSkippedCodegen(ctx)
 }
 
-type reqMyServicePing struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServicePing)(nil)
-
-// Deprecated: MyServicePingArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServicePingArgsDeprecated = reqMyServicePing
-
-func newReqMyServicePing() *reqMyServicePing {
-    return (&reqMyServicePing{})
-}
-
-
-
-func (x *reqMyServicePing) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServicePing"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServicePing) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServicePing) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServicePing({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServicePing struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServicePing)(nil)
-var _ thrift.WritableResult = (*respMyServicePing)(nil)
-
-// Deprecated: MyServicePingResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServicePingResultDeprecated = respMyServicePing
-
-func newRespMyServicePing() *respMyServicePing {
-    return (&respMyServicePing{})
-}
-
-
-
-func (x *respMyServicePing) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServicePing) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServicePing"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServicePing) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServicePing) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServicePing({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceGetRandomData struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceGetRandomData)(nil)
-
-// Deprecated: MyServiceGetRandomDataArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceGetRandomDataArgsDeprecated = reqMyServiceGetRandomData
-
-func newReqMyServiceGetRandomData() *reqMyServiceGetRandomData {
-    return (&reqMyServiceGetRandomData{})
-}
-
-
-
-func (x *reqMyServiceGetRandomData) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceGetRandomData"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceGetRandomData) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceGetRandomData) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceGetRandomData({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceGetRandomData struct {
-    Success *string `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceGetRandomData)(nil)
-var _ thrift.WritableResult = (*respMyServiceGetRandomData)(nil)
-
-// Deprecated: MyServiceGetRandomDataResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceGetRandomDataResultDeprecated = respMyServiceGetRandomData
-
-func newRespMyServiceGetRandomData() *respMyServiceGetRandomData {
-    return (&respMyServiceGetRandomData{})
-}
-
-func (x *respMyServiceGetRandomData) GetSuccess() string {
-    if !x.IsSetSuccess() {
-        return ""
-    }
-
-    return *x.Success
-}
-
-func (x *respMyServiceGetRandomData) SetSuccessNonCompat(value string) *respMyServiceGetRandomData {
-    x.Success = &value
-    return x
-}
-
-func (x *respMyServiceGetRandomData) SetSuccess(value *string) *respMyServiceGetRandomData {
-    x.Success = value
-    return x
-}
-
-func (x *respMyServiceGetRandomData) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respMyServiceGetRandomData) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRING, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := *x.Success
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceGetRandomData) readField0(p thrift.Format) error {  // Success
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respMyServiceGetRandomData) toString0() string {  // Success
-    if x.IsSetSuccess() {
-        return fmt.Sprintf("%v", *x.Success)
-    }
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-
-func (x *respMyServiceGetRandomData) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceGetRandomData) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceGetRandomData"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceGetRandomData) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRING)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceGetRandomData) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceGetRandomData({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceSink struct {
-    Sink int64 `thrift:"sink,1" json:"sink" db:"sink"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceSink)(nil)
-
-// Deprecated: MyServiceSinkArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceSinkArgsDeprecated = reqMyServiceSink
-
-func newReqMyServiceSink() *reqMyServiceSink {
-    return (&reqMyServiceSink{}).
-        SetSinkNonCompat(0)
-}
-
-func (x *reqMyServiceSink) GetSink() int64 {
-    return x.Sink
-}
-
-func (x *reqMyServiceSink) SetSinkNonCompat(value int64) *reqMyServiceSink {
-    x.Sink = value
-    return x
-}
-
-func (x *reqMyServiceSink) SetSink(value int64) *reqMyServiceSink {
-    x.Sink = value
-    return x
-}
-
-func (x *reqMyServiceSink) writeField1(p thrift.Format) error {  // Sink
-    if err := p.WriteFieldBegin("sink", thrift.I64, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Sink
-    if err := p.WriteI64(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceSink) readField1(p thrift.Format) error {  // Sink
-    result, err := p.ReadI64()
-if err != nil {
-    return err
-}
-
-    x.Sink = result
-    return nil
-}
-
-func (x *reqMyServiceSink) toString1() string {  // Sink
-    return fmt.Sprintf("%v", x.Sink)
-}
-
-
-
-func (x *reqMyServiceSink) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceSink"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceSink) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I64)):  // sink
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceSink) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceSink({")
-    sb.WriteString(fmt.Sprintf("Sink:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceSink struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceSink)(nil)
-var _ thrift.WritableResult = (*respMyServiceSink)(nil)
-
-// Deprecated: MyServiceSinkResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceSinkResultDeprecated = respMyServiceSink
-
-func newRespMyServiceSink() *respMyServiceSink {
-    return (&respMyServiceSink{})
-}
-
-
-
-func (x *respMyServiceSink) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceSink) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceSink"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceSink) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceSink) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceSink({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServicePutDataById struct {
-    Id int64 `thrift:"id,1" json:"id" db:"id"`
-    Data string `thrift:"data,2" json:"data" db:"data"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServicePutDataById)(nil)
-
-// Deprecated: MyServicePutDataByIdArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServicePutDataByIdArgsDeprecated = reqMyServicePutDataById
-
-func newReqMyServicePutDataById() *reqMyServicePutDataById {
-    return (&reqMyServicePutDataById{}).
-        SetIdNonCompat(0).
-        SetDataNonCompat("")
-}
-
-func (x *reqMyServicePutDataById) GetId() int64 {
-    return x.Id
-}
-
-func (x *reqMyServicePutDataById) GetData() string {
-    return x.Data
-}
-
-func (x *reqMyServicePutDataById) SetIdNonCompat(value int64) *reqMyServicePutDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServicePutDataById) SetId(value int64) *reqMyServicePutDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServicePutDataById) SetDataNonCompat(value string) *reqMyServicePutDataById {
-    x.Data = value
-    return x
-}
-
-func (x *reqMyServicePutDataById) SetData(value string) *reqMyServicePutDataById {
-    x.Data = value
-    return x
-}
-
-func (x *reqMyServicePutDataById) writeField1(p thrift.Format) error {  // Id
-    if err := p.WriteFieldBegin("id", thrift.I64, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Id
-    if err := p.WriteI64(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServicePutDataById) writeField2(p thrift.Format) error {  // Data
-    if err := p.WriteFieldBegin("data", thrift.STRING, 2); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Data
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServicePutDataById) readField1(p thrift.Format) error {  // Id
-    result, err := p.ReadI64()
-if err != nil {
-    return err
-}
-
-    x.Id = result
-    return nil
-}
-
-func (x *reqMyServicePutDataById) readField2(p thrift.Format) error {  // Data
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.Data = result
-    return nil
-}
-
-func (x *reqMyServicePutDataById) toString1() string {  // Id
-    return fmt.Sprintf("%v", x.Id)
-}
-
-func (x *reqMyServicePutDataById) toString2() string {  // Data
-    return fmt.Sprintf("%v", x.Data)
-}
-
-
-
-func (x *reqMyServicePutDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServicePutDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := x.writeField2(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServicePutDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I64)):  // id
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // data
-            if err := x.readField2(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServicePutDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServicePutDataById({")
-    sb.WriteString(fmt.Sprintf("Id:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("Data:%s", x.toString2()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServicePutDataById struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServicePutDataById)(nil)
-var _ thrift.WritableResult = (*respMyServicePutDataById)(nil)
-
-// Deprecated: MyServicePutDataByIdResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServicePutDataByIdResultDeprecated = respMyServicePutDataById
-
-func newRespMyServicePutDataById() *respMyServicePutDataById {
-    return (&respMyServicePutDataById{})
-}
-
-
-
-func (x *respMyServicePutDataById) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServicePutDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServicePutDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServicePutDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServicePutDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServicePutDataById({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceHasDataById struct {
-    Id int64 `thrift:"id,1" json:"id" db:"id"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceHasDataById)(nil)
-
-// Deprecated: MyServiceHasDataByIdArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceHasDataByIdArgsDeprecated = reqMyServiceHasDataById
-
-func newReqMyServiceHasDataById() *reqMyServiceHasDataById {
-    return (&reqMyServiceHasDataById{}).
-        SetIdNonCompat(0)
-}
-
-func (x *reqMyServiceHasDataById) GetId() int64 {
-    return x.Id
-}
-
-func (x *reqMyServiceHasDataById) SetIdNonCompat(value int64) *reqMyServiceHasDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceHasDataById) SetId(value int64) *reqMyServiceHasDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceHasDataById) writeField1(p thrift.Format) error {  // Id
-    if err := p.WriteFieldBegin("id", thrift.I64, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Id
-    if err := p.WriteI64(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceHasDataById) readField1(p thrift.Format) error {  // Id
-    result, err := p.ReadI64()
-if err != nil {
-    return err
-}
-
-    x.Id = result
-    return nil
-}
-
-func (x *reqMyServiceHasDataById) toString1() string {  // Id
-    return fmt.Sprintf("%v", x.Id)
-}
-
-
-
-func (x *reqMyServiceHasDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceHasDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceHasDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I64)):  // id
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceHasDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceHasDataById({")
-    sb.WriteString(fmt.Sprintf("Id:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceHasDataById struct {
-    Success *bool `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceHasDataById)(nil)
-var _ thrift.WritableResult = (*respMyServiceHasDataById)(nil)
-
-// Deprecated: MyServiceHasDataByIdResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceHasDataByIdResultDeprecated = respMyServiceHasDataById
-
-func newRespMyServiceHasDataById() *respMyServiceHasDataById {
-    return (&respMyServiceHasDataById{})
-}
-
-func (x *respMyServiceHasDataById) GetSuccess() bool {
-    if !x.IsSetSuccess() {
-        return false
-    }
-
-    return *x.Success
-}
-
-func (x *respMyServiceHasDataById) SetSuccessNonCompat(value bool) *respMyServiceHasDataById {
-    x.Success = &value
-    return x
-}
-
-func (x *respMyServiceHasDataById) SetSuccess(value *bool) *respMyServiceHasDataById {
-    x.Success = value
-    return x
-}
-
-func (x *respMyServiceHasDataById) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respMyServiceHasDataById) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.BOOL, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := *x.Success
-    if err := p.WriteBool(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceHasDataById) readField0(p thrift.Format) error {  // Success
-    result, err := p.ReadBool()
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respMyServiceHasDataById) toString0() string {  // Success
-    if x.IsSetSuccess() {
-        return fmt.Sprintf("%v", *x.Success)
-    }
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-
-func (x *respMyServiceHasDataById) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceHasDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceHasDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceHasDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.BOOL)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceHasDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceHasDataById({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceGetDataById struct {
-    Id int64 `thrift:"id,1" json:"id" db:"id"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceGetDataById)(nil)
-
-// Deprecated: MyServiceGetDataByIdArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceGetDataByIdArgsDeprecated = reqMyServiceGetDataById
-
-func newReqMyServiceGetDataById() *reqMyServiceGetDataById {
-    return (&reqMyServiceGetDataById{}).
-        SetIdNonCompat(0)
-}
-
-func (x *reqMyServiceGetDataById) GetId() int64 {
-    return x.Id
-}
-
-func (x *reqMyServiceGetDataById) SetIdNonCompat(value int64) *reqMyServiceGetDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceGetDataById) SetId(value int64) *reqMyServiceGetDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceGetDataById) writeField1(p thrift.Format) error {  // Id
-    if err := p.WriteFieldBegin("id", thrift.I64, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Id
-    if err := p.WriteI64(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceGetDataById) readField1(p thrift.Format) error {  // Id
-    result, err := p.ReadI64()
-if err != nil {
-    return err
-}
-
-    x.Id = result
-    return nil
-}
-
-func (x *reqMyServiceGetDataById) toString1() string {  // Id
-    return fmt.Sprintf("%v", x.Id)
-}
-
-
-
-func (x *reqMyServiceGetDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceGetDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceGetDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I64)):  // id
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceGetDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceGetDataById({")
-    sb.WriteString(fmt.Sprintf("Id:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceGetDataById struct {
-    Success *string `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceGetDataById)(nil)
-var _ thrift.WritableResult = (*respMyServiceGetDataById)(nil)
-
-// Deprecated: MyServiceGetDataByIdResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceGetDataByIdResultDeprecated = respMyServiceGetDataById
-
-func newRespMyServiceGetDataById() *respMyServiceGetDataById {
-    return (&respMyServiceGetDataById{})
-}
-
-func (x *respMyServiceGetDataById) GetSuccess() string {
-    if !x.IsSetSuccess() {
-        return ""
-    }
-
-    return *x.Success
-}
-
-func (x *respMyServiceGetDataById) SetSuccessNonCompat(value string) *respMyServiceGetDataById {
-    x.Success = &value
-    return x
-}
-
-func (x *respMyServiceGetDataById) SetSuccess(value *string) *respMyServiceGetDataById {
-    x.Success = value
-    return x
-}
-
-func (x *respMyServiceGetDataById) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respMyServiceGetDataById) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRING, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := *x.Success
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceGetDataById) readField0(p thrift.Format) error {  // Success
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respMyServiceGetDataById) toString0() string {  // Success
-    if x.IsSetSuccess() {
-        return fmt.Sprintf("%v", *x.Success)
-    }
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-
-func (x *respMyServiceGetDataById) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceGetDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceGetDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceGetDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRING)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceGetDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceGetDataById({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceDeleteDataById struct {
-    Id int64 `thrift:"id,1" json:"id" db:"id"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceDeleteDataById)(nil)
-
-// Deprecated: MyServiceDeleteDataByIdArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceDeleteDataByIdArgsDeprecated = reqMyServiceDeleteDataById
-
-func newReqMyServiceDeleteDataById() *reqMyServiceDeleteDataById {
-    return (&reqMyServiceDeleteDataById{}).
-        SetIdNonCompat(0)
-}
-
-func (x *reqMyServiceDeleteDataById) GetId() int64 {
-    return x.Id
-}
-
-func (x *reqMyServiceDeleteDataById) SetIdNonCompat(value int64) *reqMyServiceDeleteDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceDeleteDataById) SetId(value int64) *reqMyServiceDeleteDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceDeleteDataById) writeField1(p thrift.Format) error {  // Id
-    if err := p.WriteFieldBegin("id", thrift.I64, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Id
-    if err := p.WriteI64(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceDeleteDataById) readField1(p thrift.Format) error {  // Id
-    result, err := p.ReadI64()
-if err != nil {
-    return err
-}
-
-    x.Id = result
-    return nil
-}
-
-func (x *reqMyServiceDeleteDataById) toString1() string {  // Id
-    return fmt.Sprintf("%v", x.Id)
-}
-
-
-
-func (x *reqMyServiceDeleteDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceDeleteDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceDeleteDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I64)):  // id
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceDeleteDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceDeleteDataById({")
-    sb.WriteString(fmt.Sprintf("Id:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceDeleteDataById struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceDeleteDataById)(nil)
-var _ thrift.WritableResult = (*respMyServiceDeleteDataById)(nil)
-
-// Deprecated: MyServiceDeleteDataByIdResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceDeleteDataByIdResultDeprecated = respMyServiceDeleteDataById
-
-func newRespMyServiceDeleteDataById() *respMyServiceDeleteDataById {
-    return (&respMyServiceDeleteDataById{})
-}
-
-
-
-func (x *respMyServiceDeleteDataById) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceDeleteDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceDeleteDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceDeleteDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceDeleteDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceDeleteDataById({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceLobDataById struct {
-    Id int64 `thrift:"id,1" json:"id" db:"id"`
-    Data string `thrift:"data,2" json:"data" db:"data"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceLobDataById)(nil)
-
-// Deprecated: MyServiceLobDataByIdArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceLobDataByIdArgsDeprecated = reqMyServiceLobDataById
-
-func newReqMyServiceLobDataById() *reqMyServiceLobDataById {
-    return (&reqMyServiceLobDataById{}).
-        SetIdNonCompat(0).
-        SetDataNonCompat("")
-}
-
-func (x *reqMyServiceLobDataById) GetId() int64 {
-    return x.Id
-}
-
-func (x *reqMyServiceLobDataById) GetData() string {
-    return x.Data
-}
-
-func (x *reqMyServiceLobDataById) SetIdNonCompat(value int64) *reqMyServiceLobDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceLobDataById) SetId(value int64) *reqMyServiceLobDataById {
-    x.Id = value
-    return x
-}
-
-func (x *reqMyServiceLobDataById) SetDataNonCompat(value string) *reqMyServiceLobDataById {
-    x.Data = value
-    return x
-}
-
-func (x *reqMyServiceLobDataById) SetData(value string) *reqMyServiceLobDataById {
-    x.Data = value
-    return x
-}
-
-func (x *reqMyServiceLobDataById) writeField1(p thrift.Format) error {  // Id
-    if err := p.WriteFieldBegin("id", thrift.I64, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Id
-    if err := p.WriteI64(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceLobDataById) writeField2(p thrift.Format) error {  // Data
-    if err := p.WriteFieldBegin("data", thrift.STRING, 2); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Data
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceLobDataById) readField1(p thrift.Format) error {  // Id
-    result, err := p.ReadI64()
-if err != nil {
-    return err
-}
-
-    x.Id = result
-    return nil
-}
-
-func (x *reqMyServiceLobDataById) readField2(p thrift.Format) error {  // Data
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.Data = result
-    return nil
-}
-
-func (x *reqMyServiceLobDataById) toString1() string {  // Id
-    return fmt.Sprintf("%v", x.Id)
-}
-
-func (x *reqMyServiceLobDataById) toString2() string {  // Data
-    return fmt.Sprintf("%v", x.Data)
-}
-
-
-
-func (x *reqMyServiceLobDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceLobDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := x.writeField2(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceLobDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I64)):  // id
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // data
-            if err := x.readField2(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceLobDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceLobDataById({")
-    sb.WriteString(fmt.Sprintf("Id:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("Data:%s", x.toString2()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceLobDataById struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceLobDataById)(nil)
-var _ thrift.WritableResult = (*respMyServiceLobDataById)(nil)
-
-// Deprecated: MyServiceLobDataByIdResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceLobDataByIdResultDeprecated = respMyServiceLobDataById
-
-func newRespMyServiceLobDataById() *respMyServiceLobDataById {
-    return (&respMyServiceLobDataById{})
-}
-
-
-
-func (x *respMyServiceLobDataById) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceLobDataById) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceLobDataById"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceLobDataById) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceLobDataById) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceLobDataById({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceInvalidReturnForHack struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceInvalidReturnForHack)(nil)
-
-// Deprecated: MyServiceInvalidReturnForHackArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceInvalidReturnForHackArgsDeprecated = reqMyServiceInvalidReturnForHack
-
-func newReqMyServiceInvalidReturnForHack() *reqMyServiceInvalidReturnForHack {
-    return (&reqMyServiceInvalidReturnForHack{})
-}
-
-
-
-func (x *reqMyServiceInvalidReturnForHack) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceInvalidReturnForHack"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceInvalidReturnForHack) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceInvalidReturnForHack) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceInvalidReturnForHack({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceInvalidReturnForHack struct {
-    Success []float32 `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceInvalidReturnForHack)(nil)
-var _ thrift.WritableResult = (*respMyServiceInvalidReturnForHack)(nil)
-
-// Deprecated: MyServiceInvalidReturnForHackResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceInvalidReturnForHackResultDeprecated = respMyServiceInvalidReturnForHack
-
-func newRespMyServiceInvalidReturnForHack() *respMyServiceInvalidReturnForHack {
-    return (&respMyServiceInvalidReturnForHack{})
-}
-
-func (x *respMyServiceInvalidReturnForHack) GetSuccess() []float32 {
-    if !x.IsSetSuccess() {
-        return make([]float32, 0)
-    }
-
-    return x.Success
-}
-
-func (x *respMyServiceInvalidReturnForHack) SetSuccessNonCompat(value []float32) *respMyServiceInvalidReturnForHack {
-    x.Success = value
-    return x
-}
-
-func (x *respMyServiceInvalidReturnForHack) SetSuccess(value []float32) *respMyServiceInvalidReturnForHack {
-    x.Success = value
-    return x
-}
-
-func (x *respMyServiceInvalidReturnForHack) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respMyServiceInvalidReturnForHack) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.SET, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Success
-    if err := p.WriteSetBegin(thrift.FLOAT, len(item)); err != nil {
-    return thrift.PrependError("error writing set begin: ", err)
-}
-for _, v := range item {
-    {
-        item := v
-        if err := p.WriteFloat(item); err != nil {
-    return err
-}
-    }
-}
-if err := p.WriteSetEnd(); err != nil {
-    return thrift.PrependError("error writing set end: ", err)
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceInvalidReturnForHack) readField0(p thrift.Format) error {  // Success
-    _ /* elemType */, size, err := p.ReadSetBegin()
-if err != nil {
-    return thrift.PrependError("error reading set begin: ", err)
-}
-
-setResult := make([]float32, 0, size)
-for i := 0; i < size; i++ {
-    var elem float32
-    {
-        result, err := p.ReadFloat()
-if err != nil {
-    return err
-}
-        elem = result
-    }
-    setResult = append(setResult, elem)
-}
-
-if err := p.ReadSetEnd(); err != nil {
-    return thrift.PrependError("error reading set end: ", err)
-}
-result := setResult
-
-    x.Success = result
-    return nil
-}
-
-func (x *respMyServiceInvalidReturnForHack) toString0() string {  // Success
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-func (x *respMyServiceInvalidReturnForHack) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceInvalidReturnForHack) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceInvalidReturnForHack"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceInvalidReturnForHack) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.SET)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceInvalidReturnForHack) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceInvalidReturnForHack({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqMyServiceRpcSkippedCodegen struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqMyServiceRpcSkippedCodegen)(nil)
-
-// Deprecated: MyServiceRpcSkippedCodegenArgsDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceRpcSkippedCodegenArgsDeprecated = reqMyServiceRpcSkippedCodegen
-
-func newReqMyServiceRpcSkippedCodegen() *reqMyServiceRpcSkippedCodegen {
-    return (&reqMyServiceRpcSkippedCodegen{})
-}
-
-
-
-func (x *reqMyServiceRpcSkippedCodegen) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqMyServiceRpcSkippedCodegen"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqMyServiceRpcSkippedCodegen) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqMyServiceRpcSkippedCodegen) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqMyServiceRpcSkippedCodegen({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respMyServiceRpcSkippedCodegen struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respMyServiceRpcSkippedCodegen)(nil)
-var _ thrift.WritableResult = (*respMyServiceRpcSkippedCodegen)(nil)
-
-// Deprecated: MyServiceRpcSkippedCodegenResultDeprecated is deprecated, since it is supposed to be internal.
-type MyServiceRpcSkippedCodegenResultDeprecated = respMyServiceRpcSkippedCodegen
-
-func newRespMyServiceRpcSkippedCodegen() *respMyServiceRpcSkippedCodegen {
-    return (&respMyServiceRpcSkippedCodegen{})
-}
-
-
-
-func (x *respMyServiceRpcSkippedCodegen) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respMyServiceRpcSkippedCodegen) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respMyServiceRpcSkippedCodegen"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respMyServiceRpcSkippedCodegen) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respMyServiceRpcSkippedCodegen) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respMyServiceRpcSkippedCodegen({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-
 
 type MyServiceProcessor struct {
-    processorMap       map[string]thrift.ProcessorFunctionContext
-    functionServiceMap map[string]string
+    processorFunctionMap map[string]thrift.ProcessorFunction
+    functionServiceMap   map[string]string
     handler            MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorContext = (*MyServiceProcessor)(nil)
+var _ thrift.Processor = (*MyServiceProcessor)(nil)
 
 func NewMyServiceProcessor(handler MyService) *MyServiceProcessor {
     p := &MyServiceProcessor{
-        handler:            handler,
-        processorMap:       make(map[string]thrift.ProcessorFunctionContext),
-        functionServiceMap: make(map[string]string),
+        handler:              handler,
+        processorFunctionMap: make(map[string]thrift.ProcessorFunction),
+        functionServiceMap:   make(map[string]string),
     }
-    p.AddToProcessorMap("ping", &procFuncMyServicePing{handler: handler})
-    p.AddToProcessorMap("getRandomData", &procFuncMyServiceGetRandomData{handler: handler})
-    p.AddToProcessorMap("sink", &procFuncMyServiceSink{handler: handler})
-    p.AddToProcessorMap("putDataById", &procFuncMyServicePutDataById{handler: handler})
-    p.AddToProcessorMap("hasDataById", &procFuncMyServiceHasDataById{handler: handler})
-    p.AddToProcessorMap("getDataById", &procFuncMyServiceGetDataById{handler: handler})
-    p.AddToProcessorMap("deleteDataById", &procFuncMyServiceDeleteDataById{handler: handler})
-    p.AddToProcessorMap("lobDataById", &procFuncMyServiceLobDataById{handler: handler})
-    p.AddToProcessorMap("invalid_return_for_hack", &procFuncMyServiceInvalidReturnForHack{handler: handler})
-    p.AddToProcessorMap("rpc_skipped_codegen", &procFuncMyServiceRpcSkippedCodegen{handler: handler})
+    p.AddToProcessorFunctionMap("ping", &procFuncMyServicePing{handler: handler})
+    p.AddToProcessorFunctionMap("getRandomData", &procFuncMyServiceGetRandomData{handler: handler})
+    p.AddToProcessorFunctionMap("sink", &procFuncMyServiceSink{handler: handler})
+    p.AddToProcessorFunctionMap("putDataById", &procFuncMyServicePutDataById{handler: handler})
+    p.AddToProcessorFunctionMap("hasDataById", &procFuncMyServiceHasDataById{handler: handler})
+    p.AddToProcessorFunctionMap("getDataById", &procFuncMyServiceGetDataById{handler: handler})
+    p.AddToProcessorFunctionMap("deleteDataById", &procFuncMyServiceDeleteDataById{handler: handler})
+    p.AddToProcessorFunctionMap("lobDataById", &procFuncMyServiceLobDataById{handler: handler})
+    p.AddToProcessorFunctionMap("invalid_return_for_hack", &procFuncMyServiceInvalidReturnForHack{handler: handler})
+    p.AddToProcessorFunctionMap("rpc_skipped_codegen", &procFuncMyServiceRpcSkippedCodegen{handler: handler})
     p.AddToFunctionServiceMap("ping", "MyService")
     p.AddToFunctionServiceMap("getRandomData", "MyService")
     p.AddToFunctionServiceMap("sink", "MyService")
@@ -3426,23 +676,20 @@ func NewMyServiceProcessor(handler MyService) *MyServiceProcessor {
     return p
 }
 
-func (p *MyServiceProcessor) AddToProcessorMap(key string, processor thrift.ProcessorFunctionContext) {
-    p.processorMap[key] = processor
+func (p *MyServiceProcessor) AddToProcessorFunctionMap(key string, processorFunction thrift.ProcessorFunction) {
+    p.processorFunctionMap[key] = processorFunction
 }
 
 func (p *MyServiceProcessor) AddToFunctionServiceMap(key, service string) {
     p.functionServiceMap[key] = service
 }
 
-func (p *MyServiceProcessor) GetProcessorFunctionContext(key string) (processor thrift.ProcessorFunctionContext, err error) {
-    if processor, ok := p.processorMap[key]; ok {
-        return processor, nil
-    }
-    return nil, nil
+func (p *MyServiceProcessor) GetProcessorFunction(key string) (processor thrift.ProcessorFunction) {
+    return p.processorFunctionMap[key]
 }
 
-func (p *MyServiceProcessor) ProcessorMap() map[string]thrift.ProcessorFunctionContext {
-    return p.processorMap
+func (p *MyServiceProcessor) ProcessorFunctionMap() map[string]thrift.ProcessorFunction {
+    return p.processorFunctionMap
 }
 
 func (p *MyServiceProcessor) FunctionServiceMap() map[string]string {
@@ -3458,9 +705,9 @@ type procFuncMyServicePing struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServicePing)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServicePing)(nil)
 
-func (p *procFuncMyServicePing) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServicePing) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServicePing()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3469,7 +716,7 @@ func (p *procFuncMyServicePing) Read(iprot thrift.Format) (thrift.Struct, thrift
     return args, nil
 }
 
-func (p *procFuncMyServicePing) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServicePing) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3508,9 +755,9 @@ type procFuncMyServiceGetRandomData struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceGetRandomData)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceGetRandomData)(nil)
 
-func (p *procFuncMyServiceGetRandomData) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceGetRandomData) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceGetRandomData()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3519,7 +766,7 @@ func (p *procFuncMyServiceGetRandomData) Read(iprot thrift.Format) (thrift.Struc
     return args, nil
 }
 
-func (p *procFuncMyServiceGetRandomData) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceGetRandomData) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3559,9 +806,9 @@ type procFuncMyServiceSink struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceSink)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceSink)(nil)
 
-func (p *procFuncMyServiceSink) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceSink) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceSink()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3570,7 +817,7 @@ func (p *procFuncMyServiceSink) Read(iprot thrift.Format) (thrift.Struct, thrift
     return args, nil
 }
 
-func (p *procFuncMyServiceSink) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceSink) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3610,9 +857,9 @@ type procFuncMyServicePutDataById struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServicePutDataById)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServicePutDataById)(nil)
 
-func (p *procFuncMyServicePutDataById) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServicePutDataById) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServicePutDataById()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3621,7 +868,7 @@ func (p *procFuncMyServicePutDataById) Read(iprot thrift.Format) (thrift.Struct,
     return args, nil
 }
 
-func (p *procFuncMyServicePutDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServicePutDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3661,9 +908,9 @@ type procFuncMyServiceHasDataById struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceHasDataById)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceHasDataById)(nil)
 
-func (p *procFuncMyServiceHasDataById) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceHasDataById) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceHasDataById()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3672,7 +919,7 @@ func (p *procFuncMyServiceHasDataById) Read(iprot thrift.Format) (thrift.Struct,
     return args, nil
 }
 
-func (p *procFuncMyServiceHasDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceHasDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3713,9 +960,9 @@ type procFuncMyServiceGetDataById struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceGetDataById)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceGetDataById)(nil)
 
-func (p *procFuncMyServiceGetDataById) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceGetDataById) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceGetDataById()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3724,7 +971,7 @@ func (p *procFuncMyServiceGetDataById) Read(iprot thrift.Format) (thrift.Struct,
     return args, nil
 }
 
-func (p *procFuncMyServiceGetDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceGetDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3765,9 +1012,9 @@ type procFuncMyServiceDeleteDataById struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceDeleteDataById)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceDeleteDataById)(nil)
 
-func (p *procFuncMyServiceDeleteDataById) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceDeleteDataById) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceDeleteDataById()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3776,7 +1023,7 @@ func (p *procFuncMyServiceDeleteDataById) Read(iprot thrift.Format) (thrift.Stru
     return args, nil
 }
 
-func (p *procFuncMyServiceDeleteDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceDeleteDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3816,9 +1063,9 @@ type procFuncMyServiceLobDataById struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceLobDataById)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceLobDataById)(nil)
 
-func (p *procFuncMyServiceLobDataById) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceLobDataById) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceLobDataById()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3827,7 +1074,7 @@ func (p *procFuncMyServiceLobDataById) Read(iprot thrift.Format) (thrift.Struct,
     return args, nil
 }
 
-func (p *procFuncMyServiceLobDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceLobDataById) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3866,9 +1113,9 @@ type procFuncMyServiceInvalidReturnForHack struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceInvalidReturnForHack)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceInvalidReturnForHack)(nil)
 
-func (p *procFuncMyServiceInvalidReturnForHack) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceInvalidReturnForHack) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceInvalidReturnForHack()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3877,7 +1124,7 @@ func (p *procFuncMyServiceInvalidReturnForHack) Read(iprot thrift.Format) (thrif
     return args, nil
 }
 
-func (p *procFuncMyServiceInvalidReturnForHack) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceInvalidReturnForHack) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3917,9 +1164,9 @@ type procFuncMyServiceRpcSkippedCodegen struct {
     handler MyService
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncMyServiceRpcSkippedCodegen)(nil)
+var _ thrift.ProcessorFunction = (*procFuncMyServiceRpcSkippedCodegen)(nil)
 
-func (p *procFuncMyServiceRpcSkippedCodegen) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncMyServiceRpcSkippedCodegen) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqMyServiceRpcSkippedCodegen()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -3928,7 +1175,7 @@ func (p *procFuncMyServiceRpcSkippedCodegen) Read(iprot thrift.Format) (thrift.S
     return args, nil
 }
 
-func (p *procFuncMyServiceRpcSkippedCodegen) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncMyServiceRpcSkippedCodegen) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -3961,8 +1208,6 @@ func (p *procFuncMyServiceRpcSkippedCodegen) RunContext(ctx context.Context, req
 
     return result, nil
 }
-
-
 
 
 type DbMixedStackArguments interface {
@@ -4062,599 +1307,43 @@ func (c *DbMixedStackArgumentsClient) GetDataByKey1Context(ctx context.Context, 
     return c.chClient.GetDataByKey1(ctx, key)
 }
 
-type reqDbMixedStackArgumentsGetDataByKey0 struct {
-    Key string `thrift:"key,1" json:"key" db:"key"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqDbMixedStackArgumentsGetDataByKey0)(nil)
-
-// Deprecated: DbMixedStackArgumentsGetDataByKey0ArgsDeprecated is deprecated, since it is supposed to be internal.
-type DbMixedStackArgumentsGetDataByKey0ArgsDeprecated = reqDbMixedStackArgumentsGetDataByKey0
-
-func newReqDbMixedStackArgumentsGetDataByKey0() *reqDbMixedStackArgumentsGetDataByKey0 {
-    return (&reqDbMixedStackArgumentsGetDataByKey0{}).
-        SetKeyNonCompat("")
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) GetKey() string {
-    return x.Key
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) SetKeyNonCompat(value string) *reqDbMixedStackArgumentsGetDataByKey0 {
-    x.Key = value
-    return x
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) SetKey(value string) *reqDbMixedStackArgumentsGetDataByKey0 {
-    x.Key = value
-    return x
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) writeField1(p thrift.Format) error {  // Key
-    if err := p.WriteFieldBegin("key", thrift.STRING, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Key
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) readField1(p thrift.Format) error {  // Key
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.Key = result
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) toString1() string {  // Key
-    return fmt.Sprintf("%v", x.Key)
-}
-
-
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqDbMixedStackArgumentsGetDataByKey0"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // key
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey0) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqDbMixedStackArgumentsGetDataByKey0({")
-    sb.WriteString(fmt.Sprintf("Key:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respDbMixedStackArgumentsGetDataByKey0 struct {
-    Success []byte `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respDbMixedStackArgumentsGetDataByKey0)(nil)
-var _ thrift.WritableResult = (*respDbMixedStackArgumentsGetDataByKey0)(nil)
-
-// Deprecated: DbMixedStackArgumentsGetDataByKey0ResultDeprecated is deprecated, since it is supposed to be internal.
-type DbMixedStackArgumentsGetDataByKey0ResultDeprecated = respDbMixedStackArgumentsGetDataByKey0
-
-func newRespDbMixedStackArgumentsGetDataByKey0() *respDbMixedStackArgumentsGetDataByKey0 {
-    return (&respDbMixedStackArgumentsGetDataByKey0{})
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) GetSuccess() []byte {
-    if !x.IsSetSuccess() {
-        return []byte("")
-    }
-
-    return x.Success
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) SetSuccessNonCompat(value []byte) *respDbMixedStackArgumentsGetDataByKey0 {
-    x.Success = value
-    return x
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) SetSuccess(value []byte) *respDbMixedStackArgumentsGetDataByKey0 {
-    x.Success = value
-    return x
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRING, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Success
-    if err := p.WriteBinary(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) readField0(p thrift.Format) error {  // Success
-    result, err := p.ReadBinary()
-if err != nil {
-    return err
-}
-
-    x.Success = result
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) toString0() string {  // Success
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respDbMixedStackArgumentsGetDataByKey0"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRING)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey0) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respDbMixedStackArgumentsGetDataByKey0({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqDbMixedStackArgumentsGetDataByKey1 struct {
-    Key string `thrift:"key,1" json:"key" db:"key"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqDbMixedStackArgumentsGetDataByKey1)(nil)
-
-// Deprecated: DbMixedStackArgumentsGetDataByKey1ArgsDeprecated is deprecated, since it is supposed to be internal.
-type DbMixedStackArgumentsGetDataByKey1ArgsDeprecated = reqDbMixedStackArgumentsGetDataByKey1
-
-func newReqDbMixedStackArgumentsGetDataByKey1() *reqDbMixedStackArgumentsGetDataByKey1 {
-    return (&reqDbMixedStackArgumentsGetDataByKey1{}).
-        SetKeyNonCompat("")
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) GetKey() string {
-    return x.Key
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) SetKeyNonCompat(value string) *reqDbMixedStackArgumentsGetDataByKey1 {
-    x.Key = value
-    return x
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) SetKey(value string) *reqDbMixedStackArgumentsGetDataByKey1 {
-    x.Key = value
-    return x
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) writeField1(p thrift.Format) error {  // Key
-    if err := p.WriteFieldBegin("key", thrift.STRING, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Key
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) readField1(p thrift.Format) error {  // Key
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.Key = result
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) toString1() string {  // Key
-    return fmt.Sprintf("%v", x.Key)
-}
-
-
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqDbMixedStackArgumentsGetDataByKey1"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // key
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqDbMixedStackArgumentsGetDataByKey1) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqDbMixedStackArgumentsGetDataByKey1({")
-    sb.WriteString(fmt.Sprintf("Key:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respDbMixedStackArgumentsGetDataByKey1 struct {
-    Success []byte `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respDbMixedStackArgumentsGetDataByKey1)(nil)
-var _ thrift.WritableResult = (*respDbMixedStackArgumentsGetDataByKey1)(nil)
-
-// Deprecated: DbMixedStackArgumentsGetDataByKey1ResultDeprecated is deprecated, since it is supposed to be internal.
-type DbMixedStackArgumentsGetDataByKey1ResultDeprecated = respDbMixedStackArgumentsGetDataByKey1
-
-func newRespDbMixedStackArgumentsGetDataByKey1() *respDbMixedStackArgumentsGetDataByKey1 {
-    return (&respDbMixedStackArgumentsGetDataByKey1{})
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) GetSuccess() []byte {
-    if !x.IsSetSuccess() {
-        return []byte("")
-    }
-
-    return x.Success
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) SetSuccessNonCompat(value []byte) *respDbMixedStackArgumentsGetDataByKey1 {
-    x.Success = value
-    return x
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) SetSuccess(value []byte) *respDbMixedStackArgumentsGetDataByKey1 {
-    x.Success = value
-    return x
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRING, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Success
-    if err := p.WriteBinary(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) readField0(p thrift.Format) error {  // Success
-    result, err := p.ReadBinary()
-if err != nil {
-    return err
-}
-
-    x.Success = result
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) toString0() string {  // Success
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respDbMixedStackArgumentsGetDataByKey1"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRING)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respDbMixedStackArgumentsGetDataByKey1) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respDbMixedStackArgumentsGetDataByKey1({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-
 
 type DbMixedStackArgumentsProcessor struct {
-    processorMap       map[string]thrift.ProcessorFunctionContext
-    functionServiceMap map[string]string
+    processorFunctionMap map[string]thrift.ProcessorFunction
+    functionServiceMap   map[string]string
     handler            DbMixedStackArguments
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorContext = (*DbMixedStackArgumentsProcessor)(nil)
+var _ thrift.Processor = (*DbMixedStackArgumentsProcessor)(nil)
 
 func NewDbMixedStackArgumentsProcessor(handler DbMixedStackArguments) *DbMixedStackArgumentsProcessor {
     p := &DbMixedStackArgumentsProcessor{
-        handler:            handler,
-        processorMap:       make(map[string]thrift.ProcessorFunctionContext),
-        functionServiceMap: make(map[string]string),
+        handler:              handler,
+        processorFunctionMap: make(map[string]thrift.ProcessorFunction),
+        functionServiceMap:   make(map[string]string),
     }
-    p.AddToProcessorMap("getDataByKey0", &procFuncDbMixedStackArgumentsGetDataByKey0{handler: handler})
-    p.AddToProcessorMap("getDataByKey1", &procFuncDbMixedStackArgumentsGetDataByKey1{handler: handler})
+    p.AddToProcessorFunctionMap("getDataByKey0", &procFuncDbMixedStackArgumentsGetDataByKey0{handler: handler})
+    p.AddToProcessorFunctionMap("getDataByKey1", &procFuncDbMixedStackArgumentsGetDataByKey1{handler: handler})
     p.AddToFunctionServiceMap("getDataByKey0", "DbMixedStackArguments")
     p.AddToFunctionServiceMap("getDataByKey1", "DbMixedStackArguments")
 
     return p
 }
 
-func (p *DbMixedStackArgumentsProcessor) AddToProcessorMap(key string, processor thrift.ProcessorFunctionContext) {
-    p.processorMap[key] = processor
+func (p *DbMixedStackArgumentsProcessor) AddToProcessorFunctionMap(key string, processorFunction thrift.ProcessorFunction) {
+    p.processorFunctionMap[key] = processorFunction
 }
 
 func (p *DbMixedStackArgumentsProcessor) AddToFunctionServiceMap(key, service string) {
     p.functionServiceMap[key] = service
 }
 
-func (p *DbMixedStackArgumentsProcessor) GetProcessorFunctionContext(key string) (processor thrift.ProcessorFunctionContext, err error) {
-    if processor, ok := p.processorMap[key]; ok {
-        return processor, nil
-    }
-    return nil, nil
+func (p *DbMixedStackArgumentsProcessor) GetProcessorFunction(key string) (processor thrift.ProcessorFunction) {
+    return p.processorFunctionMap[key]
 }
 
-func (p *DbMixedStackArgumentsProcessor) ProcessorMap() map[string]thrift.ProcessorFunctionContext {
-    return p.processorMap
+func (p *DbMixedStackArgumentsProcessor) ProcessorFunctionMap() map[string]thrift.ProcessorFunction {
+    return p.processorFunctionMap
 }
 
 func (p *DbMixedStackArgumentsProcessor) FunctionServiceMap() map[string]string {
@@ -4670,9 +1359,9 @@ type procFuncDbMixedStackArgumentsGetDataByKey0 struct {
     handler DbMixedStackArguments
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncDbMixedStackArgumentsGetDataByKey0)(nil)
+var _ thrift.ProcessorFunction = (*procFuncDbMixedStackArgumentsGetDataByKey0)(nil)
 
-func (p *procFuncDbMixedStackArgumentsGetDataByKey0) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncDbMixedStackArgumentsGetDataByKey0) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqDbMixedStackArgumentsGetDataByKey0()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -4681,7 +1370,7 @@ func (p *procFuncDbMixedStackArgumentsGetDataByKey0) Read(iprot thrift.Format) (
     return args, nil
 }
 
-func (p *procFuncDbMixedStackArgumentsGetDataByKey0) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncDbMixedStackArgumentsGetDataByKey0) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -4722,9 +1411,9 @@ type procFuncDbMixedStackArgumentsGetDataByKey1 struct {
     handler DbMixedStackArguments
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncDbMixedStackArgumentsGetDataByKey1)(nil)
+var _ thrift.ProcessorFunction = (*procFuncDbMixedStackArgumentsGetDataByKey1)(nil)
 
-func (p *procFuncDbMixedStackArgumentsGetDataByKey1) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncDbMixedStackArgumentsGetDataByKey1) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqDbMixedStackArgumentsGetDataByKey1()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -4733,7 +1422,7 @@ func (p *procFuncDbMixedStackArgumentsGetDataByKey1) Read(iprot thrift.Format) (
     return args, nil
 }
 
-func (p *procFuncDbMixedStackArgumentsGetDataByKey1) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncDbMixedStackArgumentsGetDataByKey1) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {

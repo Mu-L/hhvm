@@ -5,24 +5,21 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
 import thrift.py3.stream
 
 
-__property__ = property
-
-
 class FooStreamEx(thrift.py3.exceptions.GeneratedError, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 
@@ -44,6 +41,7 @@ class FooEx(thrift.py3.exceptions.GeneratedError, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
 
+
     def __init__(
         self, 
     ) -> None: ...
@@ -63,6 +61,7 @@ class FooEx(thrift.py3.exceptions.GeneratedError, _typing.Hashable):
 class FooEx2(thrift.py3.exceptions.GeneratedError, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 

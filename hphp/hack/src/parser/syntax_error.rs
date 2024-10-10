@@ -343,6 +343,12 @@ pub const error2056: Error = Cow::Borrowed("First unbracketed namespace occurren
 pub const error2057: Error = Cow::Borrowed("First bracketed namespace occurrence here");
 pub const invalid_shape_field_name: Error =
     Cow::Borrowed("Shape field name must be a nonempty single-quoted string or a class constant");
+pub fn invalid_lazy_class_shape_field(class_name: &str) -> Error {
+    Cow::Owned(format!(
+        "Shape field name must not be a `{}::class` expression",
+        class_name
+    ))
+}
 pub const shape_field_int_like_string: Error =
     Cow::Borrowed("Shape field name must not be an int-like string (i.e. \"123\")");
 pub const error2061: Error = Cow::Borrowed(concat!(
@@ -576,7 +582,7 @@ pub const const_mutation: Error = Cow::Borrowed("Cannot mutate a class constant"
 pub const no_attributes_on_variadic_parameter: Error =
     Cow::Borrowed("Attributes on variadic parameters are not allowed");
 pub const no_optional_on_variadic_parameter: Error =
-    Cow::Borrowed("Cannot use `optional` on variadic parameters");
+    Cow::Borrowed("Cannot use `optional` on variadic or splat parameters");
 pub const no_optional_on_inout_parameter: Error =
     Cow::Borrowed("Cannot use `optional` on `inout` parameters");
 pub const no_attributes_on_enum_class_enumerator: Error =
@@ -609,8 +615,28 @@ pub fn error2074(call_modifier: &str) -> Error {
         call_modifier
     ))
 }
+
 pub const error2077: Error = Cow::Borrowed("Cannot use empty list");
 pub const error2078: Error = Cow::Borrowed("An expression cannot start with `=`");
+
+pub const error2079: Error = Cow::Borrowed(concat!("A splat parameter cannot also be variadic.",));
+
+pub const error2080: Error = Cow::Borrowed(concat!("A splat parameter cannot also be optional.",));
+
+pub const error2081: Error = Cow::Borrowed(concat!(
+    "A splat parameter `...` may only appear at the end of ",
+    "a parameter list."
+));
+
+pub const error2082: Error =
+    Cow::Borrowed("A splat parameter `...` must not have a default value.");
+
+pub const error2083: Error = Cow::Borrowed(concat!(
+    "A splat parameter `...` cannot have a modifier ",
+    "that changes the calling convention, like `inout`.",
+));
+
+pub const splat_readonly_param: Error = Cow::Borrowed("Splat parameters cannot be marked readonly");
 
 pub const reassign_this: Error = Cow::Borrowed("Cannot re-assign `$this`");
 
@@ -1047,7 +1073,7 @@ pub fn policy_sharded_memoized_without_policied(kind: &str) -> Error {
 
 pub fn memoize_make_ic_inaccessible_without_defaults(kind: &str) -> Error {
     Cow::Owned(format!(
-        "This {} requires the defaults, leak_safe_shallow, or leak_safe_local context to be memoized using #MakeICInaccessible or #SoftMakeICInaccessible",
+        "This {} requires the defaults, leak_safe_shallow, or leak_safe_local context to be memoized using #MakeICInaccessible",
         kind
     ))
 }

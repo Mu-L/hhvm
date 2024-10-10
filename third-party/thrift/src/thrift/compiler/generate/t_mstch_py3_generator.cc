@@ -21,18 +21,16 @@
 #include <fmt/format.h>
 
 #include <thrift/compiler/ast/t_service.h>
-#include <thrift/compiler/gen/cpp/reference_type.h>
-#include <thrift/compiler/gen/cpp/type_resolver.h>
 #include <thrift/compiler/generate/common.h>
+#include <thrift/compiler/generate/cpp/name_resolver.h>
+#include <thrift/compiler/generate/cpp/reference_type.h>
 #include <thrift/compiler/generate/mstch_objects.h>
 #include <thrift/compiler/generate/t_mstch_generator.h>
 #include <thrift/compiler/lib/cpp2/util.h>
 #include <thrift/compiler/lib/py3/util.h>
 #include <thrift/compiler/lib/uri.h>
 
-namespace apache {
-namespace thrift {
-namespace compiler {
+namespace apache::thrift::compiler {
 
 namespace {
 
@@ -123,8 +121,7 @@ bool is_func_supported(bool no_stream, const t_function* func) {
 }
 
 bool is_hidden(const t_type& node) {
-  return node.generated() ||
-      gen::cpp::type_resolver::is_directly_adapted(node) ||
+  return node.generated() || cpp_name_resolver::is_directly_adapted(node) ||
       node.has_annotation("py3.hidden") ||
       node.find_structured_annotation_or_null(kPythonPy3HiddenUri);
 }
@@ -147,6 +144,7 @@ class py3_mstch_program : public mstch_program {
             {"program:containerTypes", &py3_mstch_program::getContainerTypes},
             {"program:hasPyContainerTypes",
              &py3_mstch_program::hasPyContainerTypes},
+            {"program:hasEnumTypes", &py3_mstch_program::hasEnumTypes},
             {"program:customTemplates", &py3_mstch_program::getCustomTemplates},
             {"program:customTypes", &py3_mstch_program::getCustomTypes},
             {"program:moveContainerTypes",
@@ -190,6 +188,18 @@ class py3_mstch_program : public mstch_program {
   mstch::node hasPyContainerTypes() {
     for (const auto* ttype : containers_) {
       if (ttype->is_list()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  mstch::node hasEnumTypes() {
+    if (!program_->enums().empty()) {
+      return true;
+    }
+    for (const auto* ttype : objects_) {
+      if (ttype->is_union()) {
         return true;
       }
     }
@@ -827,7 +837,7 @@ class py3_mstch_struct : public mstch_struct {
   mstch::node exceptionMessage() {
     const auto* message_field =
         dynamic_cast<const t_exception&>(*struct_).get_message_field();
-    return message_field ? message_field->name() : "";
+    return message_field ? py3::get_py3_name(*message_field) : "";
   }
 
   mstch::node py3_fields() { return make_mstch_fields(py3_fields_); }
@@ -1059,7 +1069,7 @@ class py3_mstch_deprecated_annotation : public mstch_deprecated_annotation {
 
  protected:
   std::string to_python_string_literal(std::string val) const {
-    std::string quotes = "\"\"\"";
+    std::string quotes = R"(""")";
     boost::algorithm::replace_all(val, "\\", "\\\\");
     boost::algorithm::replace_all(val, "\"", "\\\"");
     return quotes + val + quotes;
@@ -1124,7 +1134,7 @@ std::string py3_mstch_program::visit_type_with_typedef(
 // Generator-specific validator that enforces that a reserved key is not used
 // as a namespace component.
 void validate_no_reserved_key_in_namespace(
-    diagnostic_context& ctx, const t_program& prog) {
+    sema_context& ctx, const t_program& prog) {
   auto namespace_tokens = get_py3_namespace(&prog);
   if (namespace_tokens.empty()) {
     return;
@@ -1159,8 +1169,7 @@ void validate_no_reserved_key_in_namespace(
 // Generator-specific validator that enforces "name" and "value" are not used
 // as enum member or union field names (thrift-py3).
 namespace enum_member_union_field_names_validator {
-void validate(
-    const t_named& node, const std::string& name, diagnostic_context& ctx) {
+void validate(const t_named& node, const std::string& name, sema_context& ctx) {
   auto pyname = node.get_annotation("py3.name", &name);
   if (const t_const* annot =
           node.find_structured_annotation_or_null(kPythonNameUri)) {
@@ -1180,14 +1189,14 @@ void validate(
         pyname);
   }
 }
-bool validate_enum(diagnostic_context& ctx, const t_enum& enm) {
+bool validate_enum(sema_context& ctx, const t_enum& enm) {
   for (const t_enum_value& ev : enm.values()) {
     validate(ev, ev.get_name(), ctx);
   }
   return true;
 }
 
-bool validate_union(diagnostic_context& ctx, const t_union& s) {
+bool validate_union(sema_context& ctx, const t_union& s) {
   for (const t_field& f : s.fields()) {
     validate(f, f.name(), ctx);
   }
@@ -1279,7 +1288,7 @@ class t_mstch_py3_generator : public t_mstch_generator {
   void set_mstch_factories();
   void generate_init_files();
   void generate_file(
-      const std::string& file,
+      const std::string& template_name,
       TypesFile is_types_file,
       const std::filesystem::path& base);
   void generate_types();
@@ -1342,32 +1351,31 @@ std::filesystem::path t_mstch_py3_generator::package_to_path() {
 }
 
 void t_mstch_py3_generator::generate_file(
-    const std::string& file,
+    const std::string& template_name,
     TypesFile is_types_file,
     const std::filesystem::path& base = {}) {
-  auto program = get_program();
-  const auto& name = program->name();
-  if (is_types_file == TypesFile::IsTypesFile) {
-    mstch_context_.options["is_types_file"] = "";
-  } else {
-    mstch_context_.options.erase("is_types_file");
-  }
-  auto mstch_program = make_mstch_program_cached(program, mstch_context_);
-  render_to_file(mstch_program, file, base / name / file);
+  t_program* program = get_program();
+  const std::string& program_name = program->name();
+
+  mstch_context_.set_or_erase_option(
+      is_types_file == TypesFile::IsTypesFile, "is_types_file", "");
+
+  std::shared_ptr<mstch_base> mstch_program =
+      make_mstch_program_cached(program, mstch_context_);
+  render_to_file(
+      mstch_program,
+      template_name,
+      base / program_name / template_name // (output) path
+  );
 }
 
 void t_mstch_py3_generator::generate_types() {
   std::vector<std::string> autoMigrateFilesWithTypeContext{
       "types.py",
-      // without auto_migrate, .pxd contains just bindings of cpp thrift types
-      "types.pxd",
   };
 
   std::vector<std::string> autoMigrateFilesNoTypeContext{
-      "builders.py",
-      "containers_FBTHRIFT_ONLY_DO_NOT_USE.py",
       "metadata.py",
-      "types_reflection.py",
   };
 
   std::vector<std::string> converterFiles{
@@ -1390,6 +1398,7 @@ void t_mstch_py3_generator::generate_types() {
       "types_empty.pyx",
       "types_fields.pxd",
       "types_fields.pyx",
+      "types_impl_FBTHRIFT_ONLY_DO_NOT_USE.py",
       "types_reflection.py",
   };
 
@@ -1410,26 +1419,23 @@ void t_mstch_py3_generator::generate_types() {
   }
   // - if auto_migrate is present, generate types.pxd, and types.py
   // - else, just generate normal cython files
-  if (has_option("auto_migrate")) {
-    for (const auto& file : autoMigrateFilesWithTypeContext) {
-      generate_file(file, TypesFile::IsTypesFile, generateRootPath_);
-    }
-    for (const auto& file : autoMigrateFilesNoTypeContext) {
-      generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
-    }
-  } else {
-    for (const auto& file : cythonFilesWithTypeContext) {
-      generate_file(file, TypesFile::IsTypesFile, generateRootPath_);
-    }
-    for (const auto& file : cppFilesWithTypeContext) {
-      generate_file(file, TypesFile::IsTypesFile);
-    }
-    for (const auto& file : cythonFilesNoTypeContext) {
-      generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
-    }
-    for (const auto& file : cppFilesWithNoTypeContext) {
-      generate_file(file, TypesFile::NotTypesFile);
-    }
+  for (const auto& file : autoMigrateFilesWithTypeContext) {
+    generate_file(file, TypesFile::IsTypesFile, generateRootPath_);
+  }
+  for (const auto& file : autoMigrateFilesNoTypeContext) {
+    generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
+  }
+  for (const auto& file : cythonFilesWithTypeContext) {
+    generate_file(file, TypesFile::IsTypesFile, generateRootPath_);
+  }
+  for (const auto& file : cppFilesWithTypeContext) {
+    generate_file(file, TypesFile::IsTypesFile);
+  }
+  for (const auto& file : cythonFilesNoTypeContext) {
+    generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
+  }
+  for (const auto& file : cppFilesWithNoTypeContext) {
+    generate_file(file, TypesFile::NotTypesFile);
   }
 }
 
@@ -1445,7 +1451,6 @@ void t_mstch_py3_generator::generate_services() {
   std::vector<std::string> pythonFiles{
       "clients.py",
       "services.py",
-      "services_reflection.py",
   };
 
   std::vector<std::string> normalCythonFiles{
@@ -1476,20 +1481,17 @@ void t_mstch_py3_generator::generate_services() {
   // - if auto_migrate is present, generate py3_clients and clients.px
   // - if auto_migrate isn't present, just generate all the normal files
 
-  if (has_option("auto_migrate")) {
-    for (const auto& file : pythonFiles) {
-      generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
-    }
-  } else {
-    for (const auto& file : normalCythonFiles) {
-      generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
-    }
-    for (const auto& file : cppFiles) {
-      generate_file(file, TypesFile::NotTypesFile);
-    }
-    for (const auto& file : cythonFiles) {
-      generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
-    }
+  for (const auto& file : pythonFiles) {
+    generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
+  }
+  for (const auto& file : normalCythonFiles) {
+    generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
+  }
+  for (const auto& file : cppFiles) {
+    generate_file(file, TypesFile::NotTypesFile);
+  }
+  for (const auto& file : cythonFiles) {
+    generate_file(file, TypesFile::NotTypesFile, generateRootPath_);
   }
 }
 
@@ -1500,6 +1502,4 @@ THRIFT_REGISTER_GENERATOR(
     "Python 3",
     "    include_prefix:  Use full include paths in generated files.\n");
 
-} // namespace compiler
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::compiler

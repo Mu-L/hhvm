@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -59,12 +56,11 @@ import weakref as __weakref
 import builtins as _builtins
 import importlib
 
+
 from module.containers_FBTHRIFT_ONLY_DO_NOT_USE import (
     List__bool,
     List__i32,
 )
-
-
 
 
 cdef object get_types_reflection():
@@ -108,7 +104,6 @@ cdef class Foo(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline myInteger_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).myInteger_ref().value()
 
     @property
@@ -118,7 +113,6 @@ cdef class Foo(thrift.py3.types.Struct):
     cdef inline myString_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).myString_ref().has_value():
             return None
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).myString_ref().value_unchecked()).decode('UTF-8')
 
     @property
@@ -126,7 +120,6 @@ cdef class Foo(thrift.py3.types.Struct):
         return self.myString_impl()
 
     cdef inline myBools_impl(self):
-
         if self.__fbthrift_cached_myBools is None:
             self.__fbthrift_cached_myBools = List__bool__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).myBools_ref().ref())
         return self.__fbthrift_cached_myBools
@@ -136,7 +129,6 @@ cdef class Foo(thrift.py3.types.Struct):
         return self.myBools_impl()
 
     cdef inline myNumbers_impl(self):
-
         if self.__fbthrift_cached_myNumbers is None:
             self.__fbthrift_cached_myNumbers = List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).myNumbers_ref().ref())
         return self.__fbthrift_cached_myNumbers

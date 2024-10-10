@@ -85,6 +85,10 @@ class mstch_go_program : public mstch_program {
              &mstch_go_program::thrift_metadata_import},
             {"program:go_package_alias", &mstch_go_program::go_package_alias},
             {"program:gen_metadata?", &mstch_go_program::should_gen_metadata},
+            {"program:gen_default_get?",
+             &mstch_go_program::should_gen_default_get},
+            {"program:use_reflect_codec?",
+             &mstch_go_program::should_use_reflect_codec},
             {"program:import_metadata_package?",
              &mstch_go_program::should_import_metadata_package},
             {"program:metadata_qualifier",
@@ -124,6 +128,8 @@ class mstch_go_program : public mstch_program {
     return data_.get_go_package_alias(program_);
   }
   mstch::node should_gen_metadata() { return data_.gen_metadata; }
+  mstch::node should_gen_default_get() { return data_.gen_default_get; }
+  mstch::node should_use_reflect_codec() { return data_.use_reflect_codec; }
   mstch::node should_import_metadata_package() {
     // We don't need to import the metadata package if we are
     // generating metadata inside the metadata package itself. Duh.
@@ -679,8 +685,11 @@ class mstch_go_type : public mstch_type {
         {
             {"type:go_comparable?", &mstch_go_type::is_go_comparable},
             {"type:metadata_primitive?", &mstch_go_type::is_metadata_primitive},
+            {"type:named?", &mstch_go_type::has_name},
             {"type:full_name", &mstch_go_type::full_name},
             {"type:metadata_name", &mstch_go_type::metadata_name},
+            {"type:metadata_thrift_type_getter",
+             &mstch_go_type::metadata_thrift_type_getter},
         });
   }
 
@@ -691,19 +700,44 @@ class mstch_go_type : public mstch_type {
     auto real_type = type_->get_true_type();
     return go::is_type_metadata_primitive(real_type);
   }
+  mstch::node has_name() { return !type_->name().empty(); }
   mstch::node full_name() { return type_->get_full_name(); }
-  mstch::node metadata_name() {
+  mstch::node metadata_name() { return metadata_name_(); }
+  mstch::node metadata_thrift_type_getter() {
+    // Program will be null for primitive (base) types.
+    // They should be treated as being from the current program.
+    auto is_from_current_program = type_->get_program() == nullptr ||
+        data_.is_current_program(type_->get_program());
+
+    if (is_from_current_program) {
+      // If the type is from the current program, we can simply use its
+      // corresponding *ThriftType variable already present in the program.
+      return metadata_name_();
+    } else {
+      // If the type is external, we must retrieve it from its corresponding
+      // program/package using GetMetadataThriftType helper method.
+      return fmt::format(
+          "{}.GetMetadataThriftType(\"{}\")",
+          data_.get_go_package_alias(type_->program()),
+          type_->get_full_name());
+    }
+  }
+
+ private:
+  go::codegen_data& data_;
+
+  std::string metadata_name_() {
+    return "premadeThriftType_" + sanitized_full_name_();
+  }
+  std::string sanitized_full_name_() {
     std::string full_name = type_->get_full_name();
     boost::replace_all(full_name, " ", "");
     boost::replace_all(full_name, ".", "_");
     boost::replace_all(full_name, ",", "_");
     boost::replace_all(full_name, "<", "_");
     boost::replace_all(full_name, ">", "");
-    return "premadeThriftType_" + full_name;
+    return full_name;
   }
-
- private:
-  go::codegen_data& data_;
 };
 
 class mstch_go_typedef : public mstch_typedef {
@@ -798,6 +832,12 @@ void t_mstch_go_generator::generate_program() {
   if (auto gen_metadata = get_option("gen_metadata")) {
     data_.gen_metadata = (gen_metadata.value() == "true");
   }
+  if (auto gen_default_get = get_option("gen_default_get")) {
+    data_.gen_default_get = (gen_default_get.value() == "true");
+  }
+  if (auto use_reflect_codec = get_option("use_reflect_codec")) {
+    data_.use_reflect_codec = (use_reflect_codec.value() == "true");
+  }
 
   const auto& prog = cached_program(program);
   auto package_dir = std::filesystem::path{
@@ -809,6 +849,7 @@ void t_mstch_go_generator::generate_program() {
   if (data_.gen_metadata) {
     render_to_file(prog, "metadata.go", package_dir / "metadata.go");
   }
+  render_to_file(prog, "codec.go", package_dir / "codec.go");
   if (program->has_doc()) {
     render_to_file(prog, "doc.go", package_dir / "doc.go");
   }

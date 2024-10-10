@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<ec1ec5c690f15756938c12dc58b34ff9>>
+// @generated SignedSource<<c87dd883ca3ddf67c77d4784646839d5>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -160,8 +160,8 @@ pub struct PosByteString(pub pos_or_decl::PosOrDecl, pub bstr::BString);
 #[rust_to_ocaml(attr = "deriving (eq, hash, ord, show)")]
 #[repr(C, u8)]
 pub enum TshapeFieldName {
-    #[rust_to_ocaml(name = "TSFlit_int")]
-    TSFlitInt(PosString),
+    #[rust_to_ocaml(name = "TSFregex_group")]
+    TSFregexGroup(PosString),
     #[rust_to_ocaml(name = "TSFlit_str")]
     TSFlitStr(PosByteString),
     #[rust_to_ocaml(name = "TSFclass_const")]
@@ -495,16 +495,16 @@ pub struct FunType {
 )]
 #[rust_to_ocaml(attr = "deriving (eq, ord, hash, (show { with_path = false }))")]
 #[repr(C, u8)]
-pub enum TypePredicate {
-    IsBool,
-    IsInt,
-    IsString,
-    IsArraykey,
-    IsFloat,
-    IsNum,
-    IsResource,
-    IsNull,
-    IsTupleOf(Vec<TypePredicate>),
+pub enum TypeTag {
+    BoolTag,
+    IntTag,
+    StringTag,
+    ArraykeyTag,
+    FloatTag,
+    NumTag,
+    ResourceTag,
+    NullTag,
+    ClassTag(ast_defs::Id_),
 }
 
 #[derive(
@@ -522,14 +522,95 @@ pub enum TypePredicate {
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (hash, (show { with_path = false }))")]
-#[repr(C, u8)]
-pub enum NegType {
-    #[rust_to_ocaml(name = "Neg_class")]
-    NegClass(PosId),
-    #[rust_to_ocaml(name = "Neg_predicate")]
-    NegPredicate(TypePredicate),
+#[repr(C)]
+pub struct ShapeFieldPredicate {
+    pub sfp_predicate: TypePredicate,
 }
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C)]
+pub struct ShapePredicate {
+    pub sp_fields: t_shape_map::TShapeMap<ShapeFieldPredicate>,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C)]
+pub struct TuplePredicate {
+    pub tp_required: Vec<TypePredicate>,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C, u8)]
+pub enum TypePredicate_ {
+    IsTag(TypeTag),
+    IsTupleOf(TuplePredicate),
+    IsShapeOf(ShapePredicate),
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(attr = "deriving (eq, ord, hash, (show { with_path = false }))")]
+#[repr(C)]
+pub struct TypePredicate(pub reason::Reason, pub Box<TypePredicate_>);
 
 #[derive(
     Clone,
@@ -656,8 +737,8 @@ pub enum Ty_ {
     /// A wrapper around fun_type, which contains the full type information for a
     /// function, method, lambda, etc.
     Tfun(FunType),
-    /// Tuple, with ordered list of the types of the elements of the tuple.
-    Ttuple(Vec<Ty>),
+    /// A wrapper around tuple_type, which contains information about tuple elements
+    Ttuple(TupleType),
     Tshape(ShapeType),
     /// The type of a generic parameter. The constraints on a generic parameter
     /// are accessed through the lenv.tpenv component of the environment, which
@@ -679,6 +760,7 @@ pub enum Ty_ {
     TvecOrDict(Ty, Ty),
     /// Name of class, name of type const, remaining names of type consts
     Taccess(TaccessType),
+    Tvar(isize),
     /// The type of an opaque type or enum. Outside their defining files or
     /// when they represent enums, they are "opaque", which means that they
     /// only unify with themselves. Within a file, uses of newtypes are
@@ -687,22 +769,21 @@ pub enum Ty_ {
     /// However, it is possible to have a constraint that allows us to relax
     /// opaqueness. For example:
     ///
-    ///   newtype MyType as int = ...
+    /// newtype MyType as int = ...
     ///
     /// or
     ///
-    ///   enum MyType: int as int { ... }
+    /// enum MyType: int as int { ... }
     ///
     /// Outside of the file where the type was defined, this translates to:
     ///
-    ///   Tnewtype ((pos, "MyType"), [], Tprim Tint)
+    /// Tnewtype ((pos, "MyType"), [], Tprim Tint)
     ///
     /// which means that MyType is abstract, but is a subtype of int as well.
     /// When the constraint is omitted, the third parameter is set to mixed.
     ///
     /// The second parameter is the list of type arguments to the type.
     Tnewtype(String, Vec<Ty>, Ty),
-    Tvar(isize),
     /// This represents a type alias that lacks necessary type arguments. Given
     /// type Foo<T1,T2> = ...
     /// Tunappliedalias "Foo" stands for usages of plain Foo, without supplying
@@ -718,8 +799,8 @@ pub enum Ty_ {
     /// If exact=Exact, then this represents instances of *exactly* this class
     /// If exact=Nonexact, this also includes subclasses
     Tclass(PosId, Exact, Vec<Ty>),
-    /// The negation of the type in neg_type
-    Tneg(NegType),
+    /// The negation of the [type_predicate]
+    Tneg(TypePredicate),
     /// The type of the label expression #ID
     Tlabel(String),
 }
@@ -884,6 +965,66 @@ pub struct ShapeType {
     pub origin: TypeOrigin,
     pub unknown_value: Ty,
     pub fields: t_shape_map::TShapeMap<ShapeFieldType>,
+}
+
+/// Required and extra components of a tuple. Extra components
+/// are either optional + variadic, or a type splat.
+/// Exmaple 1:
+/// (string,bool,optional float,optional bool,int...)
+/// has require components string, bool, optional components float, bool
+/// and variadic component int.
+/// Example 2:
+/// (string,float,...T)
+/// has required components string, float, and splat component T.
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(attr = "deriving hash")]
+#[rust_to_ocaml(prefix = "t_")]
+#[repr(C)]
+pub struct TupleType {
+    pub required: Vec<Ty>,
+    pub extra: TupleExtra,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(attr = "deriving hash")]
+#[repr(C, u8)]
+pub enum TupleExtra {
+    #[rust_to_ocaml(prefix = "t_")]
+    Textra {
+        optional: Vec<Ty>,
+        variadic: Ty,
+    },
+    Tsplat(Ty),
 }
 
 #[derive(

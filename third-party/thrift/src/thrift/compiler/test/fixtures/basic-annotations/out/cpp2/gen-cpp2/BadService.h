@@ -44,6 +44,7 @@ class ServiceHandler<::cpp2::GoodService> : public apache::thrift::ServerInterfa
   typedef ::cpp2::GoodServiceAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -52,6 +53,7 @@ class BadInteractionServiceInfoHolder : public apache::thrift::ServiceInfoHolder
    apache::thrift::ServiceRequestInfoMap const& requestInfoMap() const override;
    static apache::thrift::ServiceRequestInfoMap staticRequestInfoMap();
 };
+
 
 class BadInteractionIf : public apache::thrift::Tile, public apache::thrift::ServerInterface {
  public:
@@ -96,6 +98,7 @@ class BadInteractionIf : public apache::thrift::Tile, public apache::thrift::Ser
 namespace cpp2 {
 using GoodServiceSvIf [[deprecated("Use apache::thrift::ServiceHandler<GoodService> instead")]] = ::apache::thrift::ServiceHandler<GoodService>;
 } // namespace cpp2
+
 namespace cpp2 {
 class GoodServiceSvNull : public ::apache::thrift::ServiceHandler<GoodService> {
  public:

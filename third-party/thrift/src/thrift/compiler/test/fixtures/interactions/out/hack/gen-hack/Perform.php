@@ -78,11 +78,6 @@ trait PerformClientBase {
     return $interaction;
   }
 
-}
-
-class PerformAsyncClient extends \ThriftClientBase implements PerformAsyncClientIf {
-  use PerformClientBase;
-
   /**
    * Original thrift definition:-
    * void
@@ -96,36 +91,24 @@ class PerformAsyncClient extends \ThriftClientBase implements PerformAsyncClient
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = Perform_foo_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("Perform", "foo", $args);
-    $currentseqid = $this->sendImplHelper($args, "foo", false);
+    $currentseqid = $this->sendImplHelper($args, "foo", false, "Perform" );
     await $this->genAwaitResponse(Perform_foo_result::class, "foo", true, $currentseqid, $rpc_options);
   }
+
+}
+
+class PerformAsyncClient extends \ThriftClientBase implements PerformAsyncClientIf {
+  use PerformClientBase;
 
 }
 
 class PerformClient extends \ThriftClientBase implements PerformClientIf {
   use PerformClientBase;
 
-  /**
-   * Original thrift definition:-
-   * void
-   *   foo();
-   */
-  public async function foo(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Perform_foo_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("Perform", "foo", $args);
-    $currentseqid = $this->sendImplHelper($args, "foo", false);
-    await $this->genAwaitResponse(Perform_foo_result::class, "foo", true, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_foo(): int {
     $args = Perform_foo_args::withDefaultValues();
-    return $this->sendImplHelper($args, "foo", false);
+    return $this->sendImplHelper($args, "foo", false, "Perform" );
   }
   public function recv_foo(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(Perform_foo_result::class, "foo", true, $expectedsequenceid);
@@ -169,7 +152,7 @@ class Perform_MyInteraction extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteraction_frobnicate_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteraction.frobnicate', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteraction.frobnicate', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteraction.frobnicate', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);
@@ -225,7 +208,7 @@ class Perform_MyInteraction extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteraction_ping_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteraction.ping', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteraction.ping', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteraction.ping', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), true);
@@ -281,7 +264,7 @@ class Perform_MyInteraction extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteraction_truthify_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteraction.truthify', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteraction.truthify', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteraction.truthify', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);
@@ -337,7 +320,7 @@ $rpc_options->setInteractionId($this->interactionId);
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteraction_encode_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteraction.encode', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteraction.encode', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteraction.encode', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);
@@ -407,7 +390,7 @@ class Perform_MyInteractionFast extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteractionFast_frobnicate_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteractionFast.frobnicate', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteractionFast.frobnicate', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteractionFast.frobnicate', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);
@@ -463,7 +446,7 @@ class Perform_MyInteractionFast extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteractionFast_ping_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteractionFast.ping', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteractionFast.ping', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteractionFast.ping', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), true);
@@ -519,7 +502,7 @@ class Perform_MyInteractionFast extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteractionFast_truthify_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteractionFast.truthify', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteractionFast.truthify', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteractionFast.truthify', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);
@@ -575,7 +558,7 @@ $rpc_options->setInteractionId($this->interactionId);
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_MyInteractionFast_encode_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('MyInteractionFast.encode', $args, $currentseqid);
+      $this->eventHandler_->preSend('MyInteractionFast.encode', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'MyInteractionFast.encode', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);
@@ -645,7 +628,7 @@ class Perform_SerialInteraction extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = Perform_SerialInteraction_frobnicate_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('SerialInteraction.frobnicate', $args, $currentseqid);
+      $this->eventHandler_->preSend('SerialInteraction.frobnicate', $args, $currentseqid, 'Perform');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'SerialInteraction.frobnicate', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);
@@ -1423,7 +1406,7 @@ class Perform_MyInteraction_encode_FinalResponse extends \ThriftSyncStructWithRe
     ?'success' => ?this::TResult,
   );
 
-  const int STRUCTURAL_ID = 1365128170602685579;
+  const int STRUCTURAL_ID = 8919842120251162628;
   public ?this::TResult $success;
 
   public function __construct(?this::TResult $success = null)[] {
@@ -2077,7 +2060,7 @@ class Perform_MyInteractionFast_encode_FinalResponse extends \ThriftSyncStructWi
     ?'success' => ?this::TResult,
   );
 
-  const int STRUCTURAL_ID = 1365128170602685579;
+  const int STRUCTURAL_ID = 8919842120251162628;
   public ?this::TResult $success;
 
   public function __construct(?this::TResult $success = null)[] {

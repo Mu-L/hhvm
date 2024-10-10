@@ -399,6 +399,9 @@ fn write_func(
             name if name.is_86sinit() => {
                 mangle::FunctionName::Intrinsic(Intrinsic::StaticInit(mi.class.name))
             }
+            name if name.is_86constinit() => {
+                mangle::FunctionName::Intrinsic(Intrinsic::StaticConstInit(mi.class.name))
+            }
             _ => mangle::FunctionName::method(mi.class.name, mi.is_static, mi.name),
         },
         FuncInfo::Function(ref fi) => mangle::FunctionName::Function(fi.name),
@@ -487,6 +490,9 @@ pub(crate) fn write_func_decl(
                 mangle::FunctionName::Intrinsic(Intrinsic::PropInit(mi.class.name))
             }
             name if name.is_86sinit() => {
+                mangle::FunctionName::Intrinsic(Intrinsic::StaticConstInit(mi.class.name))
+            }
+            name if name.is_86constinit() => {
                 mangle::FunctionName::Intrinsic(Intrinsic::StaticInit(mi.class.name))
             }
             _ => mangle::FunctionName::method(mi.class.name, mi.is_static, mi.name),
@@ -1150,7 +1156,11 @@ fn write_call(state: &mut FuncState<'_, '_, '_>, iid: InstrId, call: &ir::Call) 
                 // self::foo() - Static call to the method in the current class.
                 let mi = state.expect_method_info();
                 let is_static = mi.is_static;
-                let target = if in_trait {
+                // constants (and the constinit and cinit methods) defined in a trait should live in the
+                // trait's own class object, whereas mutable fields/properties live in the class object of the
+                // *using* class (accessed via self). This makes a difference if a constant is directly referenced
+                // from the trait, as in TMyTrait::MYCONST, as we won't know what self is at that point
+                let target = if in_trait && !method.is_86constinit() && !method.is_86cinit() {
                     let base = ClassName::intern("__self__");
                     mangle::FunctionName::method(base, is_static, method)
                 } else {
@@ -1306,25 +1316,12 @@ impl<'a, 'b, 'c> FuncState<'a, 'b, 'c> {
 
     /// Loads the static singleton for a class.
     fn load_static_class(&mut self, cid: ClassName) -> Result<textual::Sid> {
-        match *self.func_info {
-            FuncInfo::Method(MethodInfo {
-                class, is_static, ..
-            }) if class.name == cid => {
-                // If we're already in a member of the class then use '$this'.
-                match is_static {
-                    IsStatic::Static => self.load_this(),
-                    IsStatic::NonStatic => {
-                        let this = self.load_this()?;
-                        hack::call_builtin(self.fb, hack::Builtin::GetStaticClass, [this])
-                    }
-                }
-            }
-            _ => {
-                let cname = TypeName::Class(cid);
-                let ty = textual::Ty::Type(cname);
-                self.fb.lazy_class_initialize(&ty)
-            }
-        }
+        // this used to go via $this when within the same class, but that doesn't play
+        // well with infer's modular analysis, so we now call lazy_class_initialize
+        // unconditionally
+        let cname = TypeName::Class(cid);
+        let ty = textual::Ty::Type(cname);
+        self.fb.lazy_class_initialize(&ty)
     }
 
     pub(crate) fn load_mixed(&mut self, src: impl Into<textual::Expr>) -> Result<Sid> {

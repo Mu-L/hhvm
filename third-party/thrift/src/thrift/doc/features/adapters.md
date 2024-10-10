@@ -109,7 +109,7 @@ Both type adapter and field adapter use `cpp.Adapter` API to enable. We will try
 
 ### Compose
 
-Type Adapter can be applied to a typedef, struct, or field. Field Adpater can be only applied to a field. For each typedef, field, or struct, you can only apply a single adapter. You cannot compose multiple type adapters on nested typedefs. You can only compose adapters on a field, where the type of the field is to be a typedef or struct with type adapter and either type adapter or field adapter is directly applied to the field. You cannot compose multiple field adapters.
+Type Adapter can be applied to a typedef, struct, or field. Field Adapter can be only applied to a field. For each typedef, field, or struct, you can only apply a single adapter. You cannot compose multiple type adapters on nested typedefs. You can only compose adapters on a field, where the type of the field is to be a typedef or struct with type adapter and either type adapter or field adapter is directly applied to the field. You cannot compose multiple field adapters.
 
 ```thrift
 // This would result in an error if uncommented.
@@ -212,7 +212,7 @@ Thrift Adapter allows further customization points to avoid calling `fromThrift`
 ### Other Codegen Customizations
 
  * `adaptedType`: normally the runtime can determine the result of `Adapter::fromThrift`, but sometimes doing so would result in a circular dependency or declaration order error. Setting this annotation to the result type breaks the dependency.
- * `underlyingName` and `extraNamespace`: when directly adapting types, the underlying type needs to be mangled to avoid colliding with the adapted type name. If neither is specified thrift will use the `detail` namespace and the same name.
+ * `underlyingName` and `extraNamespace`: when directly adapting a Thrift type, the name of Thrft type may need to be mangled to avoid colliding with the name of adapted type. If neither is specified, Thrift will use the `detail` namespace and the same name.
  * `moveOnly`: indicates that structs with this adapted type as a field should not have copy constructors.
 
 ## Hack

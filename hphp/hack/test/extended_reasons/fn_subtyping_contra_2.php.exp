@@ -1,156 +1,157 @@
 error: Typing[4110] Invalid argument
 
+File "fn_subtyping_contra_2.php", line 8, character 9 - line 8, character 10:
+
  6 | function foo_2((function((function(Sub): void)): void) $_): void {}
  7 | function bar_2((function((function(Super): void)): void) $f): void {
  8 |   foo_2(»$f«);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 8, character 9 - line 8, character 10:
-
 Expected `Sub`
+
+File "fn_subtyping_contra_2.php", line 6, character 36 - line 6, character 38:
 
  6 | function foo_2((function((function(»Sub«): void)): void) $_): void {}
  7 | function bar_2((function((function(Super): void)): void) $f): void {
  8 |   foo_2($f);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 6, character 36 - line 6, character 38:
-
 But got `Super`
 
- 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
- 7 | function bar_2((function((function(»Super«): void)): void) $f): void {
- 8 |   foo_2($f);
- 9 | }
-
 File "fn_subtyping_contra_2.php", line 7, character 36 - line 7, character 40:
-
-This error has 13 steps, a maximum depth of 3 and contains 3 reversals.
-
-Here's why: this hint
 
  6 | function foo_2((function((function(Sub): void)): void) $_): void {}
  7 | function bar_2((function((function(»Super«): void)): void) $f): void {
  8 |   foo_2($f);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 7, character 36 - line 7, character 40:
+Here's why:
 
-flows up into this hint as the 1st function parameter
+Step 1 of 4
 
- 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
- 7 | function bar_2((function(»(function(Super): void)«): void) $f): void {
- 8 |   foo_2($f);
- 9 | }
+I started by checking this subtype relationship.
 
-File "fn_subtyping_contra_2.php", line 7, character 26 - line 7, character 48:
+The subtype comes from this function or method declaration
 
-which itself flows from this hint because the type was decomposed
-
- 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
- 7 | function bar_2((function(»(function(Super): void)«): void) $f): void {
- 8 |   foo_2($f);
- 9 | }
-
-File "fn_subtyping_contra_2.php", line 7, character 26 - line 7, character 48:
-
-which itself flows from this declaration because they are required to be subtypes
-
- 6 | function foo_2((function(»(function(Sub): void)«): void) $_): void {}
- 7 | function bar_2((function((function(Super): void)): void) $f): void {
- 8 |   foo_2($f);
- 9 | }
-
-File "fn_subtyping_contra_2.php", line 6, character 26 - line 6, character 46:
-
-which itself flows up from this hint as the 1st function parameter
-
- 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
- 7 | function bar_2(»(function((function(Super): void)): void)« $f): void {
- 8 |   foo_2($f);
- 9 | }
-
-File "fn_subtyping_contra_2.php", line 7, character 16 - line 7, character 56:
-
-which itself flows into this expression because it is a parameter hint
-
- 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
- 7 | function bar_2((function((function(Super): void)): void) »$f«): void {
- 8 |   foo_2($f);
- 9 | }
-
-File "fn_subtyping_contra_2.php", line 7, character 58 - line 7, character 59:
-
-which itself flows into this expression because the local variable has this type
-
- 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
- 7 | function bar_2((function((function(Super): void)): void) $f): void {
- 8 |   foo_2(»$f«);
- 9 | }
-
-File "fn_subtyping_contra_2.php", line 8, character 9 - line 8, character 10:
-
-which itself flows up into this expression as the 1st function parameter
-
- 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
- 7 | function bar_2((function((function(Super): void)): void) $f): void {
- 8 |   »foo_2($f)«;
- 9 | }
-
-File "fn_subtyping_contra_2.php", line 8, character 3 - line 8, character 11:
-
-which itself flows from this function or method  because they are required to be subtypes
+File "fn_subtyping_contra_2.php", line 6, character 10 - line 6, character 14:
 
  6 | function »foo_2«((function((function(Sub): void)): void) $_): void {}
  7 | function bar_2((function((function(Super): void)): void) $f): void {
  8 |   foo_2($f);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 6, character 10 - line 6, character 14:
+The supertype comes from this expression
 
-which itself flows down into this hint as the 1st function parameter
+File "fn_subtyping_contra_2.php", line 8, character 3 - line 8, character 11:
+
+ 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
+ 7 | function bar_2((function((function(Super): void)): void) $f): void {
+ 8 |   »foo_2($f)«;
+ 9 | }
+
+Step 2 of 4
+
+These are function types so next I checked the 1st function parameters.
+Functions are contravariant in their parameters so the direction of the subtype relationship is reversed.
+
+The subtype comes from this hint
+
+File "fn_subtyping_contra_2.php", line 7, character 16 - line 7, character 56:
 
  6 | function foo_2((function((function(Sub): void)): void) $_): void {}
  7 | function bar_2(»(function((function(Super): void)): void)« $f): void {
  8 |   foo_2($f);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 7, character 16 - line 7, character 56:
+and flows into this expression as the parameter hint
 
-which itself flows into this declaration because they are required to be subtypes
+File "fn_subtyping_contra_2.php", line 7, character 58 - line 7, character 59:
+
+ 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
+ 7 | function bar_2((function((function(Super): void)): void) »$f«): void {
+ 8 |   foo_2($f);
+ 9 | }
+
+which itself flows into this expression as the type of the local variable
+
+File "fn_subtyping_contra_2.php", line 8, character 9 - line 8, character 10:
+
+ 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
+ 7 | function bar_2((function((function(Super): void)): void) $f): void {
+ 8 |   foo_2(»$f«);
+ 9 | }
+
+The supertype comes from this hint
+
+File "fn_subtyping_contra_2.php", line 6, character 16 - line 6, character 54:
 
  6 | function foo_2(»(function((function(Sub): void)): void)« $_): void {}
  7 | function bar_2((function((function(Super): void)): void) $f): void {
  8 |   foo_2($f);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 6, character 16 - line 6, character 54:
+Step 3 of 4
 
-which itself flows into this hint because the type was decomposed
+These are function types so next I checked the 1st function parameters.
+Functions are contravariant in their parameters so the direction of the subtype relationship is reversed.
 
- 6 | function foo_2(»(function((function(Sub): void)): void)« $_): void {}
- 7 | function bar_2((function((function(Super): void)): void) $f): void {
- 8 |   foo_2($f);
- 9 | }
+The subtype comes from this hint
 
-File "fn_subtyping_contra_2.php", line 6, character 16 - line 6, character 54:
-
-which itself flows down from this hint as the 1st function parameter
+File "fn_subtyping_contra_2.php", line 6, character 26 - line 6, character 46:
 
  6 | function foo_2((function(»(function(Sub): void)«): void) $_): void {}
  7 | function bar_2((function((function(Super): void)): void) $f): void {
  8 |   foo_2($f);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 6, character 26 - line 6, character 46:
+The supertype comes from this hint
 
-which itself flows down into this hint as the 1st function parameter
+File "fn_subtyping_contra_2.php", line 7, character 26 - line 7, character 48:
+
+ 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
+ 7 | function bar_2((function(»(function(Super): void)«): void) $f): void {
+ 8 |   foo_2($f);
+ 9 | }
+
+Step 4 of 4 (here is where the error occurred)
+
+These are function types so next I checked the 1st function parameters.
+Functions are contravariant in their parameters so the direction of the subtype relationship is reversed.
+
+The subtype comes from this hint
+
+File "fn_subtyping_contra_2.php", line 7, character 36 - line 7, character 40:
+
+ 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
+ 7 | function bar_2((function((function(»Super«): void)): void) $f): void {
+ 8 |   foo_2($f);
+ 9 | }
+
+which is defined here
+
+File "fn_subtyping_contra_2.php", line 3, character 7 - line 3, character 11:
+
+ 3 | class »Super« {}
+ 4 | class Sub extends Super {}
+ 5 | 
+ 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
+
+The supertype comes from this hint
+
+File "fn_subtyping_contra_2.php", line 6, character 36 - line 6, character 38:
 
  6 | function foo_2((function((function(»Sub«): void)): void) $_): void {}
  7 | function bar_2((function((function(Super): void)): void) $f): void {
  8 |   foo_2($f);
  9 | }
 
-File "fn_subtyping_contra_2.php", line 6, character 36 - line 6, character 38:
+which is defined here
 
-1 error found.
+File "fn_subtyping_contra_2.php", line 4, character 7 - line 4, character 9:
+
+ 3 | class Super {}
+ 4 | class »Sub« extends Super {}
+ 5 | 
+ 6 | function foo_2((function((function(Sub): void)): void) $_): void {}
+
+1 error found

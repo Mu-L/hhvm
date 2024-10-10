@@ -512,6 +512,12 @@ TEST_P(
           processor_->executeRequest(std::move(request), methodMetadata);
         }
 
+        void processInteraction(apache::thrift::ServerRequest&&) override {
+          LOG(FATAL)
+              << "This AsyncProcessor doesn't support Thrift interactions. "
+              << "Please implement processInteraction to support interactions.";
+        }
+
         explicit Processor(std::unique_ptr<AsyncProcessor> processor)
             : processor_(std::move(processor)) {}
 
@@ -625,6 +631,15 @@ TEST(AsyncProcessorMethodResolutionTest, MultipleService) {
   EXPECT_EQ(monitoringClient->semifuture_parentMethod1().get(), 84);
   EXPECT_EQ(
       monitoringClient->semifuture_childMethod2().get(), "hello from Monitor");
+}
+
+TEST(AsyncProcessorFactoryTest, ThriftGenerated) {
+  std::shared_ptr<ServiceHandler<Parent>> generated =
+      std::make_shared<ServiceHandler<Parent>>();
+  ThriftServerAsyncProcessorFactory<ServiceHandler<Parent>> notGenerated =
+      ThriftServerAsyncProcessorFactory<ServiceHandler<Parent>>(generated);
+  EXPECT_TRUE(generated->isThriftGenerated());
+  EXPECT_FALSE(notGenerated.isThriftGenerated());
 }
 
 } // namespace apache::thrift::test

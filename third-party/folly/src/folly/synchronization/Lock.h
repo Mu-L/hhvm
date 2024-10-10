@@ -106,40 +106,40 @@ class lock_base {
   owner_type state_{};
 
  public:
-  lock_base() = default;
-  lock_base(lock_base&& that) noexcept
+  FOLLY_NODISCARD lock_base() = default;
+  FOLLY_NODISCARD lock_base(lock_base&& that) noexcept
       : mutex_{std::exchange(that.mutex_, nullptr)},
         state_{std::exchange(that.state_, owner_type{})} {}
   template <typename M = mutex_type, if_<!has_state_, M>* = nullptr>
-  lock_base(type_t<M>& mutex, std::adopt_lock_t)
+  FOLLY_NODISCARD lock_base(type_t<M>& mutex, std::adopt_lock_t)
       : mutex_{std::addressof(mutex)}, state_{owner_true_(tag<owner_type>)} {}
   template <typename M = mutex_type, if_<has_state_, M>* = nullptr>
-  lock_base(type_t<M>& mutex, std::adopt_lock_t, owner_type const& state)
+  FOLLY_NODISCARD lock_base(
+      type_t<M>& mutex, std::adopt_lock_t, owner_type const& state)
       : mutex_{std::addressof(mutex)}, state_{state} {
     state_ || (check_fail_<true>(), 0);
   }
-  FOLLY_NODISCARD explicit lock_base(mutex_type& mutex) {
-    mutex_ = std::addressof(mutex);
+  FOLLY_NODISCARD explicit lock_base(mutex_type& mutex)
+      : mutex_{std::addressof(mutex)} {
     lock();
   }
-  lock_base(mutex_type& mutex, std::defer_lock_t) noexcept {
-    mutex_ = std::addressof(mutex);
-  }
-  FOLLY_NODISCARD lock_base(mutex_type& mutex, std::try_to_lock_t) {
-    mutex_ = std::addressof(mutex);
+  lock_base(mutex_type& mutex, std::defer_lock_t) noexcept
+      : mutex_{std::addressof(mutex)} {}
+  FOLLY_NODISCARD lock_base(mutex_type& mutex, std::try_to_lock_t)
+      : mutex_{std::addressof(mutex)} {
     try_lock();
   }
   template <typename Rep, typename Period>
   FOLLY_NODISCARD lock_base(
-      mutex_type& mutex, std::chrono::duration<Rep, Period> const& timeout) {
-    mutex_ = std::addressof(mutex);
+      mutex_type& mutex, std::chrono::duration<Rep, Period> const& timeout)
+      : mutex_{std::addressof(mutex)} {
     try_lock_for(timeout);
   }
   template <typename Clock, typename Duration>
   FOLLY_NODISCARD lock_base(
       mutex_type& mutex,
-      std::chrono::time_point<Clock, Duration> const& deadline) {
-    mutex_ = std::addressof(mutex);
+      std::chrono::time_point<Clock, Duration> const& deadline)
+      : mutex_{std::addressof(mutex)} {
     try_lock_until(deadline);
   }
 
@@ -523,54 +523,6 @@ class hybrid_lock_guard
 
 template <typename Mutex, typename... A>
 explicit hybrid_lock_guard(Mutex&, A const&...) -> hybrid_lock_guard<Mutex>;
-
-//  make_unique_lock
-//
-//  Returns a unique_lock constructed with the given arguments. Deduces the
-//  mutex type.
-struct make_unique_lock_fn {
-  template <typename Mutex, typename... A>
-  FOLLY_NODISCARD unique_lock<Mutex> operator()(Mutex& mutex, A&&... a) const {
-    return unique_lock<Mutex>{mutex, static_cast<A&&>(a)...};
-  }
-};
-inline constexpr make_unique_lock_fn make_unique_lock{};
-
-//  make_shared_lock
-//
-//  Returns a shared_lock constructed with the given arguments. Deduces the
-//  mutex type.
-struct make_shared_lock_fn {
-  template <typename Mutex, typename... A>
-  FOLLY_NODISCARD shared_lock<Mutex> operator()(Mutex& mutex, A&&... a) const {
-    return shared_lock<Mutex>{mutex, static_cast<A&&>(a)...};
-  }
-};
-inline constexpr make_shared_lock_fn make_shared_lock{};
-
-//  make_upgrade_lock
-//
-//  Returns an upgrade_lock constructed with the given arguments. Deduces the
-//  mutex type.
-struct make_upgrade_lock_fn {
-  template <typename Mutex, typename... A>
-  FOLLY_NODISCARD upgrade_lock<Mutex> operator()(Mutex& mutex, A&&... a) const {
-    return upgrade_lock<Mutex>{mutex, static_cast<A&&>(a)...};
-  }
-};
-inline constexpr make_upgrade_lock_fn make_upgrade_lock{};
-
-//  make_hybrid_lock
-//
-//  Returns a hybrid_lock constructed with the given arguments. Deduces the
-//  mutex type.
-struct make_hybrid_lock_fn {
-  template <typename Mutex, typename... A>
-  FOLLY_NODISCARD hybrid_lock<Mutex> operator()(Mutex& mutex, A&&... a) const {
-    return hybrid_lock<Mutex>{mutex, static_cast<A&&>(a)...};
-  }
-};
-inline constexpr make_hybrid_lock_fn make_hybrid_lock{};
 
 } // namespace folly
 

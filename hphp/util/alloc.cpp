@@ -654,9 +654,8 @@ struct JEMallocInitializer {
       }
     }
 
-    // Do some reallocation between low and high 1G arenas based on the total 
+    // Do some reallocation between low and high 1G arenas based on the total
     // number of pages reserved.
-    auto const origHigh1G = high_1g_pages;
     HugePageInfo info = get_huge1g_info();
     unsigned remaining = static_cast<unsigned>(info.nr_hugepages);
     if (low_1g_pages > 2) low_1g_pages = 2;
@@ -696,6 +695,8 @@ struct JEMallocInitializer {
 #endif
 
     setup_low_arena({low_1g_pages, low_2m_pages});
+#ifdef __x86_64__
+    auto const origHigh1G = high_1g_pages;
     if (high_1g_pages > remaining) {
       high_1g_pages = remaining;
     }
@@ -704,6 +705,14 @@ struct JEMallocInitializer {
               "using %u (specified %u) 1G huge pages for high arena\n",
               high_1g_pages, origHigh1G);
     }
+#else
+    if (high_1g_pages && !remaining) {
+      fprintf(stderr,
+              "specified %u 1G huge pages for high arena but the host doesn't "
+              "have any, will try to use THP\n",
+              high_1g_pages);
+    }
+#endif
     setup_high_arena({high_1g_pages, high_2m_pages});
     // Make sure high/low arenas are available to the current thread.
     arenas_thread_init();
@@ -768,6 +777,12 @@ SwappableReadonlyArena* get_swappable_readonly_arena() {
 
 extern "C" {
   const char* malloc_conf = "narenas:1,lg_tcache_max:16"
+#if (JEMALLOC_VERSION_MAJOR == 5 && JEMALLOC_VERSION_MINOR >= 3) || \
+    (JEMALLOC_VERSION_MAJOR > 5) // requires jemalloc >= 5.3
+#if (JEMALLOC_VERSION_NREV >= 211)
+    ",experimental_tcache_gc:false"
+#endif
+#endif
 #if (JEMALLOC_VERSION_MAJOR == 5 && JEMALLOC_VERSION_MINOR >= 1) || \
     (JEMALLOC_VERSION_MAJOR > 5) // requires jemalloc >= 5.1
     ",metadata_thp:disabled"

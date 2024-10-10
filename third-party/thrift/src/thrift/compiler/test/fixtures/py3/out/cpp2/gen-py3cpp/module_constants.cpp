@@ -10,6 +10,7 @@
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
 
+
 namespace py3::simple {
 namespace module_constants {
 
@@ -72,6 +73,8 @@ namespace module_constants {
   {  ::py3::simple::AnEnumRenamed::normal, static_cast<::std::int32_t>(2) } } };
   return *instance;
 }
+
+
 
 } // namespace module_constants
 } // namespace py3::simple

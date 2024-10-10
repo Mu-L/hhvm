@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class Foo(thrift.py3.types.Struct, _typing.Hashable):
@@ -27,13 +23,10 @@ class Foo(thrift.py3.types.Struct, _typing.Hashable):
         myNumbers: bool
         pass
 
-    myInteger: Final[int] = ...
-
-    myString: Final[_typing.Optional[str]] = ...
-
-    myBools: Final[_typing.Sequence[bool]] = ...
-
-    myNumbers: Final[_typing.Sequence[int]] = ...
+    myInteger: _typing.Final[int] = ...
+    myString: _typing.Final[_typing.Optional[str]] = ...
+    myBools: _typing.Final[_typing.Sequence[bool]] = ...
+    myNumbers: _typing.Final[_typing.Sequence[int]] = ...
 
     def __init__(
         self, *,
@@ -45,10 +38,10 @@ class Foo(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        myInteger: _typing.Union[int, '__NotSet', None]=NOTSET,
-        myString: _typing.Union[str, '__NotSet', None]=NOTSET,
-        myBools: _typing.Union[_typing.Sequence[bool], '__NotSet', None]=NOTSET,
-        myNumbers: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET
+        myInteger: _typing.Union[int, None]=None,
+        myString: _typing.Union[str, None]=None,
+        myBools: _typing.Union[_typing.Sequence[bool], None]=None,
+        myNumbers: _typing.Union[_typing.Sequence[int], None]=None
     ) -> Foo: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Foo'], bytes]]: ...

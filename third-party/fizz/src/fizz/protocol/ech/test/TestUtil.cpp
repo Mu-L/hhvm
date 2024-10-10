@@ -6,9 +6,11 @@
  *  LICENSE file in the root directory of this source tree.
  */
 
+#include <fizz/backend/openssl/OpenSSL.h>
 #include <fizz/crypto/test/TestUtil.h>
 #include <fizz/protocol/ech/Encryption.h>
 #include <fizz/protocol/ech/test/TestUtil.h>
+#include <fizz/protocol/test/TestUtil.h>
 
 namespace fizz {
 namespace ech {
@@ -50,7 +52,7 @@ ECHConfig getECHConfig() {
 
 ClientHello getClientHelloOuter() {
   // Create fake client hello outer
-  ClientHello chloOuter;
+  ClientHello chloOuter = ::fizz::test::TestMessages::clientHello();
   chloOuter.legacy_session_id =
       folly::IOBuf::copyBuffer("test legacy session id");
 

@@ -1534,7 +1534,7 @@ end = struct
         lazy
           ( pos,
             Printf.sprintf
-              "Cannot access a public element which belongs to %s from %s"
+              "Cannot access an element which belongs to %s from %s"
               target_package
               current_package )
       and reason =
@@ -4503,19 +4503,6 @@ end = struct
       [],
       User_error_flags.empty )
 
-  let ellipsis_strict_mode pos require =
-    let claim =
-      lazy
-        ( pos,
-          match require with
-          | `Param_name ->
-            "Variadic function arguments require a name in strict mode, e.g. `...$args`."
-          | `Type_and_param_name ->
-            "Variadic function arguments require a name and type in strict mode, e.g. `int ...$args`."
-        )
-    in
-    (Error_code.EllipsisStrictMode, claim, lazy [], [], User_error_flags.empty)
-
   let object_string pos1 pos2 =
     ( Error_code.ObjectString,
       lazy (pos1, "You cannot use this object as a string"),
@@ -5451,7 +5438,6 @@ end = struct
         member_kind
         member_name
     | Generic_static { pos; typaram_name } -> generic_static pos typaram_name
-    | Ellipsis_strict_mode { pos; require } -> ellipsis_strict_mode pos require
     | Object_string { pos; decl_pos } -> object_string pos decl_pos
     | Cyclic_typedef { def_pos; use_pos } -> cyclic_typedef def_pos use_pos
     | Require_args_reify { pos; decl_pos } -> require_args_reify pos decl_pos
@@ -5598,9 +5584,8 @@ end = struct
           Markdown_lite.md_codify nm ^ acc
         | Either.Second (Custom_error_eval.Value.Ty ty) ->
           (Markdown_lite.md_codify
-          @@ Typing_print.with_blank_tyvars (fun () ->
-                 Typing_print.full_strip_ns_i env
-                 @@ Typing_defs_core.LoclType ty))
+          @@ Typing_print.full_strip_ns_i ~hide_internals:true env
+          @@ Typing_defs_core.LoclType ty)
           ^ acc)
       ~init:""
 
@@ -5688,8 +5673,7 @@ end = struct
        Typing_print.coeffects env ty)
 
   let describe_ty_default env ty =
-    Typing_print.with_blank_tyvars (fun () ->
-        Typing_print.full_strip_ns_i env ty)
+    Typing_print.full_strip_ns_i ~hide_internals:true env ty
 
   let describe_ty ~is_coeffect =
     (* Optimization: specialize on partial application, i.e.
@@ -5789,12 +5773,16 @@ end = struct
       | (_, Tcan_index _) -> "an array that can be indexed"
       | (_, Tdestructure _) ->
         Markdown_lite.md_codify
-          (Typing_print.with_blank_tyvars (fun () ->
-               Typing_print.full_strip_ns_i env (ConstraintType ty)))
+          (Typing_print.full_strip_ns_i
+             ~hide_internals:true
+             env
+             (ConstraintType ty))
       | (_, Ttype_switch _) ->
         Markdown_lite.md_codify
-          (Typing_print.with_blank_tyvars (fun () ->
-               Typing_print.full_strip_ns_i env (ConstraintType ty)))
+          (Typing_print.full_strip_ns_i
+             ~hide_internals:true
+             env
+             (ConstraintType ty))
       | (_, Thas_const { name; ty = _ }) ->
         Printf.sprintf "a class with a constant `%s`" name)
 
@@ -5802,7 +5790,8 @@ end = struct
     let ty_descr = describe_ty ~is_coeffect env ety in
     let ty_constraints =
       match ety with
-      | Typing_defs.LoclType ty -> Typing_print.constraints_for_type env ty
+      | Typing_defs.LoclType ty ->
+        Typing_print.constraints_for_type ~hide_internals:true env ty
       | Typing_defs.ConstraintType _ -> ""
     in
 
@@ -5832,9 +5821,8 @@ end = struct
            (ty_super_descr, ty_sub_descr)
        in
        let left =
-         Typing_reason.to_string
-           ("Expected " ^ ty_super_descr)
-           (Typing_reason.reverse r_super)
+         Typing_reason.to_string ("Expected " ^ ty_super_descr)
+         @@ Typing_reason.reverse_flow r_super
        in
        let right = Typing_reason.to_string ("But got " ^ ty_sub_descr) r_sub in
        let reasons = left @ right in
@@ -5842,15 +5830,11 @@ end = struct
          Option.value_map
            ~default:[]
            ~f:(function
+             | GlobalOptions.Legacy -> []
              | GlobalOptions.Extended complexity ->
-               Typing_reason.(
-                 explain
-                   (flow ~from:r_sub ~into:r_super ~kind:Flow_subtype_toplevel)
-                   ~complexity)
+               Typing_reason.(explain ~sub:r_sub ~super:r_super ~complexity)
              | GlobalOptions.Debug ->
-               Typing_reason.(
-                 debug
-                   (flow ~from:r_sub ~into:r_super ~kind:Flow_subtype_toplevel)))
+               Typing_reason.(debug ~sub:r_sub ~super:r_super))
            (TypecheckerOptions.tco_extended_reasons
               Typing_env_types.(env.genv.tcopt))
        in
@@ -5964,21 +5948,12 @@ end = struct
         :: Option.value_map
              ~default:[]
              ~f:(function
+               | GlobalOptions.Legacy -> []
                | GlobalOptions.Extended complexity ->
                  Typing_reason.(
-                   explain
-                     (flow
-                        ~from:reason_sub
-                        ~into:reason_super
-                        ~kind:Flow_subtype_toplevel)
-                     ~complexity)
+                   explain ~sub:reason_sub ~super:reason_super ~complexity)
                | GlobalOptions.Debug ->
-                 Typing_reason.(
-                   debug
-                     (flow
-                        ~from:reason_sub
-                        ~into:reason_super
-                        ~kind:Flow_subtype_toplevel)))
+                 Typing_reason.(debug ~sub:reason_sub ~super:reason_super))
              (TypecheckerOptions.tco_extended_reasons
                 Typing_env_types.(env.genv.tcopt)))
     in
@@ -6119,21 +6094,12 @@ end = struct
         :: Option.value_map
              ~default:[]
              ~f:(function
+               | GlobalOptions.Legacy -> []
                | GlobalOptions.Extended complexity ->
                  Typing_reason.(
-                   explain
-                     (flow
-                        ~from:reason_sub
-                        ~into:reason_super
-                        ~kind:Flow_subtype_toplevel)
-                     ~complexity)
+                   explain ~sub:reason_sub ~super:reason_super ~complexity)
                | GlobalOptions.Debug ->
-                 Typing_reason.(
-                   debug
-                     (flow
-                        ~from:reason_sub
-                        ~into:reason_super
-                        ~kind:Flow_subtype_toplevel)))
+                 Typing_reason.(debug ~sub:reason_sub ~super:reason_super))
              (TypecheckerOptions.tco_extended_reasons
                 Typing_env_types.(env.genv.tcopt)))
     in
@@ -7157,8 +7123,7 @@ end = struct
     @@ apply_help ?code ?claim ?reasons ?flags ?quickfixes t ~env ~current_span
 end
 
-let is_suppressed User_error.{ claim; code; _ } =
-  Errors.fixme_present Message.(get_message_pos claim) code
+let is_suppressed error = Errors.is_suppressed error
 
 let add_typing_error err ~env =
   Eval_result.iter ~f:Errors.add_error

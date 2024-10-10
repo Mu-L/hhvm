@@ -33,7 +33,6 @@ module Init_telemetry : sig
   type reason =
     | Init_lazy_dirty  (** normal saved-state init *)
     | Init_typecheck_disabled_after_init  (** I don't know what this is for *)
-    | Init_eager  (** full init *)
     | Init_lazy_full  (** failed a saved-state init, and fell back to full *)
     | Init_prechecked_fanout  (** I don't know what this is for *)
 
@@ -55,11 +54,25 @@ end
     Distance tracks the number of revisions between X and Y, using globalrev.
     Age tracks the time elapsed between X and Y in seconds, according to hg log data.
 *)
-type saved_state_delta = {
-  distance: int;
-  age: int;
+type saved_state_revs_info = {
+  distance: int option;
+  age: int option;
+  saved_state_rev: Hg.Rev.t;
+  saved_state_globalrev: Hg.global_rev option;
+  saved_state_rev_timestamp: int option;
+  mergebase_rev: Hg.Rev.t option;
+  mergebase_globalrev: Hg.global_rev option;
+  mergebase_rev_timestamp: int option;
 }
-[@@deriving show]
+[@@deriving show, yojson]
+
+module SavedStateRevsInfo : sig
+  type t = saved_state_revs_info
+
+  val default : saved_state_rev:Hg.Rev.t -> t
+
+  val to_telemetry : t -> Telemetry.t
+end
 
 type init_env = {
   approach_name: string;
@@ -70,7 +83,7 @@ type init_env = {
   init_start_t: float;
   init_type: string;
   mergebase: Hg.Rev.t option;
-  mergebase_warning_hashes: Warnings_saved_state.t;
+  mergebase_warning_hashes: Warnings_saved_state.t option;
   why_needed_full_check: Init_telemetry.t option;
       (** This is about the first full check (if any) which was deferred after init.
       It gets reset after that first full check is completed.
@@ -78,7 +91,7 @@ type init_env = {
   recheck_id: string option;
   (* Additional data associated with init that we want to log when a first full
    * check completes. *)
-  saved_state_delta: saved_state_delta option;
+  saved_state_revs_info: saved_state_revs_info option;
   naming_table_manifold_path: string option;
       (** The manifold path for remote typechecker workers to download the naming table
           saved state. This value will be None in the case of full init *)
@@ -242,7 +255,7 @@ val is_full_check_needed : full_check_status -> bool
 
 val is_full_check_started : full_check_status -> bool
 
-val list_files : env -> string list
+val list_files_with_errors : env -> string list
 
 val add_changed_files : env -> Relative_path.Set.t -> env
 

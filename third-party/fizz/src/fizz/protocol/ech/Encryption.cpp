@@ -9,7 +9,6 @@
 #include <fizz/protocol/ech/Encryption.h>
 #include "fizz/record/Types.h"
 
-#include <fizz/backend/openssl/OpenSSL.h>
 #include <fizz/crypto/hpke/Utils.h>
 #include <fizz/protocol/Protocol.h>
 #include <fizz/protocol/ech/ECHExtensions.h>
@@ -188,8 +187,8 @@ folly::Optional<SupportedECHConfig> selectECHConfig(
 }
 
 static hpke::SetupParam getSetupParam(
+    const fizz::Factory& factory,
     std::unique_ptr<DHKEM> dhkem,
-    std::unique_ptr<folly::IOBuf> prefix,
     hpke::KEMId kemId,
     const HpkeSymmetricCipherSuite& cipherSuite) {
   // Get suite id
@@ -198,58 +197,29 @@ static hpke::SetupParam getSetupParam(
   auto suite = getCipherSuite(cipherSuite.aead_id);
   auto suiteId = hpke::generateHpkeSuiteId(group, hash, suite);
 
-  auto hkdf = hpke::makeHpkeHkdf(std::move(prefix), cipherSuite.kdf_id);
+  auto hkdf = std::make_unique<fizz::hpke::Hkdf>(
+      fizz::hpke::Hkdf::v1(factory.makeHasherFactory(hash)));
 
   return hpke::SetupParam{
       std::move(dhkem),
-      makeCipher(cipherSuite.aead_id),
+      factory.makeAead(getCipherSuite(cipherSuite.aead_id)),
       std::move(hkdf),
       std::move(suiteId),
       0};
 }
 
-std::unique_ptr<folly::IOBuf> getRecordDigest(
-    const ECHConfig& echConfig,
-    hpke::KDFId id) {
-  switch (id) {
-    case hpke::KDFId::Sha256: {
-      std::array<uint8_t, fizz::Sha256::HashLen> recordDigest;
-      fizz::openssl::Hasher<Sha256>::hash(
-          *encode(echConfig),
-          folly::MutableByteRange(recordDigest.data(), recordDigest.size()));
-      return folly::IOBuf::copyBuffer(recordDigest);
-    }
-    case hpke::KDFId::Sha384: {
-      std::array<uint8_t, fizz::Sha384::HashLen> recordDigest;
-      fizz::openssl::Hasher<Sha384>::hash(
-          *encode(echConfig),
-          folly::MutableByteRange(recordDigest.data(), recordDigest.size()));
-      return folly::IOBuf::copyBuffer(recordDigest);
-    }
-    case hpke::KDFId::Sha512: {
-      std::array<uint8_t, fizz::Sha512::HashLen> recordDigest;
-      fizz::openssl::Hasher<Sha512>::hash(
-          *encode(echConfig),
-          folly::MutableByteRange(recordDigest.data(), recordDigest.size()));
-      return folly::IOBuf::copyBuffer(recordDigest);
-    }
-    default:
-      throw std::runtime_error("kdf: not implemented");
-  }
-}
-
 hpke::SetupResult constructHpkeSetupResult(
+    const fizz::Factory& factory,
     std::unique_ptr<KeyExchange> kex,
     const SupportedECHConfig& supportedConfig) {
-  const std::unique_ptr<folly::IOBuf> prefix =
-      folly::IOBuf::copyBuffer("HPKE-v1");
-
   folly::io::Cursor cursor(supportedConfig.config.ech_config_content.get());
   auto config = decode<ECHConfigContentDraft>(cursor);
   auto cipherSuite = supportedConfig.cipherSuite;
+  auto hash = getHashFunction(cipherSuite.kdf_id);
 
   // Get shared secret
-  auto hkdf = hpke::makeHpkeHkdf(prefix->clone(), cipherSuite.kdf_id);
+  auto hkdf = std::make_unique<fizz::hpke::Hkdf>(
+      fizz::hpke::Hkdf::v1(factory.makeHasherFactory(hash)));
   std::unique_ptr<DHKEM> dhkem = std::make_unique<DHKEM>(
       std::move(kex), getKexGroup(config.key_config.kem_id), std::move(hkdf));
 
@@ -263,10 +233,7 @@ hpke::SetupResult constructHpkeSetupResult(
       std::move(info),
       folly::none,
       getSetupParam(
-          std::move(dhkem),
-          prefix->clone(),
-          config.key_config.kem_id,
-          cipherSuite));
+          factory, std::move(dhkem), config.key_config.kem_id, cipherSuite));
 }
 
 ServerHello makeDummyServerHello(const ServerHello& shlo) {
@@ -428,6 +395,17 @@ void setAcceptConfirmation(
 }
 
 namespace {
+
+static std::unique_ptr<folly::IOBuf> randomIOBuf(
+    const Factory& factory,
+    size_t count) {
+  auto buf = folly::IOBuf::create(count);
+  if (count > 0) {
+    factory.makeRandomBytes(buf->writableData(), count);
+    buf->append(count);
+  }
+  return buf;
+}
 // GREASE PSKs are essentially the same size as the source PSK with the actual
 // contents of all fields replaced with random data. For the HRR case, the PSK
 // identity is preserved.
@@ -443,15 +421,18 @@ ClientPresharedKey generateGreasePskCommon(
       greaseIdentity.psk_identity = identity.psk_identity->clone();
     } else {
       size_t identitySize = identity.psk_identity->computeChainDataLength();
-      greaseIdentity.psk_identity = factory->makeRandomBytes(identitySize);
+      greaseIdentity.psk_identity = randomIOBuf(*factory, identitySize);
     }
-    greaseIdentity.obfuscated_ticket_age = factory->makeTicketAgeAdd();
+
+    factory->makeRandomBytes(
+        reinterpret_cast<unsigned char*>(&greaseIdentity.obfuscated_ticket_age),
+        sizeof(greaseIdentity.obfuscated_ticket_age));
     grease.identities.push_back(std::move(greaseIdentity));
 
     const auto& binder = source.binders.at(i);
     PskBinder greaseBinder;
     size_t binderSize = binder.binder->computeChainDataLength();
-    greaseBinder.binder = factory->makeRandomBytes(binderSize);
+    greaseBinder.binder = randomIOBuf(*factory, binderSize);
     grease.binders.push_back(std::move(greaseBinder));
   }
   return grease;
@@ -504,18 +485,57 @@ size_t calculateECHPadding(
   return padding;
 }
 
+std::vector<Extension> generateAndReplaceOuterExtensions(
+    std::vector<Extension>&& chloInnerExt,
+    const std::vector<ExtensionType>& outerExtensionTypes) {
+  std::vector<ExtensionType> extTypes;
+  for (const auto& ext : chloInnerExt) {
+    if (std::find(
+            outerExtensionTypes.begin(),
+            outerExtensionTypes.end(),
+            ext.extension_type) != outerExtensionTypes.end()) {
+      extTypes.push_back(ext.extension_type);
+    }
+  }
+  if (extTypes.size() == 0) {
+    return std::move(chloInnerExt);
+  }
+
+  OuterExtensions outerExt;
+  outerExt.types = extTypes;
+
+  bool outerExtensionsInserted = false;
+  for (const auto extType : extTypes) {
+    auto it = std::find_if(
+        chloInnerExt.begin(), chloInnerExt.end(), [extType](const auto& ext) {
+          return ext.extension_type == extType;
+        });
+    if (!outerExtensionsInserted) {
+      *it = encodeExtension(outerExt);
+      outerExtensionsInserted = true;
+    } else {
+      chloInnerExt.erase(it);
+    }
+  }
+
+  return std::move(chloInnerExt);
+}
+
 namespace {
 
-void encryptClientHelloShared(
+void encryptClientHelloImpl(
     OuterECHClientHello& echExtension,
     const ClientHello& clientHelloInner,
     const ClientHello& clientHelloOuter,
     hpke::SetupResult& setupResult,
     const folly::Optional<ClientPresharedKey>& greasePsk,
-    size_t maxLen) {
+    size_t maxLen,
+    const std::vector<ExtensionType>& outerExtensionTypes) {
   // Remove legacy_session_id and serialize the client hello inner
   auto chloInnerCopy = clientHelloInner.clone();
   chloInnerCopy.legacy_session_id = folly::IOBuf::copyBuffer("");
+  chloInnerCopy.extensions = generateAndReplaceOuterExtensions(
+      std::move(chloInnerCopy.extensions), outerExtensionTypes);
   auto encodedClientHelloInner = encode(chloInnerCopy);
 
   size_t padding = calculateECHPadding(
@@ -534,7 +554,7 @@ void encryptClientHelloShared(
 
   // Get cipher overhead
   size_t dummyPayloadSize = encodedClientHelloInner->computeChainDataLength() +
-      makeCipher(echExtension.cipher_suite.aead_id)->getCipherOverhead();
+      hpke::getCipherOverhead(echExtension.cipher_suite.aead_id);
 
   // Make dummy payload.
   echExtension.payload = folly::IOBuf::create(dummyPayloadSize);
@@ -562,20 +582,22 @@ OuterECHClientHello encryptClientHelloHRR(
     const ClientHello& clientHelloInner,
     const ClientHello& clientHelloOuter,
     hpke::SetupResult& setupResult,
-    const folly::Optional<ClientPresharedKey>& greasePsk) {
+    const folly::Optional<ClientPresharedKey>& greasePsk,
+    const std::vector<ExtensionType>& outerExtensionTypes) {
   // Create ECH extension with blank config ID and enc for HRR
   OuterECHClientHello echExtension;
   echExtension.cipher_suite = supportedConfig.cipherSuite;
   echExtension.config_id = supportedConfig.configId;
   echExtension.enc = folly::IOBuf::create(0);
 
-  encryptClientHelloShared(
+  encryptClientHelloImpl(
       echExtension,
       clientHelloInner,
       clientHelloOuter,
       setupResult,
       greasePsk,
-      supportedConfig.maxLen);
+      supportedConfig.maxLen,
+      outerExtensionTypes);
 
   return echExtension;
 }
@@ -585,20 +607,22 @@ OuterECHClientHello encryptClientHello(
     const ClientHello& clientHelloInner,
     const ClientHello& clientHelloOuter,
     hpke::SetupResult& setupResult,
-    const folly::Optional<ClientPresharedKey>& greasePsk) {
+    const folly::Optional<ClientPresharedKey>& greasePsk,
+    const std::vector<ExtensionType>& outerExtensionTypes) {
   // Create ECH extension
   OuterECHClientHello echExtension;
   echExtension.cipher_suite = supportedConfig.cipherSuite;
   echExtension.config_id = supportedConfig.configId;
   echExtension.enc = setupResult.enc->clone();
 
-  encryptClientHelloShared(
+  encryptClientHelloImpl(
       echExtension,
       clientHelloInner,
       clientHelloOuter,
       setupResult,
       greasePsk,
-      supportedConfig.maxLen);
+      supportedConfig.maxLen,
+      outerExtensionTypes);
 
   return echExtension;
 }
@@ -640,31 +664,32 @@ ClientHello decryptECHWithContext(
 }
 
 std::unique_ptr<hpke::HpkeContext> setupDecryptionContext(
+    const fizz::Factory& factory,
     const ECHConfig& echConfig,
     HpkeSymmetricCipherSuite cipherSuite,
     const std::unique_ptr<folly::IOBuf>& encapsulatedKey,
     std::unique_ptr<KeyExchange> kex,
     uint64_t seqNum) {
-  const std::unique_ptr<folly::IOBuf> prefix =
-      folly::IOBuf::copyBuffer("HPKE-v1");
-
   // Get crypto primitive types used for decrypting
   hpke::KDFId kdfId = cipherSuite.kdf_id;
   folly::io::Cursor echConfigCursor(echConfig.ech_config_content.get());
   auto decodedConfigContent = decode<ECHConfigContentDraft>(echConfigCursor);
   auto kemId = decodedConfigContent.key_config.kem_id;
   NamedGroup group = hpke::getKexGroup(kemId);
+  auto hash = getHashFunction(cipherSuite.kdf_id);
+  auto hkdf = std::make_unique<fizz::hpke::Hkdf>(
+      fizz::hpke::Hkdf::v1(factory.makeHasherFactory(hash)));
 
-  auto dhkem = std::make_unique<DHKEM>(
-      std::move(kex), group, hpke::makeHpkeHkdf(prefix->clone(), kdfId));
+  auto dhkem = std::make_unique<DHKEM>(std::move(kex), group, std::move(hkdf));
   auto aeadId = cipherSuite.aead_id;
   auto suiteId = hpke::generateHpkeSuiteId(
       group, hpke::getHashFunction(kdfId), hpke::getCipherSuite(aeadId));
 
   hpke::SetupParam setupParam{
       std::move(dhkem),
-      makeCipher(aeadId),
-      hpke::makeHpkeHkdf(prefix->clone(), kdfId),
+      factory.makeAead(getCipherSuite(aeadId)),
+      std::make_unique<fizz::hpke::Hkdf>(
+          fizz::hpke::Hkdf::v1(factory.makeHasherFactory(hash))),
       std::move(suiteId),
       seqNum};
 
@@ -680,8 +705,8 @@ std::unique_ptr<hpke::HpkeContext> setupDecryptionContext(
 }
 
 std::vector<Extension> substituteOuterExtensions(
-    std::vector<Extension>&& innerExt,
-    const std::vector<Extension>& outerExt) {
+    std::vector<Extension>&& chloInnerExt,
+    const std::vector<Extension>& chloOuterExt) {
   std::vector<Extension> expandedInnerExt;
 
   // This will throw if we duplicate an extension (or if we try to put an
@@ -694,7 +719,7 @@ std::vector<Extension> substituteOuterExtensions(
     seenTypes.insert(t);
   };
 
-  for (auto& ext : innerExt) {
+  for (auto& ext : chloInnerExt) {
     dupeCheck(ext.extension_type);
     if (ExtensionType::ech_outer_extensions != ext.extension_type) {
       expandedInnerExt.push_back(std::move(ext));
@@ -709,8 +734,8 @@ std::vector<Extension> substituteOuterExtensions(
       }
 
       // Use the linear approach suggested by the RFC.
-      auto outerIt = outerExt.cbegin();
-      auto outerEnd = outerExt.cend();
+      auto outerIt = chloOuterExt.cbegin();
+      auto outerEnd = chloOuterExt.cend();
       for (const auto extType : outerExtensions.types) {
         // Check types for dupes and ech
         dupeCheck(extType);

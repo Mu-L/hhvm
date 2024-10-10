@@ -12,11 +12,11 @@ path = "../../compile.rs"
 
 [dependencies]
 aast_parser = { version = "0.0.0", path = "../../../../parser/cargo/aast_parser" }
-anyhow = "1.0.75"
+anyhow = "1.0.86"
 bc_to_ir = { version = "0.0.0", path = "../../../ir/conversions/bc_to_ir" }
-bstr = { version = "1.4.0", features = ["serde", "std", "unicode"] }
+bstr = { version = "1.10.0", features = ["serde", "std", "unicode"] }
 bytecode_printer = { version = "0.0.0", path = "../../../bytecode_printer" }
-clap = { version = "4.5.6", features = ["derive", "env", "string", "unicode", "wrap_help"] }
+clap = { version = "4.5.20", features = ["derive", "env", "string", "unicode", "wrap_help"] }
 decl_provider = { version = "0.0.0", path = "../../../decl_provider" }
 elab = { version = "0.0.0", path = "../../../../elab" }
 emit_unit = { version = "0.0.0", path = "../../../emitter/cargo/emit_unit" }
@@ -34,4 +34,4 @@ relative_path = { version = "0.0.0", path = "../../../../utils/rust/relative_pat
 rewrite_program = { version = "0.0.0", path = "../rewrite_program" }
 serde = { version = "1.0.185", features = ["derive", "rc"] }
 stack_limit = { version = "0.0.0", path = "../../../../utils/stack_limit" }
-thiserror = "1.0.49"
+thiserror = "1.0.64"

@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-
 import typing as _typing
 
 import enum
@@ -69,7 +68,7 @@ class SerializedUnion(_fbthrift_python_types.Union, _fbthrift_compatible_with_Se
     @classmethod
     def fromValue(cls, value: _typing.Union[None, str, int]) -> SerializedUnion: ...
     value: _typing.Final[_typing.Union[None, str, int]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "test.fixtures.python_capi.serialized_dep.types.SerializedUnion": ...  # type: ignore
@@ -149,7 +148,7 @@ class MarshalUnion(_fbthrift_python_types.Union, _fbthrift_compatible_with_Marsh
     @classmethod
     def fromValue(cls, value: _typing.Union[None, str, int]) -> MarshalUnion: ...
     value: _typing.Final[_typing.Union[None, str, int]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "test.fixtures.python_capi.serialized_dep.types.MarshalUnion": ...  # type: ignore

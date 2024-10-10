@@ -16,11 +16,64 @@ pub(crate) use crate as client;
 pub(crate) use ::::services;
 
 
+pub trait MyRoot: ::std::marker::Send {
+    fn do_root(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>>;
+}
+
+pub trait MyRootExt<T>: MyRoot
+where
+    T: ::fbthrift::Transport,
+{
+    fn do_root_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>>;
+
+    fn transport(&self) -> &T;
+}
+
+#[allow(deprecated)]
+impl<'a, S> MyRoot for S
+where
+    S: ::std::convert::AsRef<dyn MyRoot + 'a>,
+    S: ::std::marker::Send,
+{
+    fn do_root(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>> {
+        self.as_ref().do_root(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> MyRootExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn MyRoot + 'a> + ::std::convert::AsRef<dyn MyRootExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn do_root_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>> {
+        <Self as ::std::convert::AsRef<dyn MyRootExt<T>>>::as_ref(self).do_root_with_rpc_opts(
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
 /// Client definitions for `MyRoot`.
 pub struct MyRootImpl<P, T, S = ::fbthrift::NoopSpawner> {
     transport: T,
     _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
 }
+
 
 impl<P, T, S> MyRootImpl<P, T, S>
 where
@@ -45,6 +98,7 @@ where
     }
 
 
+
     fn _do_root_impl(
         &self,
         rpc_options: T::RpcOptions,
@@ -52,8 +106,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyRoot";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyRoot.do_root";
+        let service_name = c"MyRoot";
+        let service_method_name = c"MyRoot.do_root";
+
         let args = self::Args_MyRoot_do_root {
             _phantom: ::std::marker::PhantomData,
         };
@@ -67,7 +122,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "MyRoot.do_root"));
 
         async move {
@@ -98,23 +153,7 @@ where
     }
 }
 
-pub trait MyRoot: ::std::marker::Send {
-    fn do_root(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>>;
-}
 
-pub trait MyRootExt<T>: MyRoot
-where
-    T: ::fbthrift::Transport,
-{
-    fn do_root_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>>;
-
-    fn transport(&self) -> &T;
-}
 
 struct Args_MyRoot_do_root<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -169,41 +208,6 @@ where
 
     fn transport(&self) -> &T {
         self.transport()
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> MyRoot for S
-where
-    S: ::std::convert::AsRef<dyn MyRoot + 'a>,
-    S: ::std::marker::Send,
-{
-    fn do_root(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>> {
-        self.as_ref().do_root(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> MyRootExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn MyRoot + 'a> + ::std::convert::AsRef<dyn MyRootExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn do_root_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_root::DoRootError>> {
-        <Self as ::std::convert::AsRef<dyn MyRootExt<T>>>::as_ref(self).do_root_with_rpc_opts(
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
     }
 }
 
@@ -305,11 +309,59 @@ impl ::fbthrift::ClientFactory for make_MyRoot {
     }
 }
 
+pub trait MyNode: crate::client::MyRoot + ::std::marker::Send {
+    fn do_mid(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>>;
+}
 
+pub trait MyNodeExt<T>: MyNode + crate::client::MyRootExt<T>
+where
+    T: ::fbthrift::Transport,
+{
+    fn do_mid_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>>;
+}
+
+#[allow(deprecated)]
+impl<'a, S> MyNode for S
+where
+    S: ::std::convert::AsRef<dyn MyNode + 'a>,
+    S: crate::client::MyRoot,
+    S: ::std::marker::Send,
+{
+    fn do_mid(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>> {
+        self.as_ref().do_mid(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> MyNodeExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn MyNode + 'a> + ::std::convert::AsRef<dyn MyNodeExt<T> + 'a>,
+    S: crate::client::MyRoot + crate::client::MyRootExt<T>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn do_mid_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>> {
+        <Self as ::std::convert::AsRef<dyn MyNodeExt<T>>>::as_ref(self).do_mid_with_rpc_opts(
+            rpc_options,
+        )
+    }
+}
 /// Client definitions for `MyNode`.
 pub struct MyNodeImpl<P, T, S = ::fbthrift::NoopSpawner> {
     parent: crate::client::MyRootImpl<P, T, S>,
 }
+
 
 impl<P, T, S> MyNodeImpl<P, T, S>
 where
@@ -323,13 +375,15 @@ where
     pub fn new(
         transport: T,
     ) -> Self {
-        let parent = crate::client::MyRootImpl::<P, T, S>::new(transport);
-        Self { parent }
+        Self {
+            parent: crate::client::MyRootImpl::<P, T, S>::new(transport),
+        }
     }
 
     pub fn transport(&self) -> &T {
         ::fbthrift::help::GetTransport::transport(self)
     }
+
 
 
     fn _do_mid_impl(
@@ -339,8 +393,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyNode";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyNode.do_mid";
+        let service_name = c"MyNode";
+        let service_method_name = c"MyNode.do_mid";
+
         let args = self::Args_MyNode_do_mid {
             _phantom: ::std::marker::PhantomData,
         };
@@ -354,7 +409,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "MyNode.do_mid"));
 
         async move {
@@ -417,21 +472,7 @@ where
     }
 }
 
-pub trait MyNode: crate::client::MyRoot + ::std::marker::Send {
-    fn do_mid(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>>;
-}
 
-pub trait MyNodeExt<T>: MyNode + crate::client::MyRootExt<T>
-where
-    T: ::fbthrift::Transport,
-{
-    fn do_mid_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>>;
-}
 
 struct Args_MyNode_do_mid<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -480,39 +521,6 @@ where
         rpc_options: T::RpcOptions,
     ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>> {
         self._do_mid_impl(
-            rpc_options,
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> MyNode for S
-where
-    S: ::std::convert::AsRef<dyn MyNode + 'a>,
-    S: crate::client::MyRoot,
-    S: ::std::marker::Send,
-{
-    fn do_mid(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>> {
-        self.as_ref().do_mid(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> MyNodeExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn MyNode + 'a> + ::std::convert::AsRef<dyn MyNodeExt<T> + 'a>,
-    S: crate::client::MyRoot + crate::client::MyRootExt<T>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn do_mid_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_node::DoMidError>> {
-        <Self as ::std::convert::AsRef<dyn MyNodeExt<T>>>::as_ref(self).do_mid_with_rpc_opts(
             rpc_options,
         )
     }
@@ -616,11 +624,61 @@ impl ::fbthrift::ClientFactory for make_MyNode {
     }
 }
 
+pub trait MyLeaf: crate::client::MyNode + ::std::marker::Send {
+    fn do_leaf(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>>;
+}
 
+pub trait MyLeafExt<T>: MyLeaf + crate::client::MyNodeExt<T>
+where
+    T: ::fbthrift::Transport,
+{
+    fn do_leaf_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>>;
+}
+
+#[allow(deprecated)]
+impl<'a, S> MyLeaf for S
+where
+    S: ::std::convert::AsRef<dyn MyLeaf + 'a>,
+    S: crate::client::MyNode,
+    S: crate::client::MyRoot,
+    S: ::std::marker::Send,
+{
+    fn do_leaf(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>> {
+        self.as_ref().do_leaf(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> MyLeafExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn MyLeaf + 'a> + ::std::convert::AsRef<dyn MyLeafExt<T> + 'a>,
+    S: crate::client::MyNode + crate::client::MyNodeExt<T>,
+    S: crate::client::MyRoot + crate::client::MyRootExt<T>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn do_leaf_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>> {
+        <Self as ::std::convert::AsRef<dyn MyLeafExt<T>>>::as_ref(self).do_leaf_with_rpc_opts(
+            rpc_options,
+        )
+    }
+}
 /// Client definitions for `MyLeaf`.
 pub struct MyLeafImpl<P, T, S = ::fbthrift::NoopSpawner> {
     parent: crate::client::MyNodeImpl<P, T, S>,
 }
+
 
 impl<P, T, S> MyLeafImpl<P, T, S>
 where
@@ -634,13 +692,15 @@ where
     pub fn new(
         transport: T,
     ) -> Self {
-        let parent = crate::client::MyNodeImpl::<P, T, S>::new(transport);
-        Self { parent }
+        Self {
+            parent: crate::client::MyNodeImpl::<P, T, S>::new(transport),
+        }
     }
 
     pub fn transport(&self) -> &T {
         ::fbthrift::help::GetTransport::transport(self)
     }
+
 
 
     fn _do_leaf_impl(
@@ -650,8 +710,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyLeaf";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyLeaf.do_leaf";
+        let service_name = c"MyLeaf";
+        let service_method_name = c"MyLeaf.do_leaf";
+
         let args = self::Args_MyLeaf_do_leaf {
             _phantom: ::std::marker::PhantomData,
         };
@@ -665,7 +726,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "MyLeaf.do_leaf"));
 
         async move {
@@ -760,21 +821,7 @@ where
     }
 }
 
-pub trait MyLeaf: crate::client::MyNode + ::std::marker::Send {
-    fn do_leaf(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>>;
-}
 
-pub trait MyLeafExt<T>: MyLeaf + crate::client::MyNodeExt<T>
-where
-    T: ::fbthrift::Transport,
-{
-    fn do_leaf_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>>;
-}
 
 struct Args_MyLeaf_do_leaf<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -823,41 +870,6 @@ where
         rpc_options: T::RpcOptions,
     ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>> {
         self._do_leaf_impl(
-            rpc_options,
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> MyLeaf for S
-where
-    S: ::std::convert::AsRef<dyn MyLeaf + 'a>,
-    S: crate::client::MyNode,
-    S: crate::client::MyRoot,
-    S: ::std::marker::Send,
-{
-    fn do_leaf(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>> {
-        self.as_ref().do_leaf(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> MyLeafExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn MyLeaf + 'a> + ::std::convert::AsRef<dyn MyLeafExt<T> + 'a>,
-    S: crate::client::MyNode + crate::client::MyNodeExt<T>,
-    S: crate::client::MyRoot + crate::client::MyRootExt<T>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn do_leaf_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_leaf::DoLeafError>> {
-        <Self as ::std::convert::AsRef<dyn MyLeafExt<T>>>::as_ref(self).do_leaf_with_rpc_opts(
             rpc_options,
         )
     }

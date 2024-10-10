@@ -15,20 +15,26 @@
 #include <memory>
 
 #include "squangle/base/Base.h"
-#include "squangle/base/ConnectionKey.h"
 #include "squangle/logger/DBEventCounter.h"
+#include "squangle/mysql_client/ChangeUserOperation.h"
+#include "squangle/mysql_client/ConnectPoolOperation.h"
 #include "squangle/mysql_client/Connection.h"
-#include "squangle/mysql_client/MysqlConnectionHolder.h"
+#include "squangle/mysql_client/ConnectionHolder.h"
 #include "squangle/mysql_client/Operation.h"
 #include "squangle/mysql_client/PoolKey.h"
 #include "squangle/mysql_client/PoolStorage.h"
+#include "squangle/mysql_client/ResetOperation.h"
+#include "squangle/mysql_client/SpecialOperation.h"
 
 namespace facebook::common::mysql_client {
+namespace mysql_protocol {
+template <typename C>
+class MysqlConnectPoolOperationImpl;
+}
 
+class ConnectionKey;
 template <typename Client>
 class ConnectionPool;
-template <typename Client>
-class ConnectPoolOperation;
 
 // In order to keep always healthy connections avoid and avoid holding one
 // connection for way too long, we have the options:
@@ -51,8 +57,7 @@ class PoolOptions {
   // TimeLiterals.h for Open Source.
   static constexpr Duration kDefaultMaxAge = std::chrono::seconds(60);
   static constexpr Duration kDefaultMaxIdleTime = std::chrono::seconds(4);
-  static constexpr std::chrono::milliseconds kCleanUpTimeout =
-      std::chrono::milliseconds(300);
+  static constexpr Millis kCleanUpTimeout = Millis(300);
   static const int kDefaultMaxOpenConn = 100;
 
   PoolOptions()
@@ -137,17 +142,15 @@ class PoolOptions {
 std::ostream& operator<<(std::ostream& os, const PoolOptions& options);
 
 template <typename Client>
-class MysqlPooledHolder : public MysqlConnectionHolder {
+class MysqlPooledHolder : public ConnectionHolder {
  public:
   // Constructed based on an already existing MysqlConnectionHolder, the
   // values are going to be copied and the old holder will be destroyed.
   MysqlPooledHolder(
-      std::unique_ptr<MysqlConnectionHolder> holder_base,
+      std::unique_ptr<ConnectionHolder> holder_base,
       std::weak_ptr<ConnectionPool<Client>> weak_pool,
       const PoolKey& pool_key)
-      : MysqlConnectionHolder(
-            std::move(holder_base),
-            pool_key.getConnectionKey()),
+      : ConnectionHolder(*holder_base, pool_key.getConnectionKey()),
         good_for_(Duration::zero()),
         weak_pool_(weak_pool),
         pool_key_(pool_key) {
@@ -286,6 +289,10 @@ class ConnectionPoolBase {
     shouldThrottleCallback_ = std::move(cb);
   }
 
+  virtual bool isInCorrectThread(bool /*expectMysqlThread*/) const {
+    return true;
+  }
+
  protected:
   virtual bool isShuttingDown() const = 0;
 
@@ -388,7 +395,7 @@ class ConnectionPool
       const std::string& user,
       const std::string& password,
       const std::string& special_tag = "") {
-    return beginConnection(ConnectionKey(
+    return beginConnection(std::make_shared<const MysqlConnectionKey>(
         host,
         port,
         database_name,
@@ -399,15 +406,15 @@ class ConnectionPool
   }
 
   std::shared_ptr<ConnectOperation> beginConnection(
-      const ConnectionKey& conn_key) {
-    auto ret = std::make_shared<ConnectPoolOperation<Client>>(
-        getSelfWeakPointer(), mysql_client_, conn_key);
+      std::shared_ptr<const ConnectionKey> conn_key) {
+    auto impl = createConnectPoolOperationImpl(
+        getSelfWeakPointer(), mysql_client_, std::move(conn_key));
+    auto ret = std::make_shared<ConnectPoolOperation<Client>>(std::move(impl));
     if (isShuttingDown()) {
       LOG(ERROR)
           << "Attempt to start pool operation while pool is shutting down";
       ret->cancel();
     }
-    mysql_client_->addOperation(ret);
     return ret;
   }
 
@@ -453,8 +460,8 @@ class ConnectionPool
 
     stats()->incrConnectionsRequested();
     // Pass that to pool
-    auto pool_key = PoolKey(
-        raw_pool_op->getConnectionKey(), raw_pool_op->getConnectionOptions());
+    auto pool_key =
+        PoolKey(raw_pool_op->getKey(), raw_pool_op->getConnectionOptions());
 
     std::unique_ptr<MysqlPooledHolder<Client>> mysql_conn =
         conn_storage_.popConnection(pool_key);
@@ -528,7 +535,7 @@ class ConnectionPool
             return;
           }
           auto conn = connOp.releaseConnection();
-          auto mysql_conn = conn->stealMysqlConnectionHolder();
+          auto mysql_conn = conn->stealConnectionHolder();
           // Now we got a connection from the client, it will become a pooled
           // connection
           auto pooled_conn = std::make_unique<MysqlPooledHolder<Client>>(
@@ -550,12 +557,10 @@ class ConnectionPool
       ConnectPoolOperation<Client>* rawPoolOp,
       const PoolKey& poolKey,
       std::unique_ptr<MysqlPooledHolder<Client>> mysqlConn) {
-    auto conn =
-        makeNewConnection(rawPoolOp->getConnectionKey(), std::move(mysqlConn));
+    auto conn = makeNewConnection(rawPoolOp->getKey(), std::move(mysqlConn));
     conn->needToCloneConnection_ = false;
-    const auto& connKey = poolKey.getConnectionKey();
-    auto changeUserOp = Connection::changeUser(
-        std::move(conn), connKey.user(), connKey.password(), connKey.db_name());
+    auto changeUserOp =
+        Connection::changeUser(std::move(conn), poolKey.getConnectionKey());
 
     changeUserOp->setCallback(
         [this, rawPoolOp, poolKey, poolPtr = getSelfWeakPointer()](
@@ -568,11 +573,10 @@ class ConnectionPool
           }
 
           auto connection = op.releaseConnection();
-          auto mysqlConn = connection->stealMysqlConnectionHolder(true);
-          auto newMysqlConn = std::make_unique<MysqlConnectionHolder>(
-              std::move(mysqlConn), poolKey.getConnectionKey());
+          auto mysqlConn = connection->stealConnectionHolder(true);
+          mysqlConn->updateConnectionKey(poolKey.getConnectionKey());
           auto pooledConn = std::make_unique<MysqlPooledHolder<Client>>(
-              std::move(newMysqlConn), poolPtr, poolKey);
+              std::move(mysqlConn), poolPtr, poolKey);
           stats()->incrPoolHits();
           stats()->incrPoolHitsChangeUser();
 
@@ -587,10 +591,8 @@ class ConnectionPool
     }
 
     // For async - run in mysql thread; for sync - run in current thread
-    runInCorrectThread([changeUserOp = std::move(changeUserOp)] {
-      changeUserOp->connection()->client()->addOperation(changeUserOp);
-      changeUserOp->run();
-    });
+    runInCorrectThread(
+        [changeUserOp = std::move(changeUserOp)] { changeUserOp->run(); });
   }
 
   void connectionSpotFreed(const PoolKey& conn_key) override {
@@ -626,7 +628,7 @@ class ConnectionPool
     // logged with the expected additional logging
     tryRequestNewConnection(
         poolKey,
-        pool_op->connection_context_,
+        pool_op->copyConnectionContextPtr(),
         [&](uint32_t errnum, const std::string& error) {
           pool_op->setAsyncClientError(errnum, error);
           pool_op->attemptFailed(OperationResult::Failed);
@@ -643,8 +645,7 @@ class ConnectionPool
       ConnectPoolOperation<Client>* rawPoolOp,
       const PoolKey& poolKey,
       std::unique_ptr<MysqlPooledHolder<Client>> mysqlConn) {
-    auto conn =
-        makeNewConnection(rawPoolOp->getConnectionKey(), std::move(mysqlConn));
+    auto conn = makeNewConnection(rawPoolOp->getKey(), std::move(mysqlConn));
     conn->needToCloneConnection_ = false;
     auto resetOp = Connection::resetConn(std::move(conn));
 
@@ -658,7 +659,7 @@ class ConnectionPool
       }
 
       auto connection = op.releaseConnection();
-      auto mysqlConnHolder = connection->stealMysqlConnectionHolder(true);
+      auto mysqlConnHolder = connection->stealConnectionHolder(true);
       auto pmysqlConn = mysqlConnHolder.release();
       std::unique_ptr<MysqlPooledHolder<Client>> mysqlConnection(
           static_cast<MysqlPooledHolder<Client>*>(pmysqlConn));
@@ -674,10 +675,7 @@ class ConnectionPool
     }
 
     // For async - run in mysql thread; for sync - run in current thread
-    runInCorrectThread([resetOp = std::move(resetOp)]() {
-      resetOp->connection()->client()->addOperation(resetOp);
-      resetOp->run();
-    });
+    runInCorrectThread([resetOp = std::move(resetOp)]() { resetOp->run(); });
   }
 
  protected:
@@ -700,10 +698,12 @@ class ConnectionPool
   PoolStorage<Client> conn_storage_;
 
  private:
-  friend class ConnectPoolOperation<Client>;
+  template <typename C>
+  friend class ConnectPoolOperationImpl;
+  template <typename C>
+  friend class mysql_protocol::MysqlConnectPoolOperationImpl;
 
-  void recycleMysqlConnection(
-      std::unique_ptr<MysqlConnectionHolder> mysql_conn) {
+  void recycleMysqlConnection(std::unique_ptr<ConnectionHolder> mysql_conn) {
     // this method can run by any thread where the Connection is dying
     if (isShuttingDown()) {
       return;
@@ -796,265 +796,15 @@ class ConnectionPool
       const PoolKey& pool_key) = 0;
 
   virtual std::unique_ptr<Connection> makeNewConnection(
-      const ConnectionKey& conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       std::unique_ptr<MysqlPooledHolder<Client>> mysqlConn) = 0;
 };
 
 template <typename Client>
-class ConnectPoolOperation : public ConnectOperation {
- public:
-  ~ConnectPoolOperation() override {
-    cancelPreOperation();
-  }
-
-  // Don't call this; it's public strictly for ConnectionPool to be able to call
-  // make_shared.
-  ConnectPoolOperation(
-      std::weak_ptr<ConnectionPool<Client>> pool,
-      std::shared_ptr<Client> client,
-      ConnectionKey conn_key)
-      : ConnectOperation(client.get(), std::move(conn_key)), pool_(pool) {}
-
-  db::OperationType getOperationType() const override {
-    return db::OperationType::PoolConnect;
-  }
-
-  bool setPreOperation(std::shared_ptr<Operation> op) {
-    return preOperation_.wlock()->set(std::move(op));
-  }
-
-  void cancelPreOperation() {
-    preOperation_.wlock()->cancel();
-  }
-
-  void resetPreOperation() {
-    preOperation_.wlock()->reset();
-  }
-
- protected:
-  ConnectPoolOperation<Client>* specializedRun() override;
-
-  void specializedTimeoutTriggered() override {
-    if (auto locked_pool = pool_.lock(); locked_pool) {
-      cancelPreOperation();
-
-      // Check if the timeout happened because of the host is being slow or the
-      // pool is lacking resources
-      auto pool_key = PoolKey(getConnectionKey(), getConnectionOptions());
-      auto key_stats = locked_pool->getPoolKeyStats(pool_key);
-      auto num_open = key_stats.open_connections;
-      auto num_opening = key_stats.pending_connections;
-
-      // As a way to be realistic regarding the reason a connection was not
-      // obtained, we start from the principle that this is pool's fault.
-      // We can only blame the host (by forwarding 2013) if we have no
-      // open connections and none trying to be open.
-      // The second rule is applied where the resource restriction is so small
-      // that the pool can't even try to open a connection.
-      if (!(num_open == 0 &&
-            (num_opening > 0 ||
-             locked_pool->canCreateMoreConnections(pool_key)))) {
-        setAsyncClientError(
-            static_cast<uint16_t>(SquangleErrno::SQ_ERRNO_POOL_CONN_TIMEOUT),
-            createTimeoutErrorMessage(key_stats, locked_pool->perKeyLimit()));
-        attemptFailed(OperationResult::TimedOut);
-        return;
-      }
-    }
-
-    ConnectOperation::timeoutHandler(false, true);
-  }
-
-  void attemptFailed(OperationResult result) override {
-    ++attempts_made_;
-    if (shouldCompleteOperation(result)) {
-      completeOperation(result);
-      return;
-    }
-
-    conn()->socketHandler()->unregisterHandler();
-    conn()->socketHandler()->cancelTimeout();
-
-    auto now = std::chrono::steady_clock::now();
-    // Adjust timeout
-    std::chrono::duration<uint64_t, std::micro> timeout_attempt_based =
-        getConnectionOptions().getTimeout() +
-        std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - start_time_);
-
-    timeout_ =
-        min(timeout_attempt_based, getConnectionOptions().getTotalTimeout());
-
-    specializedRun();
-  }
-
- private:
-  friend class ConnectionPool<Client>;
-  friend class PoolStorageData<Client>;
-  friend class AsyncConnectionPool;
-  friend class SyncConnectionPool;
-
-  void specializedRunImpl() {
-    // Initialize all we need from our tevent handler
-    if (attempts_made_ == 0) {
-      conn()->initialize(false);
-    }
-    conn()->socketHandler()->setOperation(this);
-
-    if (conn_options_.getSSLOptionsProviderPtr() && connection_context_) {
-      connection_context_->isSslConnection = true;
-    }
-
-    // Set timeout for waiting for connection
-    auto end = timeout_ + start_time_;
-    auto now = std::chrono::steady_clock::now();
-    if (now >= end) {
-      timeoutTriggered();
-      return;
-    }
-
-    if constexpr (uses_one_thread_v<Client>) {
-      conn()->socketHandler()->scheduleTimeout(
-          std::chrono::duration_cast<std::chrono::milliseconds>(end - now)
-              .count());
-    }
-
-    // Remove before to not count against itself
-    removeClientReference();
-
-    if (auto shared_pool = pool_.lock(); shared_pool) {
-      // Sync attributes in conn_options_ with the Operation::attributes_ value
-      // as pool key uses the attributes from ConnectionOptions
-      conn_options_.setAttributes(attributes_);
-      shared_pool->registerForConnection(this);
-    } else {
-      VLOG(2) << "Pool is gone, operation must cancel";
-      cancel();
-    }
-  }
-
-  // Called when the connection is matched by the pool client
-  void connectionCallback(
-      std::unique_ptr<MysqlPooledHolder<Client>> mysql_conn) {
-    // TODO: validate we are in the correct thread (for async)
-
-    if (!mysql_conn) {
-      LOG(DFATAL) << "Unexpected error";
-      completeOperation(OperationResult::Failed);
-      return;
-    }
-    if (mysql_errno_) {
-      LOG_EVERY_N(ERROR, 1000)
-          << "Connection pool callback was called with mysql err: "
-          << mysql_errno_;
-      completeOperation(OperationResult::Failed);
-      return;
-    }
-
-    conn()->socketHandler()->changeHandlerFD(folly::NetworkSocket::fromFd(
-        mysql_get_socket_descriptor(mysql_conn->mysql())));
-
-    conn()->setMysqlConnectionHolder(std::move(mysql_conn));
-    conn()->setConnectionOptions(getConnectionOptions());
-    conn()->setConnectionDyingCallback(
-        [pool = pool_](std::unique_ptr<MysqlConnectionHolder> mysql_conn) {
-          auto shared_pool = pool.lock();
-          if (shared_pool) {
-            shared_pool->recycleMysqlConnection(std::move(mysql_conn));
-          }
-        });
-    if (conn()->mysql()) {
-      attemptSucceeded(OperationResult::Succeeded);
-    } else {
-      VLOG(2) << "Error: Failed to acquire connection";
-      attemptFailed(OperationResult::Failed);
-    }
-
-    signalWaiter();
-  }
-
-  // Called when the connection that the pool is trying to acquire failed
-  void failureCallback(
-      OperationResult failure,
-      unsigned int mysql_errno,
-      const std::string& mysql_error) {
-    mysql_errno_ = mysql_errno;
-    mysql_error_ = mysql_error;
-    attemptFailed(failure);
-  }
-
-  void socketActionable() override {
-    DCHECK(client()->getEventBase()->isInEventBaseThread());
-    LOG(DFATAL) << "Should not be called";
-  }
-
-  void prepWait() {
-    baton_ = std::make_unique<folly::Baton<>>();
-  }
-
-  bool syncWait() {
-    DCHECK(baton_);
-    auto end = timeout_ + start_time_;
-    return baton_->try_wait_until(end);
-  }
-
-  void cleanupWait() {
-    baton_.reset();
-  }
-
-  void signalWaiter() {
-    if (baton_) {
-      baton_->post();
-    }
-  }
-
-  std::string createTimeoutErrorMessage(
-      const PoolKeyStats& pool_key_stats,
-      size_t per_key_limit);
-
-  std::weak_ptr<ConnectionPool<Client>> pool_;
-
-  std::unique_ptr<folly::Baton<>> baton_;
-
-  // PreOperation keeps any other operation that needs to be canceled when
-  // ConnectPoolOperation is cancelled.
-  // PreOperation is not reused and its lifetime is with ConnectPoolOperation.
-  // PreOperation is not thread-safe, and ConnectPoolOperation is responsible
-  // for adding a lock.
-  class PreOperation {
-   public:
-    void cancel() {
-      if (preOperation_) {
-        preOperation_->cancel();
-        preOperation_.reset();
-      }
-      canceled_ = true;
-    }
-
-    void reset() {
-      preOperation_.reset();
-    }
-
-    // returns true if set pre-operation succeeds, false otherwise
-    bool set(std::shared_ptr<Operation> op) {
-      if (canceled_) {
-        return false;
-      }
-      preOperation_ = std::move(op);
-      return true;
-    }
-
-   private:
-    std::shared_ptr<Operation> preOperation_;
-    bool canceled_{false};
-  };
-
-  // Operation that is required before completing this operation, which could
-  // be reset_connection or change_user operation. There's at most 1
-  // pre-operation.
-  folly::Synchronized<PreOperation> preOperation_;
-
-  friend class AsyncConnectionPool;
-};
+std::unique_ptr<ConnectPoolOperationImpl<Client>>
+createConnectPoolOperationImpl(
+    std::weak_ptr<ConnectionPool<Client>> pool,
+    std::shared_ptr<Client> client,
+    std::shared_ptr<const ConnectionKey> conn_key);
 
 } // namespace facebook::common::mysql_client

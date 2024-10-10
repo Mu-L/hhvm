@@ -153,7 +153,8 @@ class t_program : public t_named {
    * @param language - The target language (i.e. py, cpp) to generate code
    * @param name_space - //TODO add definition of name_space
    */
-  void set_namespace(std::string language, std::string name_space) {
+  void set_namespace(
+      const std::string& language, const std::string& name_space) {
     namespaces_.emplace(language, name_space);
   }
 
@@ -170,12 +171,14 @@ class t_program : public t_named {
    * well as the location of the include statement.
    */
   const std::vector<t_include*>& includes() const { return includes_; }
+  std::vector<t_include*>& includes() { return includes_; }
 
   /**
    * Returns a list of programs that are included by this program.
    */
   std::vector<t_program*> get_included_programs() const {
     std::vector<t_program*> included_programs;
+    included_programs.reserve(includes_.size());
     for (const auto& include : includes_) {
       included_programs.push_back(include->get_program());
     }

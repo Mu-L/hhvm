@@ -20,31 +20,43 @@ let process_doc_comment
   | None -> fa
   | Some (pos, _doc) -> snd (Add_fact.decl_comment ~path pos decl_ref fa)
 
-let process_thrift_container_comment
-    (thrift_ctx : Thrift.t)
+let process_thrift_container
+    (thrift_ctx : Thrift.t option)
     (con : ('a, 'b) Aast_defs.class_)
     (hack_decl : Declaration.t)
-    (root_path : string)
     (fa : Fact_acc.t) : Fact_acc.t =
-  match Fact_acc.get_generated_from fa with
+  match thrift_ctx with
   | None -> fa
-  | Some thrift_path ->
-    let thrift_path = Filename.concat root_path thrift_path in
-    (match Thrift.get_thrift_from_container thrift_ctx ~thrift_path con with
+  | Some thrift_ctx ->
+    (match Thrift.get_thrift_from_container thrift_ctx con with
     | Some thrift_decl -> Add_fact.hack_to_thrift hack_decl thrift_decl fa
     | None -> fa)
 
-let process_thrift_method_comment
+(* Thrift declaration can be reconstructed from comments, enum values, or class members
+   names for union, see [Thrift] *)
+type thrift_member =
+  | Comment of string
+  | Enumerator of string
+  | Member_name of string
+
+let process_thrift_member
     (thrift_ctx : Thrift.t)
-    (comment : Aast.doc_comment option)
+    (member : thrift_member)
     (hack_decl : Hack.Declaration.t)
     (fa : Fact_acc.t) : Fact_acc.t =
-  match (Fact_acc.get_generated_from fa, comment) with
-  | (Some _, Some (_pos, doc)) ->
-    (match Thrift.get_thrift_from_member thrift_ctx ~doc with
+  match Fact_acc.get_generated_from fa with
+  | Some _ ->
+    let decl =
+      match member with
+      | Enumerator id -> Thrift.get_thrift_from_enum thrift_ctx id
+      | Comment doc -> Thrift.get_thrift_from_comment thrift_ctx ~doc
+      | Member_name member_name ->
+        Thrift.get_thrift_from_union_member thrift_ctx member_name
+    in
+    (match decl with
     | None -> fa
     | Some thrift_decl -> Add_fact.hack_to_thrift hack_decl thrift_decl fa)
-  | _ -> fa
+  | None -> fa
 
 let process_loc_span
     path (pos : Pos.t) (span : Pos.t) (ref : Declaration.t) (fa : Fact_acc.t) :
@@ -63,15 +75,20 @@ let process_decl_loc
     (id : Ast_defs.id_)
     (elem : 'elem)
     (doc : Aast.doc_comment option)
-    ?(thrift_ctx : Thrift.t option)
+    (thrift_ctx : Thrift.t option)
     (fa : Fact_acc.t) : Fact_id.t * Fact_acc.t =
   let (decl_id, fa) = decl_fun id fa in
   let (_, fa) = defn_fun elem decl_id fa in
   let ref = decl_ref_fun decl_id in
   let fa = process_doc_comment doc path ref fa in
+  let thrift_member =
+    match doc with
+    | Some (_pos, doc) -> Comment doc
+    | None -> Member_name id
+  in
   let fa =
     match thrift_ctx with
-    | Some thrift_ctx -> process_thrift_method_comment thrift_ctx doc ref fa
+    | Some thrift_ctx -> process_thrift_member thrift_ctx thrift_member ref fa
     | None -> fa
   in
   let fa = process_loc_span path pos span ref fa in
@@ -127,20 +144,13 @@ let process_member_cluster mc fa =
        mc.File_info.class_constants
 
 let process_container_decl
-    ctx
-    thrift_ctx
-    path
-    source_text
-    con
-    member_clusters
-    root_path
-    (xrefs, all_decls, fa) =
+    ctx thrift_ctx path source_text con member_clusters (xrefs, all_decls, fa) =
   let (con_pos, con_name) = con.c_name in
   let (parent_kind, decl_pred) = Predicate.classish_to_predicate con.c_kind in
   let (con_decl_id, fa) = Add_fact.container_decl decl_pred con_name fa in
   let ref = Predicate.container_ref parent_kind con_decl_id in
   let fa = process_loc_span path con_pos con.c_span ref fa in
-  let fa = process_thrift_container_comment thrift_ctx con ref root_path fa in
+  let fa = process_thrift_container thrift_ctx con ref fa in
   let (prop_decls, fa) =
     List.fold_right con.c_vars ~init:([], fa) ~f:(fun prop (decls, fa) ->
         let (pos, id) = prop.cv_id in
@@ -155,7 +165,7 @@ let process_container_decl
             id
             prop
             prop.cv_doc_comment
-            ~thrift_ctx
+            thrift_ctx
             fa
         in
         (Declaration.Property_ (PropertyDeclaration.Id decl_id) :: decls, fa))
@@ -174,6 +184,7 @@ let process_container_decl
             id
             const
             const.cc_doc_comment
+            thrift_ctx
             fa
         in
         (Declaration.ClassConst (ClassConstDeclaration.Id decl_id) :: decls, fa))
@@ -192,6 +203,7 @@ let process_container_decl
             id
             tc
             tc.c_tconst_doc_comment
+            None
             fa
         in
         (Declaration.TypeConst (TypeConstDeclaration.Id decl_id) :: decls, fa))
@@ -237,7 +249,7 @@ let process_container_decl
             id
             meth
             meth.m_doc_comment
-            ~thrift_ctx
+            thrift_ctx
             fa
         in
         (Declaration.Method (MethodDeclaration.Id decl_id) :: decls, fa))
@@ -271,7 +283,7 @@ let process_container_decl
   let fa = process_doc_comment con.c_doc_comment path ref fa in
   (xrefs, all_decls, fa)
 
-let process_enum_decl path source_text enm (xrefs, all_decls, fa) =
+let process_enum_decl thrift_ctx path source_text enm (xrefs, all_decls, fa) =
   let (pos, id) = enm.c_name in
   match enm.c_enum with
   | None ->
@@ -284,6 +296,8 @@ let process_enum_decl path source_text enm (xrefs, all_decls, fa) =
         (ContainerDeclaration.Enum_ (EnumDeclaration.Id enum_id))
     in
     let fa = process_loc_span path pos enm.c_span enum_decl_ref fa in
+    let fa = process_doc_comment enm.c_doc_comment path enum_decl_ref fa in
+    let fa = process_thrift_container thrift_ctx enm enum_decl_ref fa in
     let (enumerators, decl_refs, fa) =
       List.fold_right
         enm.c_consts
@@ -296,13 +310,18 @@ let process_enum_decl path source_text enm (xrefs, all_decls, fa) =
           (* TODO we're using pos instead of _span. _span refer to the whole enum container,
              rather than the enumerator *)
           let fa = process_loc_span path pos pos ref fa in
+          let fa =
+            match thrift_ctx with
+            | None -> fa
+            | Some thrift_ctx ->
+              process_thrift_member thrift_ctx (Enumerator id) ref fa
+          in
           let fa = process_doc_comment enumerator.cc_doc_comment path ref fa in
           (decl_id :: decls, ref :: refs, fa))
     in
     let (_, fa) =
       Add_fact.enum_defn source_text enm enum_id enum_data enumerators fa
     in
-    let fa = process_doc_comment enm.c_doc_comment path enum_decl_ref fa in
     (xrefs, all_decls @ (enum_decl_ref :: decl_refs), fa)
 
 let process_func_decl path source_text fd (xrefs, all_decls, fa) =
@@ -319,6 +338,7 @@ let process_func_decl path source_text fd (xrefs, all_decls, fa) =
       id
       fd
       elem.f_doc_comment
+      None
       fa
   in
   ( xrefs,
@@ -337,6 +357,7 @@ let process_gconst_decl path source_text elem (xrefs, all_decls, fa) =
       elem.cst_span
       id
       elem
+      None
       None
       fa
   in
@@ -357,6 +378,7 @@ let process_typedef_decl path source_text elem (xrefs, all_decls, fa) =
       id
       elem
       elem.t_doc_comment
+      None
       fa
   in
   (xrefs, all_decls @ [Declaration.Typedef_ (TypedefDeclaration.Id decl_id)], fa)
@@ -374,6 +396,7 @@ let process_module_decl path source_text elem (xrefs, all_decls, fa) =
       id
       elem
       None
+      None
       fa
   in
   (xrefs, all_decls @ [Declaration.Module (ModuleDeclaration.Id decl_id)], fa)
@@ -389,6 +412,7 @@ let process_namespace_decl ~path (pos, id) (all_decls, fa) =
       pos (* no span for a namespace decl, we re-use the location *)
       id
       ()
+      None
       None
       fa
   in
@@ -432,21 +456,19 @@ let process_mod_xref fa xrefs (pos, id) =
   (Xrefs.add xrefs target_id pos Xrefs.{ target; receiver_type = None }, fa)
 
 let process_tast_decls ctx ~path tast source_text root_path (decls, fa) =
-  let thrift_ctx = Thrift.empty () in
+  let thrift_ctx =
+    match Fact_acc.get_generated_from fa with
+    | None -> None
+    | Some thrift_path ->
+      let thrift_path = Filename.concat root_path thrift_path in
+      Some (Thrift.empty ~thrift_path)
+  in
   List.fold tast ~init:(Xrefs.empty, decls, fa) ~f:(fun acc (def, im) ->
       match def with
       | Class en when Util.is_enum_or_enum_class en.c_kind ->
-        process_enum_decl path source_text en acc
+        process_enum_decl thrift_ctx path source_text en acc
       | Class cd ->
-        process_container_decl
-          ctx
-          thrift_ctx
-          path
-          source_text
-          cd
-          im
-          root_path
-          acc
+        process_container_decl ctx thrift_ctx path source_text cd im acc
       | Constant gd -> process_gconst_decl path source_text gd acc
       | Fun fd -> process_func_decl path source_text fd acc
       | Typedef td -> process_typedef_decl path source_text td acc

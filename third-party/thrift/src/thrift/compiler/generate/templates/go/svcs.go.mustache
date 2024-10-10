@@ -21,7 +21,7 @@
 import (
     "context"
     "fmt"
-    "strings"
+    "reflect"
 
     {{#program:thrift_imports}}
     {{program:go_package_alias}} "{{program:go_import_path}}"
@@ -38,7 +38,7 @@ import (
 // (needed to ensure safety because of naive import list construction)
 var _ = context.Background
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 {{#program:gen_metadata?}}
 {{#program:import_metadata_package?}}
@@ -46,14 +46,8 @@ var _ = metadata.GoUnusedProtection__
 {{/program:import_metadata_package?}}
 {{/program:gen_metadata?}}
 
-{{#program:services}}{{!
-
-}}{{#service:docs?}}{{!
-}}{{service:docs}}{{!
-}}{{/service:docs?}}
-
+{{#program:services}}
 {{> svc/interface}}
-
 
 {{> svc/client}}
 

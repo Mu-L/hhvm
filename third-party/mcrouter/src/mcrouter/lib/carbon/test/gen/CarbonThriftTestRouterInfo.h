@@ -24,6 +24,7 @@
 
 #include "mcrouter/lib/carbon/test/gen/CarbonThriftTestRouteHandleIf.h"
 #include "mcrouter/lib/carbon/test/gen/CarbonThriftTestRouterStats.h"
+#include "mcrouter/lib/carbon/test/gen/CarbonThriftTestRoutingGroups.h"
 
 // Forward declarations
 namespace folly {
@@ -82,6 +83,7 @@ struct CarbonThriftTestRouterInfo {
   static constexpr const char* name = "CarbonThriftTest";
   static constexpr const bool bucketization = false;
   static constexpr const bool useRequestAclChecker = false;
+  static constexpr const bool hasMcRefillRoute = false;
 
   template <class Route>
   using RouteHandle = CarbonThriftTestRouteHandle<Route>;

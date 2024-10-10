@@ -1090,7 +1090,7 @@ void Debugger::requestShutdown() {
     m_requestInfoMap.erase(infoItr);
 
     if (!g_context.isNull()) {
-      g_context->removeStdoutHook(getStdoutHook());
+      g_context->removeDebuggerStdoutHook();
     }
     Logger::SetThreadHook(nullptr);
 
@@ -2431,9 +2431,6 @@ void Debugger::interruptAllThreads() {
 }
 
 void DebuggerStdoutHook::operator()(const char* str, int len) {
-  fflush(stdout);
-  write(fileno(stdout), str, len);
-
   // Quickly no-op if there's no client.
   if (!m_debugger->clientConnected()) {
     return;
@@ -2454,6 +2451,20 @@ operator()(const char*, const char* msg, const char* /*ending*/
   }
 
   m_debugger->sendUserMessage(msg, DebugTransport::OutputLevelStderr);
+}
+
+DebuggerEvaluationContext::DebuggerEvaluationContext(Debugger* debugger) {
+  // If a debugger stdout hook is already attached,
+  // either in non-server execution mode or because this is a
+  // nested DebuggerEvaluationContext,
+  // do not reset it in the destructor of this DebuggerEvaluationContext.
+  if (!debugger || g_context->debuggerStdoutHook()) return;
+  g_context->addDebuggerStdoutHook(debugger->getStdoutHook());
+  m_shouldReset = true;
+}
+
+DebuggerEvaluationContext::~DebuggerEvaluationContext() {
+  if (m_shouldReset) g_context->removeDebuggerStdoutHook();
 }
 
 SilentEvaluationContext::SilentEvaluationContext(
@@ -2477,8 +2488,8 @@ SilentEvaluationContext::SilentEvaluationContext(
     // Disable all sorts of output during this eval.
     m_oldHook = debugger->getStdoutHook();
     m_savedOutputBuffer = g_context->swapOutputBuffer(&m_sb);
-    g_context->removeStdoutHook(m_oldHook);
     g_context->addStdoutHook(&m_noOpHook);
+    g_context->removeDebuggerStdoutHook();
   }
 
   // Set aside the flow filters to disable all stepping and bp filtering.
@@ -2498,7 +2509,7 @@ SilentEvaluationContext::~SilentEvaluationContext() {
     rid.setErrorReportingLevel(m_errorLevel);
     g_context->swapOutputBuffer(m_savedOutputBuffer);
     g_context->removeStdoutHook(&m_noOpHook);
-    g_context->addStdoutHook(m_oldHook);
+    g_context->addDebuggerStdoutHook(m_oldHook);
   }
 
   m_savedFlowFilter.swap(rid.m_flowFilter);

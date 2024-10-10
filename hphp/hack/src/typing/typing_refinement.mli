@@ -42,25 +42,24 @@ type ty_partition = {
       pass and fails the predicate
 
   As an example consider partition the type (num | arraykey | T) where T is a generic type
-    bounded by nonnull over the predicate IsInt
+    bounded by nonnull over the predicate (IsTag IntTag)
 
   This will produce
-    left = int (num & IsInt = int and arraykey & IsInt = int)
-    right = float | string (num & !IsInt = float and arraykey & !IsInt = string)
+    left = int (num & (IsTag IntTag) = int and arraykey & (IsTag IntTag) = int)
+    right = float | string (num & !(IsTag IntTag) = float and arraykey & !(IsTag IntTag) = string)
     span = T (T can contain values that are ints and values that are not ints)
 *)
 val partition_ty :
   Typing_env_types.env ->
   Typing_defs.locl_ty ->
   Typing_defs.type_predicate ->
-  ty_partition
+  Typing_env_types.env * ty_partition
 
 module TyPredicate : sig
   val of_ty :
     Typing_env_types.env ->
     Typing_defs.locl_ty ->
-    (Typing_env_types.env * Typing_defs.type_predicate) option
+    (Typing_defs.type_predicate, string) Result.t
 
-  val to_ty :
-    Typing_defs.Reason.t -> Typing_defs.type_predicate -> Typing_defs.locl_ty
+  val to_ty : Typing_defs.type_predicate -> Typing_defs.locl_ty
 end

@@ -787,13 +787,15 @@ module Warning = struct
     | CastNonPrimitive [@value 12005]
     | TruthinessTest [@value 12006]
     | EqualityCheck [@value 12007]
-    | Duplicate_properties [@value 12008]
+    | DuplicateProperties [@value 12008]
     | IsIsAlwaysTrue [@value 12009]
     | IsIsAlwaysFalse [@value 12010]
     | AsAlwaysSucceeds [@value 12011]
     | AsAlwaysFails [@value 12012]
-  [@@deriving enum, show { with_path = false }]
+  [@@deriving enum, ord, show { with_path = false }]
 end
+
+module Warning_set = Stdlib.Set.Make (Warning)
 
 (* 5xxx: reserved for FB lint *)
 (* 6xxx: reserved for FB ai *)
@@ -819,5 +821,5 @@ module GlobalAccessCheck = struct
   (* Add new GlobalAccessCheck codes here! Comment out when deprecating. *)
   [@@deriving enum, show { with_path = false }]
 
-  let err_code = to_enum
+  let err_code : t -> int = to_enum
 end

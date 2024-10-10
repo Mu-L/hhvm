@@ -66,7 +66,6 @@ use naming_special_names_rust::pseudo_consts;
 use naming_special_names_rust::pseudo_functions;
 use naming_special_names_rust::special_functions;
 use naming_special_names_rust::special_idents;
-use naming_special_names_rust::superglobals;
 use naming_special_names_rust::typehints;
 use naming_special_names_rust::user_attributes;
 use oxidized::aast;
@@ -83,6 +82,7 @@ use oxidized::ast_defs;
 use oxidized::ast_defs::ParamKind;
 use oxidized::local_id;
 use oxidized::pos::Pos;
+use oxidized_by_ref::typing_defs;
 use regex::Regex;
 use serde_json::json;
 use string_utils::reified::ReifiedTparam;
@@ -151,8 +151,8 @@ mod inout_locals {
     impl Default for AliasInfo {
         fn default() -> Self {
             AliasInfo {
-                first_inout: std::isize::MAX,
-                last_write: std::isize::MIN,
+                first_inout: isize::MAX,
+                last_write: isize::MIN,
                 num_uses: 0,
             }
         }
@@ -1098,8 +1098,11 @@ fn emit_shape<'a, 'd>(
     ) -> Result<ast::Expr_> {
         use ast_defs::ShapeFieldName as SF;
         Ok(match field {
-            SF::SFlitInt(s) => ast::Expr_::mk_int(s.1.clone()),
+            SF::SFregexGroup(s) => ast::Expr_::mk_int(s.1.clone()),
             SF::SFlitStr(s) => ast::Expr_::mk_string(s.1.clone()),
+            SF::SFclassname(id) => {
+                ast::Expr_::mk_nameof(ast::ClassId((), pos.clone(), ast::ClassId_::CI(id.clone())))
+            }
             SF::SFclassConst(id, p) => {
                 if ClassExpr::is_reified_tparam(&env.scope, &id.1) {
                     return Err(Error::fatal_parse(
@@ -1679,24 +1682,19 @@ fn emit_call_isset_expr<'a, 'd>(
     }
     if let Some(lid) = expr.2.as_lvar() {
         let name = local_id::get_name(&lid.1);
-        return Ok(if superglobals::is_any_global(name) {
-            InstrSeq::gather(vec![
-                emit_pos(outer_pos),
-                instr::string(string_utils::locals::strip_dollar(name)),
-                emit_pos(outer_pos),
-                instr::isset_g(),
-            ])
-        } else if is_local_this(env, &lid.1) && !env.flags.contains(env::Flags::NEEDS_LOCAL_THIS) {
-            InstrSeq::gather(vec![
-                emit_pos(outer_pos),
-                emit_local(e, env, BareThisOp::NoNotice, lid)?,
-                emit_pos(outer_pos),
-                instr::is_type_c(IsTypeOp::Null),
-                instr::not(),
-            ])
-        } else {
-            emit_pos_then(outer_pos, instr::isset_l(get_local(e, env, &lid.0, name)?))
-        });
+        return Ok(
+            if is_local_this(env, &lid.1) && !env.flags.contains(env::Flags::NEEDS_LOCAL_THIS) {
+                InstrSeq::gather(vec![
+                    emit_pos(outer_pos),
+                    emit_local(e, env, BareThisOp::NoNotice, lid)?,
+                    emit_pos(outer_pos),
+                    instr::is_type_c(IsTypeOp::Null),
+                    instr::not(),
+                ])
+            } else {
+                emit_pos_then(outer_pos, instr::isset_l(get_local(e, env, &lid.0, name)?))
+            },
+        );
     }
     Ok(InstrSeq::gather(vec![
         emit_expr(e, env, expr)?,
@@ -1820,7 +1818,7 @@ fn emit_call<'a, 'd>(
     readonly_return: bool,
 ) -> Result<InstrSeq> {
     if let Some(ast_defs::Id(_, s)) = expr.as_id() {
-        let fid = hhbc::FunctionName::from_ast_name(s);
+        let fid = e.emit_function_name(s);
         e.add_function_ref(fid);
     }
     let readonly_this = match &expr.2 {
@@ -1839,7 +1837,7 @@ fn emit_call<'a, 'd>(
     match expr.2.as_id() {
         None => emit_call_default(e, env, pos, expr, targs, args, uarg, fcall_args),
         Some(ast_defs::Id(_, id)) => {
-            let fq = hhbc::FunctionName::from_ast_name(id);
+            let fq = e.emit_function_name(id);
             let lower_fq_name = fq.as_str();
             emit_special_function(e, env, pos, targs, args, uarg, lower_fq_name)
                 .transpose()
@@ -1863,7 +1861,7 @@ fn emit_call_default<'a, 'd>(
     scope::with_unnamed_locals(e, |em| {
         let FCallArgs { num_rets, .. } = &fcall_args;
         let num_uninit = num_rets - 1;
-        let (lhs, fcall) = emit_call_lhs_and_fcall(em, env, expr, fcall_args, targs, None)?;
+        let (lhs, fcall) = emit_call_lhs_and_fcall(em, env, pos, expr, fcall_args, targs, None)?;
         let (args, inout_setters) = emit_args_inout_setters(em, env, args)?;
         let uargs = match uarg {
             Some(uarg) => emit_expr(em, env, uarg)?,
@@ -1997,6 +1995,7 @@ fn emit_object_expr<'a, 'd>(
 fn emit_call_lhs_and_fcall<'a, 'd>(
     e: &mut Emitter<'d>,
     env: &Env<'a>,
+    call_pos: &Pos,
     expr: &ast::Expr,
     mut fcall_args: FCallArgs,
     targs: &[ast::Targ],
@@ -2045,7 +2044,7 @@ fn emit_call_lhs_and_fcall<'a, 'd>(
             // handle ObjGet and ClassGet prop call cases. Keep track of the position of the
             // outer readonly expression for use later.
             // TODO: use the fact that this is a readonly call in HHVM enforcement
-            emit_call_lhs_and_fcall(e, env, r, fcall_args, targs, Some(pos))
+            emit_call_lhs_and_fcall(e, env, call_pos, r, fcall_args, targs, Some(pos))
         }
         Expr_::ObjGet(o) if o.as_ref().3 == ast::PropOrMethod::IsMethod => {
             // Case $x->foo(...).
@@ -2113,7 +2112,7 @@ fn emit_call_lhs_and_fcall<'a, 'd>(
                                         ]),
                                         InstrSeq::gather(vec![instr::f_call_func_d(
                                             fcall_args,
-                                            hhbc::FunctionName::from_ast_name(fid),
+                                            e.emit_function_name(fid),
                                         )]),
                                     ))
                                 }
@@ -2179,10 +2178,13 @@ fn emit_call_lhs_and_fcall<'a, 'd>(
                         InstrSeq::gather(vec![
                             generics,
                             emit_expr(e, env, &expr)?,
-                            instr::f_call_cls_method_m(
-                                IsLogAsDynamicCallOp::DontLogAsDynamicCall,
-                                fcall_args,
-                                method_name,
+                            emit_pos_then(
+                                call_pos,
+                                instr::f_call_cls_method_m(
+                                    IsLogAsDynamicCallOp::DontLogAsDynamicCall,
+                                    fcall_args,
+                                    method_name,
+                                ),
                             ),
                         ]),
                     )
@@ -2307,12 +2309,12 @@ fn emit_call_lhs_and_fcall<'a, 'd>(
             } = fcall_args;
             let fq_id = match string_utils::strip_global_ns(&id.1) {
                 "min" if num_args == 2 && !flags.contains(FCallArgsFlags::HasUnpack) => {
-                    hhbc::FunctionName::from_ast_name("__SystemLib\\min2")
+                    e.emit_function_name("__SystemLib\\min2")
                 }
                 "max" if num_args == 2 && !flags.contains(FCallArgsFlags::HasUnpack) => {
-                    hhbc::FunctionName::from_ast_name("__SystemLib\\max2")
+                    e.emit_function_name("__SystemLib\\max2")
                 }
-                _ => hhbc::FunctionName::from_ast_name(&id.1),
+                _ => e.emit_function_name(&id.1),
             };
             let generics = emit_generics(e, env, &mut fcall_args)?;
             Ok((
@@ -2323,7 +2325,7 @@ fn emit_call_lhs_and_fcall<'a, 'd>(
         Expr_::String(s) => {
             match std::str::from_utf8(s) {
                 Ok(s) => {
-                    let fq_id = hhbc::FunctionName::intern(s);
+                    let fq_id = e.emit_function_name(s);
                     let generics = emit_generics(e, env, &mut fcall_args)?;
                     Ok((
                         InstrSeq::gather(vec![instr::null_uninit(), instr::null_uninit()]),
@@ -2836,11 +2838,13 @@ fn emit_special_function<'a, 'd>(
                         })
                         .to_string(),
                         Ok(decl_provider::TypeDecl::Typedef(td)) => json!({
-                            "kind": (match td.vis {
-                                aast_defs::TypedefVisibility::Transparent => "type",
-                                aast_defs::TypedefVisibility::Opaque => "newtype",
-                                aast_defs::TypedefVisibility::OpaqueModule => "module newtype",
-                                aast_defs::TypedefVisibility::CaseType => "case type",
+                            "kind": (match td.type_assignment {
+                                typing_defs::TypedefTypeAssignment::SimpleTypeDef((vis, _hint)) => match vis {
+                                    aast_defs::TypedefVisibility::Transparent => "type",
+                                    aast_defs::TypedefVisibility::Opaque => "newtype",
+                                    aast_defs::TypedefVisibility::OpaqueModule => "module newtype",
+                                },
+                                typing_defs::TypedefTypeAssignment::CaseType(_) => "case type",
                             })
                         })
                         .to_string(),
@@ -2863,16 +2867,6 @@ fn emit_special_function<'a, 'd>(
                     Some(InstrSeq::gather(vec![
                         emit_expr(e, env, error::expect_normal_paramkind(arg_expr)?)?,
                         is_expr,
-                    ]))
-                }
-                (&[(ref pk, Expr(_, _, Expr_::Lvar(ref arg_id)))], Some(i), _)
-                    if superglobals::is_any_global(arg_id.name()) =>
-                {
-                    error::ensure_normal_paramkind(pk)?;
-                    Some(InstrSeq::gather(vec![
-                        emit_local(e, env, BareThisOp::NoNotice, arg_id)?,
-                        emit_pos(pos),
-                        instr::is_type_c(i),
                     ]))
                 }
                 (&[(ref pk, Expr(_, _, Expr_::Lvar(ref arg_id)))], Some(i), _)
@@ -4304,17 +4298,19 @@ fn emit_array_get_<'a, 'd>(
     }
 }
 
+fn class_id_is_class_expr_id(e: &Emitter<'_>, env: &Env<'_>, cname: &ast::ClassId) -> bool {
+    let expr = ClassExpr::class_id_to_class_expr(e, &env.scope, false, false, cname);
+    matches!(expr, ClassExpr::Id(_))
+}
+
+// TODO(199608418) kill this function when these are banned
 fn is_special_class_constant_accessed_with_class_id(
     e: &Emitter<'_>,
     env: &Env<'_>,
     cname: &ast::ClassId,
     id: &str,
 ) -> bool {
-    if !string_utils::is_class(id) {
-        return false;
-    }
-    let expr = ClassExpr::class_id_to_class_expr(e, &env.scope, false, false, cname);
-    matches!(expr, ClassExpr::Id(_))
+    string_utils::is_class(id) && class_id_is_class_expr_id(e, env, cname)
 }
 
 fn emit_elem<'a, 'd>(
@@ -4343,6 +4339,7 @@ fn emit_elem<'a, 'd>(
                     (instr::empty(), 0)
                 }
             }
+            ast::Expr_::Nameof(x) if class_id_is_class_expr_id(e, env, x) => (instr::empty(), 0),
             ast::Expr_::ClassConst(x)
                 if is_special_class_constant_accessed_with_class_id(e, env, &(x.0), &(x.1).1) =>
             {
@@ -4363,6 +4360,24 @@ fn get_elem_member_key<'a, 'd>(
     use ast::ClassId_ as CI_;
     use ast::Expr;
     use ast::Expr_;
+    let class_name_key = |cid: &ast::ClassId| {
+        let cname = match (&cid.2, env.scope.get_class()) {
+            (CI_::CIself, Some(cd)) => string_utils::strip_global_ns(cd.get_name_str()),
+            (CI_::CIexpr(Expr(_, _, Expr_::Id(id))), _) => string_utils::strip_global_ns(&id.1),
+            (CI_::CI(id), _) => string_utils::strip_global_ns(&id.1),
+            _ => {
+                return Err(Error::unrecoverable(
+                    "Unreachable due to class_id_is_class_expr_id",
+                ));
+            }
+        };
+
+        let fq_id = ClassName::from_ast_name_and_mangle(cname);
+        Ok(MemberKey::ET(
+            hhbc::intern_bytes(fq_id.as_bytes()),
+            ReadonlyOp::Any,
+        ))
+    };
     match elem {
         // ELement missing (so it's array append)
         None => Ok((MemberKey::W, instr::empty())),
@@ -4394,27 +4409,16 @@ fn get_elem_member_key<'a, 'd>(
                 MemberKey::ET(hhbc::intern_bytes(s.as_slice()), ReadonlyOp::Any),
                 instr::empty(),
             )),
-            // Special case for class name
+            // Special cases for class name
+            Expr_::Nameof(x) if class_id_is_class_expr_id(e, env, x) => {
+                let key = class_name_key(x)?;
+                Ok((key, instr::empty()))
+            }
             Expr_::ClassConst(x)
                 if is_special_class_constant_accessed_with_class_id(e, env, &(x.0), &(x.1).1) =>
             {
-                let cname = match (&(x.0).2, env.scope.get_class()) {
-                    (CI_::CIself, Some(cd)) => string_utils::strip_global_ns(cd.get_name_str()),
-                    (CI_::CIexpr(Expr(_, _, Expr_::Id(id))), _) => {
-                        string_utils::strip_global_ns(&id.1)
-                    }
-                    (CI_::CI(id), _) => string_utils::strip_global_ns(&id.1),
-                    _ => {
-                        return Err(Error::unrecoverable(
-                            "Unreachable due to is_special_class_constant_accessed_with_class_id",
-                        ));
-                    }
-                };
-                let fq_id = ClassName::from_ast_name_and_mangle(cname);
-                Ok((
-                    MemberKey::ET(hhbc::intern_bytes(fq_id.as_bytes()), ReadonlyOp::Any),
-                    instr::raise_class_string_conversion_notice(),
-                ))
+                let key = class_name_key(&x.0)?;
+                Ok((key, instr::raise_class_string_conversion_notice()))
             }
             _ => {
                 // General case
@@ -4558,22 +4562,14 @@ fn emit_local<'a, 'd>(
 ) -> Result<InstrSeq> {
     let ast::Lid(pos, id) = lid;
     let id_name = local_id::get_name(id);
-    if superglobals::is_superglobal(id_name) {
-        Ok(InstrSeq::gather(vec![
-            instr::string(string_utils::locals::strip_dollar(id_name)),
-            emit_pos(pos),
-            instr::c_get_g(),
-        ]))
-    } else {
-        Ok(
-            if is_local_this(env, id) && !env.flags.contains(EnvFlags::NEEDS_LOCAL_THIS) {
-                emit_pos_then(pos, instr::bare_this(notice))
-            } else {
-                let local = get_local(e, env, pos, id_name)?;
-                instr::c_get_l(local)
-            },
-        )
-    }
+    Ok(
+        if is_local_this(env, id) && !env.flags.contains(EnvFlags::NEEDS_LOCAL_THIS) {
+            emit_pos_then(pos, instr::bare_this(notice))
+        } else {
+            let local = get_local(e, env, pos, id_name)?;
+            instr::c_get_l(local)
+        },
+    )
 }
 
 fn emit_class_const<'a, 'd>(
@@ -4758,8 +4754,7 @@ fn emit_first_expr<'a, 'd>(
 ) -> Result<(InstrSeq, bool)> {
     Ok(match &expr.2 {
         ast::Expr_::Lvar(l)
-            if !((is_local_this(env, &l.1) && !env.flags.contains(EnvFlags::NEEDS_LOCAL_THIS))
-                || superglobals::is_any_global(local_id::get_name(&l.1))) =>
+            if !is_local_this(env, &l.1) || env.flags.contains(EnvFlags::NEEDS_LOCAL_THIS) =>
         {
             (
                 instr::c_get_l_2(get_local(e, env, &l.0, local_id::get_name(&l.1))?),
@@ -5448,21 +5443,6 @@ fn emit_base_<'a, 'd>(
                 )
             }
         }
-        Expr_::Lvar(x) if superglobals::is_superglobal(&(x.1).1) => {
-            let base_instrs = emit_pos_then(
-                &x.0,
-                instr::string(string_utils::locals::strip_dollar(&(x.1).1)),
-            );
-
-            Ok(emit_default(
-                e,
-                base_instrs,
-                instr::empty(),
-                instr::base_gc(base_offset, base_mode),
-                1,
-                0,
-            ))
-        }
         Expr_::Lvar(x) if is_object && (x.1).1 == special_idents::THIS => {
             let base_instrs = emit_pos_then(&x.0, instr::check_this());
             Ok(emit_default(
@@ -5898,17 +5878,17 @@ fn emit_array_get_fixed(last_usage: bool, local: Local, indices: &[isize]) -> In
     InstrSeq::gather(vec![base, indices])
 }
 
-/// Generate code for each lvalue assignment in a list destructuring expression.
-/// Lvalues are assigned right-to-left, regardless of the nesting structure. So
-///      list($a, list($b, $c)) = $d
-///  and list(list($a, $b), $c) = $d
-///  will both assign to $c, $b and $a in that order.
-///  Returns a pair of instructions:
-///  1. initialization part of the left hand side
-///  2. assignment
-///  this is necessary to handle cases like:
-///  list($a[$f()]) = b();
-///  here f() should be invoked before b()
+// Generate code for each lvalue assignment in a list destructuring expression.
+// Lvalues are assigned right-to-left, regardless of the nesting structure. So
+//      list($a, list($b, $c)) = $d
+//  and list(list($a, $b), $c) = $d
+//  will both assign to $c, $b and $a in that order.
+//  Returns a pair of instructions:
+//  1. initialization part of the left hand side
+//  2. assignment
+//  this is necessary to handle cases like:
+//  list($a[$f()]) = b();
+//  here f() should be invoked before b()
 pub fn emit_lval_op_list<'a, 'd>(
     e: &mut Emitter<'d>,
     env: &Env<'a>,
@@ -6033,16 +6013,6 @@ pub fn emit_lval_op_nonlist<'a, 'd>(
     .map(|(lhs, rhs, setop)| InstrSeq::gather(vec![lhs, rhs, setop]))
 }
 
-pub fn emit_final_global_op(pos: &Pos, op: LValOp) -> InstrSeq {
-    use LValOp as L;
-    match op {
-        L::Set => emit_pos_then(pos, instr::set_g()),
-        L::SetOp(op) => instr::set_op_g(op),
-        L::IncDec(op) => instr::inc_dec_g(op),
-        L::Unset => emit_pos_then(pos, instr::unset_g()),
-    }
-}
-
 pub fn emit_final_local_op(pos: &Pos, op: LValOp, lid: Local) -> InstrSeq {
     use LValOp as L;
     emit_pos_then(
@@ -6110,14 +6080,6 @@ pub fn emit_lval_op_nonlist_steps<'a, 'd>(
         use ast::Expr_;
         let pos = &expr.1;
         Ok(match &expr.2 {
-            Expr_::Lvar(v) if superglobals::is_any_global(local_id::get_name(&v.1)) => (
-                emit_pos_then(
-                    &v.0,
-                    instr::string(string_utils::lstrip(local_id::get_name(&v.1), "$")),
-                ),
-                rhs_instrs,
-                emit_final_global_op(outer_pos, op),
-            ),
             Expr_::Lvar(v) if is_local_this(env, &v.1) && op.is_incdec() => (
                 emit_local(e, env, BareThisOp::Notice, v)?,
                 rhs_instrs,

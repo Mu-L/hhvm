@@ -55,16 +55,25 @@ mod test {
         }
         let ty = a!(Ty(
             a!(Reason::FromWitnessDecl(a!(WitnessDecl::Hint(pos(1))))),
-            Ttuple(a!([
-                a!(Ty(
-                    a!(Reason::FromWitnessDecl(a!(WitnessDecl::Hint(pos(2))))),
-                    Tapply(a!(((pos(3), "foo"), &[][..]))),
-                )),
-                a!(Ty(
-                    a!(Reason::FromWitnessDecl(a!(WitnessDecl::Hint(pos(4))))),
-                    Tapply(a!(((pos(5), "bar"), &[][..]))),
-                )),
-            ])),
+            Ttuple(a!(TupleType {
+                required: (a!([
+                    a!(Ty(
+                        a!(Reason::FromWitnessDecl(a!(WitnessDecl::Hint(pos(2))))),
+                        Tapply(a!(((pos(3), "foo"), &[][..]))),
+                    )),
+                    a!(Ty(
+                        a!(Reason::FromWitnessDecl(a!(WitnessDecl::Hint(pos(4))))),
+                        Tapply(a!(((pos(5), "bar"), &[][..]))),
+                    )),
+                ])),
+                extra: TupleExtra::Textra {
+                    optional: &[],
+                    variadic: a!(Ty(
+                        a!(Reason::FromWitnessDecl(a!(WitnessDecl::Hint(pos(1))))),
+                        Ty_::Tunion(&[])
+                    ))
+                },
+            })),
         ));
 
         let mut visitor = PrintEveryTapplyVisitor(vec![], vec![]);

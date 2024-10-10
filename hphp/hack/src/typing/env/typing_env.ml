@@ -91,23 +91,6 @@ let log_env_change name ?(level = 1) old_env new_env =
 
 let expand_var env r v =
   let (inference_env, ty_solution) = Inf.expand_var env.inference_env r v in
-  (* When we have a concrete solution r, record the flow of that solution as a
-     prefix to the original type variables's reason; when we linearize the
-     path, we should then see the path of the relevant uppper / lower bounds
-     as the prefix for any flow through typing.
-     We don't record the flow when we are pointing at another tyvar on the
-     heap since we would end up with a chain of flows representing unification
-  *)
-  let ty_solution =
-    if
-      (not (is_tyvar ty_solution))
-      && TypecheckerOptions.using_extended_reasons env.genv.tcopt
-    then
-      map_reason ty_solution ~f:(fun from ->
-          Typing_reason.(flow ~from ~into:r ~kind:Flow_solved))
-    else
-      ty_solution
-  in
   ({ env with inference_env }, ty_solution)
 
 let fresh_type_reason ?variance env p r =
@@ -206,7 +189,7 @@ let bind env v ty = { env with inference_env = Inf.bind env.inference_env v ty }
 
     The simplification is recursive: simplifying a type variable will
     trigger simplification of its own occurrences. *)
-let simplify_occurrences env v =
+let simplify_occurrences env v r =
   let rec simplify_occurrences env v ~seen_tyvars =
     let vars = Inf.get_tyvar_occurrences env.inference_env v in
     let (env, seen_tyvars) =
@@ -244,6 +227,10 @@ let simplify_occurrences env v =
             (* we only call this function when v does not recursively contain unsolved
                type variables, so ty here should not contain unsolved type variables and
                it is safe to simply bind it without reupdating the type var occurrences. *)
+            let ty =
+              map_reason ty ~f:(fun solution ->
+                  Typing_reason.(solved v ~solution ~in_:r))
+            in
             let env = bind env v ty in
             env
         in
@@ -258,7 +245,8 @@ let add env ?(tyvar_pos = Pos.none) v ty =
   let env =
     { env with inference_env = Inf.add env.inference_env ~tyvar_pos v ty }
   in
-  let env = simplify_occurrences env v in
+  let r = get_reason ty in
+  let env = simplify_occurrences env v r in
   env
 
 let get_type env r var =
@@ -268,10 +256,7 @@ let get_type env r var =
 let expand_type env ty =
   match deref ty with
   | (reason, Tvar tvid) -> expand_var env reason tvid
-  | _ ->
-    (* If this expansion was applied to a concrete type, don't modify the
-       reason *)
-    (env, ty)
+  | _ -> (env, ty)
 
 let expand_internal_type env ty =
   match ty with
@@ -695,7 +680,10 @@ let get_package_for_module env md =
 
 let get_package_for_file env file =
   let info = get_tcopt env |> TypecheckerOptions.package_info in
-  PackageInfo.get_package_for_file info file
+  let support_multifile_tests =
+    get_tcopt env |> TypecheckerOptions.package_v2_support_multifile_tests
+  in
+  PackageInfo.get_package_for_file ~support_multifile_tests info file
 
 let get_package_by_name env pkg_name =
   let info = get_tcopt env |> TypecheckerOptions.package_info in
@@ -757,23 +745,25 @@ let is_typedef env x =
     | _ -> false
 
 let is_typedef_visible env ?(expand_visible_newtype = true) ~name td =
-  let { Typing_defs.td_vis; td_module; _ } = td in
-  match td_vis with
-  | Aast.Opaque ->
-    expand_visible_newtype
-    &&
-    let td_path = Naming_provider.get_typedef_path (get_ctx env) name in
-    (match td_path with
-    | Some s -> Relative_path.equal s (get_file env)
-    | None -> (* Not the right place to raise an error *) false)
-  | Aast.OpaqueModule ->
-    expand_visible_newtype
-    && Option.equal
-         String.equal
-         (get_current_module env)
-         (Option.map td_module ~f:snd)
-  | Aast.Transparent -> true
-  | Aast.CaseType -> false
+  match td.td_type_assignment with
+  | CaseType _ -> false
+  | SimpleTypeDef (td_vis, _td_type) ->
+    let td_module = td.td_module in
+    (match td_vis with
+    | Aast.Opaque ->
+      expand_visible_newtype
+      &&
+      let td_path = Naming_provider.get_typedef_path (get_ctx env) name in
+      (match td_path with
+      | Some s -> Relative_path.equal s (get_file env)
+      | None -> (* Not the right place to raise an error *) false)
+    | Aast.OpaqueModule ->
+      expand_visible_newtype
+      && Option.equal
+           String.equal
+           (get_current_module env)
+           (Option.map td_module ~f:snd)
+    | Aast.Transparent -> true)
 
 let get_class (env : env) (name : Decl_provider.type_key) : Cls.t Decl_entry.t =
   let res =
@@ -1585,7 +1575,13 @@ and get_tyvars_i env (ty : internal_type) =
     | Tneg _ ->
       (env, Tvid.Set.empty, Tvid.Set.empty)
     | Toption ty -> get_tyvars env ty
-    | Ttuple tyl
+    | Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } } ->
+      get_tyvars env t_variadic |> fun init ->
+      List.fold_left t_required ~init ~f:get_tyvars_union |> fun init ->
+      List.fold_left t_optional ~f:get_tyvars_union ~init
+    | Ttuple { t_required; t_extra = Tsplat t_splat } ->
+      get_tyvars env t_splat |> fun init ->
+      List.fold_left t_required ~f:get_tyvars_union ~init
     | Tunion tyl
     | Tintersection tyl ->
       List.fold_left
@@ -1992,6 +1988,29 @@ module Log = struct
       (env : env)
       (v : Tvid.t) =
     Inf.Log.tyvar_to_json p_locl_ty p_internal_type env.inference_env v
+
+  let expand_env
+      env
+      {
+        Typing_defs.type_expansions;
+        make_internal_opaque;
+        expand_visible_newtype;
+        substs = _;
+        this_ty;
+        on_error = _;
+        wildcard_action = _;
+        ish_weakening;
+      } =
+    if Typing_env_types.get_log_level env "expand_env" |> Int.( = ) 0 then
+      []
+    else
+      [
+        ("expand_visible_newtype", Bool.to_string expand_visible_newtype);
+        ("this_ty", Typing_print.debug env this_ty);
+        ("type_expansions", Type_expansions.to_log_string type_expansions);
+        ("make_internal_opaque", Bool.to_string make_internal_opaque);
+        ("ish_weakening", Bool.to_string ish_weakening);
+      ]
 end
 
 let update_reason { genv = { tcopt; _ }; _ } ty ~f =

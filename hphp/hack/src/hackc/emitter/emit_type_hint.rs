@@ -23,6 +23,7 @@ use oxidized::aast_defs::Hint_::*;
 use oxidized::aast_defs::NastShapeInfo;
 use oxidized::aast_defs::ShapeFieldInfo;
 use oxidized::aast_defs::Tprim;
+use oxidized::aast_defs::TupleInfo;
 use oxidized::ast_defs::Id;
 use oxidized::ast_defs::ShapeFieldName;
 
@@ -119,8 +120,11 @@ pub fn fmt_hint(tparams: &[&str], strip_tparams: bool, hint: &Hint) -> Result<St
         //  TODO: Check whether shape fields need to retain order *)
         Hshape(NastShapeInfo { field_map, .. }) => {
             let fmt_field_name = |name: &ShapeFieldName| match name {
-                ShapeFieldName::SFlitInt((_, s)) => s.to_owned(),
+                ShapeFieldName::SFregexGroup((_, s)) => s.to_owned(),
                 ShapeFieldName::SFlitStr((_, s)) => format!("'{}'", s),
+                ShapeFieldName::SFclassname(Id(_, cid)) => {
+                    format!("'{}'", fmt_name_or_prim(tparams, cid))
+                }
                 ShapeFieldName::SFclassConst(Id(_, cid), (_, s)) => {
                     format!("{}::{}", fmt_name_or_prim(tparams, cid), s)
                 }
@@ -141,7 +145,8 @@ pub fn fmt_hint(tparams: &[&str], strip_tparams: bool, hint: &Hint) -> Result<St
                 .map(|v| v.join(", "))?;
             string_utils::prefix_namespace("HH", &format!("shape({})", shape_fields))
         }
-        Htuple(hints) => format!("({})", fmt_hints(tparams, hints)?),
+        // TODO optional and variadic components T201398626 T201398652
+        Htuple(TupleInfo { required, .. }) => format!("({})", fmt_hints(tparams, required)?),
         Hlike(t) => format!("~{}", fmt_hint(tparams, false, t)?),
         Hsoft(t) => format!("@{}", fmt_hint(tparams, false, t)?),
         h => fmt_name_or_prim(tparams, hint_to_string(h)).into(),
@@ -196,18 +201,15 @@ fn hint_to_type_constraint(
         Hdynamic | Hfun(_) | Hunion(_) | Hintersection(_) | Hmixed | Hwildcard => {
             Constraint::default()
         }
-        Haccess(_, _) => Constraint::intern(
-            "",
-            TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::TypeConstant,
-        ),
-        Hshape(_) => Constraint::intern("HH\\darray", TypeConstraintFlags::ExtendedHint),
-        Htuple(_) => Constraint::intern("HH\\varray", TypeConstraintFlags::ExtendedHint),
+        Haccess(_, _) => Constraint::intern("", TypeConstraintFlags::TypeConstant),
+        Hshape(_) => Constraint::intern("HH\\darray", TypeConstraintFlags::NoFlags),
+        Htuple(_) => Constraint::intern("HH\\varray", TypeConstraintFlags::NoFlags),
         Hsoft(t) => make_tc_with_flags_if_non_empty_flags(
             kind,
             tparams,
             skipawaitable,
             t,
-            TypeConstraintFlags::Soft | TypeConstraintFlags::ExtendedHint,
+            TypeConstraintFlags::Soft,
         )?,
         Hlike(h) => hint_to_type_constraint(kind, tparams, skipawaitable, h)?,
         Hoption(t) => {
@@ -228,7 +230,7 @@ fn hint_to_type_constraint(
                                 tparams,
                                 skipawaitable,
                                 h,
-                                TypeConstraintFlags::Soft | TypeConstraintFlags::ExtendedHint,
+                                TypeConstraintFlags::Soft,
                             );
                         }
                     }
@@ -239,9 +241,7 @@ fn hint_to_type_constraint(
                 tparams,
                 skipawaitable,
                 t,
-                TypeConstraintFlags::Nullable
-                    | TypeConstraintFlags::DisplayNullable
-                    | TypeConstraintFlags::ExtendedHint,
+                TypeConstraintFlags::Nullable | TypeConstraintFlags::DisplayNullable,
             )?
         }
         Happly(Id(_, s), hs) => {
@@ -313,7 +313,7 @@ fn type_application_helper(tparams: &[&str], kind: &Kind, name: &str) -> Result<
         };
         Ok(Constraint {
             name: tc_name,
-            flags: TypeConstraintFlags::ExtendedHint | TypeConstraintFlags::TypeVar,
+            flags: TypeConstraintFlags::TypeVar,
         })
     } else {
         let name = ClassName::mangle(name);
@@ -364,7 +364,14 @@ fn param_hint_to_type_info(
 ) -> Result<TypeInfo> {
     let Hint(_, h) = hint;
     let is_simple_hint = match h.as_ref() {
-        Hsoft(_) | Hoption(_) | Haccess(_, _) | Hfun(_) | Hdynamic | Hnonnull | Hmixed => false,
+        Hlike(_)
+        | Hsoft(_)
+        | Hoption(_)
+        | Haccess(_, _)
+        | Hfun(_)
+        | Hdynamic
+        | Hnonnull
+        | Hmixed => false,
         Happly(Id(_, s), hs) => {
             hs.is_empty()
                 && s != "\\HH\\dynamic"
@@ -373,7 +380,19 @@ fn param_hint_to_type_info(
                 && !tparams.contains(&s.as_str())
         }
         Habstr(s, hs) => hs.is_empty() && !tparams.contains(&s.as_str()),
-        _ => true,
+        Hprim(_)
+        | Htuple(_)
+        | HclassArgs(_)
+        | Hshape(_)
+        | Hrefinement(_, _)
+        | Hwildcard
+        | HvecOrDict(_, _)
+        | Hthis
+        | Hnothing
+        | Hunion(_)
+        | Hintersection(_)
+        | HfunContext(_)
+        | Hvar(_) => true,
     };
     let tc = hint_to_type_constraint(kind, tparams, skipawaitable, hint)?;
     make_type_info(
@@ -404,9 +423,6 @@ pub fn hint_to_type_info(
     };
     let tc = hint_to_type_constraint(kind, tparams, skipawaitable, hint)?;
     let flags = match kind {
-        Kind::Return | Kind::Property if tc.name.is_just() => {
-            TypeConstraintFlags::ExtendedHint | tc.flags
-        }
         Kind::UpperBound => TypeConstraintFlags::UpperBound | tc.flags,
         _ => tc.flags,
     };
@@ -470,14 +486,14 @@ pub fn emit_type_constraint_for_native_function(
     ti: TypeInfo,
 ) -> TypeInfo {
     let (name, flags) = match (&ti.user_type, ret_opt) {
-        (_, None) | (Nothing, _) => (Just("HH\\void"), TypeConstraintFlags::ExtendedHint),
+        (_, None) | (Nothing, _) => (Just("HH\\void"), TypeConstraintFlags::NoFlags),
         (Just(t), _) => match t.as_str() {
             "HH\\mixed" | "callable" => (Nothing, TypeConstraintFlags::default()),
             "HH\\void" => {
                 let Hint(_, h) = ret_opt.as_ref().unwrap();
                 (
                     Just("HH\\void"),
-                    get_flags(tparams, TypeConstraintFlags::ExtendedHint, h),
+                    get_flags(tparams, TypeConstraintFlags::NoFlags, h),
                 )
             }
             _ => return ti,

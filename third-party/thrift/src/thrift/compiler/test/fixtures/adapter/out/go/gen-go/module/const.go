@@ -6,7 +6,7 @@
 package module
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
@@ -45,7 +45,7 @@ var PersonNoTransitive *Person2 = NewPerson2().
 const TypeAdapted AdaptedBool = true
 var NestedAdapted *MoveOnly = NewMoveOnly().
     SetPtrNonCompat(
-        *NewHeapAllocated(),
+        NewHeapAllocated(),
     )
 var ContainerOfAdapted []AdaptedByte = []AdaptedByte{
     1,

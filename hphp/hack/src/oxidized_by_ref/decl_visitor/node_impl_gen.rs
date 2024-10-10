@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<b9758bc6243d43516f8091099263f64f>>
+// @generated SignedSource<<e5e5cd4d67a6951d4684d8deaa2c5920>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -380,7 +380,7 @@ impl<'a> Node<'a> for TshapeFieldName<'a> {
     }
     fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
         match self {
-            TshapeFieldName::TSFlitInt(ref __binding_0) => __binding_0.accept(v),
+            TshapeFieldName::TSFregexGroup(ref __binding_0) => __binding_0.accept(v),
             TshapeFieldName::TSFlitStr(ref __binding_0) => __binding_0.accept(v),
             TshapeFieldName::TSFclassConst(ref __binding_0) => __binding_0.accept(v),
         }
@@ -574,32 +574,84 @@ impl<'a> Node<'a> for FunType<'a> {
         }
     }
 }
+impl<'a> Node<'a> for TypeTag<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_type_tag(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TypeTag::BoolTag => {}
+            TypeTag::IntTag => {}
+            TypeTag::StringTag => {}
+            TypeTag::ArraykeyTag => {}
+            TypeTag::FloatTag => {}
+            TypeTag::NumTag => {}
+            TypeTag::ResourceTag => {}
+            TypeTag::NullTag => {}
+            TypeTag::ClassTag(ref __binding_0) => __binding_0.accept(v),
+        }
+    }
+}
+impl<'a> Node<'a> for ShapeFieldPredicate<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_shape_field_predicate(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            ShapeFieldPredicate {
+                sfp_predicate: ref __binding_0,
+            } => __binding_0.accept(v),
+        }
+    }
+}
+impl<'a> Node<'a> for ShapePredicate<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_shape_predicate(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            ShapePredicate {
+                sp_fields: ref __binding_0,
+            } => __binding_0.accept(v),
+        }
+    }
+}
+impl<'a> Node<'a> for TuplePredicate<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_tuple_predicate(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TuplePredicate {
+                tp_required: ref __binding_0,
+            } => __binding_0.accept(v),
+        }
+    }
+}
+impl<'a> Node<'a> for TypePredicate_<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_type_predicate_(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TypePredicate_::IsTag(ref __binding_0) => __binding_0.accept(v),
+            TypePredicate_::IsTupleOf(ref __binding_0) => __binding_0.accept(v),
+            TypePredicate_::IsShapeOf(ref __binding_0) => __binding_0.accept(v),
+        }
+    }
+}
 impl<'a> Node<'a> for TypePredicate<'a> {
     fn accept(&'a self, v: &mut dyn Visitor<'a>) {
         v.visit_type_predicate(self)
     }
     fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
         match self {
-            TypePredicate::IsBool => {}
-            TypePredicate::IsInt => {}
-            TypePredicate::IsString => {}
-            TypePredicate::IsArraykey => {}
-            TypePredicate::IsFloat => {}
-            TypePredicate::IsNum => {}
-            TypePredicate::IsResource => {}
-            TypePredicate::IsNull => {}
-            TypePredicate::IsTupleOf(ref __binding_0) => __binding_0.accept(v),
-        }
-    }
-}
-impl<'a> Node<'a> for NegType<'a> {
-    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
-        v.visit_neg_type(self)
-    }
-    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
-        match self {
-            NegType::NegClass(ref __binding_0) => __binding_0.accept(v),
-            NegType::NegPredicate(ref __binding_0) => __binding_0.accept(v),
+            TypePredicate(ref __binding_0, ref __binding_1) => {
+                {
+                    __binding_0.accept(v)
+                }
+                { __binding_1.accept(v) }
+            }
         }
     }
 }
@@ -661,8 +713,8 @@ impl<'a> Node<'a> for Ty_<'a> {
             Ty_::Tintersection(ref __binding_0) => __binding_0.accept(v),
             Ty_::TvecOrDict(ref __binding_0) => __binding_0.accept(v),
             Ty_::Taccess(ref __binding_0) => __binding_0.accept(v),
-            Ty_::Tnewtype(ref __binding_0) => __binding_0.accept(v),
             Ty_::Tvar(ref __binding_0) => __binding_0.accept(v),
+            Ty_::Tnewtype(ref __binding_0) => __binding_0.accept(v),
             Ty_::TunappliedAlias(ref __binding_0) => __binding_0.accept(v),
             Ty_::Tdependent(ref __binding_0) => __binding_0.accept(v),
             Ty_::Tclass(ref __binding_0) => __binding_0.accept(v),
@@ -775,6 +827,43 @@ impl<'a> Node<'a> for ShapeType<'a> {
                 }
                 { __binding_2.accept(v) }
             }
+        }
+    }
+}
+impl<'a> Node<'a> for TupleType<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_tuple_type(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TupleType {
+                required: ref __binding_0,
+                extra: ref __binding_1,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                { __binding_1.accept(v) }
+            }
+        }
+    }
+}
+impl<'a> Node<'a> for TupleExtra<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_tuple_extra(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TupleExtra::Textra {
+                optional: ref __binding_0,
+                variadic: ref __binding_1,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                { __binding_1.accept(v) }
+            }
+            TupleExtra::Tsplat(ref __binding_0) => __binding_0.accept(v),
         }
     }
 }
@@ -977,6 +1066,32 @@ impl<'a> Node<'a> for EnumType<'a> {
         }
     }
 }
+impl<'a> Node<'a> for TypedefCaseTypeVariant<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_typedef_case_type_variant(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TypedefCaseTypeVariant(ref __binding_0, ref __binding_1) => {
+                {
+                    __binding_0.accept(v)
+                }
+                { __binding_1.accept(v) }
+            }
+        }
+    }
+}
+impl<'a> Node<'a> for TypedefTypeAssignment<'a> {
+    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
+        v.visit_typedef_type_assignment(self)
+    }
+    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
+        match self {
+            TypedefTypeAssignment::SimpleTypeDef(ref __binding_0) => __binding_0.accept(v),
+            TypedefTypeAssignment::CaseType(ref __binding_0) => __binding_0.accept(v),
+        }
+    }
+}
 impl<'a> Node<'a> for TypedefType<'a> {
     fn accept(&'a self, v: &mut dyn Visitor<'a>) {
         v.visit_typedef_type(self)
@@ -986,16 +1101,15 @@ impl<'a> Node<'a> for TypedefType<'a> {
             TypedefType {
                 module: ref __binding_0,
                 pos: ref __binding_1,
-                vis: ref __binding_2,
-                tparams: ref __binding_3,
-                as_constraint: ref __binding_4,
-                super_constraint: ref __binding_5,
-                type_: ref __binding_6,
-                is_ctx: ref __binding_7,
-                attributes: ref __binding_8,
-                internal: ref __binding_9,
-                docs_url: ref __binding_10,
-                package_override: ref __binding_11,
+                tparams: ref __binding_2,
+                as_constraint: ref __binding_3,
+                super_constraint: ref __binding_4,
+                type_assignment: ref __binding_5,
+                is_ctx: ref __binding_6,
+                attributes: ref __binding_7,
+                internal: ref __binding_8,
+                docs_url: ref __binding_9,
+                package_override: ref __binding_10,
             } => {
                 {
                     __binding_0.accept(v)
@@ -1027,10 +1141,7 @@ impl<'a> Node<'a> for TypedefType<'a> {
                 {
                     __binding_9.accept(v)
                 }
-                {
-                    __binding_10.accept(v)
-                }
-                { __binding_11.accept(v) }
+                { __binding_10.accept(v) }
             }
         }
     }
@@ -1085,17 +1196,24 @@ impl<'a> Node<'a> for PrjSymm<'a> {
             PrjSymm::PrjSymmFnParam(ref __binding_0) => __binding_0.accept(v),
             PrjSymm::PrjSymmFnParamInout(ref __binding_0) => __binding_0.accept(v),
             PrjSymm::PrjSymmFnRet => {}
+            PrjSymm::PrjSymmSupportdyn => {}
         }
     }
 }
-impl<'a> Node<'a> for Prj<'a> {
+impl<'a> Node<'a> for FlowKind<'a> {
     fn accept(&'a self, v: &mut dyn Visitor<'a>) {
-        v.visit_prj(self)
+        v.visit_flow_kind(self)
     }
     fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
         match self {
-            Prj::Symm(ref __binding_0) => __binding_0.accept(v),
-            Prj::Asymm(ref __binding_0) => __binding_0.accept(v),
+            FlowKind::FlowAssign => {}
+            FlowKind::FlowCall => {}
+            FlowKind::FlowPropAccess => {}
+            FlowKind::FlowLocal => {}
+            FlowKind::FlowFunReturn => {}
+            FlowKind::FlowParamHint => {}
+            FlowKind::FlowReturnExpr => {}
+            FlowKind::FlowInstantiate(ref __binding_0) => __binding_0.accept(v),
         }
     }
 }
@@ -1161,6 +1279,7 @@ impl<'a> Node<'a> for WitnessLocl<'a> {
             WitnessLocl::CapturedLike(ref __binding_0) => __binding_0.accept(v),
             WitnessLocl::UnsafeCast(ref __binding_0) => __binding_0.accept(v),
             WitnessLocl::Pattern(ref __binding_0) => __binding_0.accept(v),
+            WitnessLocl::JoinPoint(ref __binding_0) => __binding_0.accept(v),
         }
     }
 }
@@ -1175,6 +1294,7 @@ impl<'a> Node<'a> for WitnessDecl<'a> {
             WitnessDecl::Hint(ref __binding_0) => __binding_0.accept(v),
             WitnessDecl::ClassClass(ref __binding_0) => __binding_0.accept(v),
             WitnessDecl::VarParamFromDecl(ref __binding_0) => __binding_0.accept(v),
+            WitnessDecl::TupleFromSplat(ref __binding_0) => __binding_0.accept(v),
             WitnessDecl::VecOrDictKey(ref __binding_0) => __binding_0.accept(v),
             WitnessDecl::RetFunKindFromDecl(ref __binding_0) => __binding_0.accept(v),
             WitnessDecl::InoutParam(ref __binding_0) => __binding_0.accept(v),
@@ -1208,10 +1328,85 @@ impl<'a> Node<'a> for T_<'a> {
             T_::Instantiate(ref __binding_0) => __binding_0.accept(v),
             T_::NoReason => {}
             T_::FromWitnessLocl(ref __binding_0) => __binding_0.accept(v),
-            T_::Flow(ref __binding_0) => __binding_0.accept(v),
-            T_::Prj(ref __binding_0) => __binding_0.accept(v),
-            T_::Rev(ref __binding_0) => __binding_0.accept(v),
+            T_::LowerBound {
+                bound: ref __binding_0,
+                of__: ref __binding_1,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                { __binding_1.accept(v) }
+            }
+            T_::Flow {
+                from: ref __binding_0,
+                kind: ref __binding_1,
+                into: ref __binding_2,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                {
+                    __binding_1.accept(v)
+                }
+                { __binding_2.accept(v) }
+            }
+            T_::PrjBoth {
+                sub_prj: ref __binding_0,
+                prj: ref __binding_1,
+                sub: ref __binding_2,
+                super_: ref __binding_3,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                {
+                    __binding_1.accept(v)
+                }
+                {
+                    __binding_2.accept(v)
+                }
+                { __binding_3.accept(v) }
+            }
+            T_::PrjOne {
+                part: ref __binding_0,
+                whole: ref __binding_1,
+                prj: ref __binding_2,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                {
+                    __binding_1.accept(v)
+                }
+                { __binding_2.accept(v) }
+            }
+            T_::Axiom {
+                next: ref __binding_0,
+                prev: ref __binding_1,
+                axiom: ref __binding_2,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                {
+                    __binding_1.accept(v)
+                }
+                { __binding_2.accept(v) }
+            }
             T_::Def(ref __binding_0) => __binding_0.accept(v),
+            T_::Solved {
+                solution: ref __binding_0,
+                of__: ref __binding_1,
+                in__: ref __binding_2,
+            } => {
+                {
+                    __binding_0.accept(v)
+                }
+                {
+                    __binding_1.accept(v)
+                }
+                { __binding_2.accept(v) }
+            }
             T_::Invalid => {}
             T_::MissingField => {}
             T_::Idx(ref __binding_0) => __binding_0.accept(v),
@@ -1355,7 +1550,6 @@ impl<'a> Node<'a> for TypedefVisibility {
             TypedefVisibility::Transparent => {}
             TypedefVisibility::Opaque => {}
             TypedefVisibility::OpaqueModule => {}
-            TypedefVisibility::CaseType => {}
         }
     }
 }
@@ -1451,39 +1645,20 @@ impl<'a> Node<'a> for PrjAsymm {
             PrjAsymm::PrjAsymmInter => {}
             PrjAsymm::PrjAsymmNeg => {}
             PrjAsymm::PrjAsymmNullable => {}
+            PrjAsymm::PrjAsymmArraykey => {}
+            PrjAsymm::PrjAsymmNum => {}
         }
     }
 }
-impl<'a> Node<'a> for Side {
+impl<'a> Node<'a> for Axiom {
     fn accept(&'a self, v: &mut dyn Visitor<'a>) {
-        v.visit_side(self)
+        v.visit_axiom(self)
     }
     fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
         match self {
-            Side::Sub => {}
-            Side::Super => {}
-        }
-    }
-}
-impl<'a> Node<'a> for FlowKind {
-    fn accept(&'a self, v: &mut dyn Visitor<'a>) {
-        v.visit_flow_kind(self)
-    }
-    fn recurse(&'a self, v: &mut dyn Visitor<'a>) {
-        match self {
-            FlowKind::FlowAssign => {}
-            FlowKind::FlowLocal => {}
-            FlowKind::FlowSolved => {}
-            FlowKind::FlowSubtype => {}
-            FlowKind::FlowSubtypeToplevel => {}
-            FlowKind::FlowPrj => {}
-            FlowKind::FlowExtends => {}
-            FlowKind::FlowTransitive => {}
-            FlowKind::FlowFunReturn => {}
-            FlowKind::FlowParamHint => {}
-            FlowKind::FlowReturnExpr => {}
-            FlowKind::FlowUpperBound => {}
-            FlowKind::FlowLowerBound => {}
+            Axiom::Extends => {}
+            Axiom::UpperBound => {}
+            Axiom::LowerBound => {}
         }
     }
 }

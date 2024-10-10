@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -58,7 +55,6 @@ from collections.abc import Sequence, Set, Mapping, Iterable
 import weakref as __weakref
 import builtins as _builtins
 import importlib
-
 
 
 
@@ -92,7 +88,6 @@ cdef class Fiery(thrift.py3.exceptions.GeneratedError):
         return __fbthrift_inst
 
     cdef inline message_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).message_ref().value()).decode('UTF-8')
 
     @property
@@ -192,7 +187,7 @@ cdef class Serious(thrift.py3.exceptions.GeneratedError):
 
     cdef object _fbthrift_isset(self):
         return _fbthrift_IsSet("Serious", {
-          "sonnet": deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).sonnet_ref().has_value(),
+          "not_sonnet": deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).not_sonnet_ref().has_value(),
         })
 
     @staticmethod
@@ -202,15 +197,14 @@ cdef class Serious(thrift.py3.exceptions.GeneratedError):
         _builtins.Exception.__init__(__fbthrift_inst, *(v for _, v in __fbthrift_inst))
         return __fbthrift_inst
 
-    cdef inline sonnet_impl(self):
-        if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).sonnet_ref().has_value():
+    cdef inline not_sonnet_impl(self):
+        if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).not_sonnet_ref().has_value():
             return None
-
-        return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).sonnet_ref().value_unchecked()).decode('UTF-8')
+        return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).not_sonnet_ref().value_unchecked()).decode('UTF-8')
 
     @property
-    def sonnet(self):
-        return self.sonnet_impl()
+    def not_sonnet(self):
+        return self.not_sonnet_impl()
 
 
     def __hash__(Serious self):
@@ -220,7 +214,7 @@ cdef class Serious(thrift.py3.exceptions.GeneratedError):
         return super().__repr__()
 
     def __str__(Serious self):
-        field = self.sonnet
+        field = self.not_sonnet
         if field is None:
             return str(field)
         return field
@@ -317,7 +311,6 @@ cdef class ComplexFieldNames(thrift.py3.exceptions.GeneratedError):
         return __fbthrift_inst
 
     cdef inline error_message_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).error_message_ref().value()).decode('UTF-8')
 
     @property
@@ -325,7 +318,6 @@ cdef class ComplexFieldNames(thrift.py3.exceptions.GeneratedError):
         return self.error_message_impl()
 
     cdef inline internal_error_message_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).internal_error_message_ref().value()).decode('UTF-8')
 
     @property
@@ -437,7 +429,6 @@ cdef class CustomFieldNames(thrift.py3.exceptions.GeneratedError):
         return __fbthrift_inst
 
     cdef inline error_message_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).error_message_ref().value()).decode('UTF-8')
 
     @property
@@ -445,7 +436,6 @@ cdef class CustomFieldNames(thrift.py3.exceptions.GeneratedError):
         return self.error_message_impl()
 
     cdef inline internal_error_message_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).internal_error_message_ref().value()).decode('UTF-8')
 
     @property
@@ -557,7 +547,6 @@ cdef class ExceptionWithPrimitiveField(thrift.py3.exceptions.GeneratedError):
         return __fbthrift_inst
 
     cdef inline message_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).message_ref().value()).decode('UTF-8')
 
     @property
@@ -565,7 +554,6 @@ cdef class ExceptionWithPrimitiveField(thrift.py3.exceptions.GeneratedError):
         return self.message_impl()
 
     cdef inline error_code_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).error_code_ref().value()
 
     @property
@@ -677,7 +665,6 @@ cdef class ExceptionWithStructuredAnnotation(thrift.py3.exceptions.GeneratedErro
         return __fbthrift_inst
 
     cdef inline message_field_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).message_field_ref().value()).decode('UTF-8')
 
     @property
@@ -685,7 +672,6 @@ cdef class ExceptionWithStructuredAnnotation(thrift.py3.exceptions.GeneratedErro
         return self.message_field_impl()
 
     cdef inline error_code_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).error_code_ref().value()
 
     @property

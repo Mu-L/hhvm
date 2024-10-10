@@ -175,6 +175,9 @@ class WebTransport {
       return stopSendingErrorCode_;
     }
 
+    virtual folly::Expected<folly::Unit, ErrorCode> setPriority(
+        uint8_t level, uint64_t order, bool incremental) = 0;
+
    protected:
     folly::Optional<uint32_t> stopSendingErrorCode_;
   };
@@ -215,6 +218,9 @@ class WebTransport {
                   bool fin) = 0;
   virtual folly::Expected<folly::Unit, ErrorCode> resetStream(
       uint64_t streamId, uint32_t error) = 0;
+  virtual folly::Expected<folly::Unit, ErrorCode> setPriority(
+      uint64_t streamId, uint8_t level, uint64_t order, bool incremental) = 0;
+
   virtual folly::Expected<folly::Unit, ErrorCode> stopSending(
       uint64_t streamId, uint32_t error) = 0;
 
@@ -228,6 +234,22 @@ class WebTransport {
   // exception
   virtual folly::Expected<folly::Unit, ErrorCode> closeSession(
       folly::Optional<uint32_t> error = folly::none) = 0;
+};
+
+// WebTransportHandler is a virtual interface for handling events that come
+// from web transport that are not tied to an existing stream
+//
+//  * New streams
+//  * Datagrams
+//  * The end of of session
+class WebTransportHandler {
+ public:
+  virtual ~WebTransportHandler() = default;
+
+  virtual void onNewUniStream(WebTransport::StreamReadHandle* readHandle) = 0;
+  virtual void onNewBidiStream(WebTransport::BidiStreamHandle bidiHandle) = 0;
+  virtual void onDatagram(std::unique_ptr<folly::IOBuf> datagram) = 0;
+  virtual void onSessionEnd(folly::Optional<uint32_t> error) = 0;
 };
 
 } // namespace proxygen

@@ -37,7 +37,10 @@ let get_type_at_pos ctx tast_map pos :
   let (path, line, col) = pos in
   let tast = Relative_path.Map.find tast_map path in
   match ServerInferType.type_at_pos ctx tast line col with
-  | Some (env, ty) -> Ok (Tast_env.tast_env_as_typing_env env, ty)
+  | Some info ->
+    Ok
+      ( Tast_env.tast_env_as_typing_env (ServerInferType.get_env info),
+        ServerInferType.get_type info )
   | _ ->
     Error
       (Printf.sprintf
@@ -58,9 +61,16 @@ let rec validate_free_type env locl_ty =
     | Decl_entry.NotYetAvailable ->
       ["Unbound class name " ^ class_id]
     | Decl_entry.Found _ -> validate_l env tyargs)
+  | Ttuple { t_required; t_extra } ->
+    validate_l env t_required
+    @ begin
+        match t_extra with
+        | Textra { t_optional; t_variadic } ->
+          validate_l env t_optional @ validate_free_type env t_variadic
+        | Tsplat t_splat -> validate_free_type env t_splat
+      end
   | Tunion tyargs
-  | Tintersection tyargs
-  | Ttuple tyargs ->
+  | Tintersection tyargs ->
     validate_l env tyargs
   | Toption locl_ty -> validate_free_type env locl_ty
   | Tnonnull
@@ -93,7 +103,11 @@ let rec validate_free_type env locl_ty =
   (* Unsupported b/c relative/erroneous *)
   | Tlabel _
   | Tgeneric _ ->
-    [Printf.sprintf "Unsupported free type %s" (Typing_print.full env locl_ty)]
+    [
+      Printf.sprintf
+        "Unsupported free type %s"
+        (Typing_print.full ~hide_internals:true env locl_ty);
+    ]
 
 and validate_l env locl_tyl =
   List.concat_map locl_tyl ~f:(validate_free_type env)
@@ -144,8 +158,8 @@ type is_subtype_result = {
 let is_subtype env l_ty r_ty : is_subtype_result =
   {
     is_subtype = Typing_subtype.is_sub_type env l_ty r_ty;
-    ty_left = Typing_print.full env l_ty;
-    ty_right = Typing_print.full env r_ty;
+    ty_left = Typing_print.full ~hide_internals:true env l_ty;
+    ty_right = Typing_print.full ~hide_internals:true env r_ty;
   }
 
 let helper

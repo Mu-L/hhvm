@@ -10,6 +10,7 @@
 
 #include <fizz/backend/openssl/OpenSSL.h>
 #include <fizz/extensions/tokenbinding/Utils.h>
+#include <fizz/protocol/DefaultFactory.h>
 
 using namespace folly;
 using namespace folly::io;
@@ -79,7 +80,8 @@ void Validator::verify(
     auto ecdsa = constructECDSASig(signature);
 
     std::array<uint8_t, fizz::Sha256::HashLen> hashedMessage;
-    fizz::openssl::Hasher<fizz::Sha256>::hash(
+    fizz::hash(
+        fizz::DefaultFactory().makeHasherFactory(fizz::HashFunction::Sha256),
         *message,
         folly::MutableByteRange(hashedMessage.data(), hashedMessage.size()));
     if (ECDSA_do_verify(
@@ -90,7 +92,6 @@ void Validator::verify(
       throw std::runtime_error(folly::to<std::string>(
           "Verification failed: ", openssl::detail::getOpenSSLError()));
     }
-#if FIZZ_OPENSSL_HAS_ED25519
   } else if (keyParams == TokenBindingKeyParameters::ed25519_experimental) {
     // Read the first byte from `key`, which denotes the size of the key
     Cursor keyReader(key.get());
@@ -122,7 +123,6 @@ void Validator::verify(
       throw std::runtime_error(folly::to<std::string>(
           "Verification failed: ", openssl::detail::getOpenSSLError()));
     }
-#endif
   } else {
     // rsa_pss and rsa_pkcs
     throw std::runtime_error(

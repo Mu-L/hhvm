@@ -18,10 +18,10 @@
 
 #include <folly/channels/MultiplexChannel.h>
 #include <folly/channels/RateLimiter.h>
+#include <folly/coro/FutureUtil.h>
+#include <folly/coro/Mutex.h>
+#include <folly/coro/Promise.h>
 #include <folly/experimental/channels/detail/Utility.h>
-#include <folly/experimental/coro/FutureUtil.h>
-#include <folly/experimental/coro/Mutex.h>
-#include <folly/experimental/coro/Promise.h>
 
 namespace folly {
 namespace channels {
@@ -164,15 +164,13 @@ namespace detail {
 template <typename MultiplexerType>
 class MultiplexChannelProcessor : public IChannelCallback {
  private:
-  using KeyType = typename detail::MultiplexerTraits<MultiplexerType>::KeyType;
-  using KeyContextType =
-      typename detail::MultiplexerTraits<MultiplexerType>::KeyContextType;
+  using MultiplexerTypeTraits = detail::MultiplexerTraits<MultiplexerType>;
+  using KeyType = typename MultiplexerTypeTraits::KeyType;
+  using KeyContextType = typename MultiplexerTypeTraits::KeyContextType;
   using SubscriptionArgType =
-      typename detail::MultiplexerTraits<MultiplexerType>::SubscriptionArgType;
-  using InputValueType =
-      typename detail::MultiplexerTraits<MultiplexerType>::InputValueType;
-  using OutputValueType =
-      typename detail::MultiplexerTraits<MultiplexerType>::OutputValueType;
+      typename MultiplexerTypeTraits::SubscriptionArgType;
+  using InputValueType = typename MultiplexerTypeTraits::InputValueType;
+  using OutputValueType = typename MultiplexerTypeTraits::OutputValueType;
 
  public:
   explicit MultiplexChannelProcessor(MultiplexerType multiplexer)

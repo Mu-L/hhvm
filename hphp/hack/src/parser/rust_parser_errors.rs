@@ -485,8 +485,32 @@ fn is_variadic_parameter_declaration(node: S<'_>) -> bool {
         _ => false,
     }
 }
+fn is_readonly_parameter_declaration(node: S<'_>) -> bool {
+    match &node.children {
+        ParameterDeclaration(x) => x.readonly.is_readonly(),
+        ClosureParameterTypeSpecifier(x) => x.readonly.is_readonly(),
+        _ => false,
+    }
+}
+fn is_optional_parameter_declaration(node: S<'_>) -> bool {
+    match &node.children {
+        ParameterDeclaration(x) => x.optional.is_optional(),
+        ClosureParameterTypeSpecifier(x) => x.optional.is_optional(),
+        _ => false,
+    }
+}
+fn is_splat_parameter_declaration(node: S<'_>) -> bool {
+    match &node.children {
+        ParameterDeclaration(x) => x.pre_ellipsis.is_ellipsis(),
+        ClosureParameterTypeSpecifier(x) => x.pre_ellipsis.is_ellipsis(),
+        _ => false,
+    }
+}
 fn misplaced_variadic_param<'a>(param: S<'a>) -> Option<S<'a>> {
     assert_last_in_list(is_variadic_parameter_declaration, param)
+}
+fn misplaced_splat_param<'a>(param: S<'a>) -> Option<S<'a>> {
+    assert_last_in_list(is_splat_parameter_declaration, param)
 }
 fn misplaced_variadic_arg<'a>(args: S<'a>) -> Option<S<'a>> {
     assert_last_in_list(is_variadic_expression, args)
@@ -505,6 +529,11 @@ fn ends_with_variadic_comma<'a>(params: S<'a>) -> Option<S<'a>> {
 // Extract variadic parameter from a parameter list
 fn variadic_param<'a>(params: S<'a>) -> Option<S<'a>> {
     syntax_to_list_with_separators(params).find(|&x| is_variadic_parameter_declaration(x))
+}
+
+// Extract splat parameter from a parameter list
+fn splat_param<'a>(params: S<'a>) -> Option<S<'a>> {
+    syntax_to_list_with_separators(params).find(|&x| is_splat_parameter_declaration(x))
 }
 
 fn is_parameter_with_default_value(param: S<'_>) -> bool {
@@ -789,16 +818,33 @@ fn variadic_param_with_default_value<'a>(params: S<'a>) -> Option<S<'a>> {
     variadic_param(params).filter(|x| is_parameter_with_default_value(x))
 }
 
+fn splat_param_with_default_value<'a>(params: S<'a>) -> Option<S<'a>> {
+    splat_param(params).filter(|x| is_parameter_with_default_value(x))
+}
+
 // If a variadic parameter is marked inout, return it
 fn variadic_param_with_callconv<'a>(params: S<'a>) -> Option<S<'a>> {
     variadic_param(params).filter(|x| is_parameter_with_callconv(x))
 }
 
+fn splat_param_with_callconv<'a>(params: S<'a>) -> Option<S<'a>> {
+    splat_param(params).filter(|x| is_parameter_with_callconv(x))
+}
+
+fn splat_param_with_variadic<'a>(params: S<'a>) -> Option<S<'a>> {
+    splat_param(params).filter(|x| is_variadic_parameter_declaration(x))
+}
+
 fn variadic_param_with_readonly<'a>(params: S<'a>) -> Option<S<'a>> {
-    variadic_param(params).filter(|x| match &x.children {
-        ParameterDeclaration(x) => x.readonly.is_readonly(),
-        _ => false,
-    })
+    variadic_param(params).filter(|x| is_readonly_parameter_declaration(x))
+}
+
+fn splat_param_with_readonly<'a>(params: S<'a>) -> Option<S<'a>> {
+    splat_param(params).filter(|x| is_readonly_parameter_declaration(x))
+}
+
+fn splat_param_with_optional<'a>(params: S<'a>) -> Option<S<'a>> {
+    splat_param(params).filter(|x| is_optional_parameter_declaration(x))
 }
 
 // If an inout parameter has a default, return the default
@@ -1144,24 +1190,61 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
 
         match &arg.children {
             LiteralExpression(x) => {
-                let text = self.text(&x.expression);
-                match FeatureName::from_str(escaper::unquote_str(text)) {
-                    Ok(feature) => feature.enable(
-                        &self.env.parser_options,
-                        self.env.is_hhi_mode(),
-                        &mut self.env.context.active_experimental_features,
-                        text,
-                        &mut |err| self.errors.push(make_error_from_node(node, err)),
-                    ),
-                    Err(_) => error_invalid_argument(
-                        self,
-                        format!(
-                            "there is no feature named {}.\nAvailable features are:\n\t{}",
+                let text = escaper::unquote_str(self.text(&x.expression));
+                let consider_all_possible_features = matches!(self.env.mode, Mode::ForCodegen)
+                    || self.env.is_hhi_mode()
+                    || self
+                        .env
+                        .parser_options
+                        .consider_unspecified_experimental_features_released
+                    || self
+                        .env
+                        .parser_options
+                        .use_legacy_experimental_feature_config;
+                match FeatureName::from_str(text) {
+                    Ok(feature)
+                        if consider_all_possible_features
+                            || self
+                                .env
+                                .parser_options
+                                .experimental_features
+                                .contains_key(text) =>
+                    {
+                        // We will enable a feature if
+                        // - we are in hhvm,
+                        // - we are enabling an experimental feature that is specified in the configuration,
+                        // - we are going to consider all experimental features as OngoingRelease status,
+                        // - we are in an .hhi file, or
+                        // - we are using the legacy hardcoded approach to experimental feature config,
+                        // Otherwise, we are in the typechecker, and the feature wasn't specified in the config, and we
+                        // want to signal an error for attempting to enable an invalid experimental feature.
+                        feature.enable(
+                            &self.env.parser_options,
+                            self.env.is_hhi_mode(),
+                            &mut self.env.context.active_experimental_features,
                             text,
-                            FeatureName::iter().join("\n\t")
+                            &mut |err| self.errors.push(make_error_from_node(node, err)),
                         )
-                        .as_str(),
-                    ),
+                    }
+                    _ => {
+                        let valid_features = if consider_all_possible_features {
+                            FeatureName::iter().join("\n\t")
+                        } else {
+                            self.env
+                                .parser_options
+                                .experimental_features
+                                .keys()
+                                .join("\n\t")
+                        };
+                        error_invalid_argument(
+                            self,
+                            format!(
+                                "there is no feature named {}.\nAvailable features are:\n\t{}",
+                                text, valid_features,
+                            )
+                            .as_str(),
+                        )
+                    }
                 }
             }
             _ => error_invalid_argument(self, "this is not a literal string expression"),
@@ -1172,17 +1255,27 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
         self.uses_readonly = true;
     }
 
-    fn check_can_use_feature(&mut self, node: S<'a>, feature: &FeatureName) {
+    fn check_can_use_feature_errors(
+        &self,
+        errors: &mut Vec<SyntaxError>,
+        node: S<'a>,
+        feature: &FeatureName,
+    ) {
         if !feature.can_use(
             &self.env.parser_options,
-            &self.env.mode,
             &self.env.context.active_experimental_features,
         ) {
-            self.errors.push(make_error_from_node(
+            errors.push(make_error_from_node(
                 node,
                 errors::cannot_use_feature(feature.into()),
             ))
         }
+    }
+
+    fn check_can_use_feature(&mut self, node: S<'a>, feature: &FeatureName) {
+        let mut errors = std::mem::take(&mut self.errors);
+        self.check_can_use_feature_errors(&mut errors, node, feature);
+        self.errors = errors;
     }
 
     fn attr_name(&self, node: S<'a>) -> Option<&'a str> {
@@ -2147,14 +2240,23 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
     fn params_errors(&mut self, params: S<'a>) {
         self.produce_error_from_check(ends_with_variadic_comma, params, || errors::error2022);
         self.produce_error_from_check(misplaced_variadic_param, params, || errors::error2021);
+        self.produce_error_from_check(misplaced_splat_param, params, || errors::error2081);
 
         self.produce_error_from_check(variadic_param_with_default_value, params, || {
             errors::error2065
         });
 
+        self.produce_error_from_check(splat_param_with_default_value, params, || errors::error2082);
+
         self.produce_error_from_check(variadic_param_with_callconv, params, || errors::error2073);
+        self.produce_error_from_check(splat_param_with_callconv, params, || errors::error2083);
+        self.produce_error_from_check(splat_param_with_variadic, params, || errors::error2079);
+        self.produce_error_from_check(splat_param_with_optional, params, || errors::error2080);
         self.produce_error_from_check(variadic_param_with_readonly, params, || {
             errors::variadic_readonly_param
+        });
+        self.produce_error_from_check(splat_param_with_readonly, params, || {
+            errors::splat_readonly_param
         });
     }
 
@@ -2231,6 +2333,10 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
 
                 self.check_type_hint(&p.type_);
                 self.check_parameter_readonly(node);
+
+                if !p.pre_ellipsis.is_missing() {
+                    self.check_can_use_feature(node, &FeatureName::TypeSplat);
+                }
 
                 if let Some(inout_modifier) = parameter_callconv(node) {
                     if self.is_inside_async_method() {
@@ -2484,6 +2590,7 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
                         .push(make_error_from_node(node, errors::invalid_shape_field_name))
                 }
             }
+            NameofExpression(_) if !self.env.is_typechecker() => {}
             ScopeResolutionExpression(_) => {}
             QualifiedName(_) => {
                 if self.env.is_typechecker() {
@@ -2528,9 +2635,7 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
                 if name == sn::superglobals::GLOBALS {
                     self.errors
                         .push(make_error_from_node(node, errors::globals_disallowed))
-                } else if self.env.parser_options.disallow_direct_superglobals_refs
-                    && sn::superglobals::is_superglobal(name)
-                {
+                } else if sn::superglobals::is_superglobal(name) {
                     self.errors.push(make_error_from_node(
                         node,
                         errors::superglobal_disallowed(name),
@@ -2728,13 +2833,40 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
     fn await_as_an_expression_errors(&mut self, await_node: S<'a>) {
         let mut prev = None;
         let mut node = await_node;
+
+        // true if we are in an expression tree, false if we are in a splice or not in an expression tree at all
+        // Start at false because actual await expressions are forbidden in expression trees
+        let mut in_expr_tree = false;
         for n in self.parents.iter().rev() {
             if let Some(prev) = prev {
                 node = prev;
             }
             prev = Some(n);
             match &n.children {
-                // statements that root for the concurrently executed await expressions
+                ETSpliceExpression(_) => {
+                    let mut errors = std::mem::take(&mut self.errors);
+                    self.check_can_use_feature_errors(
+                        &mut errors,
+                        node,
+                        &FeatureName::AwaitInSplice,
+                    );
+                    self.errors = errors;
+                    // if we were in a splice, the parent must be in an expression tree, because splices can only occur in expression trees
+                    in_expr_tree = true;
+                    continue;
+                }
+                PrefixedCodeExpression(_) => {
+                    // if we were in an expression tree, the parent must not be, since expression trees can't directly nest
+                    in_expr_tree = false;
+                    continue;
+                }
+                _ if in_expr_tree => {
+                    // if we are in an expression tree, than nothing affects the execution of an await nested in a splice
+                    // so we ignore, even if it's a lambda, expressionStatement, etc. that would usually break us out of
+                    // the check
+                    continue;
+                }
+                // statements that root for the concurrently executed await expressions, as long as they aren't in an expression tree
                 ExpressionStatement(_)
                 | ReturnStatement(_)
                 | UnsetStatement(_)
@@ -2754,10 +2886,6 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
                     break;
                 }
                 LambdaExpression(x) if std::ptr::eq(node, &x.body) => break,
-                ETSpliceExpression(_) => {
-                    self.check_can_use_feature(node, &FeatureName::AwaitInSplice);
-                    break;
-                }
                 PrefixUnaryExpression(x) if token_kind(&x.operator) == Some(TokenKind::Await) => {
                     let (feature, enabled) = self.is_pipe_await_enabled();
                     if !enabled {
@@ -2912,7 +3040,6 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
         let feature = FeatureName::PipeAwait;
         let enabled = feature.can_use(
             &self.env.parser_options,
-            &self.env.mode,
             &self.env.context.active_experimental_features,
         );
         (feature, enabled)
@@ -4142,6 +4269,9 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
                     ))
                 }
             }
+            if !ctv.where_clause.is_missing() {
+                self.check_can_use_feature(&ctv.where_clause, &FeatureName::CaseTypeWhereClauses);
+            }
         }
     }
 
@@ -4551,6 +4681,7 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
                     && !is_parent_class_access(&x.qualifier, &x.name) => {}
             NameofExpression(x) => match x.target.children {
                 // Match behavior for ScopeResolution expression when rhs is ::class
+                QualifiedName(_) => {}
                 Token(t) => {
                     // The parser does a weird clone fork to separate a name-token of "parent" vs.
                     // a token kind of parent when the following token is a :: for scope resolution
@@ -5392,6 +5523,21 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
             ClassArgsTypeSpecifier(_) => {
                 self.check_can_use_feature(node, &FeatureName::ClassType);
             }
+            TupleOrUnionOrIntersectionElementTypeSpecifier(c) => {
+                let has_optional = !c.optional.is_missing();
+                let has_ellipsis = !c.ellipsis.is_missing();
+                if has_optional || has_ellipsis {
+                    self.check_can_use_feature(node, &FeatureName::OpenTuples);
+                }
+                if !c.pre_ellipsis.is_missing() {
+                    self.check_can_use_feature(node, &FeatureName::TypeSplat);
+                }
+            }
+            ClosureParameterTypeSpecifier(x) => {
+                if !x.pre_ellipsis.is_missing() {
+                    self.check_can_use_feature(node, &FeatureName::TypeSplat);
+                }
+            }
             _ => {}
         }
         self.lval_errors(node);
@@ -5415,6 +5561,9 @@ impl<'a, State: 'a + Clone> ParserErrors<'a, State> {
         match &node.children {
             UnionTypeSpecifier(_) | IntersectionTypeSpecifier(_) => {
                 self.check_can_use_feature(node, &FeatureName::UnionIntersectionTypeHints)
+            }
+            LikeTypeSpecifier(_) if !self.env.hhi_mode => {
+                self.check_can_use_feature(node, &FeatureName::LikeTypeHints)
             }
             DeclareLocalStatement(_) => {
                 self.check_can_use_feature(node, &FeatureName::TypedLocalVariables)

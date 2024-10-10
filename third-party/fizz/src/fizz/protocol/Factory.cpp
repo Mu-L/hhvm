@@ -1,3 +1,10 @@
+/**
+ * Copyright (c) Meta Platforms, Inc. and affiliates.
+ * All rights reserved.
+ *
+ * This source code is licensed under the BSD-style license found in the
+ * LICENSE file in the root directory of this source tree.
+ */
 #include <fizz/protocol/Factory.h>
 
 namespace fizz {
@@ -28,30 +35,19 @@ std::unique_ptr<KeyScheduler> Factory::makeKeyScheduler(
   return std::make_unique<KeyScheduler>(std::move(keyDer));
 }
 
-// TODO: This should not belong as part of the base Factory; a concrete
-// factory should provide the random primitive.
-Random Factory::makeRandom() const {
-  return RandomGenerator<Random().size()>().generateRandom();
+std::unique_ptr<HandshakeContext> Factory::makeHandshakeContext(
+    CipherSuite cipher) const {
+  auto hasherFactory = makeHasherFactory(getHashFunction(cipher));
+  return std::make_unique<HandshakeContextImpl>(hasherFactory);
 }
 
-// TODO: This should not belong as part of the base Factory; a concrete
-// factory should provide the random primitive.
-uint32_t Factory::makeTicketAgeAdd() const {
-  return RandomNumGenerator<uint32_t>().generateRandom();
-}
-
-// TODO: This should not belong as part of the base Factory; a concrete
-// factory should provide the random primitive.
-std::unique_ptr<folly::IOBuf> Factory::makeRandomBytes(size_t count) const {
-  return RandomBufGenerator(count).generateRandom();
+std::unique_ptr<KeyDerivation> Factory::makeKeyDeriver(
+    CipherSuite cipher) const {
+  auto hasher = makeHasherFactory(getHashFunction(cipher));
+  return std::make_unique<KeyDerivationImpl>(hasher);
 }
 
 std::shared_ptr<Cert> Factory::makeIdentityOnlyCert(std::string ident) const {
   return std::make_shared<IdentityCert>(std::move(ident));
 }
-
-std::string Factory::getHkdfPrefix() const {
-  return kHkdfLabelPrefix.str();
-}
-
 } // namespace fizz

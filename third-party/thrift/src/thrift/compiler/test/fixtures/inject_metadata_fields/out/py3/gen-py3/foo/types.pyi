@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class Fields(thrift.py3.types.Struct, _typing.Hashable):
@@ -26,11 +22,9 @@ class Fields(thrift.py3.types.Struct, _typing.Hashable):
         injected_unstructured_annotation_field: bool
         pass
 
-    injected_field: Final[str] = ...
-
-    injected_structured_annotation_field: Final[_typing.Optional[str]] = ...
-
-    injected_unstructured_annotation_field: Final[_typing.Optional[str]] = ...
+    injected_field: _typing.Final[str] = ...
+    injected_structured_annotation_field: _typing.Final[_typing.Optional[str]] = ...
+    injected_unstructured_annotation_field: _typing.Final[_typing.Optional[str]] = ...
 
     def __init__(
         self, *,
@@ -41,9 +35,9 @@ class Fields(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        injected_field: _typing.Union[str, '__NotSet', None]=NOTSET,
-        injected_structured_annotation_field: _typing.Union[str, '__NotSet', None]=NOTSET,
-        injected_unstructured_annotation_field: _typing.Union[str, '__NotSet', None]=NOTSET
+        injected_field: _typing.Union[str, None]=None,
+        injected_structured_annotation_field: _typing.Union[str, None]=None,
+        injected_unstructured_annotation_field: _typing.Union[str, None]=None
     ) -> Fields: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Fields'], bytes]]: ...

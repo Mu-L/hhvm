@@ -110,6 +110,24 @@ public final class MyUnion implements com.facebook.thrift.payload.ThriftSerializ
     private java.lang.Object value;
     private short id;
 
+    public enum TypeEnum {
+      __FBTHRIFT_EMPTY_UNION__,
+      BOOL_FIELD,
+      BYTE_FIELD,
+      SHORT_FIELD,
+      INT_FIELD,
+      LONG_FIELD,
+      FLOAT_FIELD,
+      DOUBLE_FIELD,
+      STRING_FIELD,
+      BINARY_FIELD,
+      ENUM_FIELD,
+      LIST_FIELD,
+      SET_FIELD,
+      MAP_FIELD,
+      STRUCT_FIELD,
+    }
+
     public static MyUnion from(int _id, java.lang.Object _field) {
         return from((short) _id, _field);
     }
@@ -602,6 +620,43 @@ public final class MyUnion implements com.facebook.thrift.payload.ThriftSerializ
     @ThriftUnionId
     public short getThriftId() {
         return this.id;
+    }
+
+    public TypeEnum getThriftUnionType() {
+      switch(this.id) {
+        case 0:
+          return TypeEnum.__FBTHRIFT_EMPTY_UNION__;
+        case 1:
+          return TypeEnum.BOOL_FIELD;
+        case 2:
+          return TypeEnum.BYTE_FIELD;
+        case 3:
+          return TypeEnum.SHORT_FIELD;
+        case 4:
+          return TypeEnum.INT_FIELD;
+        case 5:
+          return TypeEnum.LONG_FIELD;
+        case 6:
+          return TypeEnum.FLOAT_FIELD;
+        case 7:
+          return TypeEnum.DOUBLE_FIELD;
+        case 8:
+          return TypeEnum.STRING_FIELD;
+        case 9:
+          return TypeEnum.BINARY_FIELD;
+        case 10:
+          return TypeEnum.ENUM_FIELD;
+        case 11:
+          return TypeEnum.LIST_FIELD;
+        case 12:
+          return TypeEnum.SET_FIELD;
+        case 13:
+          return TypeEnum.MAP_FIELD;
+        case 14:
+          return TypeEnum.STRUCT_FIELD;
+        default:
+          throw new IllegalStateException("unreachable");
+      }
     }
 
     public String getThriftName() {

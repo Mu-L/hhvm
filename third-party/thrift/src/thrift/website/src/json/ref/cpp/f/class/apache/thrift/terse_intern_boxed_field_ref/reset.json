@@ -16,13 +16,14 @@
       "definition_html": "FOLLY_ERASE void apache::thrift::terse_intern_boxed_field_ref&lt; T &gt;::reset",
       "argsstring_html": "() noexcept",
       "name_html": "reset",
+      "qualifiedname_html": "apache::thrift::terse_intern_boxed_field_ref::reset",
       "location": {
         "file": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "line": "1440",
+        "line": "1469",
         "column": "20",
         "bodyfile": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "bodystart": "1440",
-        "bodyend": "1443"
+        "bodystart": "1469",
+        "bodyend": "1472"
       },
       "definition": {
         "simple_html": "FOLLY_ERASE void reset()",

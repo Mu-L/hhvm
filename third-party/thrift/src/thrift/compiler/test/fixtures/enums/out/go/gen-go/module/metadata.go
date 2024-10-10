@@ -6,22 +6,15 @@
 package module
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
@@ -30,12 +23,9 @@ var (
         metadata.NewThriftEnumType().
             SetName("module.Metasyntactic"),
             )
-    premadeThriftType_i32 = metadata.NewThriftType().SetTPrimitive(
-        metadata.ThriftPrimitiveType_THRIFT_I32_TYPE.Ptr(),
-            )
-    premadeThriftType_set_i32 = metadata.NewThriftType().SetTSet(
-        metadata.NewThriftSetType().
-            SetValueType(premadeThriftType_i32),
+    premadeThriftType_module_MyEnum1 = metadata.NewThriftType().SetTEnum(
+        metadata.NewThriftEnumType().
+            SetName("module.MyEnum1"),
             )
     premadeThriftType_module_MyEnum2 = metadata.NewThriftType().SetTEnum(
         metadata.NewThriftEnumType().
@@ -45,11 +35,47 @@ var (
         metadata.NewThriftEnumType().
             SetName("module.MyEnum3"),
             )
-    premadeThriftType_module_MyEnum1 = metadata.NewThriftType().SetTEnum(
+    premadeThriftType_module_MyEnum4 = metadata.NewThriftType().SetTEnum(
         metadata.NewThriftEnumType().
-            SetName("module.MyEnum1"),
+            SetName("module.MyEnum4"),
+            )
+    premadeThriftType_module_MyBitmaskEnum1 = metadata.NewThriftType().SetTEnum(
+        metadata.NewThriftEnumType().
+            SetName("module.MyBitmaskEnum1"),
+            )
+    premadeThriftType_module_MyBitmaskEnum2 = metadata.NewThriftType().SetTEnum(
+        metadata.NewThriftEnumType().
+            SetName("module.MyBitmaskEnum2"),
+            )
+    premadeThriftType_i32 = metadata.NewThriftType().SetTPrimitive(
+        metadata.ThriftPrimitiveType_THRIFT_I32_TYPE.Ptr(),
+            )
+    premadeThriftType_set_i32 = metadata.NewThriftType().SetTSet(
+        metadata.NewThriftSetType().
+            SetValueType(premadeThriftType_i32),
+            )
+    premadeThriftType_module_SomeStruct = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("module.SomeStruct"),
+            )
+    premadeThriftType_module_MyStruct = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("module.MyStruct"),
             )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "module.Metasyntactic": premadeThriftType_module_Metasyntactic,
+    "module.MyEnum1": premadeThriftType_module_MyEnum1,
+    "module.MyEnum2": premadeThriftType_module_MyEnum2,
+    "module.MyEnum3": premadeThriftType_module_MyEnum3,
+    "module.MyEnum4": premadeThriftType_module_MyEnum4,
+    "module.MyBitmaskEnum1": premadeThriftType_module_MyBitmaskEnum1,
+    "module.MyBitmaskEnum2": premadeThriftType_module_MyBitmaskEnum2,
+    "i32": premadeThriftType_i32,
+    "module.SomeStruct": premadeThriftType_module_SomeStruct,
+    "module.MyStruct": premadeThriftType_module_MyStruct,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
     metadata.NewThriftStruct().
@@ -186,6 +212,12 @@ var enumMetadatas = []*metadata.ThriftEnum{
 }
 
 var serviceMetadatas = []*metadata.ThriftService{
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.

@@ -45,9 +45,9 @@
 #include <thrift/lib/cpp2/transport/core/ThriftClientCallback.h>
 #include <thrift/lib/cpp2/transport/core/TryUtil.h>
 #include <thrift/lib/cpp2/transport/rocket/FdSocket.h>
-#include <thrift/lib/cpp2/transport/rocket/PayloadUtils.h>
 #include <thrift/lib/cpp2/transport/rocket/RocketException.h>
 #include <thrift/lib/cpp2/transport/rocket/client/RocketClient.h>
+#include <thrift/lib/cpp2/transport/rocket/payload/PayloadSerializer.h>
 #include <thrift/lib/thrift/gen-cpp2/RpcMetadata_constants.h>
 #include <thrift/lib/thrift/gen-cpp2/RpcMetadata_types.h>
 #if __has_include(<thrift/lib/thrift/gen-cpp2/any_rep_types.h>)
@@ -67,8 +67,7 @@ THRIFT_FLAG_DEFINE_bool(rocket_client_enable_bidirectional_propagation, true);
 
 using namespace apache::thrift::transport;
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 namespace {
 struct LegacyResponseSerializationHandler {
@@ -128,7 +127,8 @@ folly::Try<FirstResponsePayload> decodeResponseError(
 
   ResponseRpcError responseError;
   try {
-    rocket::unpackCompact(responseError, ex.moveErrorData().get());
+    rocket::PayloadSerializer::getInstance().unpackCompact(
+        responseError, ex.moveErrorData().get());
   } catch (...) {
     return folly::Try<FirstResponsePayload>(
         folly::make_exception_wrapper<TApplicationException>(fmt::format(
@@ -201,6 +201,10 @@ folly::Try<FirstResponsePayload> decodeResponseError(
     case ResponseRpcErrorCode::TENANT_QUOTA_EXCEEDED:
       exCode = kTenantQuotaExceededErrorCode;
       exType = TApplicationException::LOADSHEDDING;
+      break;
+    case ResponseRpcErrorCode::TENANT_BLOCKLISTED:
+      exCode = kTenantBlocklistedErrorCode;
+      exType = TApplicationException::TENANT_BLOCKLISTED;
       break;
     default:
       exCode = kUnknownErrorCode;
@@ -536,32 +540,6 @@ class FirstRequestProcessorSink : public SinkClientCallback,
 };
 } // namespace
 
-void RocketClientChannel::setCompression(
-    RequestRpcMetadata& metadata, ssize_t payloadSize) {
-  if (auto compressionConfig = metadata.compressionConfig_ref()) {
-    if (auto codecRef = compressionConfig->codecConfig_ref()) {
-      if (codecRef->getType() ==
-              apache::thrift::CodecConfig::Type::zlibConfig &&
-          getServerZstdSupported()) {
-        codecRef->zstdConfig_ref().emplace();
-      }
-      if (payloadSize >
-          compressionConfig->compressionSizeLimit_ref().value_or(0)) {
-        switch (codecRef->getType()) {
-          case CodecConfig::Type::zlibConfig:
-            metadata.compression_ref() = CompressionAlgorithm::ZLIB;
-            break;
-          case CodecConfig::Type::zstdConfig:
-            metadata.compression_ref() = CompressionAlgorithm::ZSTD;
-            break;
-          default:
-            break;
-        }
-      }
-    }
-  }
-}
-
 class RocketClientChannel::SingleRequestSingleResponseCallback final
     : public rocket::RocketClient::RequestResponseCallback {
   using clock = std::chrono::steady_clock;
@@ -620,7 +598,9 @@ class RocketClientChannel::SingleRequestSingleResponseCallback final
       stats.responseWireSizeBytes =
           payload->metadataAndDataSize() - payload->metadataSize();
 
-      response = rocket::unpack<FirstResponsePayload>(std::move(*payload));
+      response =
+          rocket::PayloadSerializer::getInstance().unpack<FirstResponsePayload>(
+              std::move(*payload));
       if (response.hasException()) {
         cb_.release()->onResponseError(std::move(response.exception()));
         return;
@@ -736,15 +716,24 @@ rocket::SetupFrame RocketClientChannel::makeSetupFrame(
   if (!clientMetadata.agent_ref()) {
     clientMetadata.agent_ref() = "RocketClientChannel.cpp";
   }
-  CompactProtocolWriter compactProtocolWriter;
+
   folly::IOBufQueue paramQueue;
-  compactProtocolWriter.setOutput(&paramQueue);
-  meta.write(&compactProtocolWriter);
+  uint32_t serialized_size;
+  if (THRIFT_FLAG(rocket_client_binary_rpc_metadata_encoding)) {
+    BinaryProtocolWriter binaryProtocolWriter;
+    binaryProtocolWriter.setOutput(&paramQueue);
+    meta.write(&binaryProtocolWriter);
+    serialized_size = meta.serializedSize(&binaryProtocolWriter);
+  } else {
+    CompactProtocolWriter compactProtocolWriter;
+    compactProtocolWriter.setOutput(&paramQueue);
+    meta.write(&compactProtocolWriter);
+    serialized_size = meta.serializedSize(&compactProtocolWriter);
+  }
 
   // Serialize RocketClient's major/minor version (which is separate from the
   // rsocket protocol major/minor version) into setup metadata.
-  auto buf = folly::IOBuf::createCombined(
-      sizeof(int32_t) + meta.serializedSize(&compactProtocolWriter));
+  auto buf = folly::IOBuf::createCombined(sizeof(int32_t) + serialized_size);
   folly::IOBufQueue queue;
   queue.append(std::move(buf));
   folly::io::QueueAppender appender(&queue, /* do not grow */ 0);
@@ -760,7 +749,7 @@ rocket::SetupFrame RocketClientChannel::makeSetupFrame(
 
   return rocket::SetupFrame(
       rocket::Payload::makeFromMetadataAndData(queue.move(), {}),
-      /* rocketMimeTypes = */ true);
+      THRIFT_FLAG(rocket_client_binary_rpc_metadata_encoding));
 }
 
 RocketClientChannel::RocketClientChannel(
@@ -840,35 +829,31 @@ void RocketClientChannel::sendRequestStream(
     std::shared_ptr<THeader> header,
     StreamClientCallback* clientCallback) {
   DestructorGuard dg(this);
-
+  if (!canHandleRequest(clientCallback)) {
+    return;
+  }
   preprocessHeader(header.get());
 
+  auto firstResponseTimeout = getClientTimeout(rpcOptions);
+  auto buf = std::move(request.buffer);
   auto metadata = apache::thrift::detail::makeRequestRpcMetadata(
       rpcOptions,
       RpcKind::SINGLE_REQUEST_STREAMING_RESPONSE,
-      static_cast<ProtocolId>(header->getProtocolId()),
       methodMetadata.name_managed(),
-      timeout_,
+      firstResponseTimeout,
+      getInteractionHandle(rpcOptions),
+      getServerZstdSupported(),
+      buf->computeChainDataLength(),
       *header);
 
-  std::chrono::milliseconds firstResponseTimeout;
-  if (!preSendValidation(
-          metadata, rpcOptions, clientCallback, firstResponseTimeout)) {
-    return;
-  }
-
-  auto buf = std::move(request.buffer);
-  setCompression(metadata, buf->computeChainDataLength());
-
-  auto payload = rocket::packWithFds(
+  auto payload = rocket::PayloadSerializer::getInstance().packWithFds(
       &metadata,
       std::move(buf),
       rpcOptions.copySocketFdsToSend(),
       getTransportWrapper());
-  assert(metadata.name_ref());
   return rocket::RocketClient::sendRequestStream(
       std::move(payload),
-      firstResponseTimeout,
+      firstResponseTimeout.value_or(std::chrono::milliseconds::zero()),
       rpcOptions.getChunkTimeout(),
       rpcOptions.getChunkBufferSize(),
       new FirstRequestProcessorStream(
@@ -885,41 +870,36 @@ void RocketClientChannel::sendRequestSink(
     std::shared_ptr<transport::THeader> header,
     SinkClientCallback* clientCallback) {
   DestructorGuard dg(this);
-
+  if (!canHandleRequest(clientCallback)) {
+    return;
+  }
   preprocessHeader(header.get());
 
+  auto firstResponseTimeout = getClientTimeout(rpcOptions);
+  auto buf = std::move(request.buffer);
   auto metadata = apache::thrift::detail::makeRequestRpcMetadata(
       rpcOptions,
       RpcKind::SINK,
-      static_cast<ProtocolId>(header->getProtocolId()),
       methodMetadata.name_managed(),
-      timeout_,
+      firstResponseTimeout,
+      getInteractionHandle(rpcOptions),
+      getServerZstdSupported(),
+      buf->computeChainDataLength(),
       *header);
 
-  std::chrono::milliseconds firstResponseTimeout;
-  if (!preSendValidation(
-          metadata, rpcOptions, clientCallback, firstResponseTimeout)) {
-    return;
-  }
-
-  auto buf = std::move(request.buffer);
-  setCompression(metadata, buf->computeChainDataLength());
-
-  auto payload = rocket::packWithFds(
+  auto payload = rocket::PayloadSerializer::getInstance().packWithFds(
       &metadata,
       std::move(buf),
       rpcOptions.copySocketFdsToSend(),
       getTransportWrapper());
-  assert(metadata.name_ref());
   return rocket::RocketClient::sendRequestSink(
       std::move(payload),
-      firstResponseTimeout,
+      firstResponseTimeout.value_or(std::chrono::milliseconds(0)),
       new FirstRequestProcessorSink(
           header->getProtocolId(),
           std::move(*metadata.name_ref()),
           clientCallback,
           evb_),
-      // rpcOptions.getMemAllocType(),
       header->getDesiredCompressionConfig());
 }
 
@@ -929,41 +909,42 @@ void RocketClientChannel::sendThriftRequest(
     apache::thrift::ManagedStringView&& methodName,
     SerializedRequest&& request,
     std::shared_ptr<transport::THeader> header,
-    RequestClientCallback::Ptr cb) {
+    RequestClientCallback::Ptr clientCallback) {
   DestructorGuard dg(this);
-
+  if (!canHandleRequest(clientCallback)) {
+    return;
+  }
   preprocessHeader(header.get());
 
+  auto timeout = getClientTimeout(rpcOptions);
+  auto buf = std::move(request.buffer);
   auto metadata = apache::thrift::detail::makeRequestRpcMetadata(
       rpcOptions,
       kind,
-      static_cast<ProtocolId>(header->getProtocolId()),
       std::move(methodName),
-      timeout_,
+      timeout,
+      getInteractionHandle(rpcOptions),
+      getServerZstdSupported(),
+      buf->computeChainDataLength(),
       *header);
   header.reset();
-
-  std::chrono::milliseconds timeout;
-  if (!preSendValidation(metadata, rpcOptions, cb, timeout)) {
-    return;
-  }
-
-  auto buf = std::move(request.buffer);
-  setCompression(metadata, buf->computeChainDataLength());
 
   switch (kind) {
     case RpcKind::SINGLE_REQUEST_NO_RESPONSE:
       sendSingleRequestNoResponse(
-          rpcOptions, std::move(metadata), std::move(buf), std::move(cb));
+          rpcOptions,
+          std::move(metadata),
+          std::move(buf),
+          std::move(clientCallback));
       break;
 
     case RpcKind::SINGLE_REQUEST_SINGLE_RESPONSE:
       sendSingleRequestSingleResponse(
           rpcOptions,
           std::move(metadata),
-          timeout,
+          timeout.value_or(std::chrono::milliseconds(0)),
           std::move(buf),
-          std::move(cb));
+          std::move(clientCallback));
       break;
 
     case RpcKind::SINGLE_REQUEST_STREAMING_RESPONSE:
@@ -981,7 +962,7 @@ void RocketClientChannel::sendSingleRequestNoResponse(
     RequestRpcMetadata&& metadata,
     std::unique_ptr<folly::IOBuf> buf,
     RequestClientCallback::Ptr cb) {
-  auto requestPayload = rocket::packWithFds(
+  auto requestPayload = rocket::PayloadSerializer::getInstance().packWithFds(
       &metadata,
       std::move(buf),
       rpcOptions.copySocketFdsToSend(),
@@ -1006,7 +987,7 @@ void RocketClientChannel::sendSingleRequestSingleResponse(
     std::unique_ptr<folly::IOBuf> buf,
     RequestClientCallback::Ptr cb) {
   const auto requestSerializedSize = buf->computeChainDataLength();
-  auto requestPayload = rocket::packWithFds(
+  auto requestPayload = rocket::PayloadSerializer::getInstance().packWithFds(
       &metadata,
       std::move(buf),
       rpcOptions.copySocketFdsToSend(),
@@ -1015,8 +996,6 @@ void RocketClientChannel::sendSingleRequestSingleResponse(
   const auto requestMetadataAndPayloadSize =
       requestPayload.metadataAndDataSize();
   const bool isSync = cb->isSync();
-  assert(metadata.protocol_ref());
-  assert(metadata.name_ref());
   SingleRequestSingleResponseCallback callback(
       std::move(cb),
       static_cast<uint16_t>(*metadata.protocol_ref()),
@@ -1052,13 +1031,7 @@ void onResponseError(SinkClientCallback* cb, folly::exception_wrapper ew) {
 }
 
 template <typename CallbackPtr>
-bool RocketClientChannel::preSendValidation(
-    RequestRpcMetadata& metadata,
-    const RpcOptions& rpcOptions,
-    CallbackPtr& cb,
-    std::chrono::milliseconds& firstResponseTimeout) {
-  DCHECK(metadata.kind_ref().has_value());
-
+bool RocketClientChannel::canHandleRequest(CallbackPtr& cb) {
   if (!isAlive()) {
     // Channel is not in connected state due to some pre-existing transport
     // exception, pass it back for some breadcrumbs.
@@ -1082,27 +1055,35 @@ bool RocketClientChannel::preSendValidation(
     return false;
   }
 
-  firstResponseTimeout =
-      std::chrono::milliseconds(metadata.clientTimeoutMs_ref().value_or(0));
-  if (rpcOptions.getClientOnlyTimeouts()) {
-    metadata.clientTimeoutMs_ref().reset();
-    metadata.queueTimeoutMs_ref().reset();
-  }
+  return true;
+}
 
+std::optional<std::chrono::milliseconds> RocketClientChannel::getClientTimeout(
+    const RpcOptions& rpcOptions) const {
+  if (rpcOptions.getTimeout() > std::chrono::milliseconds::zero()) {
+    return rpcOptions.getTimeout();
+  } else if (timeout_ > std::chrono::milliseconds::zero()) {
+    return timeout_;
+  }
+  return std::nullopt;
+}
+
+std::variant<InteractionCreate, int64_t, std::monostate>
+RocketClientChannel::getInteractionHandle(const RpcOptions& rpcOptions) {
   if (auto interactionId = rpcOptions.getInteractionId()) {
     evb_->dcheckIsInEventBaseThread();
     if (auto* name = folly::get_ptr(pendingInteractions_, interactionId)) {
       InteractionCreate create;
       create.interactionId_ref() = interactionId;
       create.interactionName_ref() = std::move(*name).str();
-      metadata.interactionCreate_ref() = std::move(create);
       pendingInteractions_.erase(interactionId);
+      return create;
     } else {
-      metadata.interactionId_ref() = interactionId;
+      return interactionId;
     }
   }
 
-  return true;
+  return std::monostate{};
 }
 
 ClientChannel::SaturationStatus RocketClientChannel::getSaturationStatus() {
@@ -1228,5 +1209,4 @@ InteractionId RocketClientChannel::registerInteraction(
 int32_t RocketClientChannel::getServerVersion() const {
   return rocket::RocketClient::getServerVersion();
 }
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

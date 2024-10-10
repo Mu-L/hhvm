@@ -16,19 +16,19 @@
 
 #pragma once
 
+#include <functional>
 #include <stdexcept>
 #include <vector>
 
 #include <folly/ExceptionWrapper.h>
-#include <folly/experimental/coro/Task.h>
 
 #include <thrift/lib/cpp2/async/ClientInterceptorStorage.h>
 
 namespace apache::thrift {
 
-class ClientInterceptorBase;
-
-#if FOLLY_HAS_COROUTINES
+namespace transport {
+class THeader;
+}
 
 class ClientInterceptorBase {
  public:
@@ -36,11 +36,41 @@ class ClientInterceptorBase {
 
   virtual std::string getName() const = 0;
 
-  struct RequestInfo {};
-  virtual folly::coro::Task<void> internal_onRequest(RequestInfo) = 0;
+  struct RequestInfo {
+    detail::ClientInterceptorOnRequestStorage* storage = nullptr;
+    ClientInterceptorOnRequestArguments arguments;
+    apache::thrift::transport::THeader* headers = nullptr;
+    /**
+     * The name of the service definition as specified in Thrift IDL.
+     */
+    const char* serviceName = nullptr;
+    /**
+     * The name of the method as specified in Thrift IDL. This does NOT include
+     * the service name. If the method is an interaction method, then it will be
+     * in the format `{interaction_name}.{method_name}`.
+     */
+    const char* methodName = nullptr;
+  };
+  virtual void internal_onRequest(RequestInfo) = 0;
 
-  struct ResponseInfo {};
-  virtual folly::coro::Task<void> internal_onResponse(ResponseInfo) = 0;
+  struct ResponseInfo {
+    detail::ClientInterceptorOnRequestStorage* storage = nullptr;
+    const apache::thrift::transport::THeader* headers = nullptr;
+    /**
+     * The name of the service definition as specified in Thrift IDL.
+     */
+    const char* serviceName = nullptr;
+    /**
+     * The name of the method as specified in Thrift IDL. This does NOT include
+     * the service name. If the method is an interaction method, then it will be
+     * in the format `{interaction_name}.{method_name}`.
+     */
+    const char* methodName = nullptr;
+  };
+  virtual void internal_onResponse(ResponseInfo) = 0;
+
+  static constexpr std::size_t kMaxRequestStateSize =
+      detail::ClientInterceptorOnRequestStorage::max_size();
 };
 
 class ClientInterceptorException : public std::runtime_error {
@@ -64,7 +94,5 @@ class ClientInterceptorException : public std::runtime_error {
  private:
   std::vector<SingleExceptionInfo> causes_;
 };
-
-#endif // FOLLY_HAS_COROUTINES
 
 } // namespace apache::thrift

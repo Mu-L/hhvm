@@ -109,14 +109,16 @@ let enum_check_type env (pos : Pos_or_decl.t) ur ty_interface ty _on_error =
     match get_node ty with
     | Tnewtype (name, _, _) ->
       (match Typing_env.get_typedef env name with
-      | Decl_entry.Found { td_vis = Aast.CaseType; td_pos; _ } ->
+      | Decl_entry.Found { td_type_assignment = CaseType _; td_pos; _ } ->
         Typing_error_utils.add_typing_error ~env
         @@ Typing_error.(
              enum
              @@ Primary.Enum.Enum_type_bad_case_type
                   {
                     pos = Pos_or_decl.unsafe_to_raw_pos pos;
-                    ty_name = lazy (Typing_print.full_strip_ns env ty);
+                    ty_name =
+                      lazy
+                        (Typing_print.full_strip_ns ~hide_internals:true env ty);
                     case_type_decl_pos = td_pos;
                   })
       | _ -> ())
@@ -130,7 +132,11 @@ let enum_check_type env (pos : Pos_or_decl.t) ur ty_interface ty _on_error =
     | Tnonnull ->
       true
     | Toption lty -> is_valid_base lty
-    | Ttuple ltys -> List.for_all ~f:is_valid_base ltys
+    | Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } } ->
+      List.for_all ~f:is_valid_base t_required
+      && List.for_all ~f:is_valid_base t_optional
+      && is_nothing t_variadic
+    | Ttuple { t_extra = Tsplat _; _ } -> false
     | Tnewtype (_, ltys, lty) ->
       check_if_case_type env ty;
       List.for_all ~f:is_valid_base (lty :: ltys)
@@ -165,7 +171,12 @@ let enum_check_type env (pos : Pos_or_decl.t) ur ty_interface ty _on_error =
                   {
                     pos = Pos_or_decl.unsafe_to_raw_pos pos;
                     is_enum_class = true;
-                    ty_name = lazy (Typing_print.full_strip_ns env interface);
+                    ty_name =
+                      lazy
+                        (Typing_print.full_strip_ns
+                           ~hide_internals:true
+                           env
+                           interface);
                     trail = [];
                   }));
       (env, None)
@@ -180,7 +191,9 @@ let enum_check_type env (pos : Pos_or_decl.t) ur ty_interface ty _on_error =
                  {
                    pos = Pos_or_decl.unsafe_to_raw_pos pos;
                    is_enum_class = false;
-                   ty_name = lazy (Typing_print.full_strip_ns env ty);
+                   ty_name =
+                     lazy
+                       (Typing_print.full_strip_ns ~hide_internals:true env ty);
                    trail = [];
                  }))
       in
@@ -195,19 +208,40 @@ let enum_check_type env (pos : Pos_or_decl.t) ur ty_interface ty _on_error =
   Option.iter ~f:(Typing_error_utils.add_typing_error ~env) ty_err_opt;
   env
 
-(* Check an enum declaration of the form
- *    enum E : <ty_exp> as <ty_constraint>
- * or
- *    class E extends Enum<ty_exp>
- * where the absence of <ty_constraint> is assumed to default to arraykey.
- *
- * Check that <ty_exp> is int or string, and that
- *   ty_exp <: ty_constraint <: arraykey
- * Also that each type constant is of type ty_exp.
- *)
-let enum_class_check env tc consts const_types =
+let check_cyclic_constraint env (p, enum_name) constraint_ty =
+  let ((env, _ty_err1, cycles), _) =
+    Phase.localize_no_subst_report_cycles
+      env
+      ~ignore_errors:false
+      constraint_ty
+      ~report_cycle:(p, Type_expansions.Expandable.Enum enum_name)
+  in
+  Type_expansions.report cycles
+  |> Option.iter ~f:(Typing_error_utils.add_typing_error ~env)
+
+(** Check an enum declaration of the form
+
+     enum E : <ty_exp> as <ty_constraint>
+
+  or
+
+     class E extends Enum<ty_exp>
+
+  where the absence of `<ty_constraint>` is assumed to default to arraykey.
+
+  Check that `<ty_exp>` is int or string, and that
+
+    ty_exp <: ty_constraint <: arraykey
+
+  Also that each type constant is of type `ty_exp`. *)
+let enum_class_check
+    env
+    ~name_pos
+    (tc : Cls.t)
+    (consts : Nast.class_const list)
+    (const_types : locl_ty list) =
   let pos = Cls.pos tc in
-  let enum_info_opt =
+  let (enum_info_opt : Decl_enum.t option) =
     Decl_enum.enum_kind
       (pos, Cls.name tc)
       ~is_enum_class:(Ast_defs.is_c_enum_class (Cls.kind tc))
@@ -261,6 +295,7 @@ let enum_class_check env tc consts const_types =
         match ty_constraint with
         | None -> (env, None)
         | Some ty ->
+          check_cyclic_constraint env (name_pos, Cls.name tc) ty;
           let ((env, ty_err1), ty) =
             Phase.localize_no_subst env ~ignore_errors:false ty
           in

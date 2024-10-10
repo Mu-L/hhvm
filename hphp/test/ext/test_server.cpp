@@ -54,11 +54,9 @@ static int s_server_port = 0;
 static int s_admin_port = 0;
 static int s_rpc_port = 0;
 static int inherit_fd = -1;
-static std::unique_ptr<AsyncFunc<TestServer>> s_func;
 static char s_pidfile[PATH_MAX];
 static char s_repoFile[PATH_MAX];
 static char s_logFile[PATH_MAX];
-static char s_filename[PATH_MAX];
 static int k_timeout = 30;
 
 bool TestServer::VerifyServerResponse(const char* input, const char** outputs,
@@ -86,23 +84,6 @@ bool TestServer::VerifyServerResponse(const char* input, const char** outputs,
   func.start();
 
   bool passed = true;
-  if (s_func) {
-    if (!s_func->waitForEnd(k_timeout)) {
-      // Takeover didn't complete in 30s, stop the old server
-      fprintf(stderr, "stopping HHVM\n");
-      AsyncFunc<TestServer> stopFunc(this, &TestServer::KillServer);
-      stopFunc.run();
-      fprintf(stderr, "Waiting for stop\n");
-      stopFunc.waitForEnd();
-      fprintf(stderr, "Waiting for old HHVM\n");
-      s_func->waitForEnd();
-      // Mark this test a failure
-      fprintf(stderr, "Proceeding to test\n");
-      passed = false;
-    }
-    s_func.reset();
-  }
-
   std::string actual;
 
   int url = 0;
@@ -173,9 +154,7 @@ void TestServer::RunServer() {
   auto const rpcConfig = "-vSatellites.rpc.Port=" +
     folly::to<std::string>(s_rpc_port);
   auto const fd = folly::to<std::string>(inherit_fd);
-  auto option = inherit_fd >= 0
-    ? "--port-fd=" + fd
-    : "-vServer.TakeoverFilename=" + std::string(s_filename);
+  auto option = "--port-fd=" + fd;
   auto serverType = std::string("-vServer.Type=") + m_serverType;
   auto pidFile = std::string("-vPidFile=") + s_pidfile;
   auto repoFile = std::string("-vRepo.Path=") + s_repoFile;
@@ -301,7 +280,6 @@ bool TestServer::RunTests(const std::string &which) {
   close(tmpfd);
 
   RUN_TEST(TestInheritFdServer);
-  RUN_TEST(TestTakeoverServer);
   RUN_TEST(TestSanity);
   RUN_TEST(TestServerVariables);
   RUN_TEST(TestInteraction);
@@ -329,19 +307,19 @@ bool TestServer::TestSanity() {
 }
 
 bool TestServer::TestServerVariables() {
-  VSR("<?hh var_dump($_POST, $_GET);",
+  VSR("<?hh var_dump(\\HH\\global_get('_POST'), \\HH\\global_get('_GET'));",
       "array(0) {\n}\narray(0) {\n}\n");
 
-  VSR("<?hh print $_SERVER['REQUEST_URI'];",
+  VSR("<?hh print \\HH\\global_get('_SERVER')['REQUEST_URI'];",
       "/string");
 
   VSGET("<?hh "
-        "var_dump($_SERVER['PATH_INFO']);"
-        "var_dump(clean($_SERVER['PATH_TRANSLATED']));"
-        "var_dump($_SERVER['SCRIPT_NAME']);"
-        "var_dump($_SERVER['REQUEST_URI']);"
-        "var_dump(clean($_SERVER['SCRIPT_FILENAME']));"
-        "var_dump($_SERVER['QUERY_STRING']);"
+        "var_dump(\\HH\\global_get('_SERVER')['PATH_INFO']);"
+        "var_dump(clean(\\HH\\global_get('_SERVER')['PATH_TRANSLATED']));"
+        "var_dump(\\HH\\global_get('_SERVER')['SCRIPT_NAME']);"
+        "var_dump(\\HH\\global_get('_SERVER')['REQUEST_URI']);"
+        "var_dump(clean(\\HH\\global_get('_SERVER')['SCRIPT_FILENAME']));"
+        "var_dump(\\HH\\global_get('_SERVER')['QUERY_STRING']);"
         "function clean($x) { return str_replace(getcwd(),'',$x); }",
 
         "string(13) \"/path/subpath\"\n"
@@ -354,13 +332,13 @@ bool TestServer::TestServerVariables() {
         "string/path/subpath?a=1&b=2");
 
   VSGET("<?hh "
-        "var_dump($_SERVER['PATH_INFO']);"
-        "var_dump(clean($_SERVER['PATH_TRANSLATED']));"
-        "var_dump($_SERVER['SCRIPT_NAME']);"
-        "var_dump($_SERVER['REQUEST_URI']);"
-        "var_dump(clean($_SERVER['SCRIPT_FILENAME']));"
-        "var_dump($_SERVER['QUERY_STRING']);"
-        "var_dump(isset($_ENV['HPHP_RPC']));"
+        "var_dump(\\HH\\global_get('_SERVER')['PATH_INFO']);"
+        "var_dump(clean(\\HH\\global_get('_SERVER')['PATH_TRANSLATED']));"
+        "var_dump(\\HH\\global_get('_SERVER')['SCRIPT_NAME']);"
+        "var_dump(\\HH\\global_get('_SERVER')['REQUEST_URI']);"
+        "var_dump(clean(\\HH\\global_get('_SERVER')['SCRIPT_FILENAME']));"
+        "var_dump(\\HH\\global_get('_SERVER')['QUERY_STRING']);"
+        "var_dump(isset(\\HH\\global_get('_ENV')['HPHP_RPC']));"
         "function clean($x) { return str_replace(getcwd(),'',$x); }",
 
         "NULL\n"
@@ -387,16 +365,16 @@ bool TestServer::TestInteraction() {
 }
 
 bool TestServer::TestGet() {
-  VSGET("<?hh var_dump($_GET['name']);",
+  VSGET("<?hh var_dump(\\HH\\global_get('_GET')['name']);",
         "string(0) \"\"\n", "string?name");
 
-  VSGET("<?hh var_dump($_GET['name'], $_GET['id']);",
+  VSGET("<?hh var_dump(\\HH\\global_get('_GET')['name'], \\HH\\global_get('_GET')['id']);",
         "string(0) \"\"\nstring(1) \"1\"\n", "string?name&id=1");
 
-  VSGET("<?hh print $_GET['name'];",
+  VSGET("<?hh print \\HH\\global_get('_GET')['name'];",
         "value", "string?name=value");
 
-  VSGET("<?hh var_dump($_GET['names']);",
+  VSGET("<?hh var_dump(\\HH\\global_get('_GET')['names']);",
         "array(2) {\n"
         "  [1]=>\n"
         "  string(3) \"foo\"\n"
@@ -405,7 +383,7 @@ bool TestServer::TestGet() {
         "}\n",
         "string?names[1]=foo&names[2]=bar");
 
-  VSGET("<?hh var_dump($_GET['names']);",
+  VSGET("<?hh var_dump(\\HH\\global_get('_GET')['names']);",
         "array(2) {\n"
         "  [0]=>\n"
         "  string(3) \"foo\"\n"
@@ -414,7 +392,7 @@ bool TestServer::TestGet() {
         "}\n",
         "string?names[]=foo&names[]=bar");
 
-  VSGET("<?hh print $_REQUEST['name'];",
+  VSGET("<?hh print \\HH\\global_get('_REQUEST')['name'];",
         "value", "string?name=value");
 
   return true;
@@ -423,10 +401,10 @@ bool TestServer::TestGet() {
 bool TestServer::TestPost() {
   const char *params = "name=value";
 
-  VSPOST("<?hh print $_POST['name'];",
+  VSPOST("<?hh print \\HH\\global_get('_POST')['name'];",
          "value", "string", params);
 
-  VSPOST("<?hh print $_REQUEST['name'];",
+  VSPOST("<?hh print \\HH\\global_get('_REQUEST')['name'];",
          "value", "string", params);
 
   VSPOST("<?hh print $HTTP_RAW_POST_DATA;",
@@ -438,17 +416,17 @@ bool TestServer::TestPost() {
 bool TestServer::TestExpectContinue() {
   const char *params = "name=value";
 
-  VSRX("<?hh print $_POST['name'];",
+  VSRX("<?hh print \\HH\\global_get('_POST')['name'];",
        "value", "string", "POST", "Expect: 100-continue", params);
 
   return true;
 }
 
 bool TestServer::TestCookie() {
-  VSRX("<?hh print $_COOKIE['name'];",
+  VSRX("<?hh print \\HH\\global_get('_COOKIE')['name'];",
        "value", "string", "GET", "Cookie: name=value;", nullptr);
 
-  VSRX("<?hh print $_COOKIE['name2'];",
+  VSRX("<?hh print \\HH\\global_get('_COOKIE')['name2'];",
        "value2", "string", "GET", "Cookie: n=v;name2=value2;n3=v3", nullptr);
 
   return true;
@@ -630,38 +608,6 @@ bool TestServer::TestInheritFdServer() {
   return true;
 }
 
-bool TestServer::TestTakeoverServer() {
-  // start a server
-  snprintf(s_filename, MAXPATHLEN, "/tmp/hphp_takeover_XXXXXX");
-  auto const tmpfd = mkstemp(s_filename);
-  close(tmpfd);
-
-  s_func.reset(new AsyncFunc<TestServer>(this, &TestServer::RunServer));
-  s_func->start();
-
-  // Wait for the server to actually start
-  HttpClient http;
-  StringBuffer response;
-  req::vector<String> responseHeaders;
-  auto url = "http://127.0.0.1:" + folly::to<std::string>(s_server_port) +
-    "/status.php";
-  HeaderMap headers;
-  for (int i = 0; i < 10; i++) {
-    int code = http.get(url.c_str(), response, &headers, &responseHeaders);
-    if (code > 0) {
-      break;
-    }
-    sleep(1);
-  }
-
-  // will start a second server, which should takeover
-  VSR("<?hh print 'Hello, World!';",
-      "Hello, World!");
-  unlink(s_filename);
-  s_filename[0] = 0;
-  return true;
-}
-
 ///////////////////////////////////////////////////////////////////////////////
 
 struct EchoHandler final : RequestHandler {
@@ -826,7 +772,7 @@ bool TestServer::TestRPCServer() {
          s_rpc_port);
 
   VSGETP("<?hh\n"
-         "var_dump(isset($_ENV['HPHP_RPC']));\n",
+         "var_dump(isset(\\HH\\global_get('_ENV')['HPHP_RPC']));\n",
          "bool(true)\n"
          "bool(true)\n",
          "?include=string&output=1&auth=test",
@@ -837,7 +783,7 @@ bool TestServer::TestRPCServer() {
 
 bool TestServer::TestXboxServer() {
   VSGET("<?hh\n"
-        "if (array_key_exists('main', $_GET)) {\n"
+        "if (array_key_exists('main', \\HH\\global_get('_GET'))) {\n"
         "  $t = xbox_task_start('1');\n"
         "  xbox_task_result($t, 0, $r);\n"
         "  var_dump($r);\n"
@@ -879,10 +825,10 @@ bool TestServer::TestXboxServer() {
 
 bool TestServer::TestPageletServer() {
   VSGET("<?hh\n"
-        "if (array_key_exists('pagelet', $_GET)) {\n"
+        "if (array_key_exists('pagelet', \\HH\\global_get('_GET'))) {\n"
         "  echo 'Hello from the pagelet!';\n"
         "} else {\n"
-        "  $h = array('Host: ' . $_SERVER['HTTP_HOST']);\n"
+        "  $h = array('Host: ' . \\HH\\global_get('_SERVER')['HTTP_HOST']);\n"
         "  $t = pagelet_server_task_start('/string?pagelet=1', $h, '');\n"
         "  echo 'First! ';\n"
         "  $r = pagelet_server_task_result($t, $h, $c);\n"
@@ -893,10 +839,10 @@ bool TestServer::TestPageletServer() {
 
   // POST vs GET
   VSGET("<?hh\n"
-        "if (array_key_exists('pagelet', $_GET)) {\n"
-        "  echo $_SERVER['REQUEST_METHOD'];\n"
+        "if (array_key_exists('pagelet', \\HH\\global_get('_GET'))) {\n"
+        "  echo \\HH\\global_get('_SERVER')['REQUEST_METHOD'];\n"
         "} else {\n"
-        "  $h = array('Host: ' . $_SERVER['HTTP_HOST']);\n"
+        "  $h = array('Host: ' . \\HH\\global_get('_SERVER')['HTTP_HOST']);\n"
         "  $t = pagelet_server_task_start('/string?pagelet=1', $h, '');\n"
         "  echo 'First! ';\n"
         "  $r = pagelet_server_task_result($t, $h, $c);\n"
@@ -906,7 +852,7 @@ bool TestServer::TestPageletServer() {
         "string");
 
   VSGET("<?hh\n"
-        "if ($_SERVER['THREAD_TYPE'] == 'Pagelet Thread') {\n"
+        "if (\\HH\\global_get('_SERVER')['THREAD_TYPE'] == 'Pagelet Thread') {\n"
         "  echo 'hello';\n"
         "  pagelet_server_flush();\n"
         "  ob_start();\n"
@@ -914,7 +860,7 @@ bool TestServer::TestPageletServer() {
         "  pagelet_server_flush();\n"
         "  echo 'what';\n"
         "} else {\n"
-        "  $h = array('Host: ' . $_SERVER['HTTP_HOST']);\n"
+        "  $h = array('Host: ' . \\HH\\global_get('_SERVER')['HTTP_HOST']);\n"
         "  $t = pagelet_server_task_start('/string', $h, '');\n"
         "  for ($i = 0; ; $i++) {\n"
         "    while (($s = pagelet_server_task_status($t)) == \n"

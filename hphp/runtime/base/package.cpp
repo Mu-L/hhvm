@@ -71,7 +71,7 @@ PackageInfo PackageInfo::fromFile(const std::filesystem::path& path) {
   PackageMap packages;
   DeploymentMap deployments;
 
-  auto info = package::package_info(path.string());
+  auto info = package::package_info(Cfg::Eval::PackageV2, path.string());
 
   auto const convert = [&] (auto const& v) {
     hphp_vector_string_set result;
@@ -104,6 +104,18 @@ PackageInfo PackageInfo::fromFile(const std::filesystem::path& path) {
                           convert(d.deployment.soft_packages),
                           std::move(domains),
                         });
+  }
+  if (info.errors.size() > 0) {
+    std::vector<folly::StringPiece> packageConfigErrors;
+    for (auto& error : info.errors) {
+      packageConfigErrors.push_back(error.c_str());
+    }
+    auto const packageConfigError = folly::sformat(
+      "Error parsing {}: {}",
+      path.c_str(),
+      folly::join("\n", packageConfigErrors)
+    );
+    Logger::FError(packageConfigError);
   }
 
   return PackageInfo(packages, deployments);

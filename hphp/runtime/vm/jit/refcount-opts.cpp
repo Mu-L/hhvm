@@ -1843,28 +1843,20 @@ bool reduce_support_bit(Env& env,
     assertx(!may_decref || !aset.unsupported_refs);
     /*
      * We can't remove the support bit, and we have no way to account for the
-     * reduction in lower bound.  There are three cases to consider:
+     * reduction in lower bound.  There are two cases to consider:
      *
      *   o If may_decref is false (we're trying to move the support
      *     from this aset to another, but no refcounts are changing)
      *     we simply need to report that we failed.
      *
-     *   o If the event we're processing actually DecRef'd this
-     *     must-alias-set through this memory location (only possible
-     *     when may_decref is true implying a zero lower bound), the
-     *     lower bound will remain zero, and leaving the bit set
-     *     conservatively is not incorrect.
-     *
-     *   o If the event we're processing did not actually DecRef this
-     *     object through this memory location, because it stored
-     *     elsewhere, then we must not remove the bit, because
-     *     something in the future (after we've seen other IncRefs)
-     *     still may decref it through this location.
-     *
-     * So in this case we leave the lower bound alone, and also must
-     * not remove the bit.
+     *   o If may_decref is true we treat this as an unbalanced decref
+     *     and reduce support on all may-alias asets. As we have treated
+     *     this as an ordinary decref we can safely remove the memory
+     *     support from this aset.
      */
-    return false;
+    if (!may_decref) return false;
+    FTRACE(4, "    adding unbalanced decref: {}\n", current_set);
+    state.unbalanced_decrefs.push_back(current_set);
   }
   aset.memory_support.reset(locID);
   state.support_map[locID] = -1;
@@ -2695,7 +2687,7 @@ void pre_local_transfer(PreEnv& penv, bool incDec, Block* blk) {
     PreAdder preAdder{&adder};
     for (auto iter = blk->begin(); iter != blk->end(); ++iter) {
       auto& inst = *iter;
-      if (inst.is(DecRef)) {
+      if (inst.is(DecRef) || inst.is(DecReleaseCheck)) {
         auto const id = penv.env.asetMap[inst.src(0)];
         if (id < 0) {
           assertx(inst.src(0)->type() <= TUncounted);
@@ -2714,6 +2706,10 @@ void pre_local_transfer(PreEnv& penv, bool incDec, Block* blk) {
           }
           if (lb >= 2) {
             FTRACE(2, "    ** decnz:  {}\n", inst);
+            if (inst.is(DecReleaseCheck)) {
+              Block* inst_block = inst.block();
+              inst_block->push_back(penv.env.unit.gen(Jmp, inst.bcctx(), inst.taken()));
+            }
             inst.setOpcode(DecRefNZ);
           }
         }
@@ -3441,6 +3437,12 @@ void optimizeRefcounts(IRUnit& unit) {
     // We sunk IncRefs past CheckTypes, which could allow us to
     // specialize them.
     insertNegativeAssertTypes(unit, env.rpoBlocks);
+
+    // Remove unreachable blocks before refineTmps
+    // asserts certain variants related to block reachability
+    bool needsReflow = removeUnreachable(unit);
+    if (needsReflow) reflowTypes(unit);
+
     refineTmps(unit);
   }
 }
@@ -3456,13 +3458,14 @@ bool shouldReleaseShallow(const DecRefProfile& data, SSATmp* tmp) {
 
 IRInstruction* makeReleaseShallow(
     IRUnit& unit, Block* remainder, IRInstruction* inst, SSATmp* tmp) {
+  assertx(inst->is(DecRef));
   auto const block = inst->block();
   auto const bcctx = inst->bcctx();
   auto const next = unit.defBlock(block->profCount());
   next->push_back(unit.gen(ReleaseShallow, bcctx, tmp));
   next->push_back(unit.gen(Jmp, bcctx, remainder));
 
-  auto const decReleaseCheck = unit.gen(DecReleaseCheck, bcctx, remainder, tmp);
+  auto const decReleaseCheck = unit.gen(DecReleaseCheck, bcctx, *(inst->extra<DecRefData>()), remainder, tmp);
   decReleaseCheck->setNext(next);
   return decReleaseCheck;
 }

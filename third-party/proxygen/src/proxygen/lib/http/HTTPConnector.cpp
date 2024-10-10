@@ -6,10 +6,12 @@
  * LICENSE file in the root directory of this source tree.
  */
 
+#include <folly/logging/xlog.h>
 #include <proxygen/lib/http/HTTPConnector.h>
 
 #include <folly/io/SocketOptionMap.h>
 #include <folly/io/async/AsyncSSLSocket.h>
+#include <folly/logging/xlog.h>
 #include <proxygen/lib/http/codec/DefaultHTTPCodecFactory.h>
 #include <proxygen/lib/http/codec/HTTP1xCodec.h>
 #include <proxygen/lib/http/codec/HTTP2Codec.h>
@@ -32,16 +34,22 @@ HTTPConnector::HTTPConnector(Callback* callback,
     : cb_(CHECK_NOTNULL(callback)),
       timeout_(timeout),
       httpCodecFactory_(std::make_unique<DefaultHTTPCodecFactory>()) {
+  XLOG(DBG4) << "HTTPConnector";
 }
 
 HTTPConnector::~HTTPConnector() {
-  reset();
+  XLOG(DBG4) << "~HTTPConnector";
+  reset(false);
 }
 
-void HTTPConnector::reset() {
+void HTTPConnector::reset(bool invokeCallbacks) {
+  XLOG(DBG4) << "reset invokeCallbacks=" << invokeCallbacks;
   if (socket_) {
     auto cb = cb_;
-    cb_ = nullptr;
+    if (!invokeCallbacks) {
+      cb_ = nullptr;
+    }
+    XLOG(DBG4) << "socket_.reset()";
     socket_.reset(); // This invokes connectError() but will be ignored
     cb_ = cb;
   }
@@ -61,6 +69,7 @@ void HTTPConnector::connect(EventBase* eventBase,
                             const SocketOptionMap& socketOptions,
                             const folly::SocketAddress& bindAddr) {
 
+  XLOG(DBG4) << "connect";
   DCHECK(!isBusy());
   transportInfo_ = wangle::TransportInfo();
   transportInfo_.secure = false;
@@ -80,6 +89,7 @@ void HTTPConnector::connectSSL(EventBase* eventBase,
                                const folly::SocketAddress& bindAddr,
                                const std::string& serverName) {
 
+  XLOG(DBG4) << "connectSSL";
   DCHECK(!isBusy());
   transportInfo_ = wangle::TransportInfo();
   transportInfo_.secure = true;
@@ -161,10 +171,12 @@ void HTTPConnector::connectSuccess() noexcept {
                                                          transportInfo_,
                                                          nullptr);
 
+  XLOG(DBG5) << " connectSuccess, HTTPUpstreamSession " << session;
   cb_->connectSuccess(session);
 }
 
 void HTTPConnector::connectErr(const AsyncSocketException& ex) noexcept {
+  XLOG(DBG3) << " connectErr " << ex.what();
   socket_.reset();
   if (cb_) {
     cb_->connectError(ex);

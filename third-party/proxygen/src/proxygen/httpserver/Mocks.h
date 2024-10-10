@@ -10,6 +10,7 @@
 
 #include <folly/portability/GMock.h>
 #include <proxygen/httpserver/RequestHandler.h>
+#include <proxygen/httpserver/RequestHandlerFactory.h>
 #include <proxygen/httpserver/ResponseHandler.h>
 
 namespace proxygen {
@@ -32,7 +33,10 @@ class MockResponseHandler : public ResponseHandler {
   MOCK_METHOD((void), pauseIngress, (), (noexcept));
   MOCK_METHOD((void), refreshTimeout, (), (noexcept));
   MOCK_METHOD((void), resumeIngress, (), (noexcept));
-  MOCK_METHOD((void), sendAbort, (), (noexcept));
+  MOCK_METHOD((void),
+              sendAbort,
+              (folly::Optional<ErrorCode> errorCode),
+              (noexcept));
   MOCK_METHOD((void), sendBody, (std::shared_ptr<folly::IOBuf>), (noexcept));
   MOCK_METHOD((void), sendChunkHeader, (size_t), (noexcept));
   MOCK_METHOD((void), sendChunkTerminator, (), (noexcept));
@@ -99,6 +103,17 @@ class MockRequestHandler : public RequestHandler {
       onBody(std::shared_ptr<folly::IOBuf>(nullptr));
     }
   }
+};
+
+class MockRequestHandlerFactory : public RequestHandlerFactory {
+ public:
+  ~MockRequestHandlerFactory() override = default;
+  MOCK_METHOD(void, onServerStart, (folly::EventBase*), (noexcept, override));
+  MOCK_METHOD(void, onServerStop, (), (noexcept, override));
+  MOCK_METHOD((RequestHandler*),
+              onRequest,
+              (RequestHandler*, HTTPMessage*),
+              (noexcept, override));
 };
 
 } // namespace proxygen

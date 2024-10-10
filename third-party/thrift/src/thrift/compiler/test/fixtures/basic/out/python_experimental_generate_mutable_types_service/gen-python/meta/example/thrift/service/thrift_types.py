@@ -24,6 +24,7 @@ class EchoRequest(metaclass=_fbthrift_python_types.StructMeta):
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            8, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -41,6 +42,12 @@ class EchoRequest(metaclass=_fbthrift_python_types.StructMeta):
 
     def _to_python(self):
         return self
+
+    def _to_mutable_python(self):
+        import thrift.python.mutable_converter
+        import importlib
+        mutable_types = importlib.import_module("meta.example.thrift.service.thrift_mutable_types")
+        return thrift.python.mutable_converter.to_mutable_python_struct_or_union(mutable_types.EchoRequest, self)
 
     def _to_py3(self):
         import importlib
@@ -70,6 +77,7 @@ class EchoResponse(metaclass=_fbthrift_python_types.StructMeta):
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            8, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -87,6 +95,12 @@ class EchoResponse(metaclass=_fbthrift_python_types.StructMeta):
 
     def _to_python(self):
         return self
+
+    def _to_mutable_python(self):
+        import thrift.python.mutable_converter
+        import importlib
+        mutable_types = importlib.import_module("meta.example.thrift.service.thrift_mutable_types")
+        return thrift.python.mutable_converter.to_mutable_python_struct_or_union(mutable_types.EchoResponse, self)
 
     def _to_py3(self):
         import importlib
@@ -116,6 +130,7 @@ class WhisperException(metaclass=_fbthrift_python_exceptions.GeneratedErrorMeta)
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            8, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -133,6 +148,12 @@ class WhisperException(metaclass=_fbthrift_python_exceptions.GeneratedErrorMeta)
 
     def _to_python(self):
         return self
+
+    def _to_mutable_python(self):
+        import thrift.python.mutable_converter
+        import importlib
+        mutable_types = importlib.import_module("meta.example.thrift.service.thrift_mutable_types")
+        return thrift.python.mutable_converter.to_mutable_python_struct_or_union(mutable_types.WhisperException, self)
 
     def _to_py3(self):
         import importlib
@@ -189,6 +210,7 @@ class _fbthrift_EchoService_echo_args(metaclass=_fbthrift_python_types.StructMet
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            11, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -214,6 +236,7 @@ class _fbthrift_EchoService_echo_result(metaclass=_fbthrift_python_types.StructM
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            11, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -222,5 +245,4 @@ class _fbthrift_EchoService_echo_result(metaclass=_fbthrift_python_types.StructM
 _fbthrift_python_types.fill_specs(
     _fbthrift_EchoService_echo_args,
     _fbthrift_EchoService_echo_result,
-    
 )

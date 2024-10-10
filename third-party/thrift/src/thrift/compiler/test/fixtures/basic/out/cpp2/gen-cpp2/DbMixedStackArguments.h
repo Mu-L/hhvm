@@ -46,6 +46,7 @@ class ServiceHandler<::test::fixtures::basic::DbMixedStackArguments> : public ap
   typedef ::test::fixtures::basic::DbMixedStackArgumentsAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -79,6 +80,7 @@ class ServiceHandler<::test::fixtures::basic::DbMixedStackArguments> : public ap
 namespace test::fixtures::basic {
 using DbMixedStackArgumentsSvIf [[deprecated("Use apache::thrift::ServiceHandler<DbMixedStackArguments> instead")]] = ::apache::thrift::ServiceHandler<DbMixedStackArguments>;
 } // namespace test::fixtures::basic
+
 namespace test::fixtures::basic {
 class DbMixedStackArgumentsSvNull : public ::apache::thrift::ServiceHandler<DbMixedStackArguments> {
  public:

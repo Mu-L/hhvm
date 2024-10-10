@@ -46,20 +46,30 @@ Buf CertUtils::prepareSignData(
   static constexpr folly::StringPiece kClientLabel =
       "TLS 1.3, client CertificateVerify";
   static constexpr folly::StringPiece kAuthLabel = "Exported Authenticator";
-  static constexpr folly::StringPiece kDelegatedCredLabel =
+  static constexpr folly::StringPiece kServerDelegatedCredLabel =
       "TLS, server delegated credentials";
+  static constexpr folly::StringPiece kClientDelegatedCredLabel =
+      "TLS, client delegated credentials";
   static constexpr size_t kSigPrefixLen = 64;
   static constexpr uint8_t kSigPrefix = 32;
 
   folly::StringPiece label;
-  if (context == CertificateVerifyContext::Server) {
-    label = kServerLabel;
-  } else if (context == CertificateVerifyContext::Client) {
-    label = kClientLabel;
-  } else if (context == CertificateVerifyContext::Authenticator) {
-    label = kAuthLabel;
-  } else {
-    label = kDelegatedCredLabel;
+  switch (context) {
+    case CertificateVerifyContext::Server:
+      label = kServerLabel;
+      break;
+    case CertificateVerifyContext::Client:
+      label = kClientLabel;
+      break;
+    case CertificateVerifyContext::Authenticator:
+      label = kAuthLabel;
+      break;
+    case CertificateVerifyContext::ClientDelegatedCredential:
+      label = kClientDelegatedCredLabel;
+      break;
+    case CertificateVerifyContext::ServerDelegatedCredential:
+      label = kServerDelegatedCredLabel;
+      break;
   }
 
   size_t sigDataLen = kSigPrefixLen + label.size() + 1 + toBeSigned.size();
@@ -106,12 +116,10 @@ CertificateMsg CertUtils::getCertMessage(
   return msg;
 }
 
-std::unique_ptr<PeerCert> CertUtils::makePeerCert(Buf certData) {
-  if (certData->empty()) {
+std::unique_ptr<PeerCert> CertUtils::makePeerCert(folly::ByteRange range) {
+  if (range.size() == 0) {
     throw std::runtime_error("empty peer cert");
   }
-
-  auto range = certData->coalesce();
   const unsigned char* begin = range.data();
   folly::ssl::X509UniquePtr cert(d2i_X509(nullptr, &begin, range.size()));
   if (!cert) {
@@ -121,6 +129,9 @@ std::unique_ptr<PeerCert> CertUtils::makePeerCert(Buf certData) {
     VLOG(1) << "Did not read to end of certificate";
   }
   return makePeerCert(std::move(cert));
+}
+std::unique_ptr<PeerCert> CertUtils::makePeerCert(Buf certData) {
+  return makePeerCert(certData->coalesce());
 }
 
 std::unique_ptr<PeerCert> CertUtils::makePeerCert(
@@ -146,13 +157,10 @@ std::unique_ptr<PeerCert> CertUtils::makePeerCert(
       default:
         break;
     }
-  }
-#if FIZZ_OPENSSL_HAS_ED25519
-  else if (pkeyID == EVP_PKEY_ED25519) {
+  } else if (pkeyID == EVP_PKEY_ED25519) {
     return std::make_unique<OpenSSLPeerCertImpl<KeyType::ED25519>>(
         std::move(cert));
   }
-#endif
   throw std::runtime_error("unknown peer cert type");
 }
 
@@ -231,12 +239,9 @@ KeyType CertUtils::getKeyType(const folly::ssl::EvpPkeyUniquePtr& key) {
       case NID_secp521r1:
         return KeyType::P521;
     }
-  }
-#if FIZZ_OPENSSL_HAS_ED25519
-  else if (pkeyID == EVP_PKEY_ED25519) {
+  } else if (pkeyID == EVP_PKEY_ED25519) {
     return KeyType::ED25519;
   }
-#endif
 
   throw std::runtime_error("unknown key type");
 }
@@ -296,6 +301,31 @@ CompressedCertificate CertUtils::cloneCompressedCert(
       src.compressed_certificate_message->clone();
   ret.uncompressed_length = src.uncompressed_length;
   return ret;
+}
+
+namespace {
+class Serializer : public CertificateSerialization {
+  std::unique_ptr<folly::IOBuf> serialize(
+      const fizz::Cert& cert) const override {
+    if (auto opensslCert =
+            dynamic_cast<const folly::OpenSSLTransportCertificate*>(&cert)) {
+      if (auto x509 = opensslCert->getX509()) {
+        return folly::ssl::OpenSSLCertUtils::derEncode(*x509);
+      }
+    }
+    return nullptr;
+  }
+
+  std::shared_ptr<const fizz::Cert> deserialize(
+      folly::ByteRange range) const override {
+    return CertUtils::makePeerCert(range);
+  }
+};
+} // namespace
+
+const CertificateSerialization& certificateSerializer() {
+  static Serializer instance;
+  return instance;
 }
 
 } // namespace openssl

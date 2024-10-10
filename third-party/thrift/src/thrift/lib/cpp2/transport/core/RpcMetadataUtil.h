@@ -24,8 +24,7 @@
 #include <thrift/lib/cpp2/util/ManagedStringView.h>
 #include <thrift/lib/thrift/gen-cpp2/RpcMetadata_types.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 class RpcOptions;
 
@@ -53,9 +52,11 @@ inline constexpr std::string_view kHeaderProxiedAnyexType = "panyext";
 RequestRpcMetadata makeRequestRpcMetadata(
     const RpcOptions& rpcOptions,
     RpcKind kind,
-    ProtocolId protocolId,
     ManagedStringView&& methodName,
-    std::chrono::milliseconds defaultChannelTimeout,
+    std::optional<std::chrono::milliseconds> clientTimeout,
+    std::variant<InteractionCreate, int64_t, std::monostate> interactionHandle,
+    bool serverZstdSupported,
+    ssize_t payloadSize,
     transport::THeader& header);
 
 void fillTHeaderFromResponseRpcMetadata(
@@ -72,5 +73,4 @@ folly::Optional<std::string> errorBlameToString(ErrorBlame);
 folly::Optional<std::string> errorSafetyToString(ErrorSafety);
 
 } // namespace detail
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

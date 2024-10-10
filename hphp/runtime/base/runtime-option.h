@@ -116,6 +116,7 @@ SECTIONS_FOR_REPOOPTIONSFLAGS()
   void initHhbcFlags(hackc::HhbcFlags&) const;
   void initParserFlags(hackc::ParserFlags&) const;
   void initAliasedNamespaces(hackc::NativeEnv&) const;
+  void initTrivialBuiltins(hackc::NativeEnv&) const;
 
   std::string autoloadQuery() const { return Query; }
   folly::dynamic autoloadQueryObj() const { return m_cachedQuery; }
@@ -492,14 +493,6 @@ struct RuntimeOption {
   F(bool, CachePerRepoOptionsPath,     true)                            \
   F(bool, LogHackcMemStats,            false)                           \
   F(uint32_t, TsameCollisionSampleRate, 1)                              \
-  /* CheckBuiltinParamTypeHints
-   * 0 - Do not check parameter type hints of builtins
-   * 1 - Treat builtin parameter type hints as <<__Soft>>
-   * 2 - Enforce builtin parameter type hints
-   */                                                                   \
-  F(int32_t, CheckBuiltinParamTypeHints, 2)                             \
-  /* Unused. Scheduled for removal: T175741557 */                       \
-  F(int32_t, EnforceGenericsUB,        2)                               \
   /* WarnOnTooManyArguments:
    * 0 -> no warning, 1 -> warning, 2 -> exception
    */                                                                   \
@@ -557,6 +550,7 @@ struct RuntimeOption {
   F(bool, EmitDebuggerIntrCheck,       true)                            \
   /* Log the profile used to optimize array-like gets and sets. */      \
   F(bool, LogArrayAccessProfile,      false)                            \
+  F(bool, LogClsSpeculation,          false)                            \
   F(double, CoeffectFunParamProfileThreshold, 0.10)                     \
   F(bool, AssemblerFoldDefaultValues,  true)                            \
   F(uint64_t, AssemblerMaxScalarSize,  2147483648) /* 2GB */            \
@@ -795,7 +789,7 @@ struct RuntimeOption {
   /*                                                                    \
    * Enforce deployment boundaries.                                     \
    */                                                                   \
-  F(bool, EnforceDeployment, true)                                     \
+  F(bool, EnforceDeployment, false)                                     \
   F(uint32_t, DeploymentViolationWarningSampleRate, 1)                  \
   /*
    * Enforce top level and method level internal keyword                \
@@ -931,6 +925,7 @@ struct RuntimeOption {
   F(bool, FastMethodIntercept, false)                                   \
   F(bool, LogHttpServerSignalSource, true)                              \
   F(bool, CrashOnStaticAnalysisError, debug)                            \
+  F(bool, ReplaceTrivialBuiltins, false)                                \
   /* */
 
 private:
@@ -1000,6 +995,7 @@ public:
   // ThriftFBServer
   static int ThriftFBServerWorkerThreads;
   static int ThriftFBServerPoolThreads;
+  static std::set<std::string> ThriftFBServerHighPriorityEndPoints;
 
   // fb303 server
   static bool EnableFb303Server;
@@ -1016,18 +1012,18 @@ public:
   // defined by the `ThreadTuneAdjustmentPct` of the configured thread count,
   // and the step size is defined by `ThreadTuneStepPct`. Thread tuning is
   // turned off when `ThreadTuneAdjustmentPct` is set to 0 (default).
-  static bool ThreadTuneDebug;
-  static bool ThreadTuneSkipWarmup;
-  static double ThreadTuneAdjustmentPct;
-  static double ThreadTuneAdjustmentDownPct;
-  static double ThreadTuneStepPct;
+  static bool ServerThreadTuneDebug;
+  static bool ServerThreadTuneSkipWarmup;
+  static double ServerThreadTuneAdjustmentPct;
+  static double ServerThreadTuneAdjustmentDownPct;
+  static double ServerThreadTuneStepPct;
   // CPU high threshold is used for determining when to adjust threads. If the
   // host CPU is > this threshold no adjustments will be made.
-  static double ThreadTuneCPUThreshold;
+  static double ServerThreadTuneCPUThreshold;
   // Thread utilization threshold is used for determining when to adjust threads,
   // threads will be increased if other criteria match and the current thread
   // utilization is above this threshold.
-  static double ThreadTuneThreadUtilizationThreshold;
+  static double ServerThreadTuneThreadUtilizationThreshold;
 #endif
 
   // Xenon options

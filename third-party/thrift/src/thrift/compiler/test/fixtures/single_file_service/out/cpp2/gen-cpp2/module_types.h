@@ -48,6 +48,7 @@ using ::apache::thrift::detail::operator<=;
 using ::apache::thrift::detail::operator>=;
 
 
+/** Glean {"file": "thrift/compiler/test/fixtures/single_file_service/src/module.thrift", "name": "Foo", "kind": "struct" } */
 class Foo final  {
  private:
   friend struct ::apache::thrift::detail::st::struct_private_access;
@@ -124,56 +125,68 @@ class Foo final  {
   bool operator==(const Foo&) const;
   bool operator<(const Foo&) const;
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<const T&> value_ref() const& {
     return {this->__fbthrift_field_value, __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<const T&&> value_ref() const&& {
     return {static_cast<const T&&>(this->__fbthrift_field_value), __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<T&> value_ref() & {
     return {this->__fbthrift_field_value, __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<T&&> value_ref() && {
     return {static_cast<T&&>(this->__fbthrift_field_value), __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<const T&> value() const& {
     return {this->__fbthrift_field_value, __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<const T&&> value() const&& {
     return {static_cast<const T&&>(this->__fbthrift_field_value), __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<T&> value() & {
     return {this->__fbthrift_field_value, __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   template <typename..., typename T = ::std::int32_t>
   FOLLY_ERASE ::apache::thrift::optional_field_ref<T&&> value() && {
     return {static_cast<T&&>(this->__fbthrift_field_value), __isset.at(0), __isset.bit(0)};
   }
 
+  /** Glean { "field": "value" } */
   const ::std::int32_t* get_value() const& {
     return value_ref() ? std::addressof(__fbthrift_field_value) : nullptr;
   }
 
+  /** Glean { "field": "value" } */
   ::std::int32_t* get_value() & {
     return value_ref() ? std::addressof(__fbthrift_field_value) : nullptr;
   }
+  /** Glean { "field": "value" } */
   ::std::int32_t* get_value() && = delete;
 
-  [[deprecated("Use `FOO.value_ref() = BAR;` instead of `FOO.set_value(BAR);`")]]
+  /** Glean { "field": "value" } */
+  [[deprecated("Use `FOO.value() = BAR;` instead of `FOO.set_value(BAR);`")]]
   ::std::int32_t& set_value(::std::int32_t value_) {
     value_ref() = value_;
     return __fbthrift_field_value;

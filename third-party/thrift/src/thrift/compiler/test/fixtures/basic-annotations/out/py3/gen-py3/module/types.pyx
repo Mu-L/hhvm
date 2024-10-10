@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -59,66 +56,13 @@ import weakref as __weakref
 import builtins as _builtins
 import importlib
 
+from module.types_impl_FBTHRIFT_ONLY_DO_NOT_USE import (
+    MyEnum,
+)
+
 from module.containers_FBTHRIFT_ONLY_DO_NOT_USE import (
     std_deque_std_string__List__string,
 )
-
-
-
-cdef __EnumData __MyEnum_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyEnum](), MyEnum)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyEnumMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyEnum_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyEnum_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyEnum_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyEnum_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyEnum(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyEnum_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyEnum].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyEnum"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "module.thrift_types"
-        )
-        return python_types.MyEnum(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyEnum, <PyTypeObject*> __MyEnumMeta)
-
 
 
 cdef object get_types_reflection():
@@ -159,7 +103,6 @@ cdef class MyStructNestedAnnotation(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline name_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).name_ref().value()).decode('UTF-8')
 
     @property
@@ -277,7 +220,6 @@ cdef class SecretStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline id_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).id_ref().value()
 
     @property
@@ -285,7 +227,6 @@ cdef class SecretStruct(thrift.py3.types.Struct):
         return self.id_impl()
 
     cdef inline password_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).password_ref().value()).decode('UTF-8')
 
     @property

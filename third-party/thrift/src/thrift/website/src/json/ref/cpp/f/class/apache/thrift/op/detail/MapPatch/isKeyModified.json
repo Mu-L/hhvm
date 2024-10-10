@@ -21,6 +21,7 @@
       "definition_html": "bool apache::thrift::op::detail::MapPatch&lt; Patch &gt;::isKeyModified",
       "argsstring_html": "(K &amp;&amp;key)",
       "name_html": "isKeyModified",
+      "qualifiedname_html": "apache::thrift::op::detail::MapPatch::isKeyModified",
       "param": [
         {
           "type_html": "K &amp;&amp;",
@@ -29,11 +30,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "line": "439",
+        "line": "440",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "bodystart": "439",
-        "bodyend": "442"
+        "bodystart": "440",
+        "bodyend": "443"
       },
       "definition": {
         "simple_html": "template &lt;typename K = typename T::key_type&gt;\nbool isKeyModified(K&amp;&amp; key)",

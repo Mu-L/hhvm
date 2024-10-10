@@ -7,16 +7,15 @@ package internals
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
-
 
 type InjectMetadataFields struct {
     Type string `thrift:"type,1" json:"type" db:"type"`
@@ -25,8 +24,7 @@ type InjectMetadataFields struct {
 var _ thrift.Struct = (*InjectMetadataFields)(nil)
 
 func NewInjectMetadataFields() *InjectMetadataFields {
-    return (&InjectMetadataFields{}).
-        SetTypeNonCompat("")
+    return (&InjectMetadataFields{}).setDefaults()
 }
 
 func (x *InjectMetadataFields) GetType() string {
@@ -43,7 +41,7 @@ func (x *InjectMetadataFields) SetType(value string) *InjectMetadataFields {
     return x
 }
 
-func (x *InjectMetadataFields) writeField1(p thrift.Format) error {  // Type
+func (x *InjectMetadataFields) writeField1(p thrift.Encoder) error {  // Type
     if err := p.WriteFieldBegin("type", thrift.STRING, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -59,7 +57,7 @@ func (x *InjectMetadataFields) writeField1(p thrift.Format) error {  // Type
     return nil
 }
 
-func (x *InjectMetadataFields) readField1(p thrift.Format) error {  // Type
+func (x *InjectMetadataFields) readField1(p thrift.Decoder) error {  // Type
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -69,13 +67,9 @@ if err != nil {
     return nil
 }
 
-func (x *InjectMetadataFields) toString1() string {  // Type
-    return fmt.Sprintf("%v", x.Type)
-}
 
 
-
-func (x *InjectMetadataFields) Write(p thrift.Format) error {
+func (x *InjectMetadataFields) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("InjectMetadataFields"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -94,7 +88,7 @@ func (x *InjectMetadataFields) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *InjectMetadataFields) Read(p thrift.Format) error {
+func (x *InjectMetadataFields) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -109,15 +103,16 @@ func (x *InjectMetadataFields) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // type
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -133,18 +128,15 @@ func (x *InjectMetadataFields) Read(p thrift.Format) error {
 }
 
 func (x *InjectMetadataFields) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("InjectMetadataFields({")
-    sb.WriteString(fmt.Sprintf("Type:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *InjectMetadataFields) setDefaults() *InjectMetadataFields {
+    return x.
+        SetTypeNonCompat("")
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

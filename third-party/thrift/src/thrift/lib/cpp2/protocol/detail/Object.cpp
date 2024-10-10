@@ -16,10 +16,7 @@
 
 #include <thrift/lib/cpp2/protocol/detail/Object.h>
 
-namespace apache {
-namespace thrift {
-namespace protocol {
-namespace detail {
+namespace apache::thrift::protocol::detail {
 
 type::Type toType(const protocol::Value& value) {
   switch (value.getType()) {
@@ -71,7 +68,71 @@ type::Type toType(const protocol::Value& value) {
   }
 }
 
-} // namespace detail
-} // namespace protocol
-} // namespace thrift
-} // namespace apache
+type::AnyData toAny(
+    const Value& value, type::Type type, type::Protocol protocol) {
+  type::SemiAny semiAny;
+  if (protocol == type::StandardProtocol::Binary) {
+    semiAny.data() = std::move(
+        *serializeValue<::apache::thrift::BinaryProtocolWriter>(value));
+  } else if (protocol == type::StandardProtocol::Compact) {
+    semiAny.data() = std::move(
+        *serializeValue<::apache::thrift::CompactProtocolWriter>(value));
+  } else {
+    folly::throw_exception<std::runtime_error>(
+        "Unsupported protocol when constructing Any");
+  }
+  semiAny.type() = std::move(type);
+  semiAny.protocol() = std::move(protocol);
+  return type::AnyData{std::move(semiAny)};
+}
+
+void clearValueInner(Value& value) {
+  auto discriminant =
+      static_cast<FieldId>(folly::to_underlying(value.getType()));
+  op::invoke_by_field_id<Value>(
+      discriminant,
+      folly::overload(
+          [&](auto id) {
+            op::clear<op::get_type_tag<Value, decltype(id)>>(
+                *op::get<decltype(id)>(value));
+          },
+          [] {
+            folly::throw_exception<std::runtime_error>(
+                "Illegal value discriminant");
+          }));
+}
+
+Value parseValueFromAny(const type::AnyData& any) {
+  if (any.protocol() == type::StandardProtocol::Binary) {
+    BinaryProtocolReader reader;
+    reader.setInput(&any.data());
+    return parseValue(
+        reader,
+        type::toTType(any.type().baseType()),
+        /* string_to_binary */ true);
+  } else if (any.protocol() == type::StandardProtocol::Compact) {
+    CompactProtocolReader reader;
+    reader.setInput(&any.data());
+    return parseValue(
+        reader,
+        type::toTType(any.type().baseType()),
+        /* string_to_binary */ true);
+  } else {
+    // TODO: Support custom protocols?
+    folly::throw_exception<std::runtime_error>(
+        "Unsupported protocol when parsing Any");
+  }
+}
+
+Value parseValueFromAny(const type::AnyStruct& any) {
+  return parseValueFromAny(type::AnyData(any));
+}
+
+Value parseValueFromAnyObject(const Object& anyObject) {
+  type::AnyStruct any;
+  ProtocolValueToThriftValue<type::infer_tag<type::AnyStruct>>{}(
+      anyObject, any);
+  return parseValueFromAny(type::AnyData(std::move(any)));
+}
+
+} // namespace apache::thrift::protocol::detail

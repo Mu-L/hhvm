@@ -10,7 +10,6 @@
 #include <functional>
 #include <folly/Range.h>
 
-#include <thrift/lib/py3/enums.h>
 #include "thrift/compiler/test/fixtures/interactions/gen-cpp2/cpp_data.h"
 #include "thrift/compiler/test/fixtures/interactions/gen-cpp2/cpp_types.h"
 #include "thrift/compiler/test/fixtures/interactions/gen-cpp2/cpp_metadata.h"
@@ -18,28 +17,16 @@ namespace thrift {
 namespace py3 {
 
 
-template<>
-inline const std::vector<std::pair<std::string_view, std::string_view>>& PyEnumTraits<
-    ::facebook::thrift::annotation::cpp::RefType>::namesmap() {
-  static const folly::Indestructible<NamesMap> pairs {
-    {
-    }
-  };
-  return *pairs;
-}
-
 
 template<>
-inline const std::vector<std::pair<std::string_view, std::string_view>>& PyEnumTraits<
-    ::facebook::thrift::annotation::cpp::EnumUnderlyingType>::namesmap() {
-  static const folly::Indestructible<NamesMap> pairs {
-    {
-    }
-  };
-  return *pairs;
+inline void reset_field<::facebook::thrift::annotation::cpp::Name>(
+    ::facebook::thrift::annotation::cpp::Name& obj, uint16_t index) {
+  switch (index) {
+    case 0:
+      obj.value_ref().copy_from(default_inst<::facebook::thrift::annotation::cpp::Name>().value_ref());
+      return;
+  }
 }
-
-
 
 template<>
 inline void reset_field<::facebook::thrift::annotation::cpp::Type>(
@@ -60,16 +47,6 @@ inline void reset_field<::facebook::thrift::annotation::cpp::Ref>(
   switch (index) {
     case 0:
       obj.type_ref().copy_from(default_inst<::facebook::thrift::annotation::cpp::Ref>().type_ref());
-      return;
-  }
-}
-
-template<>
-inline void reset_field<::facebook::thrift::annotation::cpp::Name>(
-    ::facebook::thrift::annotation::cpp::Name& obj, uint16_t index) {
-  switch (index) {
-    case 0:
-      obj.value_ref().copy_from(default_inst<::facebook::thrift::annotation::cpp::Name>().value_ref());
       return;
   }
 }
@@ -126,13 +103,6 @@ inline void reset_field<::facebook::thrift::annotation::cpp::PackIsset>(
 template<>
 inline void reset_field<::facebook::thrift::annotation::cpp::MinimizePadding>(
     ::facebook::thrift::annotation::cpp::MinimizePadding& obj, uint16_t index) {
-  switch (index) {
-  }
-}
-
-template<>
-inline void reset_field<::facebook::thrift::annotation::cpp::TriviallyRelocatable>(
-    ::facebook::thrift::annotation::cpp::TriviallyRelocatable& obj, uint16_t index) {
   switch (index) {
   }
 }
@@ -210,6 +180,23 @@ inline void reset_field<::facebook::thrift::annotation::cpp::UseCursorSerializat
 }
 
 template<>
+inline void reset_field<::facebook::thrift::annotation::cpp::GenerateDeprecatedHeaderClientMethods>(
+    ::facebook::thrift::annotation::cpp::GenerateDeprecatedHeaderClientMethods& obj, uint16_t index) {
+  switch (index) {
+  }
+}
+
+template<>
+inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
+    ::facebook::thrift::annotation::cpp::Name>::namesmap() {
+  static const folly::Indestructible<NamesMap> map {
+    {
+    }
+  };
+  return *map;
+}
+
+template<>
 inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
     ::facebook::thrift::annotation::cpp::Type>::namesmap() {
   static const folly::Indestructible<NamesMap> map {
@@ -222,16 +209,6 @@ inline const std::unordered_map<std::string_view, std::string_view>& PyStructTra
 template<>
 inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
     ::facebook::thrift::annotation::cpp::Ref>::namesmap() {
-  static const folly::Indestructible<NamesMap> map {
-    {
-    }
-  };
-  return *map;
-}
-
-template<>
-inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
-    ::facebook::thrift::annotation::cpp::Name>::namesmap() {
   static const folly::Indestructible<NamesMap> map {
     {
     }
@@ -282,16 +259,6 @@ inline const std::unordered_map<std::string_view, std::string_view>& PyStructTra
 template<>
 inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
     ::facebook::thrift::annotation::cpp::MinimizePadding>::namesmap() {
-  static const folly::Indestructible<NamesMap> map {
-    {
-    }
-  };
-  return *map;
-}
-
-template<>
-inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
-    ::facebook::thrift::annotation::cpp::TriviallyRelocatable>::namesmap() {
   static const folly::Indestructible<NamesMap> map {
     {
     }
@@ -382,6 +349,16 @@ inline const std::unordered_map<std::string_view, std::string_view>& PyStructTra
 template<>
 inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
     ::facebook::thrift::annotation::cpp::UseCursorSerialization>::namesmap() {
+  static const folly::Indestructible<NamesMap> map {
+    {
+    }
+  };
+  return *map;
+}
+
+template<>
+inline const std::unordered_map<std::string_view, std::string_view>& PyStructTraits<
+    ::facebook::thrift::annotation::cpp::GenerateDeprecatedHeaderClientMethods>::namesmap() {
   static const folly::Indestructible<NamesMap> map {
     {
     }

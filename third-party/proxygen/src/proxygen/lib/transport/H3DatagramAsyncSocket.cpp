@@ -310,13 +310,14 @@ H3DatagramAsyncSocket::createFizzClientContext() {
     std::string keyData;
     folly::readFile(options_.certAndKey_->second.c_str(), keyData);
     auto cert = fizz::openssl::CertUtils::makeSelfCert(certData, keyData);
-    ctx->setClientCertificate(std::move(cert));
+    auto certMgr = std::make_shared<fizz::client::CertManager>();
+    certMgr->addCert(std::move(cert));
+    ctx->setClientCertManager(std::move(certMgr));
   }
 
   std::vector<std::string> supportedAlpns = {proxygen::kH3FBCurrentDraft};
   ctx->setSupportedAlpns(supportedAlpns);
-  ctx->setDefaultShares(
-      {fizz::NamedGroup::x25519, fizz::NamedGroup::secp256r1});
+  ctx->setRequireAlpn(true);
   ctx->setSendEarlyData(false);
   return ctx;
 }

@@ -67,9 +67,10 @@ let hint_to_string_and_symbols ~is_ctx (hint : Aast.hint) =
       append "<";
       parse_gen_seq ~sep:", " ~f:(parse ~is_ctx) hints;
       append ">"
-    | Htuple hints ->
+    (* TODO optional and variadic components T201398626 T201398652 *)
+    | Htuple { tup_required; tup_extra = _ } ->
       append "(";
-      parse_gen_seq ~sep:", " ~f:(parse ~is_ctx) hints;
+      parse_gen_seq ~sep:", " ~f:(parse ~is_ctx) tup_required;
       append ")"
     | Hprim p -> append (Aast_defs.string_of_tprim p)
     | Haccess (hint, sids) ->
@@ -182,8 +183,9 @@ let hint_to_string_and_symbols ~is_ctx (hint : Aast.hint) =
     append " => ";
     parse ~is_ctx:false sfi_hint
   and parse_shape_field_name = function
-    | Ast_defs.SFlit_int (_, s) -> append s
+    | Ast_defs.SFregex_group (_, s) -> append s
     | Ast_defs.SFlit_str (_, s) -> append ("'" ^ s ^ "'")
+    | Ast_defs.SFclassname (_, c) -> append ("nameof " ^ Typing_print.strip_ns c)
     | Ast_defs.SFclass_const ((pos, c), (_, s)) ->
       append ~annot:pos (Typing_print.strip_ns c);
       append "::";
@@ -254,3 +256,73 @@ let strip_tparams name =
   match String.index name '<' with
   | None -> name
   | Some i -> String.sub name ~pos:0 ~len:i
+
+let rec hint_to_angle h =
+  let open Aast in
+  let open Hack in
+  match snd h with
+  | Hlike h -> Hint.(Key (Like (hint_to_angle h)))
+  | Hsoft h -> Hint.(Key (Like (hint_to_angle h)))
+  | Hvar h -> Hint.(Key (Var_ h))
+  (* TODO splat fields T203492030 *)
+  | Htuple { tup_required; tup_extra = Hextra { tup_optional; tup_variadic } }
+    ->
+    let req = List.map tup_required ~f:hint_to_angle in
+    let opt = List.map tup_optional ~f:hint_to_angle in
+    let variadic = Option.map tup_variadic ~f:hint_to_angle in
+    Hint.(Key (Tuple { req; opt; variadic }))
+  | Hprim t -> Hint.(Key (Prim (Type.Key (Aast_defs.string_of_tprim t))))
+  | Hclass_args hint -> Hint.(Key (Class_args (hint_to_angle hint)))
+  | Hfun_context c -> Hint.(Key (Fun_context c))
+  | Hvec_or_dict (maybe_k, v) ->
+    Hint.(
+      Key
+        (Vect_or_dict
+           {
+             maybe_key = Option.map ~f:hint_to_angle maybe_k;
+             value_ = hint_to_angle v;
+           }))
+  | Hintersection hints ->
+    let values = List.map hints ~f:hint_to_angle in
+    Hint.(Key (Intersection values))
+  | Hunion hints ->
+    let values = List.map hints ~f:hint_to_angle in
+    Hint.(Key (Union_ values))
+  | Hoption h -> Hint.(Key (Option (hint_to_angle h)))
+  | Hshape { nsi_allows_unknown_fields; nsi_field_map } ->
+    let shape_field_name_to_hint = function
+      | Ast_defs.SFregex_group (_, s) -> ShapeKV.Sf_regex_group s
+      | Ast_defs.SFlit_str (_, s) -> ShapeKV.Sf_lit_string s
+      | Ast_defs.SFclassname (_, c) ->
+        ShapeKV.Sf_class_const
+          FieldClassConst.
+            { container = Util.make_qname c; name = Name.Key "class" }
+      | Ast_defs.SFclass_const ((_pos, c), (_, s)) ->
+        ShapeKV.Sf_class_const
+          FieldClassConst.{ container = Util.make_qname c; name = Name.Key s }
+    in
+    let f Aast_defs.{ sfi_optional; sfi_name; sfi_hint } =
+      ShapeKV.
+        {
+          key = shape_field_name_to_hint sfi_name;
+          value = hint_to_angle sfi_hint;
+          opt = sfi_optional;
+        }
+    in
+    let map_ = List.map ~f nsi_field_map in
+    Hint.(Key (Shape { open_ = nsi_allows_unknown_fields; map_ }))
+  | Happly ((_file_pos, cn), hints) ->
+    let values = List.map hints ~f:hint_to_angle in
+    Hint.(Key (Apply { class_name = Util.make_qname cn; values }))
+  | Hmixed -> Hint.(Key (Mixed ()))
+  | Hwildcard -> Hint.(Key (Wildcard ()))
+  | Hnonnull -> Hint.(Key (Nonnull ()))
+  | Hdynamic -> Hint.(Key (Dynamic ()))
+  | Hnothing -> Hint.(Key (Nothing ()))
+  | Hthis -> Hint.(Key (This_ ()))
+  | Hrefinement _
+  | Hfun _
+  | Htuple _
+  | Haccess (_, _)
+  | Habstr (_, _) ->
+    Hint.(Key (Other (Type.Key (hint_to_string ~is_ctx:false h))))

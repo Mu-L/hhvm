@@ -116,6 +116,113 @@ The paper refers to this approach as "restarting", and further suggests that rec
 the chain of jobs could be used to minimize the number of restarts.
  *)
 
+module Todo : sig
+  (** A todo list of workitems. It remembers which workitems
+    are currently in progress so that these can be cancelled. *)
+  type t
+
+  val create : workitem BigList.t -> t
+
+  (** [update progress todo] updates [todo] with the [progress] made. *)
+  val update : TypingProgress.t -> t -> unit
+
+  (** [consume how_may todo] returns a list of workitems to process next
+    if there are any left. [todo] is updated to remember which
+    workitems are in progress. *)
+  val consume :
+    (to_process_count:int -> int) -> t -> workitem list Bucket.bucket
+
+  (** Cancel all workitems currently in progress and return them to the todo list. *)
+  val cancel : t -> unit
+
+  val files_checked_count : t -> int
+end = struct
+  type t = {
+    to_process: workitem BigList.t ref;
+    in_progress: workitem Hash_set.Poly.t;
+    files_checked_count: int ref;
+  }
+
+  let create items =
+    {
+      to_process = ref items;
+      in_progress = Hash_set.Poly.create ();
+      files_checked_count = ref 0;
+    }
+
+  let update_to_process progress to_process : unit =
+    to_process :=
+      !to_process
+      |> BigList.append (TypingProgress.remaining progress)
+      |> BigList.append (TypingProgress.deferred progress)
+
+  let update_in_progress progress in_progress =
+    (* If workers can steal work from each other, then it's possible that
+       some of the files that the current worker completed checking have already
+       been removed from the in-progress set. Thus, we should keep track of
+       how many type check computations we actually remove from the in-progress
+       set. Note that we also skip counting Declare computations,
+       since they are not relevant for computing how many files we've type
+       checked. *)
+    let completed_check_count =
+      List.fold
+        (TypingProgress.completed progress)
+        ~init:0
+        ~f:(fun acc workitem ->
+          match Hash_set.Poly.strict_remove in_progress workitem with
+          | Ok () -> begin
+            match workitem with
+            | Check _ -> acc + 1
+            | _ -> acc
+          end
+          | _ -> acc)
+    in
+    completed_check_count
+
+  let update_files_check_count
+      progress ~completed_check_count files_checked_count =
+    (* Deferred type check computations should be subtracted from completed
+       in order to produce an accurate count because they we requeued them, yet
+       they were also included in the completed list.
+    *)
+    let deferred_check_count =
+      List.count ~f:Workitem.is_check (TypingProgress.deferred progress)
+    in
+    let completed_check_count = completed_check_count - deferred_check_count in
+
+    files_checked_count := !files_checked_count + completed_check_count
+
+  let update
+      (progress : TypingProgress.t)
+      { to_process; in_progress; files_checked_count } : unit =
+    update_to_process progress to_process;
+    let completed_check_count = update_in_progress progress in_progress in
+    update_files_check_count progress ~completed_check_count files_checked_count
+
+  let files_checked_count t = !(t.files_checked_count)
+
+  let consume
+      (how_many : to_process_count:int -> int)
+      { to_process; in_progress; files_checked_count = _ } =
+    if BigList.is_empty !to_process then
+      if Hash_set.Poly.is_empty in_progress then
+        Bucket.Done
+      else
+        Bucket.Wait
+    else
+      let (next, remaining) =
+        BigList.split_n
+          !to_process
+          (how_many ~to_process_count:(BigList.length !to_process))
+      in
+      to_process := remaining;
+      List.iter next ~f:(Hash_set.Poly.add in_progress);
+      Bucket.Job next
+
+  let cancel { to_process; in_progress; files_checked_count = _ } =
+    to_process := BigList.append (Hash_set.Poly.to_list in_progress) !to_process
+end
+
 type seconds_since_epoch = float
 
 type log_message = string
@@ -147,7 +254,6 @@ let scrape_class_names (ast : Nast.program) : SSet.t =
 let process_file
     (ctx : Provider_context.t)
     (file : check_file_workitem)
-    ~(log_errors : bool)
     ~(decl_cap_mb : int option) : process_file_results =
   let fn = file.path in
   let (file_errors, ast) = Ast_provider.get_ast_with_error ~full:true ctx fn in
@@ -176,21 +282,6 @@ let process_file
       in
       match result with
       | Ok (file_errors, tasts) ->
-        if log_errors then
-          List.iter (Errors.get_error_list file_errors) ~f:(fun error ->
-              let { User_error.severity; claim; code; _ } = error in
-              let (pos, msg) = claim in
-              let (l1, l2, c1, c2) = Pos.info_pos_extended pos in
-              Hh_logger.log
-                "%s: %s(%d:%d-%d:%d) [%d] %s"
-                (User_error.Severity.to_all_caps_string severity)
-                (Relative_path.suffix fn)
-                l1
-                c1
-                l2
-                c2
-                code
-                msg);
         {
           file_errors;
           deferred_decls = [];
@@ -297,7 +388,6 @@ let process_one_workitem
     ~batch_info
     ~memory_cap
     ~longlived_workers
-    ~error_count_at_start_of_batch
     (fn : workitem)
     ({ errors; map_reduce_data; tally; stats } : workitem_accumulator) :
     TypingProgress.progress_outcome * workitem_accumulator =
@@ -317,15 +407,8 @@ let process_one_workitem
         tally ) =
     match fn with
     | Check file ->
-      (* We'll show at least the first five errors in the project. Maybe more,
-         if this file has more in it, or if other concurrent workers race to print
-         the first five errors before us. *)
-      let log_errors =
-        check_info.log_errors
-        && error_count_at_start_of_batch + Errors.count errors < 5
-      in
       let { file_errors; file_map_reduce_data; deferred_decls } =
-        process_file ctx file ~decl_cap_mb ~log_errors
+        process_file ctx file ~decl_cap_mb
       in
       let map_reduce_data =
         Map_reduce.reduce map_reduce_data file_map_reduce_data
@@ -339,7 +422,7 @@ let process_one_workitem
       begin
         if type_check_twice then
           let (_ignored : process_file_results) =
-            process_file ctx file ~decl_cap_mb ~log_errors:false
+            process_file ctx file ~decl_cap_mb
           in
           ()
       end;
@@ -422,7 +505,6 @@ let process_workitems
     ~(check_info : check_info)
     ~(worker_id : string)
     ~(batch_number : int)
-    ~(error_count_at_start_of_batch : int)
     ~(typecheck_info : HackEventLogger.ProfileTypeCheck.typecheck_info) :
     typing_result * TypingProgress.t =
   Decl_counters.set_mode
@@ -459,7 +541,6 @@ let process_workitems
          ~ctx
          ~check_info
          ~batch_info
-         ~error_count_at_start_of_batch
          ~memory_cap
          ~longlived_workers
   in
@@ -499,7 +580,6 @@ let load_and_process_workitems
     ~(check_info : check_info)
     ~(worker_id : string)
     ~(batch_number : int)
-    ~(error_count_at_start_of_batch : int)
     ~(typecheck_info : HackEventLogger.ProfileTypeCheck.typecheck_info) :
     typing_result * TypingProgress.t =
   Option.iter check_info.memtrace_dir ~f:(fun temp_dir ->
@@ -521,169 +601,180 @@ let load_and_process_workitems
     ~check_info
     ~worker_id
     ~batch_number
-    ~error_count_at_start_of_batch
     ~typecheck_info
 
 (*****************************************************************************)
 (* Let's go! That's where the action is *)
 (*****************************************************************************)
 
-(** Merge the results from multiple workers.
+module Counts = struct
+  type t = int SMap.t
+
+  let increment map key =
+    let prev_count = SMap.find_opt key map |> Option.value ~default:0 in
+    SMap.add key (prev_count + 1) map
+end
+
+module ErrorStats = struct
+  type t = {
+    total_error_count: int;
+    time_first_error: seconds_since_epoch option;
+  }
+
+  let empty = { total_error_count = 0; time_first_error = None }
+
+  let update errors { total_error_count; time_first_error } : t =
+    {
+      total_error_count = total_error_count + Errors.count errors;
+      time_first_error =
+        (match time_first_error with
+        | Some t -> Some t
+        | None ->
+          if Errors.is_empty errors then
+            None
+          else
+            Some (Unix.gettimeofday ()));
+    }
+end
+
+module Merge : sig
+  val merge :
+    batch_counts_by_worker_id:Counts.t ref ->
+    error_stats:ErrorStats.t ref ->
+    check_info:check_info ->
+    warnings_saved_state:Warnings_saved_state.t option ->
+    Todo.t ->
+    int ->
+    log_message * typing_result * TypingProgress.t ->
+    typing_result ->
+    typing_result
+end = struct
+  let process_errors errors error_stats ~stream_errors ~log_errors : unit =
+    error_stats := ErrorStats.update errors !error_stats;
+    if log_errors then (
+      let error_count = Errors.count errors in
+      if error_count > 0 then (
+        let max_errors = 5 in
+        Hh_logger.log
+          "%d errors in batch. Showing first %d:"
+          error_count
+          max_errors;
+        List.iter
+          (List.take (Errors.get_error_list errors) max_errors)
+          ~f:(fun error ->
+            let { User_error.severity; claim; code; _ } = error in
+            let (pos, msg) = claim in
+            let (l1, l2, c1, c2) = Pos.info_pos_extended pos in
+            Hh_logger.log
+              "%s: %s(%d:%d-%d:%d) [%d] %s"
+              (User_error.Severity.to_all_caps_string severity)
+              (Relative_path.suffix @@ Pos.filename pos)
+              l1
+              c1
+              l2
+              c2
+              code
+              msg)
+      );
+      (* Handle errors paradigm (3) - push updates to errors-file as soon as their batch is finished *)
+      if stream_errors then Server_progress.ErrorsWrite.report errors
+    )
+
+  let process_and_merge_typing_results
+      (produced_by_job : Typing_service_types.typing_result)
+      ~(acc : Typing_service_types.typing_result)
+      (mergebase_warning_hashes : Warnings_saved_state.t option)
+      ~(stream_errors : bool)
+      ~log_errors
+      (error_stats : ErrorStats.t ref) : Typing_service_types.typing_result =
+    let produced_by_job =
+      {
+        produced_by_job with
+        errors =
+          Errors.filter_out_mergebase_warnings
+            mergebase_warning_hashes
+            produced_by_job.errors;
+      }
+    in
+    process_errors produced_by_job.errors error_stats ~stream_errors ~log_errors;
+
+    Typing_deps.register_discovered_dep_edges produced_by_job.dep_edges;
+    Typing_deps.register_discovered_dep_edges acc.dep_edges;
+
+    let produced_by_job =
+      { produced_by_job with dep_edges = Typing_deps.dep_edges_make () }
+    in
+    let acc = { acc with dep_edges = Typing_deps.dep_edges_make () } in
+
+    accumulate_job_output produced_by_job acc
+
+  (** Merge the results from multiple workers.
 
     We don't really care about which files are left unchecked since we use
     (gasp) mutation to track that, so combine the errors but always return an
     empty list for the list of unchecked files. *)
-let merge
-    ~(batch_counts_by_worker_id : int SMap.t ref)
-    ~(errors_so_far : int ref)
-    ~(check_info : check_info)
-    (workitems_to_process : workitem BigList.t ref)
-    (workitems_initial_count : int)
-    (workitems_in_progress : workitem Hash_set.t)
-    (files_checked_count : int ref)
-    (time_first_error : seconds_since_epoch option ref)
-    ( (worker_id : string),
-      (produced_by_job : typing_result),
-      ({ kind = progress_kind; progress : TypingProgress.t } : job_progress) )
-    (acc : typing_result) : typing_result =
-  (* Update batch count *)
-  begin
-    match progress_kind with
-    | Progress ->
-      let prev_batch_count =
-        SMap.find_opt worker_id !batch_counts_by_worker_id
-        |> Option.value ~default:0
-      in
-      batch_counts_by_worker_id :=
-        SMap.add worker_id (prev_batch_count + 1) !batch_counts_by_worker_id
-  end;
+  let merge
+      ~(batch_counts_by_worker_id : Counts.t ref)
+      ~(error_stats : ErrorStats.t ref)
+      ~(check_info : check_info)
+      ~(warnings_saved_state : Warnings_saved_state.t option)
+      (todo : Todo.t)
+      (workitems_initial_count : int)
+      ( (worker_id : string),
+        (produced_by_job : Typing_service_types.typing_result),
+        (progress : TypingProgress.t) )
+      (acc : Typing_service_types.typing_result) :
+      Typing_service_types.typing_result =
+    batch_counts_by_worker_id :=
+      Counts.increment !batch_counts_by_worker_id worker_id;
 
-  (* And error count *)
-  errors_so_far := !errors_so_far + Errors.count produced_by_job.errors;
+    Todo.update progress todo;
 
-  workitems_to_process :=
-    BigList.append (TypingProgress.remaining progress) !workitems_to_process;
+    Server_progress.write_percentage
+      ~operation:"typechecking"
+      ~done_count:(Todo.files_checked_count todo)
+      ~total_count:workitems_initial_count
+      ~unit:"files"
+      ~extra:None;
 
-  (* Let's also prepend the deferred files! *)
-  workitems_to_process :=
-    BigList.append (TypingProgress.deferred progress) !workitems_to_process;
-
-  (* If workers can steal work from each other, then it's possible that
-     some of the files that the current worker completed checking have already
-     been removed from the in-progress set. Thus, we should keep track of
-     how many type check computations we actually remove from the in-progress
-     set. Note that we also skip counting Declare computations,
-     since they are not relevant for computing how many files we've type
-     checked. *)
-  let completed_check_count =
-    List.fold
-      ~init:0
-      ~f:(fun acc workitem ->
-        match Hash_set.Poly.strict_remove workitems_in_progress workitem with
-        | Ok () -> begin
-          match workitem with
-          | Check _ -> acc + 1
-          | _ -> acc
-        end
-        | _ -> acc)
-      (TypingProgress.completed progress)
-  in
-
-  (* Deferred type check computations should be subtracted from completed
-     in order to produce an accurate count because they we requeued them, yet
-     they were also included in the completed list.
-  *)
-  let is_check workitem =
-    match workitem with
-    | Check _ -> true
-    | _ -> false
-  in
-  let deferred_check_count =
-    List.count ~f:is_check (TypingProgress.deferred progress)
-  in
-  let completed_check_count = completed_check_count - deferred_check_count in
-
-  files_checked_count := !files_checked_count + completed_check_count;
-  Server_progress.write_percentage
-    ~operation:"typechecking"
-    ~done_count:!files_checked_count
-    ~total_count:workitems_initial_count
-    ~unit:"files"
-    ~extra:None;
-
-  (* Handle errors paradigm (3) - push updates to errors-file as soon as their batch is finished *)
-  if check_info.log_errors then
-    Server_progress.ErrorsWrite.report produced_by_job.errors;
-  (* Handle errors paradigm (2) - push updates to lsp as well *)
-  if not (Errors.is_empty produced_by_job.errors) then
-    time_first_error :=
-      Some (Option.value !time_first_error ~default:(Unix.gettimeofday ()));
-
-  Typing_deps.register_discovered_dep_edges produced_by_job.dep_edges;
-  Typing_deps.register_discovered_dep_edges acc.dep_edges;
-
-  let produced_by_job =
-    { produced_by_job with dep_edges = Typing_deps.dep_edges_make () }
-  in
-  let acc = { acc with dep_edges = Typing_deps.dep_edges_make () } in
-
-  accumulate_job_output produced_by_job acc
+    process_and_merge_typing_results
+      produced_by_job
+      ~acc
+      warnings_saved_state
+      ~stream_errors:check_info.log_errors
+      ~log_errors:check_info.log_errors
+      error_stats
+end
 
 let next
     (workers : MultiWorker.worker list option)
-    (workitems_to_process : workitem BigList.t ref)
-    (workitems_in_progress : workitem Hash_set.Poly.t)
-    (record : Measure.record) : unit -> job_progress Bucket.bucket =
+    (todo : Todo.t)
+    (record : Measure.record) : unit -> TypingProgress.t Bucket.bucket =
   let num_workers =
     match workers with
     | Some w -> List.length w
     | None -> 1
   in
-  let return_bucket_job (kind : progress_kind) ~current_bucket ~remaining_jobs =
-    (* Update our shared mutable state, because hey: it's not like we're
-       writing OCaml or anything. *)
-    workitems_to_process := remaining_jobs;
-    List.iter ~f:(Hash_set.Poly.add workitems_in_progress) current_bucket;
-    Bucket.Job { kind; progress = TypingProgress.init current_bucket }
-  in
   fun () ->
     Measure.time ~record "time" @@ fun () ->
-    let workitems_to_process_length = BigList.length !workitems_to_process in
-
-    (* WARNING: the following List.length is costly - for a full init, files_to_process starts
-        out as the size of the entire repo, and we're traversing the entire list. *)
-    match workitems_to_process_length with
-    | 0 when Hash_set.Poly.is_empty workitems_in_progress -> Bucket.Done
-    | 0 -> Bucket.Wait
+    match num_workers with
+    | 0 ->
+      (* When num_workers is zero, the execution mode is delegate-only, so we give an empty bucket to MultiWorker for execution. *)
+      Bucket.Job (TypingProgress.init [])
     | _ ->
-      let jobs = !workitems_to_process in
-      begin
-        match num_workers with
-        (* When num_workers is zero, the execution mode is delegate-only, so we give an empty bucket to MultiWorker for execution. *)
-        | 0 ->
-          return_bucket_job Progress ~current_bucket:[] ~remaining_jobs:jobs
-        | _ ->
-          let bucket_size =
-            Bucket.calculate_bucket_size
-              ~num_jobs:workitems_to_process_length
-              ~num_workers
-              ()
-          in
-          let (current_bucket, remaining_jobs) =
-            BigList.split_n jobs bucket_size
-          in
-          return_bucket_job Progress ~current_bucket ~remaining_jobs
-      end
+      Todo.consume
+        (fun ~to_process_count ->
+          Bucket.calculate_bucket_size
+            ~num_jobs:to_process_count
+            ~num_workers
+            ())
+        todo
+      |> Bucket.map ~f:TypingProgress.init
 
-let on_cancelled
-    (next : unit -> 'a Bucket.bucket)
-    (files_to_process : 'b Hash_set.Poly.elt BigList.t ref)
-    (files_in_progress : 'b Hash_set.Poly.t) : unit -> 'a list =
+let on_cancelled (next : unit -> 'a Bucket.bucket) (todo : Todo.t) :
+    unit -> 'a list =
  fun () ->
-  (* The size of [files_to_process] is bounded only by repo size, but
-      [files_in_progress] is capped at [(worker count) * (max bucket size)]. *)
-  files_to_process :=
-    BigList.append (Hash_set.Poly.to_list files_in_progress) !files_to_process;
+  Todo.cancel todo;
   let rec add_next acc =
     match next () with
     | Bucket.Job j -> add_next (j :: acc)
@@ -873,6 +964,7 @@ let process_in_parallel
     ~(memory_cap : int option)
     ~(longlived_workers : bool)
     ~(check_info : check_info)
+    ~warnings_saved_state
     ~(typecheck_info : HackEventLogger.ProfileTypeCheck.typecheck_info) :
     typing_result
     * Telemetry.t
@@ -881,38 +973,32 @@ let process_in_parallel
     * seconds_since_epoch option =
   let record = Measure.create () in
   (* [record] is used by [next] *)
-  let workitems_to_process = ref workitems in
-  let workitems_in_progress = Hash_set.Poly.create () in
+  let todo = Todo.create workitems in
   let workitems_initial_count = BigList.length workitems in
-  let workitems_processed_count = ref 0 in
-  let time_first_error = ref None in
-  let errors_so_far = ref 0 in
+  let error_stats = ref ErrorStats.empty in
   let batch_counts_by_worker_id = ref SMap.empty in
 
-  let next = next workers workitems_to_process workitems_in_progress record in
+  let next = next workers todo record in
   (* The [job] lambda is marshalled, sent to the worker process, unmarshalled there, and executed.
      It is marshalled immediately before being executed. *)
-  let job (typing_result : typing_result) (progress : job_progress) :
-      string * typing_result * job_progress =
+  let job (typing_result : typing_result) (progress : TypingProgress.t) :
+      string * typing_result * TypingProgress.t =
     let worker_id = Option.value ~default:"main" (Hh_logger.get_id ()) in
     let (typing_result, computation_progress) =
-      match progress.kind with
-      | Progress ->
-        load_and_process_workitems
-          ctx
-          ~memory_cap
-          ~longlived_workers
-          ~check_info
-          ~typecheck_info
-          ~worker_id
-          ~error_count_at_start_of_batch:!errors_so_far
-          ~batch_number:
-            (SMap.find_opt worker_id !batch_counts_by_worker_id
-            |> Option.value ~default:0)
-          typing_result
-          progress.progress
+      load_and_process_workitems
+        ctx
+        ~memory_cap
+        ~longlived_workers
+        ~check_info
+        ~typecheck_info
+        ~worker_id
+        ~batch_number:
+          (SMap.find_opt worker_id !batch_counts_by_worker_id
+          |> Option.value ~default:0)
+        typing_result
+        progress
     in
-    (worker_id, typing_result, { progress with progress = computation_progress })
+    (worker_id, typing_result, computation_progress)
   in
   let (typing_result, env, cancelled_results) =
     MultiWorker.call_with_interrupt
@@ -920,24 +1006,21 @@ let process_in_parallel
       ~job
       ~neutral:(neutral ())
       ~merge:
-        (merge
+        (Merge.merge
            ~batch_counts_by_worker_id
-           ~errors_so_far
+           ~error_stats
            ~check_info
-           workitems_to_process
-           workitems_initial_count
-           workitems_in_progress
-           workitems_processed_count
-           time_first_error)
+           ~warnings_saved_state
+           todo
+           workitems_initial_count)
       ~next
-      ~on_cancelled:
-        (on_cancelled next workitems_to_process workitems_in_progress)
+      ~on_cancelled:(on_cancelled next todo)
       ~interrupt
   in
-  let paths_of (unfinished : job_progress list) : Relative_path.t list =
-    let paths_of (cancelled_progress : job_progress) =
+  let paths_of (unfinished : TypingProgress.t list) : Relative_path.t list =
+    let paths_of (cancelled_progress : TypingProgress.t) =
       let cancelled_computations =
-        TypingProgress.remaining cancelled_progress.progress
+        TypingProgress.remaining cancelled_progress
       in
       let paths_of paths (cancelled_workitem : workitem) =
         match cancelled_workitem with
@@ -952,7 +1035,11 @@ let process_in_parallel
     Option.map cancelled_results ~f:(fun (unfinished, reason) ->
         (paths_of unfinished, reason))
   in
-  (typing_result, telemetry, env, cancelled_results, !time_first_error)
+  ( typing_result,
+    telemetry,
+    env,
+    cancelled_results,
+    !error_stats.ErrorStats.time_first_error )
 
 type 'a job_result =
   'a * (Relative_path.t list * MultiThreadedCall.cancel_reason) option
@@ -1032,7 +1119,8 @@ let go_with_interrupt
     ~(interrupt : 'a MultiThreadedCall.interrupt_config)
     ~(longlived_workers : bool)
     ~(hh_distc_fanout_threshold : int option)
-    ~(check_info : check_info) : (_ * result) job_result =
+    ~(check_info : check_info)
+    ~warnings_saved_state : (_ * result) job_result =
   let typecheck_info =
     HackEventLogger.ProfileTypeCheck.get_typecheck_info
       ~init_id:check_info.init_id
@@ -1098,6 +1186,9 @@ let go_with_interrupt
       let profiling_info = Telemetry.create () in
       match process_with_hh_distc ~root ~interrupt ~check_info ~tcopt with
       | Success (errors, map_reduce_data, dep_edges, env) ->
+        let errors =
+          Errors.filter_out_mergebase_warnings warnings_saved_state errors
+        in
         ( { errors; map_reduce_data; dep_edges; profiling_info },
           telemetry,
           env,
@@ -1135,6 +1226,7 @@ let go_with_interrupt
         ~memory_cap:(Some 500 (* megabytes *))
         ~longlived_workers
         ~check_info
+        ~warnings_saved_state
         ~typecheck_info
     )
   in
@@ -1158,7 +1250,8 @@ let go
     ~(root : Path.t option)
     ~(longlived_workers : bool)
     ~(hh_distc_fanout_threshold : int option)
-    ~(check_info : check_info) : result =
+    ~(check_info : check_info)
+    ~warnings_saved_state : result =
   let interrupt = MultiThreadedCall.no_interrupt () in
   let (((), result), unfinished_and_reason) =
     go_with_interrupt
@@ -1171,6 +1264,7 @@ let go
       ~longlived_workers
       ~hh_distc_fanout_threshold
       ~check_info
+      ~warnings_saved_state
   in
   assert (Option.is_none unfinished_and_reason);
   result

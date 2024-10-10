@@ -48,7 +48,6 @@
 #include "hphp/runtime/server/access-log.h"
 #include "hphp/runtime/server/cli-server.h"
 #include "hphp/runtime/server/files-match.h"
-#include "hphp/runtime/server/satellite-server.h"
 #include "hphp/runtime/server/virtual-host.h"
 #include "hphp/runtime/server/server-stats.h"
 #include "hphp/runtime/vm/jit/code-cache.h"
@@ -296,6 +295,13 @@ void RepoOptionsFlags::initAliasedNamespaces(hackc::NativeEnv& env) const {
   }
 }
 
+void RepoOptionsFlags::initTrivialBuiltins(hackc::NativeEnv& env) const {
+  if (!RO::EvalReplaceTrivialBuiltins) return;
+  for (auto& [k, v] : TrivialBuiltins) {
+    env.trivial_builtins.emplace_back(hackc::StringMapEntry{k, v});
+  }
+}
+
 void RepoOptionsFlags::initDeclConfig(hackc::DeclParserConfig& config) const {
   for (auto& [k, v] : AliasedNamespaces) {
     config.aliased_namespaces.emplace_back(hackc::StringMapEntry{k, v});
@@ -320,7 +326,6 @@ void RepoOptionsFlags::initParserFlags(hackc::ParserFlags& flags) const {
   flags.disable_xhp_element_mangling = DisableXHPElementMangling;
   flags.disallow_func_ptrs_in_constants = DisallowFuncPtrsInConstants;
   flags.enable_xhp_class_modifier = EnableXHPClassModifier;
-  flags.disallow_direct_superglobals_refs = DisallowDirectSuperglobalsRefs;
 }
 
 void RepoOptionsFlags::calcCachedQuery() {
@@ -650,8 +655,6 @@ std::map<std::string, AccessLogFileData> RuntimeOption::RPCLogs;
 
 std::vector<std::shared_ptr<VirtualHost>> RuntimeOption::VirtualHosts;
 std::shared_ptr<IpBlockMap> RuntimeOption::IpBlocks;
-std::vector<std::shared_ptr<SatelliteServerInfo>>
-  RuntimeOption::SatelliteServerInfos;
 
 std::map<std::string, std::string> RuntimeOption::IncludeRoots;
 
@@ -910,6 +913,7 @@ int RuntimeOption::ProfilerMaxTraceBuffer = 0;
 
 int RuntimeOption::ThriftFBServerWorkerThreads = 1;
 int RuntimeOption::ThriftFBServerPoolThreads = 1;
+std::set<std::string> RuntimeOption::ThriftFBServerHighPriorityEndPoints;
 
 bool RuntimeOption::EnableFb303Server = false;
 int RuntimeOption::Fb303ServerPort = 0;
@@ -918,13 +922,13 @@ int RuntimeOption::Fb303ServerWorkerThreads = 1;
 int RuntimeOption::Fb303ServerPoolThreads = 1;
 bool RuntimeOption::Fb303ServerExposeSensitiveMethods = false;
 
-bool RuntimeOption::ThreadTuneDebug = false;
-bool RuntimeOption::ThreadTuneSkipWarmup = false;
-double RuntimeOption::ThreadTuneAdjustmentPct = 0;
-double RuntimeOption::ThreadTuneAdjustmentDownPct = 0;
-double RuntimeOption::ThreadTuneStepPct = 5;
-double RuntimeOption::ThreadTuneCPUThreshold = 95.0;
-double RuntimeOption::ThreadTuneThreadUtilizationThreshold = 90.0;
+bool RuntimeOption::ServerThreadTuneDebug = false;
+bool RuntimeOption::ServerThreadTuneSkipWarmup = false;
+double RuntimeOption::ServerThreadTuneAdjustmentPct = 0;
+double RuntimeOption::ServerThreadTuneAdjustmentDownPct = 0;
+double RuntimeOption::ServerThreadTuneStepPct = 5;
+double RuntimeOption::ServerThreadTuneCPUThreshold = 95.0;
+double RuntimeOption::ServerThreadTuneThreadUtilizationThreshold = 90.0;
 #endif
 
 double RuntimeOption::XenonPeriodSeconds = 0.0;
@@ -1231,19 +1235,6 @@ void logTierOverwriteInputs() {
 }
 
 InitFiniNode s_logTierOverwrites(logTierOverwriteInputs, InitFiniNode::When::ServerInit);
-
-void RuntimeOption::ReadSatelliteInfo(
-    const IniSettingMap& ini,
-    const Hdf& hdf,
-    std::vector<std::shared_ptr<SatelliteServerInfo>>& infos) {
-  auto ss_callback = [&] (const IniSettingMap &ini_ss, const Hdf &hdf_ss,
-                         const std::string &ini_ss_key) {
-    auto satellite = std::make_shared<SatelliteServerInfo>(ini_ss, hdf_ss,
-                                                           ini_ss_key);
-    infos.push_back(satellite);
-  };
-  Config::Iterate(ss_callback, ini, hdf, "Satellites");
-}
 
 extern void initialize_apc();
 void RuntimeOption::Load(
@@ -1685,6 +1676,9 @@ void RuntimeOption::Load(
       EvalEnableNuma = false;
     }
 
+    // Fast method intercept is currently unsupported on ARM.
+    if (arch() == Arch::ARM) EvalFastMethodIntercept = false;
+
     if (!Cfg::Server::ForkingEnabled && ServerExecutionMode()) {
       // Only use hugetlb pages when we don't fork().
       low_2m_pages(EvalMaxLowMemHugePages);
@@ -1763,7 +1757,7 @@ void RuntimeOption::Load(
     Config::Bind(CodeCache::ABytecodeSize, ini, config,
                  "Eval.JitABytecodeSize", 0);
     Config::Bind(CodeCache::GlobalDataSize, ini, config,
-                 "Eval.JitGlobalDataSize", CodeCache::ASize >> 2);
+                 "Eval.JitGlobalDataSize", CodeCache::ASize / 64);
 
     Config::Bind(CodeCache::MapTCHuge, ini, config, "Eval.MapTCHuge",
                  hugePagesSoundNice());
@@ -1825,9 +1819,7 @@ void RuntimeOption::Load(
     // IpBlocks
     IpBlocks = std::make_shared<IpBlockMap>(ini, config);
   }
-  {
-    ReadSatelliteInfo(ini, config, SatelliteServerInfos);
-  }
+
   {
     // Static File
 
@@ -1979,6 +1971,7 @@ void RuntimeOption::Load(
                  "ThriftFBServer.WorkerThreads", 1);
     Config::Bind(ThriftFBServerPoolThreads, ini, config, "ThriftFBServer.PoolThreads",
                  1);
+    Config::Bind(ThriftFBServerHighPriorityEndPoints, ini, config, "ThriftFBServer.HighPriorityEndPoints");
 
     // Fb303Server
     Config::Bind(EnableFb303Server, ini, config, "Fb303Server.Enable",
@@ -1992,20 +1985,20 @@ void RuntimeOption::Load(
     Config::Bind(Fb303ServerExposeSensitiveMethods, ini, config,
                  "Fb303Server.ExposeSensitiveMethods", Fb303ServerExposeSensitiveMethods);
 
-    Config::Bind(ThreadTuneDebug, ini, config,
-                 "ThreadTuneDebug", ThreadTuneDebug);
-    Config::Bind(ThreadTuneSkipWarmup, ini, config,
-                 "ThreadTuneSkipWarmup", ThreadTuneSkipWarmup);
-    Config::Bind(ThreadTuneAdjustmentPct, ini, config,
-                 "ThreadTuneAdjustmentPct", ThreadTuneAdjustmentPct);
-    Config::Bind(ThreadTuneAdjustmentDownPct, ini, config,
-                 "ThreadTuneAdjustmentDownPct", ThreadTuneAdjustmentDownPct);
-    Config::Bind(ThreadTuneStepPct, ini, config,
-                 "ThreadTuneStepPct", ThreadTuneStepPct);
-    Config::Bind(ThreadTuneCPUThreshold, ini, config,
-                 "ThreadTuneCPUThreshold", ThreadTuneCPUThreshold);
-    Config::Bind(ThreadTuneThreadUtilizationThreshold, ini, config,
-                 "ThreadTuneThreadUtilizationThreshold", ThreadTuneThreadUtilizationThreshold);
+    Config::Bind(ServerThreadTuneDebug, ini, config,
+                 "Server.ThreadTune.Debug", ServerThreadTuneDebug);
+    Config::Bind(ServerThreadTuneSkipWarmup, ini, config,
+                 "Server.ThreadTune.SkipWarmup", ServerThreadTuneSkipWarmup);
+    Config::Bind(ServerThreadTuneAdjustmentPct, ini, config,
+                 "Server.ThreadTune.AdjustmentPct", ServerThreadTuneAdjustmentPct);
+    Config::Bind(ServerThreadTuneAdjustmentDownPct, ini, config,
+                 "Server.ThreadTune.AdjustmentDownPct", ServerThreadTuneAdjustmentDownPct);
+    Config::Bind(ServerThreadTuneStepPct, ini, config,
+                 "Server.ThreadTune.StepPct", ServerThreadTuneStepPct);
+    Config::Bind(ServerThreadTuneCPUThreshold, ini, config,
+                 "Server.ThreadTune.CPUThreshold", ServerThreadTuneCPUThreshold);
+    Config::Bind(ServerThreadTuneThreadUtilizationThreshold, ini, config,
+                 "Server.ThreadTune.ThreadUtilizationThreshold", ServerThreadTuneThreadUtilizationThreshold);
   }
 #endif
 

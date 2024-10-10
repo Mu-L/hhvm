@@ -45,7 +45,9 @@ let make_param_ty env param =
     if Aast_utils.is_param_variadic param then
       (* When checking a call f($a, $b) to a function f(C ...$args),
        * both $a and $b must be of type C *)
-      mk (Reason.var_param_from_decl param_pos, get_node ty)
+      with_reason ty (Reason.var_param_from_decl param_pos)
+    else if Aast_utils.is_param_splat param then
+      with_reason ty (Reason.tuple_from_splat param_pos)
     else
       ty
   in
@@ -64,10 +66,11 @@ let make_param_ty env param =
         ~mode
         ~accept_disposable:
           (has_accept_disposable_attribute param.param_user_attributes)
-        ~has_default:(Option.is_some (Aast_utils.get_param_default param))
+        ~is_optional:(Option.is_some (Aast_utils.get_param_default param))
         ~readonly:(Option.is_some param.param_readonly)
         ~ignore_readonly_error:
-          (has_ignore_readonly_error_attribute param.param_user_attributes);
+          (has_ignore_readonly_error_attribute param.param_user_attributes)
+        ~splat:(Option.is_some param.param_splat);
     fp_def_value = None;
   }
 

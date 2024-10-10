@@ -26,15 +26,8 @@ struct KdfParams {
 };
 
 template <typename Hash>
-inline KeyDerivationImpl createKeyDerivationImpl(
-    const std::string& labelPrefix) {
-  return KeyDerivationImpl(
-      labelPrefix,
-      Hash::HashLen,
-      &openssl::Hasher<Hash>::hash,
-      &openssl::Hasher<Hash>::hmac,
-      HkdfImpl(Hash::HashLen, &openssl::Hasher<Hash>::hmac),
-      Hash::BlankHash);
+inline KeyDerivationImpl createKeyDerivationImpl() {
+  return KeyDerivationImpl(openssl::hasherFactory<Hash>());
 }
 
 class KeyDerivationTest : public ::testing::TestWithParam<KdfParams> {};
@@ -47,7 +40,7 @@ TEST_P(KeyDerivationTest, ExpandLabel) {
 
   auto secret = std::vector<uint8_t>(prk.begin(), prk.end());
 
-  auto deriver = createKeyDerivationImpl<Sha256>(kHkdfLabelPrefix.str());
+  auto deriver = createKeyDerivationImpl<Sha256>();
   auto out = deriver.expandLabel(
       range(secret),
       GetParam().label,
@@ -59,24 +52,23 @@ TEST_P(KeyDerivationTest, ExpandLabel) {
 
 TEST(KeyDerivation, DeriveSecret) {
   // dummy prk
-  std::vector<uint8_t> secret(
-      createKeyDerivationImpl<Sha256>(kHkdfLabelPrefix.str()).hashLength());
+  std::vector<uint8_t> secret(createKeyDerivationImpl<Sha256>().hashLength());
   std::vector<uint8_t> messageHash(
-      createKeyDerivationImpl<Sha256>(kHkdfLabelPrefix.str()).hashLength());
-  auto deriver = createKeyDerivationImpl<Sha256>(kHkdfLabelPrefix.str());
+      createKeyDerivationImpl<Sha256>().hashLength());
+  auto deriver = createKeyDerivationImpl<Sha256>();
   deriver.deriveSecret(
       range(secret), "hey", range(messageHash), deriver.hashLength());
 }
 
 TEST(KeyDerivation, Sha256BlankHash) {
-  std::vector<uint8_t> computed(
-      createKeyDerivationImpl<Sha256>(kHkdfLabelPrefix.str()).hashLength());
+  std::vector<uint8_t> computed(createKeyDerivationImpl<Sha256>().hashLength());
   folly::IOBuf blankBuf;
-  openssl::Hasher<Sha256>::hash(
-      blankBuf, MutableByteRange(computed.data(), computed.size()));
+  fizz::hash(
+      openssl::hasherFactory<Sha256>(),
+      blankBuf,
+      MutableByteRange(computed.data(), computed.size()));
   EXPECT_EQ(
-      StringPiece(
-          createKeyDerivationImpl<Sha256>(kHkdfLabelPrefix.str()).blankHash()),
+      StringPiece(createKeyDerivationImpl<Sha256>().blankHash()),
       StringPiece(folly::range(computed)));
 }
 

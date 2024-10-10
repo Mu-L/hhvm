@@ -66,9 +66,10 @@ module Locl_Inst = struct
     | (Tvar _ | Tdynamic | Tnonnull | Tany _ | Tprim _ | Tneg _ | Tlabel _) as x
       ->
       x
-    | Ttuple tyl ->
-      let tyl = List.map tyl ~f:(instantiate subst) in
-      Ttuple tyl
+    | Ttuple { t_required; t_extra } ->
+      let t_extra = instantiate_tuple_extra subst t_extra in
+      let t_required = List.map t_required ~f:(instantiate subst) in
+      Ttuple { t_required; t_extra }
     | Tunion tyl ->
       let tyl = List.map tyl ~f:(instantiate subst) in
       Tunion tyl
@@ -143,6 +144,16 @@ module Locl_Inst = struct
     | Taccess (ty, ids) ->
       let ty = instantiate subst ty in
       Taccess (ty, ids)
+
+  and instantiate_tuple_extra subst e =
+    match e with
+    | Textra { t_optional; t_variadic } ->
+      let t_optional = List.map t_optional ~f:(instantiate subst) in
+      let t_variadic = instantiate subst t_variadic in
+      Textra { t_optional; t_variadic }
+    | Tsplat t_splat ->
+      let t_splat = instantiate subst t_splat in
+      Tsplat t_splat
 end
 
 (* TODO(T70068435)
@@ -239,7 +250,10 @@ let check_typedef_usable_as_hk_type env use_pos typedef_name typedef_info =
       method! on_tapply _ r name args = check_tapply r name args
     end
   in
-  visitor#on_type () typedef_info.td_type;
+  (match typedef_info.td_type_assignment with
+  | SimpleTypeDef (_vis, td_type) -> visitor#on_type () td_type
+  | CaseType (variant, variants) ->
+    List.iter (List.map (variant :: variants) ~f:fst) ~f:(visitor#on_type ()));
   maybe visitor#on_type () typedef_info.td_as_constraint;
   maybe visitor#on_type () typedef_info.td_super_constraint
 
@@ -333,9 +347,8 @@ module Simple = struct
   and check_targ_well_kinded ~in_signature env tyarg (nkind : Simple.named_kind)
       =
     let kind = snd nkind in
-    let in_non_reified_targ =
-      (Simple.to_full_kind_without_bounds kind).reified |> Aast.is_erased
-    in
+    (* ignore package errors for targs *)
+    let ignore_package_errors = true in
     match get_node tyarg with
     | Twildcard ->
       let is_higher_kinded = Simple.get_arity kind > 0 in
@@ -344,20 +357,10 @@ module Simple = struct
           get_reason tyarg |> Reason.to_pos |> Pos_or_decl.unsafe_to_raw_pos
         in
         Errors.add_error Naming_error.(to_user_error @@ HKT_wildcard pos);
-        check_well_kinded
-          ~in_signature
-          ~ignore_package_errors:in_non_reified_targ
-          env
-          tyarg
-          nkind
+        check_well_kinded ~in_signature ~ignore_package_errors env tyarg nkind
       )
     | _ ->
-      check_well_kinded
-        ~in_signature
-        ~ignore_package_errors:in_non_reified_targ
-        env
-        tyarg
-        nkind
+      check_well_kinded ~in_signature ~ignore_package_errors env tyarg nkind
 
   (** Traverse a type and for each encountered type argument of a type X,
   check that it complies with the corresponding type parameter of X (arity and kinds, but not constraints),
@@ -406,7 +409,13 @@ module Simple = struct
     | Tlike ty
     | Toption ty ->
       check ty
-    | Ttuple tyl
+    | Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } } ->
+      List.iter t_required ~f:check;
+      List.iter t_optional ~f:check;
+      check t_variadic
+    | Ttuple { t_required; t_extra = Tsplat t_splat } ->
+      List.iter t_required ~f:check;
+      check t_splat
     | Tunion tyl
     | Tintersection tyl ->
       List.iter tyl ~f:check
@@ -460,7 +469,7 @@ module Simple = struct
           (Cls.internal class_info)
           (Cls.get_module class_info)
           (Cls.get_package_override class_info)
-        |> Option.iter ~f:(Typing_error_utils.add_typing_error ~env);
+        |> List.iter ~f:(Typing_error_utils.add_typing_error ~env);
         let tparams = Cls.tparams class_info in
         check_against_tparams ~in_signature (Cls.pos class_info) argl tparams
       | Decl_entry.Found (Env.TypedefResult typedef) ->
@@ -473,7 +482,7 @@ module Simple = struct
           typedef.td_internal
           (Option.map typedef.td_module ~f:snd)
           typedef.td_package_override
-        |> Option.iter ~f:(Typing_error_utils.add_typing_error ~env);
+        |> List.iter ~f:(Typing_error_utils.add_typing_error ~env);
         check_against_tparams
           ~in_signature
           typedef.td_pos
@@ -483,28 +492,6 @@ module Simple = struct
       | Decl_entry.NotYetAvailable ->
         ()
     end
-    | Tnewtype (name, tyl, _) ->
-      (match Env.get_typedef env name with
-      | Decl_entry.Found typedef ->
-        Option.iter
-          ~f:(Typing_error_utils.add_typing_error ~env)
-          (Typing_visibility.check_top_level_access
-             ~ignore_package_errors:false
-             ~in_signature
-             ~use_pos
-             ~def_pos:typedef.td_pos
-             env
-             typedef.td_internal
-             (Option.map typedef.td_module ~f:snd)
-             typedef.td_package_override);
-        check_against_tparams
-          ~in_signature
-          typedef.td_pos
-          tyl
-          typedef.td_tparams
-      | Decl_entry.DoesNotExist
-      | Decl_entry.NotYetAvailable ->
-        ())
 
   (** Check that the given type is a well-kinded type whose kind matches the provided one.
   Otherwise, reports errors.

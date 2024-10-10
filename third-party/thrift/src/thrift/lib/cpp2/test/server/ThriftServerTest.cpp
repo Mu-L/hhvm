@@ -35,13 +35,13 @@
 #include <folly/Optional.h>
 #include <folly/Range.h>
 #include <folly/SocketAddress.h>
+#include <folly/coro/Baton.h>
+#include <folly/coro/Sleep.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
 #include <folly/executors/GlobalExecutor.h>
 #include <folly/executors/MeteredExecutor.h>
-#include <folly/experimental/TestUtil.h>
-#include <folly/experimental/coro/Baton.h>
-#include <folly/experimental/coro/Sleep.h>
 #include <folly/io/GlobalShutdownSocketSet.h>
+#include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/AsyncSocketException.h>
@@ -54,6 +54,7 @@
 #include <folly/synchronization/test/Barrier.h>
 #include <folly/system/ThreadName.h>
 #include <folly/test/TestUtils.h>
+#include <folly/testing/TestUtil.h>
 #include <proxygen/httpserver/HTTPServerOptions.h>
 #include <quic/client/QuicClientAsyncTransport.h>
 #include <quic/common/events/FollyQuicEventBase.h>
@@ -92,14 +93,12 @@ using namespace fizz::client;
 using namespace apache::thrift;
 using namespace apache::thrift::test;
 using namespace apache::thrift::util;
-using namespace apache::thrift::async;
 using namespace apache::thrift::transport;
 using namespace apache::thrift::concurrency;
 using namespace std::literals;
 using folly::test::find_resource;
 using std::string;
 
-THRIFT_FLAG_DECLARE_bool(server_rocket_upgrade_enabled);
 THRIFT_FLAG_DECLARE_string(rocket_frame_parser);
 DECLARE_int32(thrift_cpp2_protocol_reader_string_limit);
 
@@ -204,7 +203,7 @@ TEST(ThriftServer, SSLClientOnPlaintextServerTest) {
   ScopedServerThread sst(factory.create());
   folly::EventBase base;
   auto sslCtx = std::make_shared<folly::SSLContext>();
-  auto socket = TAsyncSSLSocket::newSocket(sslCtx, &base);
+  auto socket = folly::AsyncSSLSocket::newSocket(sslCtx, &base);
   TestConnCallback cb;
   socket->connect(&cb, *sst.getAddress());
   base.loop();
@@ -250,8 +249,8 @@ TEST(ThriftServer, DefaultCompressionTest) {
 
   // no compression if client does not compress/send preference
   auto socket = folly::AsyncSocket::newSocket(&base, *sst.getAddress());
-  TestServiceAsyncClient client(
-      HeaderClientChannel::newChannel(std::move(socket)));
+  TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+      HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket)));
   client.sendResponse(std::make_unique<Callback>(false, 0), 64);
   base.loop();
 
@@ -275,8 +274,8 @@ TEST(ThriftServer, HeaderTest) {
   folly::EventBase base;
   auto socket = folly::AsyncSocket::newSocket(&base, *sst.getAddress());
 
-  TestServiceAsyncClient client(
-      HeaderClientChannel::newChannel(std::move(socket)));
+  TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+      HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket)));
 
   RpcOptions options;
   // Set it as a header directly so the client channel won't set a
@@ -408,7 +407,8 @@ void doLoadHeaderTest(bool isRocket) {
     if (!isRocket) {
       return runner.template newStickyClient<TestServiceAsyncClient>(
           folly::getGlobalCPUExecutor().get(), [](auto socket) mutable {
-            return HeaderClientChannel::newChannel(std::move(socket));
+            return HeaderClientChannel::newChannel(
+                HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket));
           });
     } else {
       return runner.template newStickyClient<TestServiceAsyncClient>(
@@ -831,6 +831,74 @@ TEST(ThriftServer, SocketWriteTimeout) {
   }
 }
 
+class ResourcePoolsFlagsTest : public testing::Test,
+                               public ::testing::WithParamInterface<bool> {
+ public:
+  auto expected() {
+    return std::make_tuple(expectedResourcePoolsEnabled_, expectedExplanation_);
+  }
+
+  void SetUp() override {
+    auto gFlag = FLAGS_thrift_experimental_use_resource_pools;
+    auto thriftFlag = GetParam();
+    THRIFT_FLAG_SET_MOCK(experimental_use_resource_pools, thriftFlag);
+    expectedResourcePoolsEnabled_ = thriftFlag || gFlag;
+
+    // Tests provide visibility into expected behavior.
+    // To make it obvious what the explanation looks like for various
+    // combinations of the thrift flag and gflag, this code explicitly
+    // enumerates the various cases and the complete text of the explanation.
+    if (thriftFlag && !gFlag) {
+      expectedExplanation_ =
+          "thrift flag: true, enable gflag: false, disable gflag: false";
+    } else if (!thriftFlag && gFlag) {
+      expectedExplanation_ =
+          "thrift flag: false, enable gflag: true, disable gflag: false";
+    } else if (thriftFlag && gFlag) {
+      expectedExplanation_ =
+          "thrift flag: true, enable gflag: true, disable gflag: false";
+    } else {
+      expectedExplanation_ =
+          "runtime: thriftFlagNotSet, , thrift flag: false, enable gflag: false, disable gflag: false";
+    }
+  }
+
+ private:
+  bool expectedResourcePoolsEnabled_;
+  std::string expectedExplanation_;
+};
+
+TEST_P(ResourcePoolsFlagsTest, ResourcePoolsFlags) {
+  auto handler = std::make_shared<TestInterface>();
+  class TestObserver : public apache::thrift::server::TServerObserver {
+   public:
+    explicit TestObserver(std::string& explanation)
+        : explanation_(explanation) {}
+    void resourcePoolsEnabled(const std::string& explanation) override {
+      explanation_ = explanation;
+    }
+    void resourcePoolsDisabled(const std::string& explanation) override {
+      explanation_ = explanation;
+    }
+
+    std::string& explanation_;
+  };
+
+  std::string actualExplanation;
+  auto observer = std::make_shared<TestObserver>(actualExplanation);
+  ScopedServerInterfaceThread runner(
+      handler, "::1", 0, [&](auto& thriftServer) {
+        thriftServer.setObserver(observer);
+      });
+
+  auto actual = std::make_tuple(
+      runner.getThriftServer().resourcePoolEnabled(), actualExplanation);
+  EXPECT_EQ(actual, expected());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    ThriftServer, ResourcePoolsFlagsTest, testing::Values(true, false));
+
 namespace long_shutdown {
 namespace {
 
@@ -980,7 +1048,8 @@ class HeaderOrRocketTest : public testing::Test {
   ClientChannel::Ptr makeChannel(folly::AsyncTransport::UniquePtr socket) {
     auto channel = [&]() -> ClientChannel::Ptr {
       if (transport == TransportType::Header) {
-        return HeaderClientChannel::newChannel(std::move(socket));
+        return HeaderClientChannel::newChannel(
+            HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket));
       } else {
         return RocketClientChannel::newChannel(std::move(socket));
       }
@@ -2756,8 +2825,8 @@ TEST(ThriftServer, SSLRequiredRejectsPlaintext) {
 
   folly::EventBase base;
   auto socket = folly::AsyncSocket::newSocket(&base, *sst.getAddress());
-  TestServiceAsyncClient client(
-      HeaderClientChannel::newChannel(std::move(socket)));
+  TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+      HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket)));
 
   std::string response;
   EXPECT_THROW(client.sync_sendResponse(response, 64);, TTransportException);
@@ -2871,8 +2940,8 @@ TEST(ThriftServer, SSLRequiredAllowsLocalPlaintext) {
   auto port = sst.getAddress()->getPort();
   folly::SocketAddress loopback("::1", port);
   auto socket = folly::AsyncSocket::newSocket(&base, loopback);
-  TestServiceAsyncClient client(
-      HeaderClientChannel::newChannel(std::move(socket)));
+  TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+      HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket)));
 
   std::string response;
   client.sync_sendResponse(response, 64);
@@ -2893,11 +2962,11 @@ TEST(ThriftServer, SSLRequiredLoopbackUsesSSL) {
   folly::SocketAddress loopback("::1", port);
 
   auto ctx = makeClientSslContext();
-  auto sslSock = TAsyncSSLSocket::newSocket(ctx, &base);
+  auto sslSock = folly::AsyncSSLSocket::newSocket(ctx, &base);
   sslSock->connect(nullptr /* connect callback */, loopback);
 
-  TestServiceAsyncClient client(
-      HeaderClientChannel::newChannel(std::move(sslSock)));
+  TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+      HeaderClientChannel::WithoutRocketUpgrade{}, std::move(sslSock)));
 
   std::string response;
   client.sync_sendResponse(response, 64);
@@ -2915,8 +2984,8 @@ TEST(ThriftServer, SSLPermittedAcceptsPlaintextAndSSL) {
   {
     SCOPED_TRACE("Plaintext");
     auto socket = folly::AsyncSocket::newSocket(&base, *sst.getAddress());
-    TestServiceAsyncClient client(
-        HeaderClientChannel::newChannel(std::move(socket)));
+    TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+        HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket)));
 
     std::string response;
     client.sync_sendResponse(response, 64);
@@ -2927,11 +2996,11 @@ TEST(ThriftServer, SSLPermittedAcceptsPlaintextAndSSL) {
   {
     SCOPED_TRACE("SSL");
     auto ctx = makeClientSslContext();
-    auto sslSock = TAsyncSSLSocket::newSocket(ctx, &base);
+    auto sslSock = folly::AsyncSSLSocket::newSocket(ctx, &base);
     sslSock->connect(nullptr /* connect callback */, *sst.getAddress());
 
-    TestServiceAsyncClient client(
-        HeaderClientChannel::newChannel(std::move(sslSock)));
+    TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+        HeaderClientChannel::WithoutRocketUpgrade{}, std::move(sslSock)));
 
     std::string response;
     client.sync_sendResponse(response, 64);
@@ -2960,8 +3029,8 @@ TEST(ThriftServer, ClientOnlyTimeouts) {
 
   folly::EventBase base;
   auto socket = folly::AsyncSocket::newSocket(&base, *st.getAddress());
-  TestServiceAsyncClient client(
-      HeaderClientChannel::newChannel(std::move(socket)));
+  TestServiceAsyncClient client(HeaderClientChannel::newChannel(
+      HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket)));
 
   for (bool clientOnly : {false, true}) {
     for (bool shouldTimeOut : {true, false}) {
@@ -3312,8 +3381,6 @@ TEST(ThriftServer, RocketOverSSLNoALPN) {
 }
 
 TEST(ThriftServer, HeaderToRocketUpgradeOverTLS13) {
-  THRIFT_FLAG_SET_MOCK(server_rocket_upgrade_enabled, true);
-
   auto server = TestThriftServerFactory<TestInterface>().create();
   server->setSSLPolicy(SSLPolicy::REQUIRED);
 
@@ -3395,12 +3462,13 @@ static std::shared_ptr<quic::QuicClientTransport> makeQuicClient(
 
     std::string keyData;
     folly::readFile(find_resource(folly::test::kTestKey).c_str(), keyData);
-
+    auto certMgr = std::make_shared<CertManager>();
     if (!certData.empty() && !keyData.empty()) {
       auto cert = fizz::openssl::CertUtils::makeSelfCert(
           std::move(certData), std::move(keyData));
-      ctx->setClientCertificate(std::move(cert));
+      certMgr->addCert(std::move(cert));
     }
+    ctx->setClientCertManager(std::move(certMgr));
   }
 
   auto quicClient = std::make_shared<quic::QuicClientTransport>(
@@ -3655,7 +3723,6 @@ TEST(ThriftServer, PerConnectionSocketOptions) {
 }
 
 TEST(ThriftServer, RocketOnly) {
-  THRIFT_FLAG_SET_MOCK(server_rocket_upgrade_enabled, true);
   TestThriftServerFactory<TestInterface> factory;
   auto serv = factory.create();
   ScopedServerThread sst(serv);
@@ -3694,7 +3761,6 @@ TEST(ThriftServer, RocketOnly) {
 }
 
 TEST(ThriftServer, DisableHeaderReject) {
-  THRIFT_FLAG_SET_MOCK(server_rocket_upgrade_enabled, true);
   TestThriftServerFactory<TestInterface> factory;
   auto serv = factory.create();
   ScopedServerThread sst(serv);
@@ -3786,6 +3852,7 @@ TEST(ThriftServer, acceptConnection) {
       std::make_unique<TestServiceAsyncClient>(PooledRequestChannel::newChannel(
           [fd = fds_header[1]](folly::EventBase& evb) {
             return HeaderClientChannel::newChannel(
+                HeaderClientChannel::WithoutRocketUpgrade{},
                 folly::AsyncSocket::newSocket(&evb, fd));
           },
           1));
@@ -4264,6 +4331,12 @@ class HeaderOrRocketCompression
           tm);
     }
 
+    void processInteraction(apache::thrift::ServerRequest&&) override {
+      LOG(FATAL)
+          << "This AsyncProcessor doesn't support Thrift interactions. "
+          << "Please implement processInteraction to support interactions.";
+    }
+
     std::unique_ptr<AsyncProcessor> underlyingProcessor_;
     CompressionAlgorithm compression_;
   };
@@ -4296,6 +4369,12 @@ class HeaderOrRocketCompression
           ctx,
           eb,
           tm);
+    }
+
+    void processInteraction(apache::thrift::ServerRequest&&) override {
+      LOG(FATAL)
+          << "This AsyncProcessor doesn't support Thrift interactions. "
+          << "Please implement processInteraction to support interactions.";
     }
 
     std::unique_ptr<AsyncProcessor> underlyingProcessor_;

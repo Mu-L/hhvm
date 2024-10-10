@@ -7,7 +7,6 @@
 
 from __future__ import annotations
 
-
 import typing as _typing
 
 import enum
@@ -51,7 +50,7 @@ class ComplexUnion(_fbthrift_python_types.Union, _fbthrift_compatible_with_Compl
     @classmethod
     def fromValue(cls, value: _typing.Union[None, int, _typing.Sequence[int], _typing.Sequence[str], str, _typing.Mapping[int, str], str]) -> ComplexUnion: ...
     value: _typing.Final[_typing.Union[None, int, _typing.Sequence[int], _typing.Sequence[str], str, _typing.Mapping[int, str], str]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "module.types.ComplexUnion": ...  # type: ignore
@@ -80,7 +79,7 @@ class ListUnion(_fbthrift_python_types.Union, _fbthrift_compatible_with_ListUnio
     @classmethod
     def fromValue(cls, value: _typing.Union[None, _typing.Sequence[int], _typing.Sequence[str]]) -> ListUnion: ...
     value: _typing.Final[_typing.Union[None, _typing.Sequence[int], _typing.Sequence[str]]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "module.types.ListUnion": ...  # type: ignore
@@ -109,7 +108,7 @@ class DataUnion(_fbthrift_python_types.Union, _fbthrift_compatible_with_DataUnio
     @classmethod
     def fromValue(cls, value: _typing.Union[None, bytes, str]) -> DataUnion: ...
     value: _typing.Final[_typing.Union[None, bytes, str]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "module.types.DataUnion": ...  # type: ignore
@@ -165,7 +164,7 @@ class ValUnion(_fbthrift_python_types.Union, _fbthrift_compatible_with_ValUnion)
     @classmethod
     def fromValue(cls, value: _typing.Union[None, Val, Val]) -> ValUnion: ...
     value: _typing.Final[_typing.Union[None, Val, Val]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "module.types.ValUnion": ...  # type: ignore
@@ -194,7 +193,7 @@ class VirtualComplexUnion(_fbthrift_python_types.Union, _fbthrift_compatible_wit
     @classmethod
     def fromValue(cls, value: _typing.Union[None, str, str]) -> VirtualComplexUnion: ...
     value: _typing.Final[_typing.Union[None, str, str]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "module.types.VirtualComplexUnion": ...  # type: ignore
@@ -241,7 +240,7 @@ class NonCopyableUnion(_fbthrift_python_types.Union, _fbthrift_compatible_with_N
     @classmethod
     def fromValue(cls, value: _typing.Union[None, NonCopyableStruct]) -> NonCopyableUnion: ...
     value: _typing.Final[_typing.Union[None, NonCopyableStruct]]
-    type: Type
+    type: _typing.Final[Type]
     def get_type(self) -> Type:...
     def _to_python(self) -> _typing.Self: ...
     def _to_py3(self) -> "module.types.NonCopyableUnion": ...  # type: ignore

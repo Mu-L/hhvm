@@ -142,8 +142,8 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> SmartConstructors for DirectDec
         <Self as FlattenSmartConstructors>::make_case_type_declaration(self, attribute_spec, modifiers, case_keyword, type_keyword, name, generic_parameter, as_, bounds, equal, variants, semicolon)
     }
 
-    fn make_case_type_variant(&mut self, bar: Self::Output, type_: Self::Output) -> Self::Output {
-        <Self as FlattenSmartConstructors>::make_case_type_variant(self, bar, type_)
+    fn make_case_type_variant(&mut self, bar: Self::Output, type_: Self::Output, where_clause: Self::Output) -> Self::Output {
+        <Self as FlattenSmartConstructors>::make_case_type_variant(self, bar, type_, where_clause)
     }
 
     fn make_property_declaration(&mut self, attribute_spec: Self::Output, modifiers: Self::Output, type_: Self::Output, declarators: Self::Output, semicolon: Self::Output) -> Self::Output {
@@ -246,8 +246,8 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> SmartConstructors for DirectDec
         <Self as FlattenSmartConstructors>::make_decorated_expression(self, decorator, expression)
     }
 
-    fn make_parameter_declaration(&mut self, attribute: Self::Output, visibility: Self::Output, optional: Self::Output, call_convention: Self::Output, readonly: Self::Output, type_: Self::Output, ellipsis: Self::Output, name: Self::Output, default_value: Self::Output, parameter_end: Self::Output) -> Self::Output {
-        <Self as FlattenSmartConstructors>::make_parameter_declaration(self, attribute, visibility, optional, call_convention, readonly, type_, ellipsis, name, default_value, parameter_end)
+    fn make_parameter_declaration(&mut self, attribute: Self::Output, visibility: Self::Output, optional: Self::Output, call_convention: Self::Output, readonly: Self::Output, pre_ellipsis: Self::Output, type_: Self::Output, ellipsis: Self::Output, name: Self::Output, default_value: Self::Output, parameter_end: Self::Output) -> Self::Output {
+        <Self as FlattenSmartConstructors>::make_parameter_declaration(self, attribute, visibility, optional, call_convention, readonly, pre_ellipsis, type_, ellipsis, name, default_value, parameter_end)
     }
 
     fn make_old_attribute_specification(&mut self, left_double_angle: Self::Output, attributes: Self::Output, right_double_angle: Self::Output) -> Self::Output {
@@ -678,8 +678,12 @@ impl<'a, 'o, 't, S: SourceTextAllocator<'t, 'a>> SmartConstructors for DirectDec
         <Self as FlattenSmartConstructors>::make_closure_type_specifier(self, outer_left_paren, readonly_keyword, function_keyword, inner_left_paren, parameter_list, inner_right_paren, contexts, colon, readonly_return, return_type, outer_right_paren)
     }
 
-    fn make_closure_parameter_type_specifier(&mut self, optional: Self::Output, call_convention: Self::Output, readonly: Self::Output, type_: Self::Output, ellipsis: Self::Output) -> Self::Output {
-        <Self as FlattenSmartConstructors>::make_closure_parameter_type_specifier(self, optional, call_convention, readonly, type_, ellipsis)
+    fn make_closure_parameter_type_specifier(&mut self, optional: Self::Output, call_convention: Self::Output, readonly: Self::Output, pre_ellipsis: Self::Output, type_: Self::Output, ellipsis: Self::Output) -> Self::Output {
+        <Self as FlattenSmartConstructors>::make_closure_parameter_type_specifier(self, optional, call_convention, readonly, pre_ellipsis, type_, ellipsis)
+    }
+
+    fn make_tuple_or_union_or_intersection_element_type_specifier(&mut self, optional: Self::Output, pre_ellipsis: Self::Output, type_: Self::Output, ellipsis: Self::Output) -> Self::Output {
+        <Self as FlattenSmartConstructors>::make_tuple_or_union_or_intersection_element_type_specifier(self, optional, pre_ellipsis, type_, ellipsis)
     }
 
     fn make_type_refinement(&mut self, type_: Self::Output, keyword: Self::Output, left_brace: Self::Output, members: Self::Output, right_brace: Self::Output) -> Self::Output {

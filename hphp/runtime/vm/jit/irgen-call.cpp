@@ -55,13 +55,6 @@ const StaticString
   s_DynamicContextOverrideUnsafe("__SystemLib\\DynamicContextOverrideUnsafe");
 const StaticString s_attr_Deprecated("__Deprecated");
 
-// If we manipulate the stack before generating a may-throw IR op, we have to
-// record the updated stack offset in the marker, so that the catch block of
-// the IR op will have the correct memory effects.
-void updateStackOffset(IRGS& env) {
-  updateMarker(env);
-  env.irb->exceptionStackBoundary();
-}
 
 const Class* callContext(IRGS& env, const FCallArgs& fca, const Class* cls) {
   if (!fca.context) return curClass(env);
@@ -851,15 +844,17 @@ inline SSATmp* ldCtxForClsMethod(IRGS& env,
                                  bool exact) {
 
   assertx(callCtx->isA(TCls));
+  assertx(cls);
+
+  if (callee->isStaticInPrologue()) {
+    return gen(env, AssertType, Type::SubCls(cls), callCtx);
+  };
 
   auto gen_missing_this = [&] {
-    if (!callee->isStaticInPrologue()) {
-      gen(env, ThrowMissingThis, cns(env, callee));
-    }
+    gen(env, ThrowMissingThis, cns(env, callee));
     return callCtx;
   };
 
-  if (callee->isStaticInPrologue()) return callCtx;
   if (!hasThis(env)) {
     return gen_missing_this();
   }
@@ -940,7 +935,12 @@ void optimizeProfiledCallMethod(IRGS& env,
       return ldCtxForClsMethod(env, callee, ctx,
                                cls ? cls : callee->cls(), cls != nullptr);
     }
+
+    ctx = cls ? gen(env, AssertType, Type::ExactObj(cls), ctx) 
+              : gen(env, AssertType, Type::SubObj(callee->implCls()), ctx); 
+
     if (!callee->isStaticInPrologue()) return ctx;
+
     assertx(ctx->type() <= TObj);
     auto ret = cls ? cns(env, cls) : gen(env, LdObjClass, ctx);
     decRef(env, ctx);
@@ -1386,16 +1386,65 @@ void emitModuleBoundaryCheck(IRGS& env, SSATmp* symbol, bool func /* = true */) 
 }
 
 void emitFCallFuncD(IRGS& env, FCallArgs fca, const StringData* funcName) {
-  auto const func = lookupImmutableFunc(funcName);
-  if (func) {
-    emitModuleBoundaryCheckKnown(env, func);
-    prepareAndCallKnown(env, func, fca, nullptr, false, false);
+  auto const lookup = lookupKnownFuncMaybe(env, funcName);
+  auto const fast = [&]() {
+    emitModuleBoundaryCheckKnown(env, lookup.func);
+    prepareAndCallKnown(env, lookup.func, fca, nullptr, false, false);
     return;
-  }
+  };
+  auto const slow = [&]() {
+    auto const cachedFunc = gen(env, LdFuncCached, FuncNameData { funcName } );
+    emitModuleBoundaryCheck(env, cachedFunc);
+    prepareAndCallProfiled(env, cachedFunc, fca, nullptr, false, false);
+  };
+  auto const data = [&](const Func* func, bool success) {
+    auto id = func ? func->getFuncId().toInt(): FuncId::Invalid.toInt();
+    return LoggingSpeculateData {
+      nullptr,
+      nullptr,
+      funcName,
+      Op::FCallFuncD,
+      id,
+      success,
+    };
+  };
 
-  auto const cachedFunc = gen(env, LdFuncCached, FuncNameData { funcName } );
-  emitModuleBoundaryCheck(env, cachedFunc);
-  prepareAndCallProfiled(env, cachedFunc, fca, nullptr, false, false);
+  switch (lookup.tag) {
+    case Func::FuncLookupResult::None:
+      if (RO::SandboxSpeculate && RO::EvalLogClsSpeculation) {
+        gen(env, LogClsSpeculation, data(nullptr, false));
+      }
+      return slow();
+    case Func::FuncLookupResult::Exact:
+      return fast();
+    case Func::FuncLookupResult::Maybe:
+      auto const loadedFunc = gen(env, LdFuncCached, FuncNameData { funcName } );
+      ifThenElse( 
+        env,  
+        [&] (Block* taken) {
+          gen(env, EqFuncId, FuncData(lookup.func), taken, loadedFunc);
+        },
+        [&] {
+          updateStackOffset(env);
+          if (RO::EvalLogClsSpeculation) {
+            gen(env, LogClsSpeculation, data(lookup.func, true));
+          }
+          fast();
+          return;
+        },
+        [&] {
+          hint(env, Block::Hint::Unlikely);
+          updateStackOffset(env);
+          if (RO::EvalLogClsSpeculation) {
+            gen(env, LogClsSpeculation, data(lookup.func, false));
+          }
+          emitModuleBoundaryCheck(env, loadedFunc);
+          prepareAndCallUnknown(env, loadedFunc, fca, nullptr,
+                                false, false, true /* makeExit */);
+          return;
+        }
+      );
+  };
 }
 
 void emitFCallFunc(IRGS& env, FCallArgs fca) {
@@ -1410,7 +1459,7 @@ void emitFCallFunc(IRGS& env, FCallArgs fca) {
 }
 
 void emitResolveFunc(IRGS& env, const StringData* name) {
-  auto const cachedFunc = lookupImmutableFunc(name);
+  auto const cachedFunc = lookupKnownFunc(env, name);
   if (!cachedFunc) {
     auto const func = gen(env, LookupFuncCached, FuncNameData { name } );
     emitModuleBoundaryCheck(env, func);
@@ -1422,7 +1471,7 @@ void emitResolveFunc(IRGS& env, const StringData* name) {
 }
 
 void emitResolveMethCaller(IRGS& env, const StringData* name) {
-  auto const func = lookupImmutableFunc(name);
+  auto const func = lookupKnownFunc(env, name);
 
   // We de-duplicate meth_caller across the repo which may lead to the resolved
   // meth caller being in a different unit (and therefore unavailable at this
@@ -1455,7 +1504,7 @@ void emitResolveRFunc(IRGS& env, const StringData* name) {
   auto const tsList = popC(env);
 
   auto const funcTmp = [&] () -> SSATmp* {
-    auto const func = lookupImmutableFunc(name);
+    auto const func = lookupKnownFunc(env, name);
     if (!func) return gen(env, LookupFuncCached, FuncNameData { name } );
     return cns(env, func);
   }();
@@ -1530,23 +1579,76 @@ void emitNewObj(IRGS& env) {
 }
 
 void emitNewObjD(IRGS& env, const StringData* className) {
-  auto const cls = lookupKnown(env, className);
+  auto const lookup = lookupKnownMaybe(env, className);
+  auto const cls = lookup.cls;
+  bool const fastPath = lookup.cls && isNormalClass(cls) 
+    && !isAbstract(cls) && !cls->hasNativePropHandler();
 
   auto const knownClass = [&]() {
-    bool const canInstantiate = isNormalClass(cls) && !isAbstract(cls);
-    if (canInstantiate && !cls->hasNativePropHandler()) {
+    if (fastPath) {
       push(env, allocObjFast(env, cls));
     } else {
       push(env, gen(env, AllocObj, cns(env, cls)));
     }
   };
-  if (cls) return knownClass();
 
-  auto const cachedCls = gen(env,
-                             LdClsCached,
-                             LdClsFallbackData::Fatal(),
-                             cns(env, className));
-  push(env, gen(env, AllocObj, cachedCls));
+  auto const slow = [&]() {
+    auto const cachedCls = gen(env, LdClsCached, LdClsFallbackData::Fatal(),
+                               cns(env, className));
+    push(env, gen(env, AllocObj, cachedCls));
+  };
+  
+  auto const data = [&](uint32_t id, bool success) {
+    return LoggingSpeculateData {
+      className,
+      curClass(env) ? curClass(env)->name() : nullptr,
+      nullptr,
+      Op::NewObjD,
+      id,
+      success,
+    };
+  };
+
+  switch (lookup.tag) {
+    case Class::ClassLookupResult::Exact: return knownClass();
+    case Class::ClassLookupResult::None: {
+      if (RO::SandboxSpeculate) {
+        if (RO::EvalLogClsSpeculation) {
+          gen(env, LogClsSpeculation, data(ClassId::Invalid, false));
+        }
+        gen(env, LdClsCached, LdClsFallbackData::Fatal(), cns(env, className));
+        gen(env, Jmp, makeExit(env));
+        return;
+      } else {
+        return slow();
+      }
+    };
+    case Class::ClassLookupResult::Maybe: {
+      if (!fastPath) return slow();
+      gen(env, LdClsCached, LdClsFallbackData::Fatal(), cns(env, className));
+      auto const isEqual = gen(env, EqClassId, ClassIdData(lookup.cls));
+      return ifThenElse(
+        env,
+        [&] (Block* taken) {
+          gen(env, JmpZero, taken, isEqual);
+        },
+        [&] {
+          if (RO::EvalLogClsSpeculation) {
+            gen(env, LogClsSpeculation, data(lookup.cls->classId().id(), true));
+          }
+          push(env, allocObjFast(env, cls));
+        },
+        [&] {
+          hint(env, Block::Hint::Unlikely);
+          if (RO::EvalLogClsSpeculation) {
+            gen(env, LogClsSpeculation, data(lookup.cls->classId().id(), false));
+          }
+          slow();
+        }
+      );
+    }
+    not_reached();
+  }
 }
 
 void emitNewObjS(IRGS& env, SpecialClsRef ref) {
@@ -1724,6 +1826,17 @@ void emitFCallClsMethodD(IRGS& env,
     prepareAndCallProfiled(env, func, fca, ctx, false, false);
   };
 
+  auto const data = [&](const Class* ctx, uint32_t id, bool success) {
+    return LoggingSpeculateData {
+      className,
+      ctx ? ctx->name() : nullptr,
+      methodName,
+      Op::FCallClsMethodD,
+      id,
+      success,
+    };
+  };
+
   switch (lookup.tag) {
     case Class::ClassLookupResult::Exact: {
       auto const cls = lookup.cls;
@@ -1736,7 +1849,16 @@ void emitFCallClsMethodD(IRGS& env,
       return prepareAndCallKnown(env, func, fca, ctx, false, false);
     }
     case Class::ClassLookupResult::None: {
-      return slow();
+      if (RO::SandboxSpeculate) {
+        if (RO::EvalLogClsSpeculation) {
+          gen(env, LogClsSpeculation, data(nullptr, ClassId::Invalid, false));
+        }
+        gen(env, LdClsCached, LdClsFallbackData::Fatal(), cns(env, className));
+        gen(env, Jmp, makeExit(env));
+        return;
+      } else {
+        return slow();
+      }
     }
     case Class::ClassLookupResult::Maybe: {
       auto const cls = lookup.cls;
@@ -1749,20 +1871,31 @@ void emitFCallClsMethodD(IRGS& env,
       if (!func) return slow();
 
       gen(env, LdClsCached, LdClsFallbackData::Fatal(), cns(env, className));
+      auto const isEqual = gen(env, EqClassId, ClassIdData(lookup.cls));
       return ifThenElse(
         env,
         [&] (Block* taken) {
-          gen(env, EqClassId, ClassIdData(lookup.cls), taken);
+          gen(env, JmpZero, taken, isEqual);
         },
         [&] {
           updateStackOffset(env);
           auto const ctx = ldCtxForClsMethod(env, func, cns(env, cls), cls, true);
           emitModuleBoundaryCheckKnown(env, cls);
+          if (RO::EvalLogClsSpeculation) {
+            gen(env, LogClsSpeculation, data(callCtx.cls(),
+                                             lookup.cls->classId().id(),
+                                             true));
+          }
           prepareAndCallKnown(env, func, fca, ctx, false, false);
         },
         [&] {
           hint(env, Block::Hint::Unlikely);
           updateStackOffset(env);
+          if (RO::EvalLogClsSpeculation) {
+            gen(env, LogClsSpeculation, data(callCtx.cls(),
+                                             lookup.cls->classId().id(),
+                                             false));
+          }
           slow();
         }
       );
@@ -2021,6 +2154,8 @@ void fcallClsMethodCommon(IRGS& env,
 
   auto const methodName = methVal->strVal();
   auto const knownClass = [&] () -> std::pair<const Class*, bool> {
+    // clsHint is added by HHBBC. Will be empty if not in repo mode.
+    assertx(IMPLIES(!clsHint->empty(), RO::RepoAuthoritative));
     if (!clsHint->empty()) {
       auto const cls = lookupKnown(env, clsHint);
       if (cls && isNormalClass(cls)) return std::make_pair(cls, true);

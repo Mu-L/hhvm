@@ -437,7 +437,7 @@ T decode(folly::io::Cursor& cursor);
 template <typename T>
 std::string enumToHex(T enumValue);
 
-Buf encodeHkdfLabel(HkdfLabel&& label, const std::string& hkdfLabelPrefix);
+Buf encodeHkdfLabel(HkdfLabel&& label, folly::StringPiece hkdfLabelPrefix);
 } // namespace fizz
 
 #ifdef FOLLY_MOBILE
@@ -454,7 +454,7 @@ struct hash<fizz::ExtensionType> {
 
 template <>
 struct fmt::formatter<fizz::ExtensionType> : formatter<unsigned> {
-  auto format(fizz::ExtensionType t, format_context& ctx) {
+  auto format(fizz::ExtensionType t, format_context& ctx) const {
     return formatter<unsigned>::format(folly::to_underlying(t), ctx);
   }
 };

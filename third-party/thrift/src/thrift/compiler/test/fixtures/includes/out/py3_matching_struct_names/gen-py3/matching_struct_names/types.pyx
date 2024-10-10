@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -61,14 +58,13 @@ import importlib
 cimport module.types as _module_types
 import module.types as _module_types
 
+
 from matching_struct_names.containers_FBTHRIFT_ONLY_DO_NOT_USE import (
     List__MyStruct,
     List__List__MyStruct,
     List__module_MyStruct,
     List__List__module_MyStruct,
 )
-
-
 
 
 cdef object get_types_reflection():
@@ -109,7 +105,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline field_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().value()).decode('UTF-8')
 
     @property
@@ -229,7 +224,6 @@ cdef class Combo(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline listOfOurMyStructLists_impl(self):
-
         if self.__fbthrift_cached_listOfOurMyStructLists is None:
             self.__fbthrift_cached_listOfOurMyStructLists = List__List__MyStruct__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).listOfOurMyStructLists_ref().ref())
         return self.__fbthrift_cached_listOfOurMyStructLists
@@ -239,7 +233,6 @@ cdef class Combo(thrift.py3.types.Struct):
         return self.listOfOurMyStructLists_impl()
 
     cdef inline theirMyStructList_impl(self):
-
         if self.__fbthrift_cached_theirMyStructList is None:
             self.__fbthrift_cached_theirMyStructList = List__module_MyStruct__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).theirMyStructList_ref().ref())
         return self.__fbthrift_cached_theirMyStructList
@@ -249,7 +242,6 @@ cdef class Combo(thrift.py3.types.Struct):
         return self.theirMyStructList_impl()
 
     cdef inline ourMyStructList_impl(self):
-
         if self.__fbthrift_cached_ourMyStructList is None:
             self.__fbthrift_cached_ourMyStructList = List__MyStruct__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).ourMyStructList_ref().ref())
         return self.__fbthrift_cached_ourMyStructList
@@ -259,7 +251,6 @@ cdef class Combo(thrift.py3.types.Struct):
         return self.ourMyStructList_impl()
 
     cdef inline listOfTheirMyStructList_impl(self):
-
         if self.__fbthrift_cached_listOfTheirMyStructList is None:
             self.__fbthrift_cached_listOfTheirMyStructList = List__List__module_MyStruct__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).listOfTheirMyStructList_ref().ref())
         return self.__fbthrift_cached_listOfTheirMyStructList

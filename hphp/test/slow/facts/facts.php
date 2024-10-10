@@ -76,6 +76,21 @@ function print_subtypes(
   }
 }
 
+function print_transitive_subtypes(
+  classname<mixed> $type,
+  ?HH\Facts\DeriveFilters $filters = null,
+  bool $include_interface_require_extends = false,
+): void {
+  if ($filters is nonnull) {
+    $subtypes_json = jsonify_arr(HH\Facts\transitive_subtypes($type, $filters, $include_interface_require_extends));
+    $filters_json = jsonify_filters($filters);
+    print "Transitive subtypes of $type with filters $filters_json: $subtypes_json\n";
+  } else {
+    $subtypes_json = jsonify_arr(HH\Facts\transitive_subtypes($type, $filters, $include_interface_require_extends));
+    print "Transitive subtypes of $type: $subtypes_json\n";
+  }
+}
+
 function print_supertypes(
   classname<mixed> $type,
   ?HH\Facts\DeriveFilters $filters = null,
@@ -254,42 +269,42 @@ function print_num_symbols(
   print "$path has $num_type_aliases type aliases\n";
 }
 
-function print_type_file_relative_path(
+function print_type_file_path(
   string $className,
 ): void {
-  $path = HH\Facts\type_to_path_relative($className);
-  print "$className has relative path: $path\n";
+  $path = HH\Facts\type_to_path($className);
+  print "$className has path: $path\n";
 }
 
-function print_function_file_relative_path(
+function print_function_file_path(
   string $function_name,
 ): void {
-  $path = HH\Facts\function_to_path_relative($function_name);
-  print "$function_name has relative path: $path\n";
+  $path = HH\Facts\function_to_path($function_name);
+  print "$function_name has path: $path\n";
 }
 
-function print_type_alias_file_relative_path(
+function print_type_alias_file_path(
   string $alias,
 ): void {
-  $path = HH\Facts\type_or_type_alias_to_path_relative($alias);
-  print "alias $alias from type_or_type_alias_to_path_relative has relative path: $path\n";
+  $path = HH\Facts\type_or_type_alias_to_path($alias);
+  print "alias $alias from type_or_type_alias_to_path has path: $path\n";
 
-  $path = HH\Facts\type_alias_to_path_relative($alias);
-  print "alias $alias from type_alias_to_path_relative has relative path: $path\n";
+  $path = HH\Facts\type_alias_to_path($alias);
+  print "alias $alias from type_alias_to_path has path: $path\n";
 }
 
-function print_constant_file_relative_path(
+function print_constant_file_path(
   string $constant,
 ): void {
-  $path = HH\Facts\constant_to_path_relative($constant);
-  print "$constant has relative path: $path\n";
+  $path = HH\Facts\constant_to_path($constant);
+  print "$constant has path: $path\n";
 }
 
-function print_module_file_relative_path(
+function print_module_file_path(
   string $module,
 ): void {
-  $path = HH\Facts\module_to_path_relative($module);
-  print "$module has relative path: $path\n";
+  $path = HH\Facts\module_to_path($module);
+  print "$module has path: $path\n";
 }
 
 function print_validation(): void {
@@ -352,6 +367,33 @@ function facts(): void {
         HH\Facts\TypeKind::K_TRAIT,
       ],
     ),
+  );
+
+  print_transitive_subtypes(
+    BaseClass::class,
+    shape('kind' => keyset[HH\Facts\TypeKind::K_CLASS]),
+  );
+  print_transitive_subtypes(
+    SuperClassOfFinalClassB::class,
+    shape(
+      'kind' => keyset[
+        HH\Facts\TypeKind::K_CLASS,
+        HH\Facts\TypeKind::K_TRAIT,
+        HH\Facts\TypeKind::K_INTERFACE,
+      ],
+    ),
+    true
+  );
+  print_transitive_subtypes(
+    SuperClassOfFinalClassB::class,
+    shape(
+      'kind' => keyset[
+        HH\Facts\TypeKind::K_CLASS,
+        HH\Facts\TypeKind::K_TRAIT,
+        HH\Facts\TypeKind::K_INTERFACE,
+      ],
+    ),
+    false
   );
 
   print_supertypes(DerivedClass::class);
@@ -542,11 +584,11 @@ function facts(): void {
   );
 
   print "\nGetting paths\n";
-  print_type_file_relative_path(AppleThenBanana::class);
-  print_function_file_relative_path("outOfClassFunction");
-  print_type_alias_file_relative_path("AnAlias");
-  print_constant_file_relative_path("SOME_CONSTANT");
-  print_module_file_relative_path("someModule");
+  print_type_file_path(AppleThenBanana::class);
+  print_function_file_path("outOfClassFunction");
+  print_type_alias_file_path("AnAlias");
+  print_constant_file_path("SOME_CONSTANT");
+  print_module_file_path("someModule");
   print "\nGetting attributes\n";
 
   print_type_attrs(AppleThenBanana::class);

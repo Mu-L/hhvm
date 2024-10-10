@@ -46,6 +46,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait Service1: ::std::marker::Send + ::std::marker::Sync + 'static {
     type RequestContext: ::std::marker::Sync;
@@ -91,8 +92,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for Service1's methods.
 #[derive(Clone, Debug)]
 pub struct Service1Processor<P, H, R, RS> {
@@ -100,6 +99,7 @@ pub struct Service1Processor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_Service1_r {
 }
@@ -124,7 +124,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Se
         })
     }
 }
-
 
 impl<P, H, R, RS> Service1Processor<P, H, R, RS>
 where
@@ -191,7 +190,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "S1.r", exception = ?exn);
+                ::tracing::error!(method = "S1.r", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -397,6 +396,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait S2: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn s(
@@ -436,8 +436,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for S2's methods.
 #[derive(Clone, Debug)]
 pub struct S2Processor<P, H, R, RS> {
@@ -445,6 +443,7 @@ pub struct S2Processor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_S2_r {
 }
@@ -469,7 +468,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_S2
         })
     }
 }
-
 
 impl<P, H, R, RS> S2Processor<P, H, R, RS>
 where
@@ -535,7 +533,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "S2.r", exception = ?exn);
+                ::tracing::error!(method = "S2.r", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -741,6 +739,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait AllMethods: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn foo(
@@ -802,8 +801,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for AllMethods's methods.
 #[derive(Clone, Debug)]
 pub struct AllMethodsProcessor<P, H, R, RS> {
@@ -811,6 +808,7 @@ pub struct AllMethodsProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_AllMethods_foo {
 }
@@ -836,6 +834,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Al
     }
 }
 
+
 struct Args_AllMethods_bar {
 }
 
@@ -859,7 +858,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Al
         })
     }
 }
-
 
 impl<P, H, R, RS> AllMethodsProcessor<P, H, R, RS>
 where
@@ -925,7 +923,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "AllMethods.foo", exception = ?exn);
+                ::tracing::error!(method = "AllMethods.foo", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -986,7 +984,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "AllMethods.bar", exception = ?exn);
+                ::tracing::error!(method = "AllMethods.bar", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1197,6 +1195,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait OneMethod: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn foo(
@@ -1258,8 +1257,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for OneMethod's methods.
 #[derive(Clone, Debug)]
 pub struct OneMethodProcessor<P, H, R, RS> {
@@ -1267,6 +1264,7 @@ pub struct OneMethodProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_OneMethod_foo {
 }
@@ -1292,6 +1290,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_On
     }
 }
 
+
 struct Args_OneMethod_bar {
 }
 
@@ -1315,7 +1314,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_On
         })
     }
 }
-
 
 impl<P, H, R, RS> OneMethodProcessor<P, H, R, RS>
 where
@@ -1381,7 +1379,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "OneMethod.foo", exception = ?exn);
+                ::tracing::error!(method = "OneMethod.foo", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1442,7 +1440,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "OneMethod.bar", exception = ?exn);
+                ::tracing::error!(method = "OneMethod.bar", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1653,6 +1651,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait OneMethodOptOut: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn foo(
@@ -1714,8 +1713,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for OneMethodOptOut's methods.
 #[derive(Clone, Debug)]
 pub struct OneMethodOptOutProcessor<P, H, R, RS> {
@@ -1723,6 +1720,7 @@ pub struct OneMethodOptOutProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_OneMethodOptOut_foo {
 }
@@ -1748,6 +1746,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_On
     }
 }
 
+
 struct Args_OneMethodOptOut_bar {
 }
 
@@ -1771,7 +1770,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_On
         })
     }
 }
-
 
 impl<P, H, R, RS> OneMethodOptOutProcessor<P, H, R, RS>
 where
@@ -1837,7 +1835,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "OneMethodOptOut.foo", exception = ?exn);
+                ::tracing::error!(method = "OneMethodOptOut.foo", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -1898,7 +1896,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "OneMethodOptOut.bar", exception = ?exn);
+                ::tracing::error!(method = "OneMethodOptOut.bar", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

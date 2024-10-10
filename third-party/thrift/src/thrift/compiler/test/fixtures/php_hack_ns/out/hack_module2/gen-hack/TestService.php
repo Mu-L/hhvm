@@ -65,11 +65,6 @@ interface TestServiceClientIf extends \FooHackServiceClientIf {
 trait TestServiceClientBase {
   require extends \ThriftClientBase;
 
-}
-
-class TestServiceAsyncClient extends \FooHackServiceAsyncClient implements TestServiceAsyncClientIf {
-  use TestServiceClientBase;
-
   /**
    * Original thrift definition:-
    * i32
@@ -85,40 +80,26 @@ class TestServiceAsyncClient extends \FooHackServiceAsyncClient implements TestS
       'str_arg' => $str_arg,
     ));
     await $this->asyncHandler_->genBefore("TestService", "ping", $args);
-    $currentseqid = $this->sendImplHelper($args, "ping", false);
+    $currentseqid = $this->sendImplHelper($args, "ping", false, "TestService" );
     return await $this->genAwaitResponse(\hack_ns2\TestService_ping_result::class, "ping", false, $currentseqid, $rpc_options);
   }
+
+}
+
+class TestServiceAsyncClient extends \FooHackServiceAsyncClient implements TestServiceAsyncClientIf {
+  use TestServiceClientBase;
 
 }
 
 class TestServiceClient extends \FooHackServiceClient implements TestServiceClientIf {
   use TestServiceClientBase;
 
-  /**
-   * Original thrift definition:-
-   * i32
-   *   ping(1: string str_arg);
-   */
-  public async function ping(string $str_arg): Awaitable<int> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = \hack_ns2\TestService_ping_args::fromShape(shape(
-      'str_arg' => $str_arg,
-    ));
-    await $this->asyncHandler_->genBefore("TestService", "ping", $args);
-    $currentseqid = $this->sendImplHelper($args, "ping", false);
-    return await $this->genAwaitResponse(\hack_ns2\TestService_ping_result::class, "ping", false, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_ping(string $str_arg): int {
     $args = \hack_ns2\TestService_ping_args::fromShape(shape(
       'str_arg' => $str_arg,
     ));
-    return $this->sendImplHelper($args, "ping", false);
+    return $this->sendImplHelper($args, "ping", false, "TestService" );
   }
   public function recv_ping(?int $expectedsequenceid = null): int {
     return $this->recvImplHelper(\hack_ns2\TestService_ping_result::class, "ping", false, $expectedsequenceid);

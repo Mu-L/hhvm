@@ -17,98 +17,84 @@
 package thrift
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
+	"maps"
 	"net"
 	"time"
 
-	rsocket "github.com/rsocket/rsocket-go"
-	"github.com/rsocket/rsocket-go/core/transport"
-	"github.com/rsocket/rsocket-go/payload"
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 type rocketClient struct {
-	Format
-
-	conn net.Conn
+	types.Encoder
+	types.Decoder
 
 	// rsocket client state
-	ctx    context.Context
-	cancel func()
-	client rsocket.Client
+	client RSocketClient
 
-	resultChan chan rsocketResult
+	resultData []byte
+	resultErr  error
 
 	timeout time.Duration
 
-	protoID ProtocolID
+	protoID types.ProtocolID
 	zstd    bool
 
-	reqMetadata  *requestRPCMetadata
-	respMetadata *ResponseRpcMetadata
-	seqID        int32
+	messageName string
+	writeType   types.MessageType
+	seqID       int32
 
+	reqHeaders        map[string]string
+	respHeaders       map[string]string
 	persistentHeaders map[string]string
 
-	buf *MemoryBuffer
+	rbuf *MemoryBuffer
+	wbuf *MemoryBuffer
 }
 
-// NewRocketClient creates a RocketClient
-func NewRocketClient(conn net.Conn) (Protocol, error) {
+var _ types.Protocol = (*rocketClient)(nil)
+var _ types.RequestHeaders = (*rocketClient)(nil)
+var _ types.ResponseHeaderGetter = (*rocketClient)(nil)
+
+// NewRocketClient creates a new Rocket client given an RSocketClient.
+func NewRocketClient(client RSocketClient, protoID types.ProtocolID, timeout time.Duration, persistentHeaders map[string]string) (types.Protocol, error) {
+	return newRocketClientFromRsocket(client, protoID, timeout, persistentHeaders)
+}
+
+func newRocketClient(conn net.Conn, protoID types.ProtocolID, timeout time.Duration, persistentHeaders map[string]string) (types.Protocol, error) {
+	return newRocketClientFromRsocket(newRSocketClient(conn), protoID, timeout, persistentHeaders)
+}
+
+func newRocketClientFromRsocket(client RSocketClient, protoID types.ProtocolID, timeout time.Duration, persistentHeaders map[string]string) (types.Protocol, error) {
 	p := &rocketClient{
-		protoID:           ProtocolIDCompact,
-		persistentHeaders: make(map[string]string),
-		buf:               NewMemoryBuffer(),
-		conn:              conn,
+		client:            client,
+		protoID:           protoID,
+		persistentHeaders: persistentHeaders,
+		rbuf:              NewMemoryBuffer(),
+		wbuf:              NewMemoryBuffer(),
+		timeout:           timeout,
+		reqHeaders:        make(map[string]string),
 		zstd:              false, // zstd adds a performance overhead, so we default to false
 	}
-	if err := p.resetProtocol(); err != nil {
-		return nil, err
+	switch p.protoID {
+	case types.ProtocolIDBinary:
+		p.Decoder = newBinaryDecoder(p.rbuf)
+		p.Encoder = newBinaryEncoder(p.wbuf)
+	case types.ProtocolIDCompact:
+		p.Decoder = newCompactDecoder(p.rbuf)
+		p.Encoder = newCompactEncoder(p.wbuf)
+	default:
+		return nil, types.NewProtocolException(fmt.Errorf("Unknown protocol id: %#x", p.protoID))
 	}
 	return p, nil
 }
 
-type rsocketResult struct {
-	val payload.Payload
-	err error
-}
-
-func (p *rocketClient) SetTimeout(timeout time.Duration) {
-	p.timeout = timeout
-}
-
-func (p *rocketClient) resetProtocol() error {
-	p.buf.Reset()
-	switch p.protoID {
-	case ProtocolIDBinary:
-		// These defaults match cpp implementation
-		p.Format = NewBinaryProtocol(p.buf, false, true)
-	case ProtocolIDCompact:
-		p.Format = NewCompactProtocol(p.buf)
-	default:
-		return NewProtocolException(fmt.Errorf("Unknown protocol id: %#x", p.protoID))
-	}
-	return nil
-}
-
-func (p *rocketClient) SetProtocolID(protoID ProtocolID) error {
-	p.protoID = protoID
-	return p.resetProtocol()
-}
-
-func (p *rocketClient) WriteMessageBegin(name string, typeID MessageType, seqid int32) error {
-	p.buf.Reset()
+func (p *rocketClient) WriteMessageBegin(name string, typeID types.MessageType, seqid int32) error {
+	p.wbuf.Reset()
 	p.seqID = seqid
-
-	if p.reqMetadata == nil {
-		p.reqMetadata = &requestRPCMetadata{}
-	}
-	p.reqMetadata.Name = name
-	p.reqMetadata.TypeID = typeID
-	p.reqMetadata.ProtoID = p.protoID
-	p.reqMetadata.Zstd = p.zstd
+	p.writeType = typeID
+	p.messageName = name
 	return nil
 }
 
@@ -117,307 +103,70 @@ func (p *rocketClient) WriteMessageEnd() error {
 }
 
 func (p *rocketClient) Flush() (err error) {
-	if p.reqMetadata == nil {
-		p.reqMetadata = &requestRPCMetadata{}
-	}
-	if p.reqMetadata.Other == nil {
-		p.reqMetadata.Other = make(map[string]string)
-	}
-	for k, v := range p.persistentHeaders {
-		p.reqMetadata.Other[k] = v
-	}
-	metadataBytes, err := serializeRequestRPCMetadata(p.reqMetadata)
-	if err != nil {
+	dataBytes := p.wbuf.Bytes()
+	if err := p.client.SendSetup(p.serverMetadataPush); err != nil {
 		return err
 	}
-	// serializer in the protocol field was writing to the transport's memory buffer.
-	dataBytes := p.buf.Bytes()
-	if p.reqMetadata.Zstd {
-		dataBytes, err = compressZstd(dataBytes)
-		if err != nil {
-			return err
-		}
+	headers := unionMaps(p.reqHeaders, p.persistentHeaders)
+	if p.writeType == types.ONEWAY {
+		return p.client.FireAndForget(p.messageName, p.protoID, p.writeType, headers, p.zstd, dataBytes)
 	}
-
-	request := payload.New(dataBytes, metadataBytes)
-	p.resultChan = make(chan rsocketResult, 1)
-	if err := p.open(); err != nil {
-		return err
-	}
-	// It is necessary to reset the deadline to 0.
-	// The rsocket library only sets the deadline at connection start.
-	// This means if you wait long enough, the connection will become useless.
-	// Or something else is happening, but this is very necessary.
-	p.conn.SetDeadline(time.Time{})
-	mono := p.client.RequestResponse(request)
-	if p.reqMetadata.TypeID != CALL {
+	if p.writeType != types.CALL {
 		return nil
 	}
-	ctx := p.ctx
-	go func() {
-		val, err := mono.Block(ctx)
-		if val != nil {
-			metadata, _ := val.Metadata()
-			data := val.Data()
-			val = payload.New(data, metadata)
-		}
-		p.resultChan <- rsocketResult{val: val, err: err}
-	}()
-	return nil
-}
-
-// Open opens the internal transport (required for Transport)
-func (p *rocketClient) open() error {
-	if p.client != nil {
-		return nil
-	}
-	setupPayload, err := newRequestSetupPayloadVersion8()
-	if err != nil {
-		return err
-	}
-	transporter := func(ctx context.Context) (*transport.Transport, error) {
-		conn := transport.NewTCPClientTransport(p.conn)
-		conn.SetLifetime(time.Millisecond * 3600000)
-		return conn, nil
-	}
-	p.ctx, p.cancel = context.WithCancel(context.Background())
-	clientBuilder := rsocket.Connect()
-	// See T182939211. This copies the keep alives from Java Rocket.
-	// KeepaliveLifetime = time.Duration(missedAcks = 1) * (ackTimeout = 3600000)
-	clientBuilder = clientBuilder.KeepAlive(time.Millisecond*30000, time.Millisecond*3600000, 1)
-	clientBuilder = clientBuilder.SetupPayload(setupPayload)
-	clientBuilder = clientBuilder.OnClose(func(err error) {
-		p.cancel()
-	})
-	clientStarter := clientBuilder.
-		Acceptor(func(ctx context.Context, socket rsocket.RSocket) rsocket.RSocket {
-			return rsocket.NewAbstractSocket(
-				rsocket.MetadataPush(func(pay payload.Payload) {
-					// For documentation/reference see the CPP implementation
-					// https://www.internalfb.com/code/fbsource/[ec968d3ea0ab]/fbcode/thrift/lib/cpp2/transport/rocket/client/RocketClient.cpp?lines=181
-					metadataBytes, ok := pay.Metadata()
-					if !ok {
-						panic("no metadata in metadata push")
-					}
-					// Use ServerPushMetadata{} and do not use &ServerPushMetadata{} to ensure stack and avoid heap allocation.
-					metadata := ServerPushMetadata{}
-					if err := deserializeCompact(metadataBytes, &metadata); err != nil {
-						panic(fmt.Errorf("unable to deserialize metadata push into ServerPushMetadata %w", err))
-					}
-					if metadata.SetupResponse != nil {
-						// If zstdSupported is not set (or if false) client SHOULD not use ZSTD compression.
-						if metadata.SetupResponse.ZstdSupported == nil {
-							p.zstd = false
-						} else {
-							p.zstd = p.zstd && *metadata.SetupResponse.ZstdSupported
-						}
-						if metadata.SetupResponse.Version != nil {
-							if *metadata.SetupResponse.Version != 8 {
-								panic(fmt.Errorf("unsupported protocol version received in metadata push: %d", *metadata.SetupResponse.Version))
-							}
-						}
-					} else if metadata.StreamHeadersPush != nil {
-						panic("metadata push: StreamHeadersPush not implemented")
-					} else if metadata.DrainCompletePush != nil {
-						p.Close()
-					}
-				}),
-			)
-		})
-	p.client, err = clientStarter.Transport(transporter).Start(p.ctx)
-	return err
-}
-
-func (p *rocketClient) readPayload() (resp payload.Payload, err error) {
-	ctx := p.ctx
+	ctx := context.Background()
 	if p.timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, p.timeout)
 		defer cancel()
 	}
-	select {
-	case r := <-p.resultChan:
-		return r.val, r.err
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	p.respHeaders, p.resultData, p.resultErr = p.client.RequestResponse(ctx, p.messageName, p.protoID, p.writeType, headers, p.zstd, dataBytes)
+	clear(p.reqHeaders)
+	return nil
 }
 
-func (p *rocketClient) ReadMessageBegin() (string, MessageType, int32, error) {
-	name := p.reqMetadata.Name
-	resp, err := p.readPayload()
-	if err != nil {
-		return name, EXCEPTION, p.seqID, err
+func unionMaps(dst, src map[string]string) map[string]string {
+	if dst == nil {
+		return src
 	}
-	metadataBytes, ok := resp.Metadata()
-	if ok {
-		metadata := &ResponseRpcMetadata{}
-		if err = deserializeCompact(metadataBytes, metadata); err != nil {
-			return name, EXCEPTION, p.seqID, err
-		}
-		p.respMetadata = metadata
-		if p.respMetadata.PayloadMetadata != nil && p.respMetadata.PayloadMetadata.ExceptionMetadata != nil {
-			exception := newRocketException(p.respMetadata.PayloadMetadata.ExceptionMetadata)
-			exceptionMetadata := p.respMetadata.PayloadMetadata.ExceptionMetadata
-			if exceptionMetadata.Metadata != nil {
-				if exceptionMetadata.Metadata.AppUnknownException != nil {
-					return name, EXCEPTION, p.seqID, exception
-				}
-				// This is necessary for SR Proxy timeouts to work
-				if exceptionMetadata.Metadata.DEPRECATEDProxyException != nil {
-					return name, EXCEPTION, p.seqID, exception
-				}
-			}
-		}
+	if src == nil {
+		return dst
 	}
-	dataBytes := resp.Data()
-	if p.respMetadata.Compression != nil && *p.respMetadata.Compression == CompressionAlgorithm_ZSTD {
-		dataBytes, err = decompressZstd(dataBytes)
-		if err != nil {
-			return name, EXCEPTION, p.seqID, err
-		}
-	}
-	p.buf.Buffer = bytes.NewBuffer(dataBytes)
-	p.buf.size = len(dataBytes)
-	return name, REPLY, p.seqID, err
+	maps.Copy(dst, src)
+	return dst
 }
 
-type rocketException struct {
-	Name          string
-	What          string
-	ExceptionType string
-	Kind          string
-	Blame         string
-	Safety        string
+func (p *rocketClient) serverMetadataPush(zstd bool, drain bool) {
+	// zstd is only supported if both the client and the server support it.
+	p.zstd = p.zstd && zstd
 }
 
-func (e *rocketException) Error() string {
-	data, err := json.Marshal(e)
-	if err != nil {
-		panic(err)
+func (p *rocketClient) ReadMessageBegin() (string, types.MessageType, int32, error) {
+	name := p.messageName
+	if p.resultErr != nil {
+		return name, types.EXCEPTION, p.seqID, p.resultErr
 	}
-	return string(data)
-}
 
-func newRocketException(exception *PayloadExceptionMetadataBase) error {
-	err := &rocketException{
-		Name:          "unknown",
-		What:          "unknown",
-		ExceptionType: "unknown",
-		Kind:          "none",
-		Blame:         "none",
-		Safety:        "none",
-	}
-	if exception.NameUTF8 != nil {
-		err.Name = *exception.NameUTF8
-	}
-	if exception.WhatUTF8 != nil {
-		err.What = *exception.WhatUTF8
-	}
-	var class *ErrorClassification
-	if exception.Metadata != nil {
-		if exception.Metadata.DeclaredException != nil {
-			err.ExceptionType = "DeclaredException"
-			if exception.Metadata.DeclaredException.ErrorClassification != nil {
-				class = exception.Metadata.DeclaredException.ErrorClassification
-			}
-		} else if exception.Metadata.AppUnknownException != nil {
-			err.ExceptionType = "AppUnknownException"
-			if exception.Metadata.AppUnknownException.ErrorClassification != nil {
-				class = exception.Metadata.AppUnknownException.ErrorClassification
-			}
-		} else if exception.Metadata.AnyException != nil {
-			err.ExceptionType = "AnyException"
-		} else if exception.Metadata.DEPRECATEDProxyException != nil {
-			err.ExceptionType = "DEPRECATEDProxyException"
-		}
-		if class != nil {
-			if class.Kind != nil {
-				err.Kind = class.Kind.String()
-			}
-			if class.Blame != nil {
-				err.Blame = class.Blame.String()
-			}
-			if class.Safety != nil {
-				err.Safety = class.Safety.String()
-			}
-		}
-	}
-	return NewTransportExceptionFromError(err)
+	p.rbuf.Init(p.resultData)
+	return name, types.REPLY, p.seqID, nil
 }
 
 func (p *rocketClient) ReadMessageEnd() error {
-	p.reqMetadata = nil
 	return nil
 }
 
-func (p *rocketClient) Skip(fieldType Type) (err error) {
-	return SkipDefaultDepth(p, fieldType)
-}
-
-func (p *rocketClient) SetPersistentHeader(key, value string) {
-	p.persistentHeaders[key] = value
-}
-
-func (p *rocketClient) GetPersistentHeader(key string) (string, bool) {
-	v, ok := p.persistentHeaders[key]
-	return v, ok
-}
-
-func (p *rocketClient) GetPersistentHeaders() map[string]string {
-	return p.persistentHeaders
-}
-
-func (p *rocketClient) ClearPersistentHeaders() {
-	p.persistentHeaders = make(map[string]string)
+func (p *rocketClient) Skip(fieldType types.Type) (err error) {
+	return types.SkipDefaultDepth(p, fieldType)
 }
 
 func (p *rocketClient) SetRequestHeader(key, value string) {
-	if p.reqMetadata == nil {
-		p.reqMetadata = &requestRPCMetadata{}
-	}
-	if p.reqMetadata.Other == nil {
-		p.reqMetadata.Other = make(map[string]string)
-	}
-	p.reqMetadata.Other[key] = value
-}
-
-func (p *rocketClient) GetRequestHeader(key string) (value string, ok bool) {
-	v, ok := p.GetRequestHeaders()[key]
-	return v, ok
-}
-
-func (p *rocketClient) GetRequestHeaders() map[string]string {
-	return p.reqMetadata.Other
-}
-
-func (p *rocketClient) GetResponseHeader(key string) (string, bool) {
-	if p.respMetadata == nil {
-		return "", false
-	}
-	value, ok := p.respMetadata.OtherMetadata[key]
-	return value, ok
+	p.reqHeaders[key] = value
 }
 
 func (p *rocketClient) GetResponseHeaders() map[string]string {
-	if p.respMetadata == nil {
-		return nil
-	}
-	return p.respMetadata.OtherMetadata
+	return p.respHeaders
 }
 
 func (p *rocketClient) Close() error {
-	if err := p.conn.Close(); err != nil {
-		return err
-	}
-	if p.client != nil {
-		if err := p.client.Close(); err != nil {
-			return err
-		}
-		p.client = nil
-	}
-	if p.cancel != nil {
-		p.cancel()
-	}
-	return nil
+	return p.client.Close()
 }

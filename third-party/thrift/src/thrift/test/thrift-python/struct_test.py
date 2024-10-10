@@ -12,8 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import dataclasses
-import importlib
+# pyre-strict
+
+import copy
+import pickle
 import types
 import typing
 import unittest
@@ -22,6 +24,8 @@ from datetime import datetime
 import thrift.python.mutable_serializer as mutable_serializer
 
 import thrift.python.serializer as immutable_serializer
+
+from folly.iobuf import IOBuf
 
 from parameterized import parameterized
 from thrift.python.exceptions import Error
@@ -34,6 +38,7 @@ from thrift.python.mutable_types import (
     MutableStructOrUnion,
 )
 from thrift.python.types import (
+    isset as immutable_isset,
     Struct as ImmutableStruct,
     StructMeta as ImmutableStructMeta,
     StructOrUnion as ImmutableStructOrUnion,
@@ -52,38 +57,42 @@ from thrift.test.thrift_python.struct_test.thrift_mutable_types import (  # @man
     set_constant,
     string_constant,
     TestExceptionAllThriftPrimitiveTypes as TestExceptionAllThriftPrimitiveTypesMutable,
+    TestExceptionCopy as TestExceptionCopyMutable,
     TestStruct as TestStructMutable,
-    TestStructAdaptedTypes as MutableTestStructAdaptedTypes,
-    TestStructAllThriftContainerTypes as MutableTestStructAllThriftContainerTypes,
+    TestStructAdaptedTypes as TestStructAdaptedTypesMutable,
+    TestStructAllThriftContainerTypes as TestStructAllThriftContainerTypesMutable,
     TestStructAllThriftPrimitiveTypes as TestStructAllThriftPrimitiveTypesMutable,
     TestStructAllThriftPrimitiveTypesWithDefaultValues as TestStructAllThriftPrimitiveTypesWithDefaultValuesMutable,
+    TestStructCopy as TestStructCopyMutable,
     TestStructEmpty as TestStructEmptyMutable,
     TestStructEmptyAlias as TestStructEmptyAliasMutable,
     TestStructNested_0 as TestStructNested_0_Mutable,
     TestStructNested_1 as TestStructNested_1_Mutable,
     TestStructNested_2 as TestStructNested_2_Mutable,
     TestStructWithDefaultValues as TestStructWithDefaultValuesMutable,
-    TestStructWithExceptionField as TestStructWithExceptionFieldMutable,
     TestStructWithTypedefField as TestStructWithTypedefFieldMutable,
-    TestStructWithUnionField as TestStructWithUnionFieldMutable,
 )
 
 from thrift.test.thrift_python.struct_test.thrift_types import (
     TestStruct as TestStructImmutable,
-    TestStructAdaptedTypes as ImmutableTestStructAdaptedTypes,
+    TestStructAdaptedTypes as TestStructAdaptedTypesImmutable,
     TestStructAllThriftPrimitiveTypes as TestStructAllThriftPrimitiveTypesImmutable,
     TestStructAllThriftPrimitiveTypesWithDefaultValues as TestStructAllThriftPrimitiveTypesWithDefaultValuesImmutable,
     TestStructWithDefaultValues as TestStructWithDefaultValuesImmutable,
 )
 
-max_byte = 2**7 - 1
-max_i16 = 2**15 - 1
-max_i32 = 2**31 - 1
-max_i64 = 2**63 - 1
+max_byte: int = 2**7 - 1
+max_i16: int = 2**15 - 1
+max_i32: int = 2**31 - 1
+max_i64: int = 2**63 - 1
 
 
 def _thrift_serialization_round_trip(
-    test, module, control: typing.Union[MutableStructOrUnion, ImmutableStructOrUnion]
+    test: unittest.TestCase,
+    module: types.ModuleType,
+    control: typing.Union[
+        MutableStructOrUnion, ImmutableStructOrUnion, MutableGeneratedError
+    ],
 ) -> None:
     for proto in module.Protocol:
         encoded = module.serialize(control, protocol=proto)
@@ -92,6 +101,16 @@ def _thrift_serialization_round_trip(
         decoded = module.deserialize(type(control), encoded, protocol=proto)
         test.assertIsInstance(decoded, type(control))
         test.assertEqual(control, decoded)
+
+
+def _pickle_round_trip(
+    test: unittest.TestCase,
+    control: typing.Union[MutableStructOrUnion, ImmutableStructOrUnion],
+) -> None:
+    pickled = pickle.dumps(control, protocol=pickle.HIGHEST_PROTOCOL)
+    unpickled = pickle.loads(pickled)
+    test.assertIsInstance(unpickled, type(control))
+    test.assertEqual(control, unpickled)
 
 
 class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
@@ -103,6 +122,19 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
         # Field initialization at instantiation time
         w_new = TestStructImmutable(unqualified_string="hello, world!")
         self.assertEqual(w_new.unqualified_string, "hello, world!")
+
+    def test_creation_with_None(self) -> None:
+        self.assertEqual(
+            TestStructImmutable(),
+            TestStructImmutable(unqualified_string=None, optional_string=None),
+        )
+
+        self.assertEqual(
+            TestStructImmutable(unqualified_string="hello, world!"),
+            TestStructImmutable(
+                unqualified_string="hello, world!", optional_string=None
+            ),
+        )
 
     def test_call(self) -> None:
         w = TestStructImmutable(unqualified_string="hello, world!")
@@ -120,6 +152,37 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
         # domain (since their contents cannot change).
         w3 = w()
         self.assertIs(w, w3)
+
+        # Call operator with invalid type
+        with self.assertRaisesRegex(
+            TypeError,
+            (
+                "error updating Thrift struct field 'unqualified_string': Cannot create "
+                "internal string data representation. Expected type <class 'str'>, got: "
+                "<class 'int'>."
+            ),
+        ):
+            # pyre-ignore[6]: Intentional for test
+            w(unqualified_string=42)
+
+    def test_call_with_None(self) -> None:
+        w = TestStructImmutable(unqualified_string="hello", optional_string="world")
+
+        # TEST: Updating a value with "None" means resetting to its default value.
+        self.assertEqual(
+            w(unqualified_string=None),
+            TestStructImmutable(unqualified_string="", optional_string="world"),
+        )
+        w1 = w(optional_string=None)
+        self.assertIsNone(w1.optional_string)
+        self.assertEqual(w1, TestStructImmutable(unqualified_string="hello"))
+        self.assertEqual(
+            w1, TestStructImmutable(unqualified_string="hello", optional_string=None)
+        )
+
+        w2 = w(unqualified_string=None, optional_string=None)
+        self.assertEqual(w2, TestStructImmutable())
+        self.assertIsNone(w2.optional_string)
 
     def test_default_values(self) -> None:
         # Custom default values:
@@ -152,10 +215,12 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
         with self.assertRaisesRegex(
             TypeError,
             (
-                "Cannot create internal string data representation. Expected "
-                "type <class 'str'>, got: <class 'int'>."
+                "error initializing Thrift struct field 'unqualified_string': Cannot "
+                "create internal string data representation. Expected type <class 'str'>, "
+                "got: <class 'int'>"
             ),
         ):
+            # pyre-ignore[6]: Intentional for test
             TestStructImmutable(unqualified_string=42)
 
     def test_equality_and_hashability(self) -> None:
@@ -212,6 +277,7 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
     def test_iteration(self) -> None:
         # Iterating over the class yields tuples of (field_name, None).
         self.assertSetEqual(
+            # pyre-ignore[6]: Fixme: type error to be addressed later
             set(TestStructImmutable),
             {("unqualified_string", None), ("optional_string", None)},
         )
@@ -257,6 +323,12 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
         self.assertEqual(typing.get_type_hints(TestStructImmutable), {})
 
     def test_serialization_round_trip(self) -> None:
+        s = TestStructAllThriftPrimitiveTypesImmutable()
+
+        # Default initialized fields set their isset flags to `False`
+        for field, _ in TestStructAllThriftPrimitiveTypesImmutable:
+            self.assertFalse(immutable_isset(s)[field])
+
         s = TestStructAllThriftPrimitiveTypesImmutable(
             unqualified_string="Hello world!",
             optional_string="Hello optional!",
@@ -266,14 +338,30 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
             optional_double=1.3,
             unqualified_bool=True,
             optional_bool=False,
+            unqualified_byte=1,
+            optional_byte=1,
+            unqualified_i16=211,
+            optional_i16=234,
+            unqualified_i64=211,
+            optional_i64=234,
+            unqualified_float=2.0,
+            optional_float=1.0,
         )
+
+        # All the fields are initialized above, so all isset flags should be
+        # set to `True`.
+        for field, _ in TestStructAllThriftPrimitiveTypesImmutable:
+            self.assertTrue(immutable_isset(s)[field])
+
         _thrift_serialization_round_trip(self, immutable_serializer, s)
+        _pickle_round_trip(self, s)
 
         s_default_value = TestStructAllThriftPrimitiveTypesWithDefaultValuesImmutable()
         _thrift_serialization_round_trip(self, immutable_serializer, s_default_value)
+        _pickle_round_trip(self, s_default_value)
 
     def test_adapted_types(self) -> None:
-        s = ImmutableTestStructAdaptedTypes()
+        s = TestStructAdaptedTypesImmutable()
         # standard default value for i32 is 0, therefore `fromtimestamp(0)`
         self.assertEqual(
             s.unqualified_adapted_i32_to_datetime, datetime.fromtimestamp(0)
@@ -285,10 +373,16 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
         self.assertEqual(s.unqualified_adapted_i32_to_datetime, new_date)
 
         with self.assertRaisesRegex(
-            AttributeError, "'int' object has no attribute 'timestamp'"
+            AttributeError,
+            (
+                "error updating Thrift struct field "
+                "'unqualified_adapted_i32_to_datetime': 'int' object has no attribute "
+                "'timestamp'"
+            ),
         ):
             # Thrift simply passes the value to the adapter class. All type
             # checking is performed within the adapter class.
+            # pyre-ignore[6]: Intentional for test
             s = s(unqualified_adapted_i32_to_datetime=123)
 
         s = s(unqualified_adapted_string_to_i32=999)
@@ -297,20 +391,32 @@ class ThriftPython_ImmutableStruct_Test(unittest.TestCase):
     @parameterized.expand(
         [
             (
-                ImmutableTestStructAdaptedTypes(
+                TestStructAdaptedTypesImmutable(
                     optional_adapted_i32_to_datetime=datetime.fromtimestamp(86400)
                 ),
             ),
             (
-                ImmutableTestStructAdaptedTypes(
+                TestStructAdaptedTypesImmutable(
                     unqualified_adapted_i32_to_datetime=datetime.fromtimestamp(0),
                     optional_adapted_i32_to_datetime=datetime.fromtimestamp(86400),
                 ),
             ),
         ]
     )
-    def test_adapter_serialization_round_trip(self, struct) -> None:
+    def test_adapter_serialization_round_trip(self, struct: ImmutableStruct) -> None:
         _thrift_serialization_round_trip(self, immutable_serializer, struct)
+        _pickle_round_trip(self, struct)
+
+    def test_to_immutable_python(self) -> None:
+        w = TestStructImmutable(unqualified_string="hello, world!")
+        self.assertIs(w, w._to_python())
+
+    def test_to_mutable_python(self) -> None:
+        w_immutable = TestStructImmutable(unqualified_string="hello, world!")
+        w_mutable = w_immutable._to_mutable_python()
+        self.assertIsNot(w_immutable, w_mutable)
+        self.assertNotEqual(w_immutable, w_mutable)
+        self.assertEqual(set(w_immutable), set(w_mutable))
 
 
 class ThriftPython_MutableStruct_Test(unittest.TestCase):
@@ -329,24 +435,32 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         w2.unqualified_string += ", world!"
         self.assertEqual(w2.unqualified_string, "hello, world!")
 
+    def test_creation_with_None(self) -> None:
+        self.assertEqual(
+            TestStructMutable(),
+            TestStructMutable(unqualified_string=None, optional_string=None),
+        )
+        self.assertEqual(
+            TestStructMutable(unqualified_string="hello, world!"),
+            TestStructMutable(unqualified_string="hello, world!", optional_string=None),
+        )
+
     def test_call(self) -> None:
-        # DO_BEFORE(aristidis,20240520): Support call operator for mutable types
-        with self.assertRaises(TypeError):
-            w = TestStructMutable(unqualified_string="hello, world!")
+        w = TestStructMutable(unqualified_string="hello, world!")
 
-            # Call operator: create a (deep) copy, with new values.
-            # Original instance is unchanged.
-            w2 = w(unqualified_string="foobar")
-            self.assertIsNot(w, w2)
-            self.assertEqual(w2.unqualified_string, "foobar")
-            self.assertEqual(w.unqualified_string, "hello, world!")
-            self.assertNotEqual(w, w2)
+        # Call operator: create a (deep) copy, with new values.
+        # Original instance is unchanged.
+        w2 = w(unqualified_string="foobar")
+        self.assertIsNot(w, w2)
+        self.assertEqual(w2.unqualified_string, "foobar")
+        self.assertEqual(w.unqualified_string, "hello, world!")
+        self.assertNotEqual(w, w2)
 
-            # Call operator with no values given: returns (deep) copy of self
-            # Note the difference with immutable types (which return self).
-            w3 = w()
-            self.assertIsNot(w, w3)
-            self.assertEqual(w, w3)
+        # Call operator with no values given: returns (deep) copy of self
+        # Note the difference with immutable types (which return self).
+        w3 = w()
+        self.assertIsNot(w, w3)
+        self.assertEqual(w, w3)
 
     def test_default_values(self) -> None:
         # Intrinsic default values:
@@ -415,6 +529,7 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
     def test_iteration(self) -> None:
         # Iterating over the class yields tuples of (field_name, None).
         self.assertSetEqual(
+            # pyre-ignore[6]: Fixme: type error to be addressed later
             set(TestStructMutable),
             {("unqualified_string", None), ("optional_string", None)},
         )
@@ -450,164 +565,33 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         # include type hints directly
         self.assertEqual(typing.get_type_hints(TestStructMutable), {})
 
-    def test_to_immutable(self) -> None:
-        # DO_BEFORE(aristidis,20240521): Fix _to_immutable() support
-        with self.assertRaises(TypeError):
-            w_mutable = TestStructMutable(unqualified_string="hello")
-            w_immutable = w_mutable._to_immutable()
-            self.assertIsNot(w_mutable, w_immutable)
+    def test_to_immutable_python(self) -> None:
+        w_mutable = TestStructMutable(unqualified_string="hello")
+        w_immutable = w_mutable._to_python()
+        self.assertIsNot(w_mutable, w_immutable)
 
-            # Even though their contents are the same, the mutable and immutable
-            # instance are not "equal":
-            self.assertEqual(
-                w_mutable.unqualified_string, w_immutable.unqualified_string
-            )
-            self.assertNotEqual(w_mutable, w_immutable)
+        # Even though their contents are the same, the mutable and immutable
+        # instance are not "equal":
+        self.assertEqual(w_mutable.unqualified_string, w_immutable.unqualified_string)
+        # Remember: set(<struct>) returns a set of (field name, value) tuples - see
+        # test_iteration() above.
+        self.assertSetEqual(set(w_mutable), set(w_immutable))
+        self.assertNotEqual(w_mutable, w_immutable)
 
-            # The newly obtained immutable object however is equal to a new
-            # TestStructImmutable instance (with the same contents)
-            self.assertEqual(
-                w_immutable, TestStructImmutable(unqualified_string="hello")
-            )
+        # The newly obtained immutable object however is equal to a new
+        # TestStructImmutable instance (with the same contents)
+        self.assertEqual(w_immutable, TestStructImmutable(unqualified_string="hello"))
 
-            w_mutable.unqualified_string = "hello, world!"
-            self.assertNotEqual(
-                w_mutable.unqualified_string, w_immutable.unqualified_string
-            )
-
-            # Check that converting to immutable validates field types
-            w_mutable.unqualified_string = 42
-            with self.assertRaisesRegex(
-                TypeError,
-                (
-                    "TypeError: Cannot create internal string data representation. "
-                    "Expected type <class 'str'>, got: <class 'int'>."
-                ),
-            ):
-                w_mutable._to_immutable()
-
-    def _assert_field_behavior(
-        self,
-        struct,
-        field_name: str,
-        expected_default_value,
-        value,
-        invalid_value,
-        overflow_value=None,
-    ):
-        """
-        This function is a helper function used to assert the behavior of a
-        specific field in a structure.
-            field_name (str): The name of the field to be tested.
-            expected_default_value: The expected default value of the field.
-            value: The value to be set for the field.
-            invalid_value: A value of an incorrect type that, when set,
-                should raise a TypeError.
-            overflow_value (optional): A value that, when set, should raise
-                an `OverflowError`. This is typically used for integral types.
-        """
-        # Check for the `expected_default_value`. The unqualified field should
-        # never be `None`
-        if expected_default_value is not None:
-            self.assertIsNotNone(getattr(struct, field_name))
-            self.assertEqual(expected_default_value, getattr(struct, field_name))
-        else:  # OPTIONAL
-            self.assertIsNone(getattr(struct, field_name))
-
-        # Set the `value`, read it back
-        setattr(struct, field_name, value)
-        self.assertEqual(value, getattr(struct, field_name))
-
-        # TODO: How to reset field to standard default value?
-        struct._do_not_use_resetFieldToStandardDefault(field_name)
-        if expected_default_value is not None:
-            self.assertIsNotNone(getattr(struct, field_name))
-            self.assertEqual(expected_default_value, getattr(struct, field_name))
-        else:  # OPTIONAL
-            self.assertIsNone(getattr(struct, field_name))
-
-        # `del struct.field_name` raises a `AttributeError`
-        with self.assertRaises(AttributeError):
-            delattr(struct, field_name)
-
-        # Assigning `None` raises a `TypeError`
-        with self.assertRaises(TypeError):
-            setattr(struct, field_name, None)
-
-        # Value with wrong type raises `TypeError`
-        with self.assertRaises(TypeError):
-            setattr(struct, field_name, invalid_value)
-
-        # For integral types check `OverflowError`
-        if overflow_value is not None:
-            with self.assertRaises(OverflowError):
-                setattr(struct, field_name, overflow_value)
-
-    @parameterized.expand(
-        [
-            # (field_name, expected_default_value, value, invalid_value, overflow_value")
-            ("unqualified_bool", False, True, "Not Bool", None),
-            ("optional_bool", None, True, "Not Bool", None),
-            ("unqualified_byte", 0, max_byte, "Not Byte", max_byte + 1),
-            ("optional_byte", None, max_byte, "Not Byte", max_byte + 1),
-            ("unqualified_i16", 0, max_i16, "Not i16", max_i16 + 1),
-            ("optional_i16", None, max_i16, "Not i16", max_i16 + 1),
-            ("unqualified_i32", 0, max_i32, "Not i32", max_i32 + 1),
-            ("optional_i32", None, max_i32, "Not i32", max_i32 + 1),
-            ("unqualified_i64", 0, max_i64, "Not i64", max_i64 + 1),
-            ("optional_i64", None, max_i64, "Not i64", max_i64 + 1),
-            ("unqualified_float", 0.0, 1.0, "Not float", None),
-            ("optional_float", None, 1.0, "Not float", None),
-            ("unqualified_double", 0.0, 99.12, "Not double", None),
-            ("optional_double", None, 99.12, "Not double", None),
-            ("unqualified_string", "", "str-value", 999, None),
-            ("optional_string", None, "str-value", 999, None),
-        ]
-    )
-    def test_create_and_assign_for_all_primitive_types(
-        self, field_name, expected_default_value, value, invalid_value, overflow_value
-    ):
-        s = TestStructAllThriftPrimitiveTypesMutable()
-        self._assert_field_behavior(
-            s,
-            field_name=field_name,
-            expected_default_value=expected_default_value,
-            value=value,
-            invalid_value=invalid_value,
-            overflow_value=overflow_value,
+        w_mutable.unqualified_string = "hello, world!"
+        self.assertNotEqual(
+            w_mutable.unqualified_string, w_immutable.unqualified_string
         )
 
-    @parameterized.expand(
-        [
-            # (field_name, expected_default_value, value, invalid_value, overflow_value")
-            # `expected_default_value` is from IDL
-            ("unqualified_bool", True, True, "Not Bool", None),
-            ("unqualified_byte", 32, max_byte, "Not Byte", max_byte + 1),
-            ("unqualified_i16", 512, max_i16, "Not i16", max_i16 + 1),
-            ("unqualified_i32", 2048, max_i32, "Not i32", max_i32 + 1),
-            ("unqualified_i64", 999, max_i64, "Not i64", max_i64 + 1),
-            ("unqualified_float", 1.0, 1.0, "Not float", None),
-            ("unqualified_double", 1.231, 99.12, "Not double", None),
-            ("unqualified_string", "thrift-python", "str-value", 999, None),
-        ]
-    )
-    def test_create_and_assign_for_all_primitive_types_with_default_values(
-        self, field_name, expected_default_value, value, invalid_value, overflow_value
-    ):
-        s = TestStructAllThriftPrimitiveTypesWithDefaultValuesMutable()
-        self._assert_field_behavior(
-            s,
-            field_name=field_name,
-            expected_default_value=expected_default_value,
-            value=value,
-            invalid_value=invalid_value,
-            overflow_value=overflow_value,
-        )
+    def test_to_mutable_python(self) -> None:
+        w_mutable = TestStructMutable(unqualified_string="hello")
+        self.assertIs(w_mutable, w_mutable._to_mutable_python())
 
     def test_create_and_assign_for_i32(self) -> None:
-        # This is the singular version of `test_create_and_assign_for_all_types`
-        # for the i32 type. It's more readable since it doesn't use the
-        # `verify_{qualified,optional}_helper` functions.
         s = TestStructAllThriftPrimitiveTypesMutable(unqualified_i32=11)
 
         # Check the value assigned during initialization
@@ -623,10 +607,12 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
 
         # Assigning `None` raises a `TypeError`
         with self.assertRaises(TypeError):
+            # pyre-ignore[8]: Intentional for test
             s.unqualified_i32 = None
 
         # Assigning a value of the wrong type raises a `TypeError`
         with self.assertRaises(TypeError):
+            # pyre-ignore[8]: Intentional for test
             s.unqualified_i32 = "This is not an integer"
 
         # Boundary check for integral types
@@ -649,15 +635,105 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
 
         # Assigning `None` raises a `TypeError`
         with self.assertRaises(TypeError):
+            # pyre-ignore[8]: Intentional for test
             s.unqualified_i32 = None
 
         # Assigning a value of the wrong type raises a `TypeError`
         with self.assertRaises(TypeError):
+            # pyre-ignore[8]: Intentional for test
             s.unqualified_i32 = "This is not an integer"
 
         # Boundary check for integral types
         with self.assertRaises(OverflowError):
-            s.unqualified_i32 = -(2**31 + 1)
+            s.unqualified_i32 = max_i32 + 1
+
+    def test_create_and_assign_for_optional_i32_and_optional_string(self) -> None:
+        s = TestStructAllThriftPrimitiveTypesMutable()
+
+        # Check optional fields are `None`
+        self.assertIsNone(s.optional_i32)
+        self.assertIsNone(s.optional_string)
+
+        # Set the values and read them back
+        s.optional_i32 = 23
+        s.optional_string = "thrift"
+
+        self.assertEqual(23, s.optional_i32)
+        self.assertEqual("thrift", s.optional_string)
+
+        # `del struct.field_name` raises a `AttributeError`
+        with self.assertRaises(AttributeError):
+            del s.optional_i32
+
+        with self.assertRaises(AttributeError):
+            del s.optional_string
+
+        # Assigning a value of the wrong type raises a `TypeError`
+        with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[8]: Intentional for test
+            s.optional_i32 = "This is not an integer"
+
+        with self.assertRaisesRegex(TypeError, "Expected type <class 'str'>"):
+            # pyre-ignore[8]: Intentional for test
+            s.optional_string = 42
+
+        self.assertEqual(23, s.optional_i32)
+        self.assertEqual("thrift", s.optional_string)
+
+        # Assigning `None` is reseting the optional field to `None`
+        s.optional_i32 = None
+        s.optional_string = None
+
+        self.assertIsNone(s.optional_i32)
+        self.assertIsNone(s.optional_string)
+
+        # Assigning a value of the wrong type raises a `TypeError` when fields
+        # are `None`
+        with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[8]: Intentional for test
+            s.optional_i32 = "This is not an integer"
+
+        with self.assertRaisesRegex(TypeError, "Expected type <class 'str'>"):
+            # pyre-ignore[8]: Intentional for test
+            s.optional_string = 42
+
+        # Boundary check for integral types
+        with self.assertRaises(OverflowError):
+            s.optional_i32 = -(2**31 + 1)
+
+    def test_create_and_assign_for_optional_container(self) -> None:
+        s = TestStructAllThriftContainerTypesMutable()
+
+        # Check optional field is `None`
+        self.assertIsNone(s.optional_list_i32)
+
+        # Set the value and read it back
+        s.optional_list_i32 = [1, 2, 3]
+        self.assertEqual([1, 2, 3], s.optional_list_i32)
+
+        # `del struct.field_name` raises a `AttributeError`
+        with self.assertRaises(AttributeError):
+            del s.optional_list_i32
+
+        # Assigning a value of the wrong type raises a `TypeError`
+        with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[8]: Intentional for test
+            s.optional_list_i32 = ["list", "with", "different", "type"]
+
+        self.assertEqual([1, 2, 3], s.optional_list_i32)
+
+        # Assigning `None` is reseting the optional field to `None`
+        s.optional_list_i32 = None
+
+        # Assigning a value of the wrong type raises a `TypeError` when fields
+        # are `None`
+        with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[8]: Intentional for test
+            s.optional_list_i32 = ["list", "with", "different", "type"]
+
+        # Boundary check for integral types
+        with self.assertRaises(OverflowError):
+            s.optional_list_i32 = [max_i32 + 1]
 
     def test_serialization_round_trip(self) -> None:
         s = TestStructAllThriftPrimitiveTypesMutable()
@@ -670,20 +746,23 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         s.unqualified_bool = True
         s.optional_bool = False
         _thrift_serialization_round_trip(self, mutable_serializer, s)
+        _pickle_round_trip(self, s)
 
         s_default_value = TestStructAllThriftPrimitiveTypesWithDefaultValuesMutable()
         _thrift_serialization_round_trip(self, mutable_serializer, s_default_value)
+        _pickle_round_trip(self, s_default_value)
 
     def test_create_and_assign_for_list(self) -> None:
-        s = MutableTestStructAllThriftContainerTypes(unqualified_list_i32=[1, 2, 3])
+        s = TestStructAllThriftContainerTypesMutable(unqualified_list_i32=[1, 2, 3])
 
         self.assertEqual(3, len(s.unqualified_list_i32))
         self.assertEqual([1, 2, 3], s.unqualified_list_i32)
 
-        with self.assertRaisesRegex(
-            TypeError, "Thrift container types do not support direct assignment."
-        ):
-            s.unqualified_list_i32 = [1, 2, 3]
+        # Assigning to a list field
+        s.unqualified_list_i32 = [1, 2, 3, 4, 5]
+        self.assertEqual([1, 2, 3, 4, 5], s.unqualified_list_i32)
+        s.unqualified_list_i32 = [1, 2, 3]
+        self.assertEqual([1, 2, 3], s.unqualified_list_i32)
 
         s.unqualified_list_i32[0] = 2
         self.assertEqual([2, 2, 3], s.unqualified_list_i32)
@@ -695,6 +774,7 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
             s.unqualified_list_i32[4] = 2
 
         with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[6]: Intentional for test
             s.unqualified_list_i32[4] = "Not integer"
 
         self.assertEqual([2, 2, 3], s.unqualified_list_i32)
@@ -745,6 +825,7 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         self.assertEqual([11, 12, 13], lst2)
 
         with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[6]: Intentional for test
             lst2.extend([14, 15, "16", 17])
 
         # basic exception safety
@@ -752,39 +833,115 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         self.assertEqual([11, 12, 13, 14, 15], lst1)
         self.assertEqual([11, 12, 13, 14, 15], lst2)
 
-    @parameterized.expand(
-        [
-            (MutableTestStructAllThriftContainerTypes(),),
-            (MutableTestStructAllThriftContainerTypes(unqualified_list_i32=[1, 2, 3]),),
-            (MutableTestStructAllThriftContainerTypes(optional_list_i32=[11, 22, 33]),),
-            (
-                MutableTestStructAllThriftContainerTypes(
-                    unqualified_list_i32=[1, 2], optional_list_i32=[3]
-                ),
-            ),
-            (
-                MutableTestStructAllThriftContainerTypes(
-                    unqualified_set_string=["1", "2", "3"]
-                ),
-            ),
-            (
-                MutableTestStructAllThriftContainerTypes(
-                    optional_set_string=["11", "22", "33"]
-                ),
-            ),
-            (
-                MutableTestStructAllThriftContainerTypes(
-                    unqualified_set_string=["1", "2", "3"],
-                    optional_set_string=["11", "22", "33"],
-                ),
-            ),
-        ]
-    )
-    def test_container_serialization_round_trip(self, struct) -> None:
-        _thrift_serialization_round_trip(self, mutable_serializer, struct)
+    def test_assign_for_list(self) -> None:
+        s1 = TestStructAllThriftContainerTypesMutable(unqualified_list_i32=[1, 2, 3])
+
+        # It is possible to assign any value that supports `len()` and iteration
+        s1.unqualified_list_i32 = [1, 2, 3]
+        self.assertEqual([1, 2, 3], s1.unqualified_list_i32)
+        # pyre-ignore[8]: Fixme: type error to be addressed later
+        s1.unqualified_list_i32 = {11, 12, 13}
+        self.assertEqual([11, 12, 13], s1.unqualified_list_i32)
+        # pyre-ignore[8]: Fixme: type error to be addressed later
+        s1.unqualified_list_i32 = (21, 22, 23)
+        self.assertEqual([21, 22, 23], s1.unqualified_list_i32)
+        s1.unqualified_list_i32 = []
+        self.assertEqual([], s1.unqualified_list_i32)
+
+        s2 = TestStructAllThriftContainerTypesMutable(unqualified_list_i32=[])
+        # my_list and s2.unqualified_list_i32 are different lists
+        my_list = [1, 2, 3]
+        s2.unqualified_list_i32 = my_list
+        self.assertEqual([1, 2, 3], s2.unqualified_list_i32)
+        my_list[0] = 11
+        self.assertEqual(1, s2.unqualified_list_i32[0])
+
+        s3 = TestStructAllThriftContainerTypesMutable(unqualified_list_i32=[1, 2, 3])
+        # Strong exception safety
+        with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[8]: Intentional for test
+            s3.unqualified_list_i32 = [11, 12, 13, "Not an Integer"]
+        self.assertEqual([1, 2, 3], s3.unqualified_list_i32)
+
+    def test_assign_for_set(self) -> None:
+        s1 = TestStructAllThriftContainerTypesMutable(
+            # pyre-ignore[6]: Intentional for test
+            unqualified_set_string=["a", "b", "c"]
+        )
+
+        # It is possible to assign any value that supports iteration
+        # pyre-ignore[8]: Fixme: type error to be addressed later
+        s1.unqualified_set_string = ["a", "b", "c"]
+        self.assertEqual({"a", "b", "c"}, s1.unqualified_set_string)
+        s1.unqualified_set_string = {"aa", "bb", "cc"}
+        self.assertEqual({"aa", "bb", "cc"}, s1.unqualified_set_string)
+        # pyre-ignore[8]: Fixme: type error to be addressed later
+        s1.unqualified_set_string = ("aaa", "bbb", "ccc")
+        self.assertEqual({"aaa", "bbb", "ccc"}, s1.unqualified_set_string)
+
+        # even from iterator, this is not possible for list field because of
+        # `len()` requirement
+        my_iter = iter(["x", "y", "z"])
+        # pyre-ignore[8]: Fixme: type error to be addressed later
+        s1.unqualified_set_string = my_iter
+        self.assertEqual({"x", "y", "z"}, s1.unqualified_set_string)
+
+        # pyre-ignore[6]: Fixme: type error to be addressed later
+        s2 = TestStructAllThriftContainerTypesMutable(unqualified_set_string=[])
+        # my_set and s2.unqualified_set_string are different sets
+        my_set = {"a", "b", "c"}
+        s2.unqualified_set_string = my_set
+        self.assertEqual({"a", "b", "c"}, s2.unqualified_set_string)
+        my_set.add("d")
+        self.assertEqual(4, len(my_set))
+        self.assertEqual(3, len(s2.unqualified_set_string))
+
+        s3 = TestStructAllThriftContainerTypesMutable(
+            # pyre-ignore[6]: Fixme: type error to be addressed later
+            unqualified_set_string=["a", "b", "c"]
+        )
+        # Strong exception safety
+        with self.assertRaisesRegex(TypeError, "Expected type <class 'str'>"):
+            # pyre-ignore[8]: Fixme: type error to be addressed later
+            s3.unqualified_set_string = ["aa", "bb", "cc", 999]
+        self.assertEqual({"a", "b", "c"}, s3.unqualified_set_string)
+
+    def test_assign_for_map(self) -> None:
+        s1 = TestStructAllThriftContainerTypesMutable(
+            unqualified_map_string_i32={"a": 1, "b": 2}
+        )
+
+        # It is possible to assign any mapping value that implements `items()`
+        s1.unqualified_map_string_i32 = {"x": 1, "y": 2}
+        self.assertEqual({"x": 1, "y": 2}, s1.unqualified_map_string_i32)
+
+        class MyMapping:
+            def items(self):
+                return (("aa", 11), ("bb", 22))
+
+        # pyre-ignore[8]: Fixme: type error to be addressed later
+        s1.unqualified_map_string_i32 = MyMapping()
+        self.assertEqual({"aa": 11, "bb": 22}, s1.unqualified_map_string_i32)
+
+        s2 = TestStructAllThriftContainerTypesMutable(unqualified_map_string_i32={})
+        # my_map and s2.unqualified_map_string_i32 are different maps
+        my_map = {"a": 1, "b": 2}
+        s2.unqualified_map_string_i32 = my_map
+        my_map["c"] = 3
+        self.assertEqual(3, len(my_map))
+        self.assertEqual(2, len(s2.unqualified_map_string_i32))
+
+        s3 = TestStructAllThriftContainerTypesMutable(
+            unqualified_map_string_i32={"a": 1, "b": 2}
+        )
+        # Strong exception safety
+        with self.assertRaisesRegex(TypeError, "is not a <class 'int'>"):
+            # pyre-ignore[8]: Intentional for test
+            s3.unqualified_map_string_i32 = {"x": 1, "y": "Not an Integer"}
+        self.assertEqual({"a": 1, "b": 2}, s3.unqualified_map_string_i32)
 
     def test_adapted_types(self) -> None:
-        s = MutableTestStructAdaptedTypes()
+        s = TestStructAdaptedTypesMutable()
         # standard default value for i32 is 0, therefore `fromtimestamp(0)`
         self.assertEqual(
             s.unqualified_adapted_i32_to_datetime, datetime.fromtimestamp(0)
@@ -801,28 +958,11 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         with self.assertRaisesRegex(
             AttributeError, "'int' object has no attribute 'timestamp'"
         ):
+            # pyre-ignore[8]: Intentional for test
             s.unqualified_adapted_i32_to_datetime = 123
 
         s.unqualified_adapted_string_to_i32 = 999
         self.assertEqual(s.unqualified_adapted_string_to_i32, 999)
-
-    @parameterized.expand(
-        [
-            (
-                MutableTestStructAdaptedTypes(
-                    optional_adapted_i32_to_datetime=datetime.fromtimestamp(86400)
-                ),
-            ),
-            (
-                MutableTestStructAdaptedTypes(
-                    unqualified_adapted_i32_to_datetime=datetime.fromtimestamp(0),
-                    optional_adapted_i32_to_datetime=datetime.fromtimestamp(86400),
-                ),
-            ),
-        ]
-    )
-    def test_adapter_serialization_round_trip(self, struct) -> None:
-        _thrift_serialization_round_trip(self, mutable_serializer, struct)
 
     def test_typedef_simple(self) -> None:
         empty = TestStructEmptyMutable()
@@ -834,11 +974,13 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         struct.empty_struct_alias = empty
 
         _thrift_serialization_round_trip(self, mutable_serializer, struct)
+        _pickle_round_trip(self, struct)
 
     def test_create_and_init_for_set(self) -> None:
         # Initializing the `set` member with an iterable that contains duplicate
         # elements is fine. Thrift removes the duplicates.
-        s = MutableTestStructAllThriftContainerTypes(
+        s = TestStructAllThriftContainerTypesMutable(
+            # pyre-ignore[6]: Fixme: type error to be addressed later
             unqualified_set_string=["1", "2", "2", "3", "3"]
         )
         self.assertEqual(3, len(s.unqualified_set_string))
@@ -849,22 +991,25 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         with self.assertRaisesRegex(
             TypeError, "Expected type <class 'str'>, got: <class 'int'>"
         ):
-            s = MutableTestStructAllThriftContainerTypes(
+            s = TestStructAllThriftContainerTypesMutable(
+                # pyre-ignore[6]: Fixme: type error to be addressed later
                 unqualified_set_string=["1", "2", "2", 9999, "3", "3"]
             )
 
     def test_create_and_assign_for_set(self) -> None:
-        s = MutableTestStructAllThriftContainerTypes(
+        s = TestStructAllThriftContainerTypesMutable(
+            # pyre-ignore[6]: Fixme: type error to be addressed later
             unqualified_set_string=["1", "2", "3"]
         )
 
         self.assertEqual(3, len(s.unqualified_set_string))
         self.assertEqual({"1", "2", "3"}, s.unqualified_set_string)
 
-        with self.assertRaisesRegex(
-            TypeError, "Thrift container types do not support direct assignment."
-        ):
-            s.unqualified_set_string = {"9", "8", "7"}
+        # Assigning to a set field
+        s.unqualified_set_string = {"9", "8", "7"}
+        self.assertEqual({"9", "8", "7"}, s.unqualified_set_string)
+        s.unqualified_set_string = {"1", "2", "3"}
+        self.assertEqual({"1", "2", "3"}, s.unqualified_set_string)
 
         # `__contains__()`
         self.assertIn("1", s.unqualified_set_string)
@@ -889,6 +1034,7 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         with self.assertRaisesRegex(
             TypeError, "Expected type <class 'str'>, got: <class 'int'>"
         ):
+            # pyre-ignore[6]: Intentional for test
             s.unqualified_set_string.add(999)
 
         # `remove()`
@@ -898,6 +1044,7 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         with self.assertRaisesRegex(
             TypeError, "Expected type <class 'str'>, got: <class 'int'>"
         ):
+            # pyre-ignore[6]: Intentional for test
             s.unqualified_set_string.remove(111)
 
         # `remove()` raises a `KeyError` if key is absent
@@ -910,6 +1057,7 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
 
         # `discard()` does not raises a `KeyError` or `TypeError`
         s.unqualified_set_string.discard("111")
+        # pyre-ignore[6]: Intentional for test
         s.unqualified_set_string.discard(111)
 
         set1 = s.unqualified_set_string
@@ -939,7 +1087,8 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         self.assertFalse(set1.isdisjoint(["3", "4"]))
         self.assertFalse(set2.isdisjoint({"3", "4"}))
 
-        other = MutableTestStructAllThriftContainerTypes(
+        other = TestStructAllThriftContainerTypesMutable(
+            # pyre-ignore[6]: Fixme: type error to be addressed later
             unqualified_set_string=["2", "3", "4"]
         )
         other_set = other.unqualified_set_string
@@ -997,17 +1146,18 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         self.assertEqual(set(), set2)
 
     def test_create_and_assign_for_map(self) -> None:
-        s = MutableTestStructAllThriftContainerTypes(
+        s = TestStructAllThriftContainerTypesMutable(
             unqualified_map_string_i32={"a": 1, "b": 2}
         )
 
         self.assertEqual(2, len(s.unqualified_map_string_i32))
         self.assertEqual({"a": 1, "b": 2}, s.unqualified_map_string_i32)
 
-        with self.assertRaisesRegex(
-            TypeError, "Thrift container types do not support direct assignment."
-        ):
-            s.unqualified_map_string_i32 = {"a": 1, "b": 2}
+        # Assigning to a map field
+        s.unqualified_map_string_i32 = {"x": 1, "y": 2}
+        self.assertEqual({"x": 1, "y": 2}, s.unqualified_map_string_i32)
+        s.unqualified_map_string_i32 = {"a": 1, "b": 2}
+        self.assertEqual({"a": 1, "b": 2}, s.unqualified_map_string_i32)
 
         map1 = s.unqualified_map_string_i32
         map2 = s.unqualified_map_string_i32
@@ -1078,11 +1228,13 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         with self.assertRaisesRegex(
             TypeError, "not a <class 'int'>, is actually of type <class 'str'>"
         ):
+            # pyre-ignore[6]: Intentional for test
             s.unqualified_map_string_i32["a"] = "Not an integer"
 
         with self.assertRaisesRegex(
             TypeError, "Expected type <class 'str'>, got: <class 'int'>"
         ):
+            # pyre-ignore[6]: Intentional for test
             s.unqualified_map_string_i32[999] = 11
 
         # `__iter__()`
@@ -1200,18 +1352,18 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         s.unqualified_string = string_constant
         self.assertEqual("June 28, 2017", s.unqualified_string)
 
-        s = MutableTestStructAllThriftContainerTypes()
+        s = TestStructAllThriftContainerTypesMutable()
 
         self.assertEqual([], s.unqualified_list_i32)
         s.unqualified_list_i32.extend(list_constant)
         self.assertEqual([2, 3, 5, 7], s.unqualified_list_i32)
 
-        s = MutableTestStructAllThriftContainerTypes(
+        s = TestStructAllThriftContainerTypesMutable(
             unqualified_set_string=set_constant
         )
         self.assertEqual({"foo", "bar", "baz"}, s.unqualified_set_string)
 
-        s = MutableTestStructAllThriftContainerTypes(
+        s = TestStructAllThriftContainerTypesMutable(
             unqualified_map_string_i32=map_constant
         )
         self.assertEqual({"foo": 1, "bar": 2}, s.unqualified_map_string_i32)
@@ -1265,9 +1417,6 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         self.assertIs(my_s2_var1, my_s2_var2)
         self.assertIsNot(s1, my_s2_var2)
 
-    def test_create_for_struct_with_union_field(self) -> None:
-        _ = TestStructWithUnionFieldMutable()
-
     def test_exception(self) -> None:
         s = TestStructAllThriftPrimitiveTypesMutable()
         self.assertIsInstance(s, MutableStruct)
@@ -1282,24 +1431,165 @@ class ThriftPython_MutableStruct_Test(unittest.TestCase):
         self.assertIsInstance(e, Error)
         self.assertIsInstance(e, MutableGeneratedError)
 
-    def test_create_for_struct_with_exception_field(self) -> None:
-        _ = TestStructWithExceptionFieldMutable()
+    def test_call_as_deepcopy(self) -> None:
+        """
+        struct TestStructCopy {
+          1: i32 unqualified_i32;
+          2: optional i32 optional_i32;
 
-    @parameterized.expand(
-        [
-            (TestExceptionAllThriftPrimitiveTypesMutable(),),
-            (TestExceptionAllThriftPrimitiveTypesMutable(unqualified_i32=2),),
-            (TestStructWithExceptionFieldMutable(),),
-            (TestStructWithExceptionFieldMutable(i32_field=3),),
-            (
-                TestStructWithExceptionFieldMutable(
-                    i32_field=5,
-                    exception_field=TestExceptionAllThriftPrimitiveTypesMutable(
-                        unqualified_string="Hello World!"
-                    ),
-                ),
-            ),
-        ]
-    )
-    def test_exception_serialization_round_trip(self, struct_or_exception) -> None:
-        _thrift_serialization_round_trip(self, mutable_serializer, struct_or_exception)
+          3: string unqualified_string;
+          4: optional string optional_string;
+
+          5: list<i32> unqualified_list_i32;
+          6: set<string> unqualified_set_string;
+          7: map<string, i32> unqualified_map_string_i32;
+
+          8: optional TestStructCopy recursive_struct;
+
+          @cpp.Type{name = "folly::IOBuf"}
+          9: binary unqualified_binary;
+        }
+        """
+        s = TestStructCopyMutable(
+            unqualified_i32=2,
+            optional_i32=3,
+            unqualified_string="thrift",
+            optional_string="python",
+            unqualified_list_i32=[1, 2, 3],
+            unqualified_set_string={"1", "2", "3"},
+            unqualified_map_string_i32={"a": 1, "b": 2, "c": 3},
+            unqualified_binary=IOBuf(b"abc"),
+        )
+        s_clone = s()
+
+        self.assertIsNot(s, s_clone)
+
+        self.assertEqual(s.unqualified_list_i32, s_clone.unqualified_list_i32)
+        self.assertIsNot(s.unqualified_list_i32, s_clone.unqualified_list_i32)
+
+        # Although `assertIsNot()` appears to check the deepcopy result, the
+        # best way to test it is to mutate `s_clone` (due to implementation
+        # details) and verify that it doesn't affect `s`.
+        s_clone.unqualified_list_i32.append(4)
+        self.assertNotEqual(s.unqualified_list_i32, s_clone.unqualified_list_i32)
+
+        self.assertEqual(s.unqualified_set_string, s_clone.unqualified_set_string)
+        self.assertIsNot(s.unqualified_set_string, s_clone.unqualified_set_string)
+        s_clone.unqualified_set_string.add("4")
+        self.assertNotEqual(s.unqualified_set_string, s_clone.unqualified_set_string)
+
+        self.assertEqual(
+            s.unqualified_map_string_i32, s_clone.unqualified_map_string_i32
+        )
+        self.assertIsNot(
+            s.unqualified_map_string_i32, s_clone.unqualified_map_string_i32
+        )
+        s_clone.unqualified_map_string_i32["d"] = 4
+        self.assertNotEqual(
+            s.unqualified_map_string_i32, s_clone.unqualified_map_string_i32
+        )
+        self.assertEqual(b"abc", bytes(s_clone.unqualified_binary))
+        self.assertIs(s.unqualified_binary, s_clone.unqualified_binary)
+
+    def test_call_reset_field_to_standard_default(self) -> None:
+        s1 = TestStructCopyMutable(
+            unqualified_i32=2,
+            optional_i32=3,
+            unqualified_string="thrift",
+            optional_string="python",
+            unqualified_list_i32=[1, 2, 3],
+            unqualified_set_string={"1", "2", "3"},
+            unqualified_map_string_i32={"a": 1, "b": 2, "c": 3},
+        )
+
+        # Assigning `None` to a field is resetting the field to its standard
+        # default value
+        s2 = s1(
+            unqualified_i32=None,
+            optional_string=None,
+            unqualified_set_string=None,
+            unqualified_map_string_i32={"d": 4},
+        )
+
+        self.assertEqual(0, s2.unqualified_i32)
+        self.assertEqual(3, s2.optional_i32)
+        self.assertEqual("thrift", s2.unqualified_string)
+        self.assertIsNone(s2.optional_string)
+        self.assertEqual([1, 2, 3], s2.unqualified_list_i32)
+        self.assertEqual(set(), s2.unqualified_set_string)
+        self.assertEqual({"d": 4}, s2.unqualified_map_string_i32)
+
+    def test_exception_deepcopy(self) -> None:
+        """
+        exception TestExceptionCopy {
+          1: i32 unqualified_i32;
+          2: optional i32 optional_i32;
+
+          3: string unqualified_string;
+          4: optional string optional_string;
+
+          5: list<i32> unqualified_list_i32;
+          6: optional list<i32> optional_list_i32;
+
+          7: set<string> unqualified_set_string;
+          8: optional set<string> optional_set_string;
+
+          9: map<string, i32> unqualified_map_string_i32;
+          10: optional TestExceptionCopy recursive_exception;
+        }
+        """
+        e = TestExceptionCopyMutable(
+            unqualified_i32=2,
+            optional_i32=3,
+            unqualified_string="thrift",
+            optional_string="python",
+            unqualified_list_i32=[1, 2, 3],
+            optional_list_i32=[4, 5, 6],
+            unqualified_set_string={"1", "2", "3"},
+            unqualified_map_string_i32={"a": 1, "b": 2, "c": 3},
+        )
+        e_clone = copy.deepcopy(e)
+
+        self.assertIsNot(e, e_clone)
+
+        self.assertEqual(e.unqualified_i32, e_clone.unqualified_i32)
+        self.assertEqual(e.optional_i32, e_clone.optional_i32)
+        self.assertEqual(e.unqualified_string, e_clone.unqualified_string)
+        self.assertEqual(e.optional_string, e_clone.optional_string)
+
+        e_clone.optional_i32 = None
+        self.assertIsNone(e_clone.optional_i32)
+        self.assertIsNotNone(e.optional_i32)
+
+        self.assertEqual(e.unqualified_list_i32, e_clone.unqualified_list_i32)
+        self.assertIsNot(e.unqualified_list_i32, e_clone.unqualified_list_i32)
+        self.assertEqual(e.optional_list_i32, e_clone.optional_list_i32)
+        self.assertIsNot(e.optional_list_i32, e_clone.optional_list_i32)
+
+        # Although `assertIsNot()` appears to check the deepcopy result, the
+        # best way to test it is to mutate `e_clone` (due to implementation
+        # details) and verify that it doesn't affect `e`.
+        e_clone.unqualified_list_i32.append(4)
+        self.assertNotEqual(e.unqualified_list_i32, e_clone.unqualified_list_i32)
+        if e_clone.optional_list_i32 is not None:
+            e_clone.optional_list_i32.append(4)
+
+        self.assertNotEqual(e.optional_list_i32, e_clone.optional_list_i32)
+
+        self.assertEqual(e.unqualified_set_string, e_clone.unqualified_set_string)
+        self.assertIsNot(e.unqualified_set_string, e_clone.unqualified_set_string)
+        e_clone.unqualified_set_string.add("4")
+        self.assertNotEqual(e.unqualified_set_string, e_clone.unqualified_set_string)
+
+        self.assertIsNone(e_clone.optional_set_string)
+
+        self.assertEqual(
+            e.unqualified_map_string_i32, e_clone.unqualified_map_string_i32
+        )
+        self.assertIsNot(
+            e.unqualified_map_string_i32, e_clone.unqualified_map_string_i32
+        )
+        e_clone.unqualified_map_string_i32["d"] = 4
+        self.assertNotEqual(
+            e.unqualified_map_string_i32, e_clone.unqualified_map_string_i32
+        )

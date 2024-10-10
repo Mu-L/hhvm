@@ -12,6 +12,7 @@
 *)
 val run :
   Provider_context.t ->
+  error_filter:Tast_provider.ErrorFilter.t ->
   Provider_context.entry ->
   Ide_api_types.range ->
   title_prefix:string ->

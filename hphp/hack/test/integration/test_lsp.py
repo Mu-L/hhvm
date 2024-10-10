@@ -3,23 +3,12 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import copy
-import enum
-import json
 import os
-import re
-import sys
-import unittest
-import urllib.parse
 from pathlib import Path
-from typing import Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Union
 
-import common_tests
-from hh_paths import hh_server
-from lspcommand import LspCommandProcessor, Transcript
-from lsptestspec import line, LspTestSpec, NoResponse
-from test_case import TestCase
-from utils import interpolate_variables, Json, JsonObject
+from hphp.hack.test.integration.lsp_test_base import LspTestBase
+from hphp.hack.test.integration.lsptestspec import line, LspTestSpec, NoResponse
 
 """
 Existence of this file indicates that a Hack notebook is stopped at a breakpoint
@@ -27,307 +16,7 @@ Existence of this file indicates that a Hack notebook is stopped at a breakpoint
 _HHVM_IS_PAUSED_FILE: Path = Path.home() / ".vscode-sockets/hhvm-paused"
 
 
-class LspTestDriver(common_tests.CommonTestDriver):
-    def write_load_config(
-        self,
-        use_saved_state: bool = False,
-    ) -> None:
-        # Will use the .hhconfig already in the repo directory
-        # As for hh.conf, we'll write it explicitly each test.
-        with open(os.path.join(self.repo_dir, "hh.conf"), "w") as f:
-            f.write(
-                """
-use_watchman = true
-watchman_subscribe_v2 = true
-interrupt_on_watchman = true
-interrupt_on_client = true
-max_workers = 2
-load_state_natively_v4 = {use_saved_state}
-use_mini_state = {use_saved_state}
-require_mini_state = {use_saved_state}
-lazy_decl = {use_saved_state}
-lazy_parse = {use_saved_state}
-lazy_init2 = {use_saved_state}
-ide_symbolindex_search_provider = LocalIndex
-allow_unstable_features = true
-""".format(
-                    use_saved_state=str(use_saved_state).lower(),
-                )
-            )
-
-    def write_naming_table_saved_state(self) -> str:
-        naming_table_saved_state_path = os.path.join(
-            self.repo_dir, "naming_table_saved_state.sqlite"
-        )
-        (stdout, stderr, retcode) = self.proc_call(
-            [
-                hh_server,
-                "--check",
-                self.repo_dir,
-                "--save-naming",
-                naming_table_saved_state_path,
-            ]
-        )
-        assert retcode == 0, (
-            f"Failed to save naming table saved state: {retcode}\n"
-            + f"STDOUT:\n{stdout}\n"
-            + f"STDERR:\n{stderr}\n"
-        )
-        return naming_table_saved_state_path
-
-
-class TestLsp(TestCase[LspTestDriver]):
-    @classmethod
-    def get_test_driver(cls) -> LspTestDriver:
-        return LspTestDriver()
-
-    @classmethod
-    def get_template_repo(cls) -> str:
-        return "hphp/hack/test/integration/data/lsp_exchanges/"
-
-    def repo_file(self, file: str) -> str:
-        return os.path.join(self.test_driver.repo_dir, file)
-
-    def read_repo_file(self, file: str) -> str:
-        with open(self.repo_file(file), "r") as f:
-            return f.read()
-
-    def repo_file_uri(self, file: str) -> str:
-        return urllib.parse.urljoin("file://", self.repo_file(file))
-
-    # pyre-fixme[11]: Annotation `Json` is not defined as a type.
-    def parse_test_data(self, file: str, variables: Mapping[str, str]) -> Json:
-        text = self.read_repo_file(file)
-        data: Json = json.loads(text)
-        data = interpolate_variables(data, variables)
-        return data
-
-    def load_test_data(
-        self, test_name: str, variables: Mapping[str, str]
-    ) -> Tuple[Json, Json]:
-        test = self.parse_test_data(test_name + ".json", variables)
-        expected = self.parse_test_data(test_name + ".expected", variables)
-        return (test, expected)
-
-    def write_observed(self, test_name: str, observed_transcript: Json) -> None:
-        file = os.path.join(self.test_driver.template_repo, test_name + ".observed.log")
-        text = json.dumps(
-            list(self.get_important_received_items(observed_transcript)), indent=2
-        )
-        with open(file, "w") as f:
-            f.write(text)
-
-    # pyre-fixme[11]: Annotation `JsonObject` is not defined as a type.
-    def order_response(self, response: JsonObject) -> str:
-        if "id" in response:
-            return str(response["id"])
-        else:
-            return json.dumps(response, indent=2)
-
-    # sorts a list of responses using the 'id' parameter so they can be
-    # compared in sequence even if they came back from the server out of sequence.
-    # this can happen based on how json rpc is specified to work.
-    # if 'id' isn't present the response is a notification.  we sort notifications
-    # by their entire text.
-    def sort_responses(self, responses: Iterable[JsonObject]) -> List[JsonObject]:
-        return sorted(responses, key=lambda response: self.order_response(response))
-
-    # removes stack traces from error responses since these can be noisy
-    # as code changes and they contain execution environment specific details
-    # by ignoring these when comparing responses we might miss some minor issues
-    # but will still catch the core error being thrown or not.
-    def sanitize_exceptions(
-        self, responses: Iterable[JsonObject]
-    ) -> Iterable[JsonObject]:
-        sanitized = copy.deepcopy(responses)
-        for response in sanitized:
-            if "error" in response:
-                if "data" in response["error"]:
-                    del response["error"]["data"]
-        return sanitized
-
-    # dumps an LSP response into a standard json format that can be used for
-    # doing precise text comparison in a way that is human readable in the case
-    # of there being an error.
-    def serialize_responses(self, responses: Iterable[Json]) -> List[str]:
-        return [json.dumps(response, indent=2) for response in responses]
-
-    # generates received responses from an LSP communication transcript
-    # ignoring the non-deterministic ones "progress" and "actionRequired"
-    def get_important_received_items(self, transcript: Transcript) -> Iterable[Json]:
-        for entry in transcript.values():
-            received = entry.received or None
-            if received is None:
-                continue
-            method = received.get("method") or ""
-            if method in [
-                "window/progress",
-                "window/actionRequired",
-                "window/showStatus",
-                "telemetry/event",
-                "textDocument/publishDiagnostics",
-                "client/registerCapability",
-            ]:
-                continue
-            yield received
-
-    # gets a set of loaded responses ready for validation by sorting them
-    # by id and serializing them for precise text comparison
-    def prepare_responses(self, responses: Iterable[JsonObject]) -> List[str]:
-        return self.serialize_responses(
-            self.sanitize_exceptions(self.sort_responses(responses))
-        )
-
-    def run_lsp_test(
-        self,
-        test_name: str,
-        test: Json,
-        expected: Json,
-        lsp_args: List[str],
-    ) -> None:
-        with LspCommandProcessor.create(
-            self.test_driver.test_env, lsp_args, self.test_driver.repo_dir
-        ) as lsp:
-            observed_transcript = lsp.communicate(test)
-
-        self.write_observed(test_name, observed_transcript)
-
-        expected_items = self.prepare_responses(expected)
-        observed_items = self.prepare_responses(
-            list(self.get_important_received_items(observed_transcript))
-        )
-
-        # If the server's busy, maybe the machine's just under too much
-        # pressure to give results in a timely fashion. Doing a retry would
-        # only defer the question of what to do in that case, so instead
-        # we'll just skip.
-        self.throw_skip_if_transcript_includes_server_busy(observed_transcript)
-
-        # validation checks that the number of items matches and that
-        # the responses are exactly identical to what we expect.
-        # Python equality on lists requires identical lengths,
-        # identical order, and does == on each element...
-        if expected_items != observed_items:
-            msg = "Observed this:\n" + json.dumps(
-                observed_transcript, indent=2, separators=(",", ": "), sort_keys=True
-            )
-            while (
-                expected_items
-                and observed_items
-                and expected_items[0] == observed_items[0]
-            ):
-                expected_items.pop(0)
-                observed_items.pop(0)
-            msg += (
-                f"\n\nIt first went wrong here...\n"
-                f"Expected:\n{expected_items[0] if expected_items else '[none]'}\n\n"
-                f"Observed:\n{observed_items[0] if observed_items else '[none]'}\n"
-            )
-            raise AssertionError(msg)
-
-    def throw_skip_if_transcript_includes_server_busy(
-        self, transcript: Transcript
-    ) -> None:
-        failure_messages = ["Server busy", "timed out"]
-        for entry in transcript.values():
-            received = entry.received
-            if received is None:
-                continue
-            if received.get("error"):
-                message = received["error"]["message"]
-                for failure_message in failure_messages:
-                    if failure_message in message:
-                        raise unittest.SkipTest(message)
-
-    def write_hhconf_and_naming_table(self) -> Dict[str, str]:
-        self.maxDiff = None
-        self.test_driver.write_load_config(use_saved_state=False)
-        naming_table_saved_state_path = (
-            self.test_driver.write_naming_table_saved_state()
-        )
-        return dict(
-            {
-                "naming_table_saved_state_path": naming_table_saved_state_path,
-                "root_path": self.test_driver.repo_dir,
-            }
-        )
-
-    def load_and_run(
-        self,
-        test_name: str,
-        variables: Mapping[str, str],
-        lsp_args: Optional[List[str]] = None,
-    ) -> None:
-        test, expected = self.load_test_data(test_name, variables)
-        if lsp_args is None:
-            lsp_args = []
-        self.run_lsp_test(
-            test_name=test_name,
-            test=test,
-            expected=expected,
-            lsp_args=lsp_args,
-        )
-
-    def run_spec(
-        self,
-        spec: LspTestSpec,
-        variables: Mapping[str, str],
-        fall_back_to_full_index: bool = True,
-        lsp_extra_args: List[str] = [],
-    ) -> None:
-        lsp_args = [
-            "--config",
-            f"ide_fall_back_to_full_index={str(fall_back_to_full_index).lower()}",
-        ] + lsp_extra_args
-        with LspCommandProcessor.create(
-            self.test_driver.test_env, lsp_args, self.test_driver.repo_dir
-        ) as lsp_command_processor:
-            (observed_transcript, error_details) = spec.run(
-                lsp_command_processor=lsp_command_processor, variables=variables
-            )
-        file = os.path.join(self.test_driver.template_repo, spec.name + ".sent.log")
-        text = json.dumps(
-            [
-                sent
-                for sent, _received in observed_transcript.values()
-                if sent is not None
-            ],
-            indent=2,
-        )
-        with open(file, "w") as f:
-            f.write(text)
-
-        file = os.path.join(self.test_driver.template_repo, spec.name + ".received.log")
-        text = json.dumps(
-            [
-                received
-                for _sent, received in observed_transcript.values()
-                if received is not None
-            ],
-            indent=2,
-        )
-        with open(file, "w") as f:
-            f.write(text)
-
-        # If the server's busy, maybe the machine's just under too much
-        # pressure to give results in a timely fashion. Doing a retry would
-        # only defer the question of what to do in that case, so instead
-        # we'll just skip.
-        self.throw_skip_if_transcript_includes_server_busy(observed_transcript)
-
-        if error_details is not None:
-            logs = self.test_driver.get_all_logs(self.test_driver.repo_dir)
-            print("CLIENT_LOG:\n%s\n\n" % logs.client_log, file=sys.stderr)
-            print("IDE_LOG:\n%s\n\n" % logs.ide_log, file=sys.stderr)
-            print("LSP_LOG:\n%s\n\n" % logs.lsp_log, file=sys.stderr)
-            raise AssertionError(error_details)
-
-    def setup_php_file(self, test_php: str) -> Mapping[str, str]:
-        return {
-            "php_file_uri": self.repo_file_uri(test_php),
-            "php_file": self.read_repo_file(test_php),
-        }
-
+class TestLsp(LspTestBase):
     def test_init_shutdown(self) -> None:
         variables = self.write_hhconf_and_naming_table()
         self.load_and_run("initialize_shutdown", variables)
@@ -2897,117 +2586,6 @@ class TestLsp(TestCase[LspTestDriver]):
         )
         self.run_spec(spec, variables)
 
-    def initialize_spec(
-        self,
-        spec: LspTestSpec,
-        has_status_capability: bool = False,  # do we tell the server that we have the "status" capability, i.e. want to receive window/showStatus?
-        wait_for_init_done: bool = True,  # do we wish to wait for init to be done before the test starts?
-    ) -> LspTestSpec:
-        initialization_options = {
-            "namingTableSavedStatePath": "${naming_table_saved_state_path}",
-            "namingTableSavedStateTestDelay": 0.0,
-        }
-        if not wait_for_init_done:
-            # A small delay, since otherwise init completes immediately
-            # This isn't very racy. All we need is a tiny delay so that
-            # other things which are in the queue get processed, rather
-            # than continuing synchronously
-            initialization_options["namingTableSavedStateTestDelay"] = 0.5
-
-        window_capabilities = {}
-        if has_status_capability:
-            window_capabilities["status"] = {"dynamicRegistration": False}
-
-        spec = spec.ignore_notifications(method="telemetry/event").request(
-            line=line(),
-            method="initialize",
-            params={
-                "initializationOptions": initialization_options,
-                "processId": None,
-                "rootPath": "${root_path}",
-                "capabilities": {
-                    "window": window_capabilities,
-                    "textDocument": {
-                        "completion": {"completionItem": {"snippetSupport": True}}
-                    },
-                },
-            },
-            result={
-                "capabilities": {
-                    "textDocumentSync": {
-                        "openClose": True,
-                        "change": 2,
-                        "willSave": False,
-                        "willSaveWaitUntil": True,
-                        "save": {"includeText": False},
-                    },
-                    "hoverProvider": True,
-                    "completionProvider": {
-                        "resolveProvider": True,
-                        "triggerCharacters": [
-                            "$",
-                            ">",
-                            "\\",
-                            ":",
-                            "<",
-                            "[",
-                            "'",
-                            '"',
-                            "{",
-                            "#",
-                        ],
-                    },
-                    "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
-                    "definitionProvider": True,
-                    "typeDefinitionProvider": True,
-                    "referencesProvider": True,
-                    "documentHighlightProvider": True,
-                    "documentSymbolProvider": True,
-                    "workspaceSymbolProvider": True,
-                    "codeActionProvider": {"resolveProvider": True},
-                    "documentFormattingProvider": True,
-                    "documentRangeFormattingProvider": True,
-                    "documentOnTypeFormattingProvider": {
-                        "firstTriggerCharacter": ";",
-                        "moreTriggerCharacter": ["}"],
-                    },
-                    "renameProvider": True,
-                    "implementationProvider": True,
-                    "rageProvider": True,
-                    "experimental": {"snippetTextEdit": True, "autoCloseJsx": True},
-                }
-            },
-        )
-        spec = spec.wait_for_server_request(
-            method="client/registerCapability",
-            params={
-                "registrations": [
-                    {
-                        "id": "did-change-watched-files",
-                        "method": "workspace/didChangeWatchedFiles",
-                        "registerOptions": {
-                            "watchers": [
-                                {
-                                    "globPattern": "**/*.{php,phpt,hack,hackpartial,hck,hh,hhi,xhp}",
-                                    "kind": 7,
-                                }
-                            ]
-                        },
-                    }
-                ]
-            },
-            result=None,
-        )
-
-        if wait_for_init_done:
-            spec = spec.wait_for_notification(
-                comment="wait for clientIdeDaemon to finish init",
-                method="telemetry/event",
-                params={"type": 4, "message": "[client-ide] Finished init: ok"},
-            )
-
-        return spec
-
     def test_serverless_ide_type_definition(self) -> None:
         variables = self.write_hhconf_and_naming_table()
         variables.update(self.setup_php_file("type_definition.php"))
@@ -3177,6 +2755,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 result={
                     "contents": [
                         {"language": "hack", "value": "int"},
+                        "---",
                         "A comment describing b_hover.",
                     ],
                     "range": {
@@ -3240,6 +2819,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 result={
                     "contents": [
                         {"language": "hack", "value": "THE_ANSWER"},
+                        "---",
                         "A comment describing THE_ANSWER",
                     ],
                     "range": {
@@ -3304,6 +2884,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 result={
                     "contents": [
                         {"language": "hack", "value": "final class CopyrightClass"},
+                        "---",
                         "Testing copyright removal",
                     ],
                     "range": {
@@ -3324,6 +2905,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 result={
                     "contents": [
                         {"language": "hack", "value": "final class GeneratedClass"},
+                        "---",
                         "Testing generated text removal",
                     ],
                     "range": {
@@ -3344,6 +2926,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 result={
                     "contents": [
                         {"language": "hack", "value": "attribute ?string name"},
+                        "---",
                         ":xhp:enum-attribute::name docblock",
                     ],
                     "range": {
@@ -3421,6 +3004,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 result={
                     "contents": [
                         {"language": "hack", "value": "attribute ?string name"},
+                        "---",
                         ":xhp:enum-attribute::name docblock",
                     ],
                     "range": {
@@ -3469,6 +3053,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 result={
                     "contents": [
                         {"language": "hack", "value": "int"},
+                        "---",
                         "A comment describing b_hover.",
                     ],
                     "range": {
@@ -3516,6 +3101,7 @@ class TestLsp(TestCase[LspTestDriver]):
                             "language": "hack",
                             "value": "// Defined in HoverWithErrorsClass\npublic static function staticMethod(string $z): void",
                         },
+                        "---",
                         'During testing, we\'ll remove the "public" tag from this '
                         "method\n"
                         "to ensure that we can still get IDE services",
@@ -3557,6 +3143,7 @@ class TestLsp(TestCase[LspTestDriver]):
                             "language": "hack",
                             "value": "// Defined in HoverWithErrorsClass\npublic static function staticMethod(string $z): void",
                         },
+                        "---",
                         'During testing, we\'ll remove the "public" tag from this '
                         "method\n"
                         "to ensure that we can still get IDE services",
@@ -4036,7 +3623,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 16, "character": 18},
+                    "position": {"line": 18, "character": 18},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4047,7 +3634,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 16, "character": 19},
+                    "position": {"line": 18, "character": 19},
                 },
                 result={
                     "signatures": [
@@ -4069,7 +3656,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 16, "character": 20},
+                    "position": {"line": 18, "character": 20},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4081,7 +3668,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 17, "character": 20},
+                    "position": {"line": 19, "character": 20},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4093,7 +3680,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 17, "character": 21},
+                    "position": {"line": 19, "character": 21},
                 },
                 result={
                     "signatures": [
@@ -4116,7 +3703,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 17, "character": 22},
+                    "position": {"line": 19, "character": 22},
                 },
                 result={
                     "signatures": [
@@ -4139,7 +3726,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 17, "character": 23},
+                    "position": {"line": 19, "character": 23},
                 },
                 result={
                     "signatures": [
@@ -4162,7 +3749,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 17, "character": 24},
+                    "position": {"line": 19, "character": 24},
                 },
                 result={
                     "signatures": [
@@ -4185,7 +3772,123 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 17, "character": 25},
+                    "position": {"line": 19, "character": 25},
+                },
+                result=None,
+                powered_by="serverless_ide",
+            )
+            .request(
+                line=line(),
+                comment="signature help for 2-argument generic instance method"
+                " (left of opening paren)",
+                method="textDocument/signatureHelp",
+                params={
+                    "textDocument": {"uri": "${php_file_uri}"},
+                    "position": {"line": 20, "character": 19},
+                },
+                result=None,
+                powered_by="serverless_ide",
+            )
+            .request(
+                line=line(),
+                comment="signature help for 2-argument generic instance method"
+                " (right of opening paren)",
+                method="textDocument/signatureHelp",
+                params={
+                    "textDocument": {"uri": "${php_file_uri}"},
+                    "position": {"line": 20, "character": 20},
+                },
+                result={
+                    "signatures": [
+                        {
+                            "label": "public function genericMethod"
+                            "(int $x1, int $x2): void",
+                            "documentation": "Generic instance method with doc block",
+                            "parameters": [{"label": "$x1"}, {"label": "$x2"}],
+                        }
+                    ],
+                    "activeSignature": 0,
+                    "activeParameter": 0,
+                },
+                powered_by="serverless_ide",
+            )
+            .request(
+                line=line(),
+                comment="signature help for 2-argument generic instance method"
+                " (left of first comma)",
+                method="textDocument/signatureHelp",
+                params={
+                    "textDocument": {"uri": "${php_file_uri}"},
+                    "position": {"line": 20, "character": 21},
+                },
+                result={
+                    "signatures": [
+                        {
+                            "label": "public function genericMethod"
+                            "(int $x1, int $x2): void",
+                            "documentation": "Generic instance method with doc block",
+                            "parameters": [{"label": "$x1"}, {"label": "$x2"}],
+                        }
+                    ],
+                    "activeSignature": 0,
+                    "activeParameter": 1,
+                },
+                powered_by="serverless_ide",
+            )
+            .request(
+                line=line(),
+                comment="signature help for 2-argument generic instance method"
+                " (right of first comma)",
+                method="textDocument/signatureHelp",
+                params={
+                    "textDocument": {"uri": "${php_file_uri}"},
+                    "position": {"line": 20, "character": 23},
+                },
+                result={
+                    "signatures": [
+                        {
+                            "label": "public function genericMethod"
+                            "(int $x1, int $x2): void",
+                            "documentation": "Generic instance method with doc block",
+                            "parameters": [{"label": "$x1"}, {"label": "$x2"}],
+                        }
+                    ],
+                    "activeSignature": 0,
+                    "activeParameter": 1,
+                },
+                powered_by="serverless_ide",
+            )
+            .request(
+                line=line(),
+                comment="signature help for 2-argument generic instance method"
+                " (left of closing paren)",
+                method="textDocument/signatureHelp",
+                params={
+                    "textDocument": {"uri": "${php_file_uri}"},
+                    "position": {"line": 20, "character": 23},
+                },
+                result={
+                    "signatures": [
+                        {
+                            "label": "public function genericMethod"
+                            "(int $x1, int $x2): void",
+                            "documentation": "Generic instance method with doc block",
+                            "parameters": [{"label": "$x1"}, {"label": "$x2"}],
+                        }
+                    ],
+                    "activeSignature": 0,
+                    "activeParameter": 1,
+                },
+                powered_by="serverless_ide",
+            )
+            .request(
+                line=line(),
+                comment="signature help for 2-argument generic instance method"
+                " (right of closing paren)",
+                method="textDocument/signatureHelp",
+                params={
+                    "textDocument": {"uri": "${php_file_uri}"},
+                    "position": {"line": 20, "character": 25},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4197,7 +3900,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 18, "character": 23},
+                    "position": {"line": 21, "character": 23},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4209,7 +3912,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 18, "character": 24},
+                    "position": {"line": 21, "character": 24},
                 },
                 result={
                     "signatures": [
@@ -4232,7 +3935,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 19, "character": 17},
+                    "position": {"line": 22, "character": 17},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4244,7 +3947,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 19, "character": 18},
+                    "position": {"line": 22, "character": 18},
                 },
                 result={
                     "signatures": [
@@ -4267,7 +3970,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 20, "character": 26},
+                    "position": {"line": 23, "character": 26},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4279,7 +3982,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 20, "character": 26},
+                    "position": {"line": 23, "character": 26},
                 },
                 result=None,
                 powered_by="serverless_ide",
@@ -4291,7 +3994,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 20, "character": 27},
+                    "position": {"line": 23, "character": 27},
                 },
                 result={
                     "signatures": [
@@ -4313,7 +4016,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 20, "character": 28},
+                    "position": {"line": 23, "character": 28},
                 },
                 result={
                     "signatures": [
@@ -4335,7 +4038,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 21, "character": 30},
+                    "position": {"line": 24, "character": 30},
                 },
                 result={
                     "signatures": [
@@ -4363,7 +4066,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 22, "character": 30},
+                    "position": {"line": 25, "character": 30},
                 },
                 result={
                     "signatures": [
@@ -4390,7 +4093,7 @@ class TestLsp(TestCase[LspTestDriver]):
                 method="textDocument/signatureHelp",
                 params={
                     "textDocument": {"uri": "${php_file_uri}"},
-                    "position": {"line": 23, "character": 30},
+                    "position": {"line": 26, "character": 30},
                 },
                 result={
                     "signatures": [
@@ -5390,6 +5093,7 @@ class BaseClassIncremental {
                 result={
                     "contents": [
                         {"language": "hack", "value": "int"},
+                        "---",
                         "A comment describing b_hover.",
                     ],
                     "range": {
@@ -5432,6 +5136,7 @@ function b_hover(): string {
                 result={
                     "contents": [
                         {"language": "hack", "value": "string"},
+                        "---",
                         "A comment describing b_hover differently.",
                     ],
                     "range": {
@@ -6329,14 +6034,21 @@ function unsaved_bar(): string { return "hello"; }
                 method="window/logMessage",
                 params={
                     "type": 1,
-                    "message": "Hack IDE support has failed.\nThis is unexpected.\nPlease file a bug within your IDE, and try restarting it.\nMore details: http://dummy/HH_TEST_MODE",
+                    "message": "A watchman fault stops Hack from working.\nThis is not a bug in Hack or VSCode.\nConsider consulting Watchman Users group for advice.\nMore details: http://dummy/HH_TEST_MODE",
+                },
+            )
+            .wait_for_notification(
+                method="window/showMessage",
+                params={
+                    "type": 1,
+                    "message": "A watchman fault stops Hack from working. See Output\u203aHack for details.",
                 },
             )
             .wait_for_server_request(
                 method="window/showStatus",
                 params={
-                    "message": "<ROOT>\n\nHack IDE support has failed. See Output\u203aHack for details.\n\nhh_server is stopped. Try running `hh` at the command-line.",
-                    "shortMessage": "Hack: failed",
+                    "message": "<ROOT>\n\nA watchman fault stops Hack from working. See Output\u203aHack for details.\n\nhh_server is stopped. Try running `hh` at the command-line.",
+                    "shortMessage": "Hack: watchman fault",
                     "type": 1,
                 },
                 result=NoResponse(),
@@ -7629,116 +7341,6 @@ class :el {
         )
         self.run_spec(spec, variables, lsp_extra_args=["--notebook-mode"])
 
-    def test_notebook_mode_at_breakpoint(self) -> None:
-        """
-        When `--notebook-mode` is passed to `hh lsp` **and HHVM is paused at a breakpoint**:
-        - There should be no errors for undefined vars
-        """
-        os.makedirs(os.path.dirname(_HHVM_IS_PAUSED_FILE), exist_ok=True)
-        with open(_HHVM_IS_PAUSED_FILE, "w") as f:
-            pass
-        contents = """<?hh
-echo $undefined_var_1; // no error
-echo $undefined_var_2; // no error
-1 * true;              // should error
-"""
-        variables = self.write_hhconf_and_naming_table()
-        file_base_name = "notebook_mode.php"
-        php_file_uri = self.repo_file_uri(file_base_name)
-        variables.update({"php_file_uri": php_file_uri, "contents": contents})
-        spec = (
-            self.initialize_spec(LspTestSpec("notebook_mode"))
-            .write_to_disk(
-                comment="create file ${file_base_name}",
-                uri="${php_file_uri}",
-                contents="${contents}",
-                notify=False,
-            )
-            .notification(
-                method="textDocument/didOpen",
-                params={
-                    "textDocument": {
-                        "uri": "${php_file_uri}",
-                        "languageId": "hack",
-                        "version": 1,
-                        "text": "${contents}",
-                    }
-                },
-            )
-            .wait_for_notification(
-                method="textDocument/publishDiagnostics",
-                params={
-                    "uri": "${php_file_uri}",
-                    "diagnostics": [
-                        {
-                            "range": {
-                                "start": {"line": 3, "character": 4},
-                                "end": {"line": 3, "character": 8},
-                            },
-                            "severity": 1,
-                            "code": 4429,
-                            "source": "Hack",
-                            "message": "Typing error",
-                            "relatedInformation": [
-                                {
-                                    "location": {
-                                        "uri": "${php_file_uri}",
-                                        "range": {
-                                            "start": {"line": 3, "character": 0},
-                                            "end": {"line": 3, "character": 8},
-                                        },
-                                    },
-                                    "message": "Expected num because this is used in an arithmetic operation",
-                                },
-                                {
-                                    "location": {
-                                        "uri": "${php_file_uri}",
-                                        "range": {
-                                            "start": {"line": 3, "character": 4},
-                                            "end": {"line": 3, "character": 8},
-                                        },
-                                    },
-                                    "message": "But got bool",
-                                },
-                            ],
-                            "relatedLocations": [
-                                {
-                                    "location": {
-                                        "uri": "${php_file_uri}",
-                                        "range": {
-                                            "start": {"line": 3, "character": 0},
-                                            "end": {"line": 3, "character": 8},
-                                        },
-                                    },
-                                    "message": "Expected num because this is used in an arithmetic operation",
-                                },
-                                {
-                                    "location": {
-                                        "uri": "${php_file_uri}",
-                                        "range": {
-                                            "start": {"line": 3, "character": 4},
-                                            "end": {"line": 3, "character": 8},
-                                        },
-                                    },
-                                    "message": "But got bool",
-                                },
-                            ],
-                        },
-                    ],
-                },
-            )
-            .request(line=line(), method="shutdown", params={}, result=None)
-            .wait_for_notification(
-                comment="shutdown should clear out live squiggles",
-                method="textDocument/publishDiagnostics",
-                params={
-                    "uri": "${php_file_uri}",
-                    "diagnostics": [],
-                },
-            )
-        )
-        self.run_spec(spec, variables, lsp_extra_args=["--notebook-mode"])
-
     def test_file_outline_detail(self) -> None:
         """
         Test that file outline symbols contain [the `detail` field](https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#documentSymbol), where applicable.
@@ -7879,6 +7481,259 @@ function baz<T>(readonly T $x): readonly T {
                     },
                 ],
                 powered_by="serverless_ide",
+            )
+            .request(
+                line=line(),
+                method="shutdown",
+                params={
+                    "textDocument": {
+                        "uri": "${php_file_uri}",
+                    }
+                },
+                result=None,
+            )
+        )
+        self.run_spec(spec, variables)
+
+    def run_serverless_ide_will_save_wait_until(
+        self,
+        variables: dict[str, str],
+        filename: str,
+        expected_result: list[dict[str, Union[dict[str, dict[str, int]], str]]],
+    ) -> None:
+        variables.update(self.setup_php_file(filename))
+
+        spec = (
+            self.initialize_spec(
+                LspTestSpec("serverless_ide_will_save_wait_until_" + filename),
+            )
+            .notification(
+                method="textDocument/didOpen",
+                params={
+                    "textDocument": {
+                        "uri": "${php_file_uri}",
+                        "languageId": "hack",
+                        "version": 1,
+                        "text": "${php_file}",
+                    }
+                },
+            )
+            .ignore_notifications(method="textDocument/publishDiagnostics")
+            .request(
+                line=line(),
+                comment="willSaveWaitUntil",
+                method="textDocument/willSaveWaitUntil",
+                params={"textDocument": {"uri": "${php_file_uri}"}, "reason": 1},
+                result=expected_result,
+            )
+            .request(
+                line=line(),
+                comment="shutdown",
+                method="shutdown",
+                params={},
+                result=None,
+            )
+            .notification(method="exit", params={})
+        )
+        self.run_spec(spec, variables)
+
+    def test_initialize_will_save_wait_until_is_disabled(self) -> None:
+        variables = self.write_hhconf_and_naming_table()
+        spec = (
+            LspTestSpec("test_initialize_will_save_wait_until_is_disabled")
+            .ignore_notifications(method="telemetry/event")
+            .ignore_notifications(method="textDocument/publishDiagnostics")
+            .ignore_requests(
+                method="client/registerCapability",
+                params={
+                    "registrations": [
+                        {
+                            "id": "did-change-watched-files",
+                            "method": "workspace/didChangeWatchedFiles",
+                            "registerOptions": {
+                                "watchers": [
+                                    {
+                                        "globPattern": "**/*.{php,phpt,hack,hackpartial,hck,hh,hhi,xhp}",
+                                        "kind": 7,
+                                    }
+                                ]
+                            },
+                        }
+                    ]
+                },
+            )
+            .request(
+                line=line(),
+                method="initialize",
+                params={
+                    "initializationOptions": {},
+                    "processId": None,
+                    "rootPath": "${root_path}",
+                    "capabilities": {},
+                },
+                result={
+                    "capabilities": {
+                        "textDocumentSync": {
+                            "openClose": True,
+                            "change": 2,
+                            "willSave": False,
+                            "willSaveWaitUntil": False,
+                            "save": {"includeText": False},
+                        },
+                        "hoverProvider": True,
+                        "completionProvider": {
+                            "resolveProvider": True,
+                            "triggerCharacters": [
+                                "$",
+                                ">",
+                                "\\",
+                                ":",
+                                "<",
+                                "[",
+                                "'",
+                                '"',
+                                "{",
+                                "#",
+                            ],
+                        },
+                        "signatureHelpProvider": {"triggerCharacters": ["(", ","]},
+                        "definitionProvider": True,
+                        "typeDefinitionProvider": True,
+                        "referencesProvider": True,
+                        "documentHighlightProvider": True,
+                        "documentSymbolProvider": True,
+                        "workspaceSymbolProvider": True,
+                        "codeActionProvider": {"resolveProvider": True},
+                        "documentFormattingProvider": True,
+                        "documentRangeFormattingProvider": True,
+                        "documentOnTypeFormattingProvider": {
+                            "firstTriggerCharacter": ";",
+                            "moreTriggerCharacter": ["}"],
+                        },
+                        "renameProvider": True,
+                        "implementationProvider": True,
+                        "rageProvider": True,
+                        "experimental": {"snippetTextEdit": True, "autoCloseJsx": True},
+                    }
+                },
+            )
+            .request(line=line(), method="shutdown", params={}, result=None)
+            .notification(method="exit", params={})
+        )
+        self.run_spec(spec, variables, lsp_extra_args=["--disable-format-on-save"])
+
+    def test_serverless_ide_will_save_wait_until_no_format(
+        self,
+    ) -> None:
+        variables = self.write_hhconf_and_naming_table()
+
+        for filename in [
+            "unformatted_with_format_and_generated.php",
+            "unformatted_with_noformat.php",
+        ]:
+            self.run_serverless_ide_will_save_wait_until(variables, filename, [])
+
+    def test_serverless_ide_will_save_wait_until_format(
+        self,
+    ) -> None:
+        variables = self.write_hhconf_and_naming_table()
+
+        for filename, expected_result in [
+            (
+                "formatted.php",
+                [
+                    {
+                        "range": {
+                            "start": {"line": 0, "character": 0},
+                            "end": {"line": 0, "character": 0},
+                        },
+                        "newText": "",
+                    }
+                ],
+            ),
+            (
+                "unformatted.php",
+                [
+                    {
+                        "range": {
+                            "start": {"line": 2, "character": 0},
+                            "end": {"line": 5, "character": 0},
+                        },
+                        "newText": 'function unformatted(): string {\n  return "this file should be formatted on save";\n}\n',
+                    }
+                ],
+            ),
+            (
+                "unformatted_and_partially_generated.php",
+                [
+                    {
+                        "range": {
+                            "start": {"line": 5, "character": 0},
+                            "end": {"line": 6, "character": 0},
+                        },
+                        "newText": "  return true;\n",
+                    }
+                ],
+            ),
+        ]:
+            self.run_serverless_ide_will_save_wait_until(
+                variables, filename, expected_result
+            )
+
+    def test_will_save_wait_until_newlines_at_top(self) -> None:
+        """
+        Test our handling of textDocument/willSaveWaitUntil:
+        we shouldn't have any extra newlines at the top (T188437747)
+        """
+        variables = self.write_hhconf_and_naming_table()
+        file_base_name = "will_save_wait_until_newlines_at_top.php"
+        php_file_uri = self.repo_file_uri(file_base_name)
+        contents = """<?hh
+
+
+
+class C {}
+"""
+        variables.update({"php_file_uri": php_file_uri, "contents": contents})
+        spec = (
+            self.initialize_spec(LspTestSpec("notebook_mode"))
+            .write_to_disk(
+                comment="create file ${file_base_name}",
+                uri="${php_file_uri}",
+                contents="${contents}",
+                notify=False,
+            )
+            .notification(
+                method="textDocument/didOpen",
+                params={
+                    "textDocument": {
+                        "uri": "${php_file_uri}",
+                        "languageId": "hack",
+                        "version": 1,
+                        "text": "${contents}",
+                    }
+                },
+            )
+            .request(
+                line=line(),
+                method="textDocument/willSaveWaitUntil",
+                params={
+                    "textDocument": {
+                        "uri": "${php_file_uri}",
+                    },
+                    # TextDocumentSaveReason.Manual (user saved)
+                    # https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#textDocumentSaveReason
+                    "reason": 1,
+                },
+                result=[
+                    {
+                        "range": {
+                            "start": {"line": 1, "character": 0},
+                            "end": {"line": 3, "character": 0},
+                        },
+                        "newText": "",
+                    }
+                ],
             )
             .request(
                 line=line(),

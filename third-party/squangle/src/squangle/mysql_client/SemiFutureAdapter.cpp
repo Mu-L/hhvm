@@ -7,17 +7,16 @@
  */
 
 #include <folly/MoveWrapper.h>
-#include <folly/futures/Future.h>
-#include <folly/futures/Promise.h>
 
 #include "squangle/mysql_client/AsyncHelpers.h"
-#include "squangle/mysql_client/DbResult.h"
+#include "squangle/mysql_client/ConnectOperation.h"
+#include "squangle/mysql_client/Connection.h"
+#include "squangle/mysql_client/MultiQueryOperation.h"
 #include "squangle/mysql_client/Operation.h"
+#include "squangle/mysql_client/QueryOperation.h"
 #include "squangle/mysql_client/SemiFutureAdapter.h"
 
-namespace facebook {
-namespace common {
-namespace mysql_client {
+namespace facebook::common::mysql_client {
 
 void handleConnectionCompletion(
     ConnectOperation& op,
@@ -28,8 +27,8 @@ void handleConnectionCompletion(
     promise.setValue(ConnectResult(
         std::move(conn),
         op.result(),
-        *op.getKey(),
-        op.elapsed(),
+        op.getKey(),
+        op.opElapsed(),
         op.attemptsMade()));
   } else {
     // failed - build the exception
@@ -37,8 +36,8 @@ void handleConnectionCompletion(
         op.result(),
         op.mysql_errno(),
         op.mysql_error(),
-        *conn->getKey(),
-        op.elapsed()));
+        conn->getKey(),
+        op.opElapsed()));
   }
 }
 
@@ -60,7 +59,8 @@ void handleQueryCompletion(
     QueryCallbackReason reason,
     folly::Promise<std::pair<ResultType, AsyncPostQueryCallback>>& promise) {
   auto conn = op.releaseConnection();
-  auto conn_key = *conn->getKey();
+  // Make a copy of the connection key here because we move `conn` below.
+  auto conn_key = conn->getKey();
   if (reason == QueryCallbackReason::Success) {
     ResultType result(
         std::move(query_result),
@@ -69,9 +69,9 @@ void handleQueryCompletion(
         std::move(conn),
         op.result(),
         std::move(conn_key),
-        op.elapsed());
-    promise.setValue(std::make_pair(
-        std::move(result), std::move(op.callbacks_.post_query_callback_)));
+        op.opElapsed());
+    promise.setValue(
+        std::make_pair(std::move(result), op.stealPostQueryCallback()));
   } else {
     promise.setException(QueryException(
         op.numQueriesExecuted(),
@@ -79,7 +79,7 @@ void handleQueryCompletion(
         op.mysql_errno(),
         op.mysql_error(),
         std::move(conn_key),
-        op.elapsed()));
+        op.opElapsed()));
   }
 }
 
@@ -87,8 +87,9 @@ void handleQueryCompletion(
 template <typename Operation>
 folly::SemiFuture<folly::Unit> handlePreQueryCallback(Operation& op) {
   // Use the pre-query callback if we have it, or else an empty SemiFuture
-  if (op.callbacks_.pre_query_callback_) {
-    return op.callbacks_.pre_query_callback_(op);
+  auto optFut = op.callPreQueryCallback(op);
+  if (optFut) {
+    return std::move(*optFut);
   }
 
   return folly::makeSemiFuture(folly::unit);
@@ -138,14 +139,16 @@ template <typename ResultType, typename Operation, typename QueryResult>
 folly::SemiFuture<ResultType> toSemiFutureHelper(
     std::shared_ptr<Operation> op) {
   // Run pre-query callbacks
-  auto& opRef = *op; // take a reference so we can move it in deferValue
-  return handlePreQueryCallback<Operation>(opRef)
-      // Then run the query
-      .deferValue([op = std::move(op)](auto&& /* unused */) {
-        return handleRunQuery<ResultType>(std::move(op));
-      })
-      // Then run post-query callbacks
-      .deferValue(handlePostQueryCallback<ResultType>);
+  auto sfut1 = handlePreQueryCallback<Operation>(*op);
+  auto sfut2 = std::move(sfut1).deferValue([=](auto&& /* unused */) {
+    return handleRunQuery<ResultType>(std::move(op));
+  });
+
+  return std::move(sfut2).deferValue([op = std::move(op)](auto&& result) {
+    // Pass `op` into this lambda to verify it's lifetime until we have handled
+    // post query callbacks
+    return handlePostQueryCallback<ResultType>(std::move(result));
+  });
 }
 
 folly::SemiFuture<DbQueryResult> toSemiFuture(QueryOperation_ptr query_op) {
@@ -161,6 +164,4 @@ folly::SemiFuture<DbMultiQueryResult> toSemiFuture(
       std::vector<QueryResult>>(std::move(mquery_op));
 }
 
-} // namespace mysql_client
-} // namespace common
-} // namespace facebook
+} // namespace facebook::common::mysql_client

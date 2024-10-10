@@ -312,6 +312,8 @@ module.exports = {
           'fb/server/howto',
           'fb/server/server-lifecycle',
           'fb/server/server-modules',
+          'fb/server/service-interceptors',
+          'fb/server/client-interceptors',
           'fb/server/background-tasks',
           'fb/server/flavors-of-main',
           'fb/server/components',
@@ -396,6 +398,19 @@ module.exports = {
             },
             items: [],
           },
+          'fb/server/stream-graceful-shutdown',
+          {
+            type: 'category',
+            label: 'thrift-python Servers',
+            link: {
+              type: 'doc',
+              id: 'fb/server/thrift-python/index',
+            },
+            items: [
+              'fb/server/thrift-python/create',
+              'fb/server/thrift-python/requests',
+            ],
+          },
         ],
       },
       {
@@ -471,7 +486,10 @@ module.exports = {
               type: 'doc',
               id: 'fb/troubleshooting/debugging-tools',
             },
-            items: ['fb/troubleshooting/debuggingtools/thriftdbg-info'],
+            items: [
+              'fb/troubleshooting/debuggingtools/thriftdbg-info',
+              'fb/troubleshooting/debuggingtools/thriftdbg-sendRequest',
+            ],
           },
           'fb/troubleshooting/fuzzer',
           {
@@ -488,7 +506,15 @@ module.exports = {
               'fb/troubleshooting/dogpiles/development',
             ],
           },
-          'fb/troubleshooting/fb303-counters',
+          {
+            type: 'category',
+            label: 'FB303 Counters',
+            link: {
+              type: 'doc',
+              id: 'fb/troubleshooting/fb303-counters/index',
+            },
+            items: ['fb/troubleshooting/fb303-counters/streaming'],
+          },
           'fb/troubleshooting/overload',
         ],
       },

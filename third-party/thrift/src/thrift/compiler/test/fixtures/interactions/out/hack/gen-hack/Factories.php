@@ -59,11 +59,6 @@ interface FactoriesClientIf extends \IThriftSyncIf {
 trait FactoriesClientBase {
   require extends \ThriftClientBase;
 
-}
-
-class FactoriesAsyncClient extends \ThriftClientBase implements FactoriesAsyncClientIf {
-  use FactoriesClientBase;
-
   /**
    * Original thrift definition:-
    * void
@@ -77,36 +72,24 @@ class FactoriesAsyncClient extends \ThriftClientBase implements FactoriesAsyncCl
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = Factories_foo_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("Factories", "foo", $args);
-    $currentseqid = $this->sendImplHelper($args, "foo", false);
+    $currentseqid = $this->sendImplHelper($args, "foo", false, "Factories" );
     await $this->genAwaitResponse(Factories_foo_result::class, "foo", true, $currentseqid, $rpc_options);
   }
+
+}
+
+class FactoriesAsyncClient extends \ThriftClientBase implements FactoriesAsyncClientIf {
+  use FactoriesClientBase;
 
 }
 
 class FactoriesClient extends \ThriftClientBase implements FactoriesClientIf {
   use FactoriesClientBase;
 
-  /**
-   * Original thrift definition:-
-   * void
-   *   foo();
-   */
-  public async function foo(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Factories_foo_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("Factories", "foo", $args);
-    $currentseqid = $this->sendImplHelper($args, "foo", false);
-    await $this->genAwaitResponse(Factories_foo_result::class, "foo", true, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_foo(): int {
     $args = Factories_foo_args::withDefaultValues();
-    return $this->sendImplHelper($args, "foo", false);
+    return $this->sendImplHelper($args, "foo", false, "Factories" );
   }
   public function recv_foo(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(Factories_foo_result::class, "foo", true, $expectedsequenceid);

@@ -21,6 +21,8 @@
 
 using apache::thrift::compiler::test::check_compile;
 
+// Note: To see a reference on the expected lint message format: see the regex
+// in thrift/compiler/test/compiler.cc
 TEST(CompilerTest, diagnostic_in_last_line) {
   check_compile(R"(
     struct S {
@@ -99,6 +101,22 @@ TEST(CompilerTest, no_field_id) {
       i32 field4; # expected-warning: No field id specified for `field4`, resulting protocol may have conflicts or not be backwards compatible!
     }
   )");
+}
+
+TEST(CompilerTest, no_field_id_with_validation) {
+  check_compile(
+      R"(
+    struct Experimental {} (thrift.uri = "facebook.com/thrift/annotation/Experimental") # expected-warning: The annotation thrift.uri is deprecated. Please use @thrift.Uri instead.
+    struct Foo {
+      @Experimental
+      i32 field2; # expected-error@-1: No field id specified for `field2`
+    }
+
+    struct Bar {
+      i32 field4; # expected-error: No field id specified for `field4`
+    }
+  )",
+      {"--extra-validation", "implicit_field_ids"});
 }
 
 TEST(CompilerTest, zero_as_field_id_annotation) {
@@ -344,166 +362,248 @@ TEST(CompilerTest, integer_overflow_underflow) {
   check_compile(R"(
     # Unsigned Ints
     const i64 overflowUint = 18446744073709551615;  # max uint64
-      # expected-error@-1: integer constant 18446744073709551615 is too large
+    # expected-error@-1: integer constant 18446744073709551615 is too large
   )");
   check_compile(R"(
     const i64 overflowUint2 = 18446744073709551616;  # max uint64 + 1
-      # expected-error@-1: integer constant 18446744073709551616 is too large
+    # expected-error@-1: integer constant 18446744073709551616 is too large
   )");
 }
 
 TEST(CompilerTest, double_overflow_underflow) {
   check_compile(R"(
     const double overflowConst = 1.7976931348623159e+308;
-      # expected-error@-1: floating-point constant 1.7976931348623159e+308 is out of range
+    # expected-error@-1: floating-point constant 1.7976931348623159e+308 is out of range
   )");
   check_compile(R"(
     const double overflowConst = 1.7976931348623159e+309;
-      # expected-error@-1: floating-point constant 1.7976931348623159e+309 is out of range
+    # expected-error@-1: floating-point constant 1.7976931348623159e+309 is out of range
   )");
   check_compile(R"(
     const double overflowConst = 4.9406564584124654e-325;
-      # expected-error@-1: magnitude of floating-point constant 4.9406564584124654e-325 is too small
+    # expected-error@-1: magnitude of floating-point constant 4.9406564584124654e-325 is too small
   )");
   check_compile(R"(
     const double overflowConst = 1e-324;
-      # expected-error@-1: magnitude of floating-point constant 1e-324 is too small
+    # expected-error@-1: magnitude of floating-point constant 1e-324 is too small
   )");
 }
 
-TEST(CompilerTest, const_wrong_type) {
+TEST(CompilerTest, void_data) {
   check_compile(R"(
-    const i32 wrongInt = "stringVal"; # expected-error: type error: const `wrongInt` was declared as i32.
-    const set<string> wrongSet = {1: 2};
-      # expected-error@-1: type error: const `wrongSet` was declared as set.
-    const map<i32, i32> wrongMap = [1,32,3];
-      # expected-error@-1: type error: const `wrongMap` was declared as map.
-    const map<i32, i32> weirdMap = [];
-      # expected-warning@-1: type error: map `weirdMap` initialized with empty list.
-    const set<i32> weirdSet = {};
-      # expected-warning@-1: type error: set `weirdSet` initialized with empty map.
-    const list<i32> weirdList = {};
-      # expected-warning@-1: type error: list `weirdList` initialized with empty map.
-    const list<string> badValList = [1];
-      # expected-error@-1: type error: const `badValList<elem>` was declared as string.
-    const set<string> badValSet = [2];
-      # expected-error@-1: type error: const `badValSet<elem>` was declared as string.
-    const map<string, i32> badValMap = {1: "str"};
-      # expected-error@-1: type error: const `badValMap<key>` was declared as string.
-      # expected-error@-2: type error: const `badValMap<val>` was declared as i32.
-    struct A {}
-    struct B {}
-    const A wrongStruct = B{}; # expected-error: type mismatch: expected test.A, got test.B
+    const void v = 42; # expected-error: `void` cannot be used as a data type
+    struct S {
+      1: void v; # expected-error: `void` cannot be used as a data type
+    }
   )");
 }
 
-TEST(CompilerTest, const_byte_value) {
+TEST(CompilerTest, byte_initializer) {
   check_compile(R"(
     const byte c1 = 127;
     const byte c2 = 128;
-    # expected-error@-1: value error: const `c2` has an invalid custom default value.
+    # expected-error@-1: 128 is out of range for `byte` in initialization of `c2`
 
     const byte c3 = -128;
     const byte c4 = -129;
-    # expected-error@-1: value error: const `c4` has an invalid custom default value.
+    # expected-error@-1: -129 is out of range for `byte` in initialization of `c4`
   )");
 }
 
-TEST(CompilerTest, const_i16_value) {
+TEST(CompilerTest, i16_initializer) {
   check_compile(R"(
     const i16 c1 = 32767;
     const i16 c2 = 32768;
-    # expected-error@-1: value error: const `c2` has an invalid custom default value.
+    # expected-error@-1: 32768 is out of range for `i16` in initialization of `c2`
 
     const i16 c3 = -32768;
     const i16 c4 = -32769;
-    # expected-error@-1: value error: const `c4` has an invalid custom default value.
+    # expected-error@-1: -32769 is out of range for `i16` in initialization of `c4`
   )");
 }
 
-TEST(CompilerTest, const_i32_value) {
+TEST(CompilerTest, i32_initializer) {
   check_compile(R"(
-    const i32 c1 = 2147483647;
-    const i32 c2 = 2147483648;
-    # expected-error@-1: value error: const `c2` has an invalid custom default value.
+    const i32 c0 = 42;
 
-    const i32 c3 = -2147483648;
-    const i32 c4 = -2147483649;
-    # expected-error@-1: value error: const `c4` has an invalid custom default value.
+    const i32 c1 = 4.2;
+    # expected-error@-1: cannot convert floating-point number to `i32` in initialization of `c1`
+
+    const i32 c2 = "string typing";
+    # expected-error@-1: cannot convert string to `i32` in initialization of `c2`
+
+    const i32 c3 = 2147483647;
+    const i32 c4 = 2147483648;
+    # expected-error@-1: 2147483648 is out of range for `i32` in initialization of `c4`
+
+    const i32 c5 = -2147483648;
+    const i32 c6 = -2147483649;
+    # expected-error@-1: -2147483649 is out of range for `i32` in initialization of `c6`
   )");
 }
 
-TEST(CompilerTest, const_float_value) {
+TEST(CompilerTest, float_initializer) {
   check_compile(R"(
     const float c0 = 1e8;
 
     const float c1 = 3.4028234663852886e+38;
     const float c2 = 3.402823466385289e+38; // max float + 1 double ulp
-    # expected-error@-1: value error: const `c2` has an invalid custom default value.
+    # expected-error@-1: 3.402823466385289e+38 is out of range for `float` in initialization of `c2`
 
     const float c3 = -3.4028234663852886e+38;
     const float c4 = -3.402823466385289e+38; // min float - 1 double ulp
-    # expected-error@-1: value error: const `c4` has an invalid custom default value.
+    # expected-error@-1: -3.402823466385289e+38 is out of range for `float` in initialization of `c4`
 
     const float c5 = 100000001;
-    # expected-error@-1: value error: const `c5` cannot be represented precisely as `float` or `double`.
+    # expected-error@-1: cannot convert 100000001 to `float` in initialization of `c5`
     const float c6 = -100000001;
-    # expected-error@-1: value error: const `c6` cannot be represented precisely as `float` or `double`.
+    # expected-error@-1: cannot convert -100000001 to `float` in initialization of `c6`
   )");
 }
 
-TEST(CompilerTest, const_double_value) {
+TEST(CompilerTest, double_initializer) {
   check_compile(R"(
     const double c0 = 1e8;
     const double c1 = 1.7976931348623157e+308;
     const double c2 = -1.7976931348623157e+308;
 
-    const float c3 = 10000000000000001;
-    # expected-error@-1: value error: const `c3` cannot be represented precisely as `float` or `double`.
+    const double c3 = 10000000000000001;
+    # expected-error@-1: cannot convert 10000000000000001 to `double` in initialization of `c3`
 
-    const float c4 = -10000000000000001;
-    # expected-error@-1: value error: const `c4` cannot be represented precisely as `float` or `double`.
+    const double c4 = -10000000000000001;
+    # expected-error@-1: cannot convert -10000000000000001 to `double` in initialization of `c4`
+  )");
+}
+
+TEST(CompilerTest, binary_initializer) {
+  check_compile(R"(
+    const binary b0 = "foo";
+
+    const binary b1 = 42;
+    # expected-error@-1: cannot convert integer to `binary` in initialization of `b1`
   )");
 }
 
 TEST(CompilerTest, struct_initializer) {
   check_compile(R"(
     struct S {}
-    const S s1 = {};   # OK
-    const S s2 = 42;   # expected-error: integer is incompatible with `S`
-    const S s3 = 4.2;  # expected-error: floating-point number is incompatible with `S`
-    const S s4 = "";   # expected-error: string is incompatible with `S`
-    const S s5 = true; # expected-error: bool is incompatible with `S`
-    const S s6 = [];   # expected-error: list is incompatible with `S`
+    const S s1 = {}; # OK
+
+    const S s2 = 42;
+    # expected-error@-1: cannot convert integer to `S` in initialization of `s2`
+
+    const S s3 = 4.2;
+    # expected-error@-1: cannot convert floating-point number to `S` in initialization of `s3`
+
+    const S s4 = "";
+    # expected-error@-1: cannot convert string to `S` in initialization of `s4`
+
+    const S s5 = true;
+    # expected-error@-1: cannot convert bool to `S` in initialization of `s5`
+
+    const S s6 = [];
+    # expected-error@-1: cannot convert list to `S` in initialization of `s6`
+
+    struct A {}
+    struct B {}
+    const A a = B{};
+    # expected-error@-1: type mismatch: expected test.A, got test.B
   )");
 }
 
 TEST(CompilerTest, union_initializer) {
   check_compile(R"(
-    union U {}
-    const U u1 = {};   # OK
-    const U u2 = 42;   # expected-error: integer is incompatible with `U`
-    const U u3 = 4.2;  # expected-error: floating-point number is incompatible with `U`
-    const U u4 = "";   # expected-error: string is incompatible with `U`
-    const U u5 = true; # expected-error: bool is incompatible with `U`
-    const U u6 = [];   # expected-error: list is incompatible with `U`
+    union U {
+      1: i32 a;
+      2: i32 b;
+    }
+
+    const U u1 = {}; # OK
+
+    const U u2 = 42;
+    # expected-error@-1: cannot convert integer to `U` in initialization of `u2`
+
+    const U u3 = 4.2;
+    # expected-error@-1: cannot convert floating-point number to `U` in initialization of `u3`
+
+    const U u4 = "";
+    # expected-error@-1: cannot convert string to `U` in initialization of `u4`
+
+    const U u5 = true;
+    # expected-error@-1: cannot convert bool to `U` in initialization of `u5`
+
+    const U u6 = [];
+    # expected-error@-1: cannot convert list to `U` in initialization of `u6`
+
+    const U u7 = {"a": 1, "b": 2};
+    # expected-error@-1: cannot initialize more than one field in union `U`
   )");
 }
 
 TEST(CompilerTest, enum_initializer) {
   check_compile(R"(
     enum E {A = 1}
-    const E e1 = E.A;   # OK
-    const E e2 = 42;    # expected-warning: const `e2` is defined as enum `E` with a value not of that enum
-    const E e3 = 4.2;   # expected-error: floating-point number is incompatible with `E`
-    const E e4 = "";    # expected-error: string is incompatible with `E`
-    const E e5 = "E.A"; # expected-error: string is incompatible with `E`
-    const E e6 = true;  # expected-error: bool is incompatible with `E`
-    const E e7 = [];    # expected-error: list is incompatible with `E`
+
+    const E e1 = E.A; # OK
+
+    const E e2 = 42;
+    # expected-warning@-1: const `e2` is defined as enum `E` with a value not of that enum
+
+    const E e3 = 4.2;
+    # expected-error@-1: cannot convert floating-point number to `E` in initialization of `e3`
+
+    const E e4 = "";
+    # expected-error@-1: cannot convert string to `E` in initialization of `e4`
+
+    const E e5 = "E.A";
+    # expected-error@-1: cannot convert string to `E` in initialization of `e5`
+
+    const E e6 = true;
+    # expected-error@-1: cannot convert bool to `E` in initialization of `e6`
+
+    const E e7 = [];
+    # expected-error@-1: cannot convert list to `E` in initialization of `e7`
+  )");
+}
+
+TEST(CompilerTest, list_initializer) {
+  check_compile(R"(
+    const list<i32> weirdList = {};
+    # expected-warning@-1: converting empty map to `list` in initialization of `weirdList`
+
+    const list<string> badValList = [1];
+    # expected-error@-1: cannot convert integer to `string` in initialization of `badValList`
+  )");
+}
+
+TEST(CompilerTest, set_initializer) {
+  check_compile(R"(
+    const set<string> wrongSet = {1: 2};
+    # expected-error@-1: cannot convert map to `set` in initialization of `wrongSet`
+
+    const set<i32> weirdSet = {};
+    # expected-warning@-1: converting empty map to `set` in initialization of `weirdSet`
+
+    const set<string> badValSet = [2];
+    # expected-error@-1: cannot convert integer to `string` in initialization of `badValSet`
   )");
 }
 
 TEST(CompilerTest, map_initializer) {
+  check_compile(R"(
+    const map<i32, i32> wrongMap = [1, 32, 3];
+    # expected-error@-1: cannot convert list to `map` in initialization of `wrongMap`
+
+    const map<i32, i32> weirdMap = [];
+    # expected-warning@-1: converting empty list to `map` in initialization of `weirdMap`
+
+    const map<string, i32> badValMap = {1: "str"};
+    # expected-error@-1: cannot convert integer to `string` in initialization of `badValMap`
+    # expected-error@-2: cannot convert string to `i32` in initialization of `badValMap`
+  )");
+}
+
+TEST(CompilerTest, map_item_separator) {
   check_compile(R"(
     const map<i32, i32> m = {
       1: 2,
@@ -524,11 +624,12 @@ TEST(CompilerTest, struct_fields_wrong_type) {
     struct G {}
 
     @Annot{val="hi", otherVal=5, structField=G{}}
-      # expected-error@-1: type error: const `.val` was declared as i32.
-      # expected-error@-2: type error: const `.otherVal` was declared as list.
+      # expected-error@-1: cannot convert string to `i32` in initialization of `val`
+      # expected-error@-2: cannot convert integer to `list` in initialization of `otherVal`
       # expected-error@-3: type mismatch: expected test.F, got test.G
     struct BadFields {
-      1: i32 badInt = "str"; # expected-error: type error: const `badInt` was declared as i32.
+      1: i32 badInt = "str";
+        # expected-error@-1: cannot convert string to `i32` in initialization of `badInt`
       2: F badStruct = G{}; # expected-error: type mismatch: expected test.F, got test.G
     }
   )");
@@ -608,13 +709,30 @@ TEST(CompilerTest, mixin_field_name_uniqueness) {
 
 TEST(CompilerTest, annotation_positions) {
   check_compile(R"(
+    struct Type {1: string name} (thrift.uri = "facebook.com/thrift/annotation/Type") # expected-warning: The annotation thrift.uri is deprecated. Please use @thrift.Uri instead.
     typedef set<set<i32> (annot)> T # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
     const i32 (annot) C = 42 # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
     service S {
       i32 (annot) foo() # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
       void bar(1: i32 (annot) p) # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
     }
+    struct Foo {
+      1: i32 (annot) f
+      @Type{name="foo"}
+      2: i32 g
+    }
   )");
+}
+
+TEST(CompilerTest, annotation_positions_field) {
+  check_compile(
+      R"(
+    struct Foo {
+      1: i32 (annot) f # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
+      2: i32 g
+    }
+  )",
+      {"--extra-validation", "unstructured_annotations_on_field_type"});
 }
 
 TEST(CompilerTest, performs_in_interaction) {
@@ -771,8 +889,7 @@ TEST(CompilerTest, mixins_and_refs) {
       1: optional D a (cpp.mixin); # expected-warning: The annotation cpp.mixin is deprecated. Please use @thrift.Mixin instead.
         # expected-error@-1: Mixin field `a` cannot be optional.
     }
-
-)");
+  )");
 }
 
 TEST(CompilerTest, bitpack_with_tablebased_seriliazation) {
@@ -1172,7 +1289,8 @@ TEST(CompilerTest, nonexistent_field_name) {
   check_compile(R"(
     struct Foo {}
     typedef list<Foo> List
-    const List l = [{"foo": "bar"}]; # expected-error: type error: `Foo` has no field `foo`.
+    const List l = [{"foo": "bar"}];
+    # expected-error@-1: no field named `foo` in `Foo`
   )");
 }
 
@@ -1462,49 +1580,41 @@ TEST(CompilerTest, inject_metadata_fields_annotation) {
   check_compile(name_contents_map, "bar.thrift");
 }
 
-TEST(CompilerTest, invalid_set_key_type_for_hack_codegen) {
+TEST(CompilerTest, invalid_field_type_for_hack_codegen) {
   check_compile(
       R"(
-      # expected-error@1: InvalidKeyType: Hack only supports integers and strings as key for map and set - https://fburl.com/wiki/pgzirbu8, field: set<float> set_of_float.
-    struct S {
-      1: i32 field;
-      2: set<float> set_of_float;
-    }
-  )",
+      struct S {
+        1: i32 field;
+
+        2: set<float> set_of_float;
+        # expected-error@-1: `float` cannot be used as a set element in Hack because it is not integer, string, binary or enum
+
+        3: map<float, i32> map_of_float_to_int;
+        # expected-error@-1: `float` cannot be used as a map key in Hack because it is not integer, string, binary or enum
+      }
+      )",
       {"--gen", "hack"});
 }
 
-TEST(CompilerTest, invalid_map_key_type_for_hack_codegen) {
+TEST(CompilerTest, invalid_return_type_for_hack_codegen) {
   check_compile(
       R"(
-      # expected-error@1: InvalidKeyType: Hack only supports integers and strings as key for map and set - https://fburl.com/wiki/pgzirbu8, field: map<float, i32> map_of_float_to_int.
-    struct S {
-      1: i32 field;
-      3: map<float, i32> map_of_float_to_int;
-    }
-  )",
+      service Foo {
+        set<float> invalid_rpc_return();
+        # expected-error@-1: `float` cannot be used as a set element in Hack because it is not integer, string, binary or enum
+      }
+      )",
       {"--gen", "hack"});
 }
 
-TEST(CompilerTest, invalid_rpc_return_type_for_hack_codegen) {
+TEST(CompilerTest, invalid_param_type_for_hack_codegen) {
   check_compile(
       R"(
-      # expected-error@1: InvalidKeyType: Hack only supports integers and strings as key for map and set - https://fburl.com/wiki/pgzirbu8, function invalid_rpc_return has invalid return type with type: set<float>.
-    service Foo {
-      set<float> invalid_rpc_return();
-    }
-  )",
-      {"--gen", "hack"});
-}
-
-TEST(CompilerTest, invalid_rpc_param_type_for_hack_codegen) {
-  check_compile(
-      R"(
-      # expected-error@1: InvalidKeyType: Hack only supports integers and strings as key for map and set - https://fburl.com/wiki/pgzirbu8, function invalid_rpc_param has invalid param arg1 with type: set<float>.
-    service Foo {
-      void invalid_rpc_param(set<float> arg1);
-    }
-  )",
+      service Foo {
+        void invalid_rpc_param(set<float> arg1);
+        # expected-error@-1: `float` cannot be used as a set element in Hack because it is not integer, string, binary or enum
+      }
+      )",
       {"--gen", "hack"});
 }
 
@@ -1705,17 +1815,43 @@ TEST(CompilerTest, terse_write_outside_experimental_mode) {
   )");
 }
 
-TEST(CompilerTest, new_test) {
+TEST(CompilerTest, cyclic_dependency) {
   check_compile(R"(
     # expected-error@-1: Cyclic dependency: A -> B -> A
-  struct A {
-    1: B field;
-  }
+    struct A {
+      1: B field;
+    }
 
-  struct B {
-    1: A field;
-  }
+    struct B {
+      1: A field;
+    }
   )");
+}
+
+TEST(CompilerTest, invalid_utf8) {
+  check_compile(
+      "const string s0 = '\x80';\n"
+      "# expected-error@-1: invalid UTF-8 start byte '\\x80'\n"
+      "const string s1 = '\xC2\x42';\n"
+      "# expected-error@-1: invalid UTF-8 continuation byte '\\x42'\n"
+      "const string s2 = '\xE2\x80\x43';\n"
+      "# expected-error@-1: invalid UTF-8 continuation byte '\\x43'\n"
+      "const string s3 = '\xF2\x80\x80\x44';\n"
+      "# expected-error@-1: invalid UTF-8 continuation byte '\\x44'\n"
+      "const string s4 = '\xF4\x90\x80\x80';\n"
+      "# expected-error@-1: invalid UTF-8 continuation byte '\\x90'\n"
+      // Overlong sequences:
+      "const string over0 = '\xC0';\n"
+      "# expected-error@-1: invalid UTF-8 start byte '\\xc0'\n"
+      "const string over1 = '\xC1';\n"
+      "# expected-error@-1: invalid UTF-8 start byte '\\xc1'\n"
+      "const string over2 = '\xE0\x9F\x80';\n"
+      "# expected-error@-1: invalid UTF-8 continuation byte '\\x9f'\n"
+      "const string over3 = '\xF0\x8F\x80\x80';\n"
+      "# expected-error@-1: invalid UTF-8 continuation byte '\\x8f'\n"
+      // Invalid surrogates:
+      "const string sur = '\xED\xA0\x80';\n"
+      "# expected-error@-1: invalid UTF-8 continuation byte '\\xa0'\n");
 }
 
 TEST(CompilerTest, invalid_hex_escape) {
@@ -1831,6 +1967,7 @@ TEST(CompilerTest, warn_on_non_explicit_includes) {
   )";
 
   name_contents_map["path/to/transitive_struct_field.thrift"] = R"(
+    # expected-warning@3#original[]#replacement[include "path/to/upstream.thrift"\n]@5: Your thrift file depends on a type that it did not include. Please add the following include. [implicit-include]
     include "path/to/direct.thrift"
 
     struct A {
@@ -1855,57 +1992,39 @@ TEST(CompilerTest, warn_on_non_explicit_includes) {
 
     struct TransitiveStruct {
       1: upstream.TransitiveStruct c;
-        # expected-warning@-1: Type `upstream.TransitiveStruct` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       2: direct.IncludedUnion d;
       3: B b;
       4: upstream.TransitiveEnum e;
-        # expected-warning@-1: Type `upstream.TransitiveEnum` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       5: TransitiveEnum te;
       6: list<upstream.TransitiveEnum> lte;
-        # expected-warning@-1: Type `upstream.TransitiveEnum` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       7: set<TransitiveEnum> ste;
       8: set<upstream.TransitiveEnum> sute;
-        # expected-warning@-1: Type `upstream.TransitiveEnum` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       11: map<i64, direct.IncludedEnum> mdie;
       12: map<i64, upstream.TransitiveStruct> muts;
-        # expected-warning@-1: Type `upstream.TransitiveStruct` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       @upstream.TransitiveStruct
       42: i32 annotated;
-        # expected-warning@-2: Type `upstream.TransitiveStruct` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
     }
 
     union TransitiveUnion {
       1: upstream.TransitiveUnion u;
-        # expected-warning@-1: Type `upstream.TransitiveUnion` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       2: direct.IncludedUnion d;
       3: upstream.TransitiveTypedef utt;
-        # expected-warning@-1: Type `upstream.TransitiveTypedef` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       4: direct.IncludedEnum e;
       5: list<upstream.TransitiveTypedef> lutt;
-        # expected-warning@-1: Type `upstream.TransitiveTypedef` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       6: set<direct.IncludedTypedef> sdit;
     }
 
     typedef B bprime
     typedef map<TransitiveEnum, B> map_te_b
     typedef upstream.TransitiveTypedef utt_prime
-      # expected-warning@-1: Type `upstream.TransitiveTypedef` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
     typedef direct.IncludedTypedef dtt_prime
     typedef set<upstream.TransitiveTypedef> sutt_prime
-      # expected-warning@-1: Type `upstream.TransitiveTypedef` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
 
     const upstream.TransitiveStruct c = upstream.TransitiveStruct{};
-      # expected-warning@-1: Type `upstream.TransitiveStruct` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
 
     service TransitiveService extends upstream.TransitiveService {
-        # expected-warning@-1: Type `upstream.TransitiveService` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       upstream.TransitiveStruct foo(1: upstream.TransitiveStruct x) throws (1: upstream.TransitiveException ex);
-        # expected-warning@-1: Type `upstream.TransitiveStruct` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
-        # expected-warning@-2: Type `upstream.TransitiveStruct` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
-        # expected-warning@-3: Type `upstream.TransitiveException` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
       upstream.TransitiveInteraction, stream<upstream.TransitiveStruct> bar();
-        # expected-warning@-1: Type `upstream.TransitiveStruct` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
-        # expected-warning@-2: Type `upstream.TransitiveInteraction` relies on a transitive include. Add `include "path/to/upstream.thrift"` near the top of this file.
     }
   )";
   check_compile(name_contents_map, "path/to/transitive_struct_field.thrift");
@@ -2011,5 +2130,13 @@ TEST(CompilerTest, exception_invalid_use) {
     }
 
     const E e = E{}; # expected-error: Exceptions cannot be used as const types
+  )");
+}
+
+TEST(CompilerTest, duplicate_include) {
+  check_compile(R"(
+    include "thrift/annotation/cpp.thrift"
+    include "thrift/annotation/thrift.thrift"
+    include "thrift/annotation/cpp.thrift" # expected-warning: Duplicate include of `thrift/annotation/cpp.thrift`
   )");
 }

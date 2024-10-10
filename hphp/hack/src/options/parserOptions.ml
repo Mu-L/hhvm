@@ -15,7 +15,6 @@ type t = {
   disallow_func_ptrs_in_constants: bool;
   enable_xhp_class_modifier: bool;
   disable_xhp_element_mangling: bool;
-  disallow_direct_superglobals_refs: bool;
   allow_unstable_features: bool;
   (* These options are set in hack config, but use the defaults in (from parser_options_impl.rs) hhvm*)
   hhvm_compat_mode: bool;
@@ -41,9 +40,7 @@ type t = {
   disable_hh_ignore_error: int;
   allowed_decl_fixme_codes: ISet.t;
   use_legacy_experimental_feature_config: bool;
-  experimental_features:
-    (Experimental_features.feature_name * Experimental_features.feature_status)
-    list;
+  experimental_features: Experimental_features.feature_status SMap.t;
   consider_unspecified_experimental_features_released: bool;
 }
 [@@deriving show, eq]
@@ -57,7 +54,6 @@ let default =
     disallow_func_ptrs_in_constants = false;
     enable_xhp_class_modifier = false;
     disable_xhp_element_mangling = false;
-    disallow_direct_superglobals_refs = false;
     allow_unstable_features = false;
     hhvm_compat_mode = false;
     hhi_mode = false;
@@ -82,7 +78,7 @@ let default =
     disable_hh_ignore_error = 0;
     allowed_decl_fixme_codes = ISet.empty;
     use_legacy_experimental_feature_config = true;
-    experimental_features = [];
+    experimental_features = SMap.empty;
     consider_unspecified_experimental_features_released = true;
   }
 
@@ -107,9 +103,7 @@ type ffi_t =
   * bool
   * bool
   * bool
-  * bool
-  * (Experimental_features.feature_name * Experimental_features.feature_status)
-    list
+  * Experimental_features.feature_status SMap.t
   * bool
 
 let to_rust_ffi_t po =
@@ -131,7 +125,6 @@ let to_rust_ffi_t po =
     po.interpret_soft_types_as_like_types,
     po.is_systemlib,
     po.disallow_static_constants_in_default_func_args,
-    po.disallow_direct_superglobals_refs,
     po.use_legacy_experimental_feature_config,
     po.experimental_features,
     po.consider_unspecified_experimental_features_released )

@@ -1,10 +1,12 @@
 [("\\X",
   (Shallow_decl_defs.Typedef
-     { Typing_defs.td_module = None; td_pos = [3:6-7]; td_vis = Transparent;
-       td_tparams = []; td_as_constraint = None; td_super_constraint = None;
-       td_type = (Rhint ([3:10-13]), (Tprim Tint)); td_is_ctx = false;
-       td_attributes = []; td_internal = false; td_docs_url = None;
-       td_package_override = None }));
+     { Typing_defs.td_module = None; td_pos = [3:6-7]; td_tparams = [];
+       td_as_constraint = None; td_super_constraint = None;
+       td_type_assignment =
+       (Typing_defs.SimpleTypeDef (Transparent,
+          (Rhint ([3:10-13]), (Tprim Tint))));
+       td_is_ctx = false; td_attributes = []; td_internal = false;
+       td_docs_url = None; td_package_override = None }));
   ("\\Y",
    (Shallow_decl_defs.Const
       { Typing_defs.cd_pos = [5:1-17];
@@ -22,8 +24,8 @@
                  fp_type = (Rhint ([7:12-18]), (Tprim Tstring));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params = { capability = (CapDefaults [7:10-11]) };
@@ -62,8 +64,8 @@
                     (Rhint ([10:21-22]), (Tapply (([10:21-22], "\\X"), [])));
                     fp_flags =
                     { Typing_defs_flags.FunParam.accept_disposable = false;
-                      inout = false; has_default = false; readonly = false;
-                      ignore_readonly_error = false };
+                      inout = false; is_optional = false; readonly = false;
+                      ignore_readonly_error = false; splat = false };
                     fp_def_value = None }
                    ];
                  ft_implicit_params =

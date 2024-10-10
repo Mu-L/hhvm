@@ -45,6 +45,7 @@ class ServiceHandler<::test_cpp2::cpp_reflection::service_with_special_names> : 
   typedef ::test_cpp2::cpp_reflection::service_with_special_namesAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -338,6 +339,7 @@ class ServiceHandler<::test_cpp2::cpp_reflection::service_with_special_names> : 
 namespace test_cpp2::cpp_reflection {
 using service_with_special_namesSvIf [[deprecated("Use apache::thrift::ServiceHandler<service_with_special_names> instead")]] = ::apache::thrift::ServiceHandler<service_with_special_names>;
 } // namespace test_cpp2::cpp_reflection
+
 namespace test_cpp2::cpp_reflection {
 class service_with_special_namesSvNull : public ::apache::thrift::ServiceHandler<service_with_special_names> {
  public:

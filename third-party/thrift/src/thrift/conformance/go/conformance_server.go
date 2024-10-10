@@ -156,12 +156,12 @@ func main() {
 	os.Exit(0)
 }
 
-func newServer(processor thrift.ProcessorContext, addr string) (thrift.Server, net.Addr, error) {
+func newServer(processor thrift.Processor, addr string) (thrift.Server, net.Addr, error) {
 	socket, err := thrift.NewServerSocket(addr)
 	if err != nil {
 		return nil, nil, err
 	}
-	return thrift.NewSimpleServer(processor, socket, thrift.TransportIDHeader), socket.Addr(), nil
+	return thrift.NewSimpleServer(processor, socket, thrift.TransportIDUpgradeToRocket), socket.Addr(), nil
 }
 
 type dataConformanceServiceHandler struct {
@@ -266,7 +266,7 @@ func newSerializer(protoc *protocol.ProtocolStruct) (*thrift.Serializer, error) 
 	case protocol.StandardProtocol_Json:
 		return thrift.NewSimpleJSONSerializer(), nil
 	case protocol.StandardProtocol_SimpleJson:
-		return thrift.NewJSONSerializer(), nil
+		return thrift.NewCompactJSONSerializer(), nil
 	}
 	// default value in case the protocol is unknown, as seen in the java implementation of conformance tests.
 	return thrift.NewCompactSerializer(), nil
@@ -283,7 +283,7 @@ func newDeserializer(protoc *protocol.ProtocolStruct) (*thrift.Deserializer, err
 	case protocol.StandardProtocol_Json:
 		return thrift.NewSimpleJSONDeserializer(), nil
 	case protocol.StandardProtocol_SimpleJson:
-		return thrift.NewJSONDeserializer(), nil
+		return thrift.NewCompactJSONDeserializer(), nil
 	}
 	// default value in case the protocol is unknown, as seen in the java implementation of conformance tests.
 	return thrift.NewCompactDeserializer(), nil

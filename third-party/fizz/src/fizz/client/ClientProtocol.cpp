@@ -423,7 +423,7 @@ static std::map<NamedGroup, std::unique_ptr<KeyExchange>> getKeyExchangers(
     const std::vector<NamedGroup>& groups) {
   std::map<NamedGroup, std::unique_ptr<KeyExchange>> keyExchangers;
   for (auto group : groups) {
-    auto kex = factory.makeKeyExchange(group, Factory::KeyExchangeMode::Client);
+    auto kex = factory.makeKeyExchange(group, KeyExchangeRole::Client);
     kex->generateKeyPair();
     keyExchangers.emplace(group, std::move(kex));
   }
@@ -440,6 +440,7 @@ static ClientHello getClientHello(
     const std::vector<SignatureScheme>& supportedSigSchemes,
     const std::vector<PskKeyExchangeMode>& supportedPskModes,
     const folly::Optional<std::string>& hostname,
+    const bool sniExtFirst,
     const std::vector<std::string>& supportedAlpns,
     const std::vector<CertificateCompressionAlgorithm>& compressionAlgos,
     const Optional<EarlyDataParams>& earlyDataParams,
@@ -452,6 +453,14 @@ static ClientHello getClientHello(
   chlo.legacy_session_id = legacySessionId->clone();
   chlo.cipher_suites = supportedCiphers;
   chlo.legacy_compression_methods.push_back(0x00);
+
+  if (sniExtFirst) {
+    if (hostname) {
+      auto hostnameBuf = folly::IOBuf::copyBuffer(*hostname);
+      auto sni = ServerNameList(ServerName(std::move(hostnameBuf)));
+      chlo.extensions.push_back(encodeExtension(sni));
+    }
+  }
 
   SupportedVersions versions;
   versions.versions = supportedVersions;
@@ -474,10 +483,12 @@ static ClientHello getClientHello(
   sigAlgs.supported_signature_algorithms = supportedSigSchemes;
   chlo.extensions.push_back(encodeExtension(std::move(sigAlgs)));
 
-  if (hostname) {
-    auto hostnameBuf = folly::IOBuf::copyBuffer(*hostname);
-    auto sni = ServerNameList(ServerName(std::move(hostnameBuf)));
-    chlo.extensions.push_back(encodeExtension(sni));
+  if (!sniExtFirst) {
+    if (hostname) {
+      auto hostnameBuf = folly::IOBuf::copyBuffer(*hostname);
+      auto sni = ServerNameList(ServerName(std::move(hostnameBuf)));
+      chlo.extensions.push_back(encodeExtension(sni));
+    }
   }
 
   if (!supportedAlpns.empty()) {
@@ -684,10 +695,10 @@ static folly::Optional<ECHParams> setupECH(
   auto echConfigContent = decode<ech::ECHConfigContentDraft>(cursor);
   auto fakeSni = echConfigContent.public_name->clone();
   auto kemId = echConfigContent.key_config.kem_id;
-  auto kex = factory.makeKeyExchange(
-      getKexGroup(kemId), Factory::KeyExchangeMode::Client);
+  auto kex =
+      factory.makeKeyExchange(getKexGroup(kemId), KeyExchangeRole::Client);
   auto setupResult =
-      constructHpkeSetupResult(std::move(kex), supportedECHConfig);
+      constructHpkeSetupResult(factory, std::move(kex), supportedECHConfig);
 
   return ECHParams{
       std::move(setupResult),
@@ -727,7 +738,8 @@ static ClientHello constructEncryptedClientHello(
     hpke::SetupResult& hpkeSetup,
     const Random& outerRandom,
     Buf fakeSni,
-    const folly::Optional<ClientPresharedKey>& greasePsk) {
+    const folly::Optional<ClientPresharedKey>& greasePsk,
+    const std::vector<ExtensionType>& outerExtensionTypes) {
   DCHECK(e == Event::ClientHello || e == Event::HelloRetryRequest);
 
   // Outer chlo is missing the inner ECH. We also replace any PSK
@@ -748,7 +760,6 @@ static ClientHello constructEncryptedClientHello(
   // Substitute in outer random
   chloOuter.random = outerRandom;
 
-  Extension encodedECHExtension;
   // Create the encrypted client hello inner extension.
   switch (supportedConfig.config.version) {
     case (ech::ECHVersion::Draft15): {
@@ -759,14 +770,16 @@ static ClientHello constructEncryptedClientHello(
             std::move(chlo),
             chloOuter.clone(),
             hpkeSetup,
-            greasePsk);
+            greasePsk,
+            outerExtensionTypes);
       } else {
         clientECHExtension = encryptClientHelloHRR(
             supportedConfig,
             std::move(chlo),
             chloOuter.clone(),
             hpkeSetup,
-            greasePsk);
+            greasePsk,
+            outerExtensionTypes);
       }
       chloOuter.extensions.push_back(
           encodeExtension(std::move(clientECHExtension)));
@@ -778,6 +791,17 @@ static ClientHello constructEncryptedClientHello(
   }
 
   return chloOuter;
+}
+
+static std::unique_ptr<folly::IOBuf> randomIOBuf(
+    const Factory& factory,
+    size_t count) {
+  auto buf = folly::IOBuf::create(count);
+  if (count > 0) {
+    factory.makeRandomBytes(buf->writableData(), count);
+    buf->append(count);
+  }
+  return buf;
 }
 
 Actions
@@ -795,7 +819,8 @@ EventHandler<ClientTypes, StateEnum::Uninitialized, Event::Connect>::handle(
   folly::Optional<CachedPsk> psk =
       validatePsk(*context, std::move(connect.cachedPsk));
 
-  Random random = context->getFactory()->makeRandom();
+  Random random;
+  context->getFactory()->makeRandomBytes(random.data(), random.size());
 
   // If we have a saved PSK, use the group to choose which groups to
   // send by default
@@ -820,8 +845,8 @@ EventHandler<ClientTypes, StateEnum::Uninitialized, Event::Connect>::handle(
 
   Buf legacySessionId;
   if (context->getCompatibilityMode()) {
-    legacySessionId =
-        folly::IOBuf::copyBuffer(context->getFactory()->makeRandom());
+    constexpr size_t kRandomSize = Random().size();
+    legacySessionId = randomIOBuf(*context->getFactory(), kRandomSize);
   } else {
     legacySessionId = folly::IOBuf::create(0);
   }
@@ -847,6 +872,7 @@ EventHandler<ClientTypes, StateEnum::Uninitialized, Event::Connect>::handle(
       context->getSupportedSigSchemes(),
       context->getSupportedPskModes(),
       sni,
+      context->getSniExtFirst(),
       context->getSupportedAlpns(),
       context->getSupportedCertDecompressionAlgorithms(),
       earlyDataParams,
@@ -921,7 +947,7 @@ EventHandler<ClientTypes, StateEnum::Uninitialized, Event::Connect>::handle(
   if (echParams.has_value()) {
     // Swap out randoms first.
     echRandom = std::move(random);
-    random = context->getFactory()->makeRandom();
+    context->getFactory()->makeRandomBytes(random.data(), random.size());
 
     // Generate GREASE PSK (if needed)
     greasePsk = ech::generateGreasePSK(chlo, context->getFactory());
@@ -933,7 +959,8 @@ EventHandler<ClientTypes, StateEnum::Uninitialized, Event::Connect>::handle(
         echParams->setupResult,
         random,
         echParams->fakeSni->clone(),
-        greasePsk);
+        greasePsk,
+        context->getECHOuterExtensionTypes());
 
     // Update SNI now
     echSni = std::move(sni);
@@ -1538,6 +1565,7 @@ Actions EventHandler<
       state.context()->getSupportedSigSchemes(),
       state.context()->getSupportedPskModes(),
       std::move(sni),
+      state.context()->getSniExtFirst(),
       state.context()->getSupportedAlpns(),
       state.context()->getSupportedCertDecompressionAlgorithms(),
       folly::none,
@@ -1635,7 +1663,8 @@ Actions EventHandler<
         state.echState()->hpkeSetup,
         *state.clientRandom(),
         folly::IOBuf::copyBuffer(*state.sni()),
-        greasePsk);
+        greasePsk,
+        state.context()->getECHOuterExtensionTypes());
 
     // Save client hello inner
     encodedECH = std::move(encodedClientHello);

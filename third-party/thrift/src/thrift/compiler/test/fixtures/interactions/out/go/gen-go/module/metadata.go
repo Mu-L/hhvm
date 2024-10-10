@@ -6,22 +6,17 @@
 package module
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    shared "shared"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
+var _ = shared.GoUnusedProtection__
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
@@ -29,10 +24,20 @@ var (
     premadeThriftType_string = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_STRING_TYPE.Ptr(),
             )
+    premadeThriftType_module_CustomException = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("module.CustomException"),
+            )
     premadeThriftType_void = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_VOID_TYPE.Ptr(),
             )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "string": premadeThriftType_string,
+    "module.CustomException": premadeThriftType_module_CustomException,
+    "void": premadeThriftType_void,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
 }
@@ -85,6 +90,22 @@ var serviceMetadatas = []*metadata.ThriftService{
     SetReturnType(premadeThriftType_void),
         },
     ),
+    metadata.NewThriftService().
+    SetName("module.InteractWithShared").
+    SetFunctions(
+        []*metadata.ThriftFunction{
+            metadata.NewThriftFunction().
+    SetName("do_some_similar_things").
+    SetIsOneway(false).
+    SetReturnType(shared.GetMetadataThriftType("shared.DoSomethingResult")),
+        },
+    ),
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.
@@ -111,6 +132,7 @@ func GetEnumsMetadata() map[string]*metadata.ThriftEnum {
     }
 
     // ...now add enum metadatas from recursively included programs.
+    maps.Copy(allEnumsMap, shared.GetEnumsMetadata())
 
     return allEnumsMap
 }
@@ -125,6 +147,7 @@ func GetStructsMetadata() map[string]*metadata.ThriftStruct {
     }
 
     // ...now add struct metadatas from recursively included programs.
+    maps.Copy(allStructsMap, shared.GetStructsMetadata())
 
     return allStructsMap
 }
@@ -139,6 +162,7 @@ func GetExceptionsMetadata() map[string]*metadata.ThriftException {
     }
 
     // ...now add exception metadatas from recursively included programs.
+    maps.Copy(allExceptionsMap, shared.GetExceptionsMetadata())
 
     return allExceptionsMap
 }
@@ -153,6 +177,7 @@ func GetServicesMetadata() map[string]*metadata.ThriftService {
     }
 
     // ...now add service metadatas from recursively included programs.
+    maps.Copy(allServicesMap, shared.GetServicesMetadata())
 
     return allServicesMap
 }

@@ -40,6 +40,11 @@ HTTPException stateMachineError(HTTPException::Direction dir, std::string msg) {
   ex.setErrno(uint32_t(dir));
   return ex;
 }
+
+inline ErrorCode getDefaultAbortErrorCode(bool isUpstream) {
+  return isUpstream ? ErrorCode::CANCEL : ErrorCode::INTERNAL_ERROR;
+}
+
 } // namespace
 
 #define INVARIANT_RETURN(X, Y)                                            \
@@ -107,6 +112,7 @@ HTTPTransaction::HTTPTransaction(
       egressHeadersDelivered_(false),
       has1xxResponse_(false),
       isDelegated_(false),
+      deferredNoError_(false),
       idleTimeout_(defaultIdleTimeout),
       timer_(timer),
       setIngressTimeoutAfterEom_(setIngressTimeoutAfterEom),
@@ -1066,6 +1072,22 @@ void HTTPTransaction::sendHeadersWithOptionalEOM(const HTTPMessage& headers,
   if (transportCallback_) {
     transportCallback_->headerBytesGenerated(size);
   }
+  if (txnObserverContainer_.hasObserversForEvent<
+          HTTPTransactionObserverInterface::Events::TxnBytes>()) {
+    const auto e =
+        HTTPTransactionObserverInterface::TxnBytesEvent::Builder()
+            .setTimestamp(proxygen::SteadyClock::now())
+            .setType(HTTPTransactionObserverInterface::TxnBytesEvent::Type::
+                         HEADER_BYTES_GENERATED)
+            .setNumBytes(size.compressed ? size.compressed : size.uncompressed)
+            .setHeaders(headers)
+            .build();
+    txnObserverContainer_.invokeInterfaceMethod<
+        HTTPTransactionObserverInterface::Events::TxnBytes>(
+        [&e](auto observer, auto observed) {
+          observer->onBytesEvent(observed, e);
+        });
+  }
   updateEgressCompressionInfo(transport_.getCodec().getCompressionInfo());
   if (eom) {
     if (!validateEgressStateTransition(
@@ -1175,16 +1197,30 @@ bool HTTPTransaction::sendHeadersWithDelegate(
   }
   if (txnObserverContainer_.hasObserversForEvent<
           HTTPTransactionObserverInterface::Events::TxnBytes>()) {
-    const auto e = HTTPTransactionObserverInterface::TxnBytesEvent::Builder()
-                       .setTimestamp(proxygen::SteadyClock::now())
-                       .setType(HTTPTransactionObserverInterface::
-                                    TxnBytesEvent::Type::BODY_BYTES_GENERATED)
-                       .setNumBytes(dataFrameHeaderSize)
-                       .build();
+    const auto ts = proxygen::SteadyClock::now();
+    const auto he =
+        HTTPTransactionObserverInterface::TxnBytesEvent::Builder()
+            .setTimestamp(ts)
+            .setType(HTTPTransactionObserverInterface::TxnBytesEvent::Type::
+                         HEADER_BYTES_GENERATED)
+            .setNumBytes(size.compressed ? size.compressed : size.uncompressed)
+            .setHeaders(headers)
+            .build();
     txnObserverContainer_.invokeInterfaceMethod<
         HTTPTransactionObserverInterface::Events::TxnBytes>(
-        [&e](auto observer, auto observed) {
-          observer->onBytesEvent(observed, e);
+        [&he](auto observer, auto observed) {
+          observer->onBytesEvent(observed, he);
+        });
+    const auto be = HTTPTransactionObserverInterface::TxnBytesEvent::Builder()
+                        .setTimestamp(ts)
+                        .setType(HTTPTransactionObserverInterface::
+                                     TxnBytesEvent::Type::BODY_BYTES_GENERATED)
+                        .setNumBytes(dataFrameHeaderSize)
+                        .build();
+    txnObserverContainer_.invokeInterfaceMethod<
+        HTTPTransactionObserverInterface::Events::TxnBytes>(
+        [&be](auto observer, auto observed) {
+          observer->onBytesEvent(observed, be);
         });
   }
   updateEgressCompressionInfo(transport_.getCodec().getCompressionInfo());
@@ -1431,7 +1467,28 @@ void HTTPTransaction::rateLimitTimeoutExpired() {
   notifyTransportPendingEgress();
 }
 
+size_t HTTPTransaction::maybeSendDeferredNoError() {
+  size_t bytes = 0;
+  if (deferredNoError_) {
+    deferredNoError_ = false;
+    VLOG(4) << "sending deferred NO_ERROR";
+    bytes += sendAbortImpl(ErrorCode::NO_ERROR);
+  }
+  return bytes;
+}
+
+void HTTPTransaction::sendPadding(uint16_t bytes) {
+  VLOG(4) << "egress padding=" << bytes << " on " << *this;
+  if (!validateEgressStateTransition(
+          // Sending padding is valid only when you can send body
+          HTTPTransactionEgressSM::Event::sendBody)) {
+    return;
+  }
+  transport_.sendPadding(this, bytes);
+}
+
 size_t HTTPTransaction::sendEOMNow() {
+  DestructorGuard g(this);
   VLOG(4) << "egress EOM on " << *this;
   // TODO: with ByteEvent refactor, we will have to delay changing this
   // state until later
@@ -1442,13 +1499,15 @@ size_t HTTPTransaction::sendEOMNow() {
   size_t nbytes = transport_.sendEOM(this, trailers_.get());
   trailers_.reset();
   updateReadTimeout();
+  nbytes += maybeSendDeferredNoError();
+
   return nbytes;
 }
 
 size_t HTTPTransaction::sendBodyNow(std::unique_ptr<folly::IOBuf> body,
                                     size_t bodyLen,
                                     bool sendEom) {
-  static const std::string noneStr = "None";
+  constexpr std::string_view kNoneStr = "None";
   DCHECK(body);
   DCHECK_GT(bodyLen, 0);
   size_t nbytes = 0;
@@ -1463,11 +1522,12 @@ size_t HTTPTransaction::sendBodyNow(std::unique_ptr<folly::IOBuf> body,
           << (useFlowControl_
                   ? folly::to<std::string>(
                         sendWindow_.getSize(), " / ", sendWindow_.getCapacity())
-                  : noneStr)
+                  : kNoneStr)
           << " trailers=" << ((trailers_) ? "yes" : "no") << " " << *this;
   DCHECK_LT(bodyLen, std::numeric_limits<int64_t>::max());
   transport_.notifyEgressBodyBuffered(-static_cast<int64_t>(bodyLen));
-  if (sendEom && !trailers_) {
+  const bool sendDataFin = sendEom && !trailers_;
+  if (sendDataFin) {
     if (!validateEgressStateTransition(
             HTTPTransactionEgressSM::Event::eomFlushed)) {
       return 0;
@@ -1485,10 +1545,9 @@ size_t HTTPTransaction::sendBodyNow(std::unique_ptr<folly::IOBuf> body,
     return 0;
   }
   updateReadTimeout();
-  nbytes = transport_.sendBody(this,
-                               std::move(body),
-                               sendEom && !trailers_,
-                               enableLastByteFlushedTracking_);
+  nbytes = transport_.sendBody(
+      this, std::move(body), sendDataFin, enableLastByteFlushedTracking_);
+
   bodyBytesEgressed_ += bodyLen;
   for (auto it = egressBodyOffsetsToTrack_.begin();
        it != egressBodyOffsetsToTrack_.end() && it->first < bodyBytesEgressed_;
@@ -1501,6 +1560,10 @@ size_t HTTPTransaction::sendBodyNow(std::unique_ptr<folly::IOBuf> body,
   }
   if (egressLimitBytesPerMs_ > 0) {
     numLimitedBytesEgressed_ += nbytes;
+  }
+
+  if (isEgressComplete()) {
+    nbytes += maybeSendDeferredNoError();
   }
   return nbytes;
 }
@@ -1568,10 +1631,38 @@ void HTTPTransaction::sendEOM() {
 }
 
 void HTTPTransaction::sendAbort() {
-  sendAbort(isUpstream() ? ErrorCode::CANCEL : ErrorCode::INTERNAL_ERROR);
+  sendAbort(getDefaultAbortErrorCode(isUpstream()));
 }
 
 void HTTPTransaction::sendAbort(ErrorCode statusCode) {
+  if (statusCode == ErrorCode::NO_ERROR) {
+    // we can only send RST_STREAM or STOP_SENDING w/ NO_ERROR if downstream and
+    // eom is either queued or flushed
+    const bool canSendNoError =
+        isDownstream() &&
+        getEgressState() >= HTTPTransactionEgressSMData::State::EOMQueued;
+
+    // we defer sending abort only if eom is queued
+    deferredNoError_ =
+        canSendNoError &&
+        getEgressState() == HTTPTransactionEgressSMData::State::EOMQueued;
+
+    if (deferredNoError_) {
+      VLOG(4) << "deferring abort ErrorCode=NO_ERROR";
+      return;
+    }
+
+    // if statusCode == NO_ERROR and eom has not been flushed; default to CANCEL
+    // for upstream & INTERNAL_ERROR for downstream
+    if (!canSendNoError) {
+      VLOG(4) << "cannot send NO_ERROR; falling back to default ErrorCode";
+      statusCode = getDefaultAbortErrorCode(isUpstream());
+    }
+  }
+  sendAbortImpl(statusCode);
+}
+
+size_t HTTPTransaction::sendAbortImpl(ErrorCode statusCode) {
   DestructorGuard g(this);
   markIngressComplete();
   markEgressComplete();
@@ -1579,7 +1670,7 @@ void HTTPTransaction::sendAbort(ErrorCode statusCode) {
     // This can happen in cases where the abort is sent before notifying the
     // handler, but its logic also wants to abort
     VLOG(4) << "skipping redundant abort";
-    return;
+    return 0;
   }
   VLOG(4) << "aborting transaction " << *this;
   aborted_ = true;
@@ -1589,6 +1680,7 @@ void HTTPTransaction::sendAbort(ErrorCode statusCode) {
     size.uncompressed = nbytes;
     transportCallback_->headerBytesGenerated(size);
   }
+  return nbytes;
 }
 
 bool HTTPTransaction::trackEgressBodyOffset(uint64_t offset,
@@ -2189,8 +2281,9 @@ void HTTPTransaction::onWebTransportStreamIngress(
 void HTTPTransaction::onWebTransportStreamError(HTTPCodec::StreamID id,
                                                 uint32_t errorCode) {
   auto ingressStreamIt = wtIngressStreams_.find(id);
-  CHECK(ingressStreamIt != wtIngressStreams_.end()) << id;
-  ingressStreamIt->second.error(errorCode);
+  if (ingressStreamIt != wtIngressStreams_.end()) {
+    ingressStreamIt->second.error(errorCode);
+  } // it can be gone if the application STOP_SENDING
 }
 
 bool HTTPTransaction::onWebTransportStopSending(HTTPCodec::StreamID id,

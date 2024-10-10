@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class MyEnum(thrift.py3.types.Enum):
@@ -33,9 +29,8 @@ class MyStruct(thrift.py3.types.Struct, _typing.Hashable):
         MyStringField: bool
         pass
 
-    MyIntField: Final[int] = ...
-
-    MyStringField: Final[str] = ...
+    MyIntField: _typing.Final[int] = ...
+    MyStringField: _typing.Final[str] = ...
 
     def __init__(
         self, *,
@@ -45,8 +40,8 @@ class MyStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        MyIntField: _typing.Union[int, '__NotSet', None]=NOTSET,
-        MyStringField: _typing.Union[str, '__NotSet', None]=NOTSET
+        MyIntField: _typing.Union[int, None]=None,
+        MyStringField: _typing.Union[str, None]=None
     ) -> MyStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['MyStruct'], bytes]]: ...

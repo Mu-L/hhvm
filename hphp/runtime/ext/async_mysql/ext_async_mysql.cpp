@@ -325,8 +325,7 @@ static String HHLibSQLQuery__toString__FOR_DEBUGGING_ONLY(
   const auto query = amquery_from_queryf(format, args);
   auto mysql = Native::data<AsyncMysqlConnection>(conn)
     ->m_conn
-    ->mysql_for_testing_only()
-    ->mysql();
+    ->mysql_for_testing_only();
   const auto str = query.render(mysql);
   return String(str.data(), str.length(), CopyString);
 }
@@ -649,13 +648,13 @@ Object HHVM_STATIC_METHOD(
     const String& sni_server_name /* = "" */,
     const String& serverCertExtNames /* = "" */,
     const String& serverCertExtValues /* = "" */) {
-  am::ConnectionKey key(
+  auto key = std::make_shared<const am::MysqlConnectionKey>(
       static_cast<std::string>(host),
       port,
       static_cast<std::string>(dbname),
       static_cast<std::string>(user),
       static_cast<std::string>(password));
-  auto op = getClient()->beginConnection(key);
+  auto op = getClient()->beginConnection(std::move(key));
   if (!sslContextProvider.isNull()) {
     auto* mysslContextProvider = getSSLContextProvider(
             sslContextProvider.toObject());
@@ -696,13 +695,13 @@ Object HHVM_STATIC_METHOD(
     const String& user,
     const String& password,
     const Object& asyncMysqlConnOpts) {
-  am::ConnectionKey key(
+  auto key = std::make_shared<const am::MysqlConnectionKey>(
       static_cast<std::string>(host),
       port,
       static_cast<std::string>(dbname),
       static_cast<std::string>(user),
       static_cast<std::string>(password));
-  auto op = getClient()->beginConnection(key);
+  auto op = getClient()->beginConnection(std::move(key));
 
   auto* obj = getConnectionOptions(asyncMysqlConnOpts);
   const auto& connOpts = obj->getConnectionOptions();
@@ -723,7 +722,7 @@ Object HHVM_STATIC_METHOD(
     const Object& asyncMysqlConnOpts,
     const Array& queryAttributes) {
 
-  am::ConnectionKey key(
+  auto key = std::make_shared<const am::MysqlConnectionKey>(
       static_cast<std::string>(host),
       port,
       static_cast<std::string>(dbname),
@@ -1012,7 +1011,7 @@ Object AsyncMysqlConnection::query(
     int64_t timeout_micros /* = -1 */,
     const AttributeMap& queryAttributes /*  = AttributeMap() */) {
   verifyValidConnection();
-  auto* clientPtr = static_cast<am::AsyncMysqlClient*>(m_conn->client());
+  auto* clientPtr = static_cast<am::AsyncMysqlClient*>(&m_conn->client());
   auto op = am::Connection::beginQuery(std::move(m_conn), query);
 
   op->setAttributes(queryAttributes);
@@ -1092,7 +1091,7 @@ static Object HHVM_METHOD(
     const Array& queryAttributes) {
   auto* data = Native::data<AsyncMysqlConnection>(this_);
   data->verifyValidConnection();
-  auto* clientPtr = static_cast<am::AsyncMysqlClient*>(data->m_conn->client());
+  auto* clientPtr = static_cast<am::AsyncMysqlClient*>(&data->m_conn->client());
   auto op = am::Connection::beginMultiQuery(std::move(data->m_conn),
                                             transformQueries(queries));
 
@@ -1244,27 +1243,6 @@ static void HHVM_METHOD(AsyncMysqlConnection, close) {
 
   data->m_conn.reset();
   data->m_closed = true;
-}
-
-static Variant HHVM_METHOD(AsyncMysqlConnection, releaseConnection) {
-  auto* data = Native::data<AsyncMysqlConnection>(this_);
-  data->verifyValidConnection();
-
-  auto raw_connection = data->m_conn->stealMysql();
-  auto host = data->m_conn->host();
-  auto port = data->m_conn->port();
-  auto username = data->m_conn->user();
-  auto database = data->m_conn->database();
-  data->m_conn.reset();
-  data->m_closed = true;
-  return Variant(
-    req::make<MySQLResource>(
-      std::make_shared<MySQL>(host.c_str(),
-                              port,
-                              username.c_str(),
-                              "",
-                              database.c_str(),
-                              raw_connection)));
 }
 
 static String HHVM_METHOD(AsyncMysqlConnection, getSslCertCn) {
@@ -2148,7 +2126,7 @@ static struct AsyncMysqlExtension final : Extension {
   // bump the version number and use a version guard in www:
   //   $ext = new ReflectionExtension("async_mysql");
   //   $version = (float) $ext->getVersion();
-  AsyncMysqlExtension() : Extension("async_mysql", "7.0", NO_ONCALL_YET) {}
+  AsyncMysqlExtension() : Extension("async_mysql", "7.0", "mysql_gateway") {}
   void moduleRegisterNative() override {
     // expose the mysql flags
     HHVM_RC_INT_SAME(NOT_NULL_FLAG);
@@ -2221,7 +2199,6 @@ static struct AsyncMysqlExtension final : Extension {
     HHVM_ME(AsyncMysqlConnection, multiQuery);
     HHVM_ME(AsyncMysqlConnection, escapeString);
     HHVM_ME(AsyncMysqlConnection, close);
-    HHVM_ME(AsyncMysqlConnection, releaseConnection);
     HHVM_ME(AsyncMysqlConnection, isValid);
     HHVM_ME(AsyncMysqlConnection, serverInfo);
     HHVM_ME(AsyncMysqlConnection, sslSessionReused);

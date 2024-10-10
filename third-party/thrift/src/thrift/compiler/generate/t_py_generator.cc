@@ -62,6 +62,10 @@ void mark_file_executable(const std::filesystem::path& path) {
 string prefix_temporary(const string& name) {
   return "_fbthrift_" + name;
 }
+
+bool is_hidden(const t_field& field) {
+  return field.find_structured_annotation_or_null(kPythonPyDeprecatedHiddenUri);
+}
 } // namespace
 
 /**
@@ -739,6 +743,9 @@ void t_py_generator::generate_json_reader(
   indent_down();
 
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if (is_hidden(**f_iter)) {
+      continue;
+    }
     string field = (*f_iter)->get_name();
     indent(out) << "if '" << field << "' in json_obj " << "and json_obj['"
                 << field << "'] is not None:" << endl;
@@ -892,19 +899,19 @@ string t_py_generator::render_includes() {
  * Renders all the imports necessary to use fastproto.
  */
 string t_py_generator::render_fastproto_includes() {
-  return "import pprint\n"
-         "import warnings\n"
-         "from thrift import Thrift\n"
-         "from thrift.transport import TTransport\n"
-         "from thrift.protocol import TBinaryProtocol\n"
-         "from thrift.protocol import TCompactProtocol\n"
-         "from thrift.protocol import THeaderProtocol\n"
-         "fastproto = None\n"
-         "try:\n"
-         "  from thrift.protocol import fastproto\n"
-         "except ImportError:\n"
-         "  pass\n"
-         "\n"
+  return R"(import pprint
+import warnings
+from thrift import Thrift
+from thrift.transport import TTransport
+from thrift.protocol import TBinaryProtocol
+from thrift.protocol import TCompactProtocol
+from thrift.protocol import THeaderProtocol
+fastproto = None
+try:
+  from thrift.protocol import fastproto
+except ImportError:
+  pass
+)"
          /*
     Given a sparse thrift_spec generate a full thrift_spec as expected by
     fastproto. The old form is a tuple where every position is the same as the
@@ -913,23 +920,27 @@ string t_py_generator::render_fastproto_includes() {
     python 3.10 that causes large tuples to use more memory and generate larger
     .pyc than <=3.9. See: https://github.com/python/cpython/issues/109036
           */
-         "def __EXPAND_THRIFT_SPEC(spec):\n"
-         "    next_id = 0\n"
-         "    for item in spec:\n"
-         "        if next_id >= 0 and item[0] < 0:\n"
-         "            next_id = item[0]\n"
-         "        if item[0] != next_id:\n"
-         "            for _ in range(next_id, item[0]):\n"
-         "                yield None\n"
-         "        yield item\n"
-         "        next_id = item[0] + 1\n\n"
-         "class ThriftEnumWrapper(int):\n"
-         "  def __new__(cls, enum_class, value):\n"
-         "    return super().__new__(cls, value)\n"
-         "  def __init__(self, enum_class, value):"
-         "    self.enum_class = enum_class\n"
-         "  def __repr__(self):\n"
-         "    return self.enum_class.__name__ + '.' + self.enum_class._VALUES_TO_NAMES[self]\n\n";
+         R"(
+def __EXPAND_THRIFT_SPEC(spec):
+    next_id = 0
+    for item in spec:
+        item_id = item[0]
+        if next_id >= 0 and item_id < 0:
+            next_id = item_id
+        if item_id != next_id:
+            for _ in range(next_id, item_id):
+                yield None
+        yield item
+        next_id = item_id + 1
+
+class ThriftEnumWrapper(int):
+  def __new__(cls, enum_class, value):
+    return super().__new__(cls, value)
+  def __init__(self, enum_class, value):    self.enum_class = enum_class
+  def __repr__(self):
+    return self.enum_class.__name__ + '.' + self.enum_class._VALUES_TO_NAMES[self]
+
+)";
 }
 
 /**
@@ -1310,6 +1321,9 @@ void t_py_generator::generate_py_union(
   // Generate some class level identifiers (similar to enum)
   indent(out) << "__EMPTY__ = 0" << endl;
   for (auto& member : sorted_members) {
+    if (is_hidden(*member)) {
+      continue;
+    }
     indent(out) << uppercase(member->get_name()) << " = " << member->get_key()
                 << endl;
   }
@@ -1322,6 +1336,9 @@ void t_py_generator::generate_py_union(
 
   // Generate `get_` methods
   for (auto& member : members) {
+    if (is_hidden(*member)) {
+      continue;
+    }
     indent(out) << "def get_" << member->get_name() << "(self):" << endl;
     indent(out) << "  assert self.field == " << member->get_key() << endl;
     indent(out) << "  return self.value" << endl << endl;
@@ -1329,6 +1346,9 @@ void t_py_generator::generate_py_union(
 
   // Generate `set_` methods
   for (auto& member : members) {
+    if (is_hidden(*member)) {
+      continue;
+    }
     indent(out) << "def set_" << member->get_name() << "(self, value):" << endl;
     indent(out) << "  self.field = " << member->get_key() << endl;
     indent(out) << "  self.value = value" << endl << endl;
@@ -1344,6 +1364,9 @@ void t_py_generator::generate_py_union(
       << indent() << "  value = pprint.pformat(self.value)" << endl
       << indent() << "  member = ''" << endl;
   for (auto& member : sorted_members) {
+    if (is_hidden(*member)) {
+      continue;
+    }
     auto key = rename_reserved_keywords(member->get_name());
     out << indent() << "  if self.field == " << member->get_key() << ":" << endl
         << indent() << "    padding = ' ' * " << key.size() + 1 << endl
@@ -1380,6 +1403,9 @@ void t_py_generator::generate_py_union(
 
   bool first = true;
   for (auto& member : sorted_members) {
+    if (is_hidden(*member)) {
+      continue;
+    }
     auto t = type_to_enum(member->get_type());
     auto n = member->get_name();
     auto k = member->get_key();
@@ -1418,6 +1444,9 @@ void t_py_generator::generate_py_union(
 
   first = true;
   for (auto& member : sorted_members) {
+    if (is_hidden(*member)) {
+      continue;
+    }
     auto t = type_to_enum(member->get_type());
     auto n = member->get_name();
     auto k = member->get_key();
@@ -1455,6 +1484,9 @@ void t_py_generator::generate_py_union(
     indent(out) << endl;
 
     for (auto& member : members) {
+      if (is_hidden(*member)) {
+        continue;
+      }
       auto n = member->get_name();
       indent(out) << "if '" << n << "' in obj:" << endl;
       indent_up();
@@ -1512,6 +1544,9 @@ void t_py_generator::generate_py_thrift_spec(
 
   for (m_iter = sorted_members.begin(); m_iter != sorted_members.end();
        ++m_iter) {
+    if (is_hidden(**m_iter)) {
+      continue;
+    }
     indent(out) << "(" << (*m_iter)->get_key() << ", "
                 << type_to_enum((*m_iter)->get_type()) << ", " << "'"
                 << rename_reserved_keywords((*m_iter)->get_name()) << "'"
@@ -1533,6 +1568,9 @@ void t_py_generator::generate_py_thrift_spec(
       out << " **kwargs";
     } else {
       for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+        if (is_hidden(**m_iter)) {
+          continue;
+        }
         // This fills in default values, as opposed to nulls
         out << " " << declare_argument(tstruct, *m_iter) << ",";
       }
@@ -1543,6 +1581,9 @@ void t_py_generator::generate_py_thrift_spec(
 
     if (members.size() > 255) {
       for (const auto& member : members) {
+        if (is_hidden(*member)) {
+          continue;
+        }
         indent(out) << rename_reserved_keywords(member->get_name())
                     << " = kwargs.pop(\n";
         indent(out) << "  \"" << rename_reserved_keywords(member->get_name())
@@ -1579,6 +1620,9 @@ void t_py_generator::generate_py_thrift_spec(
       }
     } else {
       for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+        if (is_hidden(**m_iter)) {
+          continue;
+        }
         // Initialize fields
         const t_type* type = (*m_iter)->get_type();
         if (!type->is_primitive_type() && !type->is_enum() &&
@@ -1613,6 +1657,9 @@ void t_py_generator::generate_py_thrift_spec(
 
     indent_up();
     for (m_iter = members.begin(); m_iter != members.end(); ++m_iter) {
+      if (is_hidden(**m_iter)) {
+        continue;
+      }
       indent(out) << "state.setdefault('"
                   << rename_reserved_keywords((*m_iter)->get_name()) << "', "
                   << render_field_default_value(*m_iter) << ")" << endl;
@@ -1717,6 +1764,9 @@ void t_py_generator::generate_py_struct_definition(
     indent_up();
     for (m_iter = sorted_members.begin(); m_iter != sorted_members.end();
          ++m_iter) {
+      if (is_hidden(**m_iter)) {
+        continue;
+      }
       indent(out) << "'" << rename_reserved_keywords((*m_iter)->get_name())
                   << "'," << endl;
     }
@@ -1766,6 +1816,9 @@ void t_py_generator::generate_py_struct_definition(
         << indent() << "  L = []" << endl
         << indent() << "  padding = ' ' * 4" << endl;
     for (const auto& member : members) {
+      if (is_hidden(*member)) {
+        continue;
+      }
       auto key = rename_reserved_keywords(member->get_name());
       auto has_double_underscore = key.find("__") == 0;
       if (has_double_underscore) {
@@ -1874,6 +1927,9 @@ void t_py_generator::generate_py_struct_definition(
   indent_up();
   for (m_iter = sorted_members.begin(); m_iter != sorted_members.end();
        ++m_iter) {
+    if (is_hidden(**m_iter)) {
+      continue;
+    }
     indent(out) << "'" << rename_reserved_keywords((*m_iter)->get_name())
                 << "'," << endl;
   }
@@ -1999,6 +2055,9 @@ void t_py_generator::generate_py_struct_reader(
 
   // Generate deserialization code for known cases
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if (is_hidden(**f_iter)) {
+      continue;
+    }
     if (first) {
       first = false;
       out << indent() << "if ";
@@ -2046,6 +2105,9 @@ void t_py_generator::generate_py_struct_writer(
   indent(out) << "oprot.writeStructBegin('" << name << "')" << endl;
 
   for (f_iter = fields.begin(); f_iter != fields.end(); ++f_iter) {
+    if (is_hidden(**f_iter)) {
+      continue;
+    }
     // Write field header
     indent(out) << "if self." << rename_reserved_keywords((*f_iter)->get_name())
                 << " != None";
@@ -3591,6 +3653,9 @@ void t_py_generator::generate_python_docstring(
     ss << subheader << ":\n";
     vector<t_field*>::const_iterator p_iter;
     for (p_iter = fields.begin(); p_iter != fields.end(); ++p_iter) {
+      if (is_hidden(**p_iter)) {
+        continue;
+      }
       const t_field* p = *p_iter;
       ss << " - " << rename_reserved_keywords(p->get_name());
       if (p->has_doc()) {

@@ -48,6 +48,7 @@ using ::apache::thrift::detail::operator<=;
 using ::apache::thrift::detail::operator>=;
 
 
+/** Glean {"file": "thrift/compiler/test/fixtures/adapter/src/module_no_uri.thrift", "name": "RefUnion", "kind": "union" } */
 class RefUnion final  {
  private:
   friend struct ::apache::thrift::detail::st::struct_private_access;
@@ -167,6 +168,7 @@ class RefUnion final  {
   bool operator==(const RefUnion&) const;
   bool operator<(const RefUnion&) const;
 
+  /** Glean { "field": "field1" } */
   template <typename... A, std::enable_if_t<!sizeof...(A), int> = 0>
   ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>& set_field1(::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion> const &t) {
     using T0 = ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>;
@@ -177,6 +179,7 @@ class RefUnion final  {
     return value_.field1;
   }
 
+  /** Glean { "field": "field1" } */
   template <typename... A, std::enable_if_t<!sizeof...(A), int> = 0>
   ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>& set_field1(::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>&& t) {
     using T0 = ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>;
@@ -187,6 +190,7 @@ class RefUnion final  {
     return value_.field1;
   }
 
+  /** Glean { "field": "field1" } */
   template<typename... T, typename = ::apache::thrift::safe_overload_t<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>, T...>> ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>& set_field1(T&&... t) {
     __fbthrift_clear();
     type_ = folly::to_underlying(Type::field1);
@@ -194,6 +198,7 @@ class RefUnion final  {
     return value_.field1;
   }
 
+  /** Glean { "field": "field1" } */
   ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>& set_field1(::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>> t) {
     __fbthrift_clear();
     type_ = folly::to_underlying(Type::field1);
@@ -213,26 +218,31 @@ class RefUnion final  {
     return value_.field1;
   }
 
-  ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>> move_field1() {
+  template <typename..., typename T = ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>>
+  T move_field1() {
     assert(getType() == Type::field1);
     return std::move(value_.field1);
   }
 
+  /** Glean { "field": "field1" } */
   template <typename..., typename T = ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>>
   FOLLY_ERASE ::apache::thrift::union_field_ref<const T&> field1_ref() const& {
     return {value_.field1, type_, folly::to_underlying(Type::field1), this, ::apache::thrift::detail::union_field_ref_owner_vtable_for<decltype(*this)>};
   }
 
+  /** Glean { "field": "field1" } */
   template <typename..., typename T = ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>>
   FOLLY_ERASE ::apache::thrift::union_field_ref<const T&&> field1_ref() const&& {
     return {std::move(value_.field1), type_, folly::to_underlying(Type::field1), this, ::apache::thrift::detail::union_field_ref_owner_vtable_for<decltype(*this)>};
   }
 
+  /** Glean { "field": "field1" } */
   template <typename..., typename T = ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>>
   FOLLY_ERASE ::apache::thrift::union_field_ref<T&> field1_ref() & {
     return {value_.field1, type_, folly::to_underlying(Type::field1), this, ::apache::thrift::detail::union_field_ref_owner_vtable_for<decltype(*this)>};
   }
 
+  /** Glean { "field": "field1" } */
   template <typename..., typename T = ::std::shared_ptr<::apache::thrift::adapt_detail::adapted_field_t<::my::Adapter1, 1, ::std::string, RefUnion>>>
   FOLLY_ERASE ::apache::thrift::union_field_ref<T&&> field1_ref() && {
     return {std::move(value_.field1), type_, folly::to_underlying(Type::field1), this, ::apache::thrift::detail::union_field_ref_owner_vtable_for<decltype(*this)>};

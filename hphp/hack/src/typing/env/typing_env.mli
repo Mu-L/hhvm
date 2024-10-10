@@ -64,7 +64,11 @@ val fresh_type : env -> Pos.t -> env * locl_ty
 (** Generate a fresh type variable type with optional variance and
     the given reason information *)
 val fresh_type_reason :
-  ?variance:Ast_defs.variance -> env -> Pos.t -> Reason.t -> env * locl_ty
+  ?variance:Ast_defs.variance ->
+  env ->
+  Pos.t ->
+  (Tvid.t -> Reason.t) ->
+  env * locl_ty
 
 (** Generate a fresh type variable type that is assumed to be invariant, so
     it won't be solved automatically at the end of the scope *)
@@ -100,6 +104,7 @@ val get_type : env -> Reason.t -> Tvid.t -> env * locl_ty
 
 val expand_var : env -> Reason.t -> Tvid.t -> env * locl_ty
 
+(** If the provided type is a type variable, expand it. *)
 val expand_type : env -> locl_ty -> env * locl_ty
 
 val expand_internal_type : env -> internal_type -> env * internal_type
@@ -582,6 +587,8 @@ module Log : sig
     env ->
     Tvid.t ->
     Hh_json.json
+
+  val expand_env : Typing_env_types.env -> expand_env -> (string * string) list
 end
 
 val make_expression_id : env -> Expression_id.t

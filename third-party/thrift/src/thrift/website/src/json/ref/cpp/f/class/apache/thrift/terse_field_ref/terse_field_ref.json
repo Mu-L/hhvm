@@ -16,6 +16,7 @@
       "definition_html": "FOLLY_ERASE apache::thrift::terse_field_ref&lt; T &gt;::terse_field_ref",
       "argsstring_html": "(reference_type value) noexcept",
       "name_html": "terse_field_ref",
+      "qualifiedname_html": "apache::thrift::terse_field_ref::terse_field_ref",
       "param": [
         {
           "type_html": "<code>reference_type</code>",
@@ -24,11 +25,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "line": "2252",
+        "line": "2321",
         "column": "15",
         "bodyfile": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "bodystart": "2252",
-        "bodyend": "2252"
+        "bodystart": "2321",
+        "bodyend": "2321"
       },
       "definition": {
         "simple_html": "FOLLY_ERASE terse_field_ref(reference_type value)",
@@ -59,13 +60,14 @@
         },
         {
           "type_html": "typename",
-          "defval_html": "<code>detail::EnableIfImplicit</code>&lt;T, U&gt;"
+          "defval_html": "<code>apache::thrift::detail::EnableIfImplicit</code>&lt;T, U&gt;"
         }
       ],
       "type_html": "FOLLY_ERASE",
       "definition_html": "FOLLY_ERASE apache::thrift::terse_field_ref&lt; T &gt;::terse_field_ref",
       "argsstring_html": "(const terse_field_ref&lt; U &gt; &amp;other) noexcept",
       "name_html": "terse_field_ref",
+      "qualifiedname_html": "apache::thrift::terse_field_ref::terse_field_ref",
       "param": [
         {
           "type_html": "const <code>terse_field_ref</code>&lt; U &gt; &amp;",
@@ -74,17 +76,17 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "line": "2255",
+        "line": "2326",
         "column": "16",
         "bodyfile": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "bodystart": "2255",
-        "bodyend": "2257"
+        "bodystart": "2326",
+        "bodyend": "2328"
       },
       "definition": {
-        "simple_html": "template &lt;typename U, typename = detail::EnableIfImplicit&lt;T, U&gt;&gt;\nFOLLY_ERASE terse_field_ref(const terse_field_ref&lt;U&gt;&amp; other)",
-        "simple_raw": "template <typename U, typename = detail::EnableIfImplicit<T, U>>\nFOLLY_ERASE terse_field_ref(const terse_field_ref<U>& other)",
-        "detailed_html": "template &lt;typename U, typename = detail::EnableIfImplicit&lt;T, U&gt;&gt;\ninline FOLLY_ERASE terse_field_ref(const terse_field_ref&lt;U&gt;&amp; other) noexcept",
-        "detailed_raw": "template <typename U, typename = detail::EnableIfImplicit<T, U>>\ninline FOLLY_ERASE terse_field_ref(const terse_field_ref<U>& other) noexcept",
+        "simple_html": "template &lt;typename U, typename = apache::thrift::detail::EnableIfImplicit&lt;T, U&gt;&gt;\nFOLLY_ERASE terse_field_ref(const terse_field_ref&lt;U&gt;&amp; other)",
+        "simple_raw": "template <typename U, typename = apache::thrift::detail::EnableIfImplicit<T, U>>\nFOLLY_ERASE terse_field_ref(const terse_field_ref<U>& other)",
+        "detailed_html": "template &lt;typename U, typename = apache::thrift::detail::EnableIfImplicit&lt;T, U&gt;&gt;\ninline FOLLY_ERASE terse_field_ref(const terse_field_ref&lt;U&gt;&amp; other) noexcept",
+        "detailed_raw": "template <typename U, typename = apache::thrift::detail::EnableIfImplicit<T, U>>\ninline FOLLY_ERASE terse_field_ref(const terse_field_ref<U>& other) noexcept",
         "original_definition_html": "FOLLY_ERASE apache::thrift::terse_field_ref&lt; T &gt;::terse_field_ref",
         "original_argsstring_html": "(const terse_field_ref&lt; U &gt; &amp;other) noexcept"
       },
@@ -116,6 +118,7 @@
       "definition_html": "FOLLY_ERASE apache::thrift::terse_field_ref&lt; T &gt;::terse_field_ref",
       "argsstring_html": "(const terse_field_ref&lt; U &amp; &gt; &amp;other) noexcept",
       "name_html": "terse_field_ref",
+      "qualifiedname_html": "apache::thrift::terse_field_ref::terse_field_ref",
       "param": [
         {
           "type_html": "const <code>terse_field_ref</code>&lt; U &amp; &gt; &amp;",
@@ -124,11 +127,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "line": "2264",
+        "line": "2335",
         "column": "24",
         "bodyfile": "fbcode/thrift/lib/cpp2/FieldRef.h",
-        "bodystart": "2264",
-        "bodyend": "2266"
+        "bodystart": "2335",
+        "bodyend": "2337"
       },
       "definition": {
         "simple_html": "template &lt;\n    typename U,\n    std::enable_if_t&lt;\n        std::is_same&lt;T, U&amp;&amp;&gt;{} || std::is_same&lt;T, const U&amp;&amp;&gt;{},\n        int&gt; = 0&gt;\nFOLLY_ERASE terse_field_ref(const terse_field_ref&lt;U&amp;&gt;&amp; other)",

@@ -22,6 +22,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait NestedContainers: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn mapList(
@@ -174,8 +175,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for NestedContainers's methods.
 #[derive(Clone, Debug)]
 pub struct NestedContainersProcessor<P, H, R, RS> {
@@ -183,6 +182,7 @@ pub struct NestedContainersProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_NestedContainers_mapList {
     foo: ::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
@@ -213,6 +213,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ne
     }
 }
 
+
 struct Args_NestedContainers_mapSet {
     foo: ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>,
 }
@@ -241,6 +242,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ne
         })
     }
 }
+
 
 struct Args_NestedContainers_listMap {
     foo: ::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::primitive::i32>>,
@@ -271,6 +273,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ne
     }
 }
 
+
 struct Args_NestedContainers_listSet {
     foo: ::std::vec::Vec<::std::collections::BTreeSet<::std::primitive::i32>>,
 }
@@ -300,6 +303,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ne
     }
 }
 
+
 struct Args_NestedContainers_turtles {
     foo: ::std::vec::Vec<::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>>>>,
 }
@@ -328,7 +332,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ne
         })
     }
 }
-
 
 impl<P, H, R, RS> NestedContainersProcessor<P, H, R, RS>
 where
@@ -395,7 +398,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "NestedContainers.mapList", exception = ?exn);
+                ::tracing::error!(method = "NestedContainers.mapList", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -457,7 +460,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "NestedContainers.mapSet", exception = ?exn);
+                ::tracing::error!(method = "NestedContainers.mapSet", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -519,7 +522,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "NestedContainers.listMap", exception = ?exn);
+                ::tracing::error!(method = "NestedContainers.listMap", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -581,7 +584,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "NestedContainers.listSet", exception = ?exn);
+                ::tracing::error!(method = "NestedContainers.listSet", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -643,7 +646,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "NestedContainers.turtles", exception = ?exn);
+                ::tracing::error!(method = "NestedContainers.turtles", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

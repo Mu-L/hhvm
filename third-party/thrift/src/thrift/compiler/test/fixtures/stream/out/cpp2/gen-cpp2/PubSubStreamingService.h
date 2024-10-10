@@ -43,6 +43,7 @@ class ServiceHandler<::cpp2::PubSubStreamingService> : public apache::thrift::Se
   typedef ::cpp2::PubSubStreamingServiceAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -137,6 +138,7 @@ class ServiceHandler<::cpp2::PubSubStreamingService> : public apache::thrift::Se
 namespace cpp2 {
 using PubSubStreamingServiceSvIf [[deprecated("Use apache::thrift::ServiceHandler<PubSubStreamingService> instead")]] = ::apache::thrift::ServiceHandler<PubSubStreamingService>;
 } // namespace cpp2
+
 namespace cpp2 {
 class PubSubStreamingServiceSvNull : public ::apache::thrift::ServiceHandler<PubSubStreamingService> {
  public:

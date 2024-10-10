@@ -6,25 +6,21 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include "squangle/mysql_client/AsyncConnectionPool.h"
-#include "squangle/mysql_client/AsyncMysqlClient.h"
-#include "squangle/mysql_client/SemiFutureAdapter.h"
-
-#include <cstddef>
-#include <memory>
-
 #include <folly/MapUtil.h>
 #include <folly/Memory.h>
 #include <folly/synchronization/Baton.h>
-
-#include <vector>
-
 #include <mysql.h>
 #include <chrono>
+#include <cstddef>
+#include <memory>
+#include <vector>
 
-namespace facebook {
-namespace common {
-namespace mysql_client {
+#include "squangle/mysql_client/AsyncConnectionPool.h"
+#include "squangle/mysql_client/AsyncMysqlClient.h"
+#include "squangle/mysql_client/ConnectPoolOperation.h"
+#include "squangle/mysql_client/SemiFutureAdapter.h"
+
+namespace facebook::common::mysql_client {
 
 std::shared_ptr<AsyncConnectionPool> AsyncConnectionPool::makePool(
     std::shared_ptr<AsyncMysqlClient> mysql_client,
@@ -130,26 +126,25 @@ std::unique_ptr<Connection> AsyncConnectionPool::connect(
 }
 
 template <>
-AsyncConnectPoolOperation* AsyncConnectPoolOperation::specializedRun() {
-  std::weak_ptr<Operation> weakSelf = getSharedPointer();
-  if (!client()->runInThread([weakSelf]() {
+void AsyncConnectPoolOperationImpl::specializedRun() {
+  std::weak_ptr<Operation> weakSelf = getOp().getSharedPointer();
+  if (!conn().client().runInThread([&, wself = std::move(weakSelf)]() {
         // There is a race confition that allows a cancelled or completed
         // operation getting here. The self ptr check ensures that the client
         // has not freed the reference to the operation, and the state() check
         // verifies whether other relevant memebers have been cleaned up by
         // connect callbacks
-        auto self =
-            std::static_pointer_cast<ConnectPoolOperation>(weakSelf.lock());
+        auto self = wself.lock();
         if (!self || (self->state() == OperationState::Completed)) {
           LOG(ERROR) << "ConnectPoolOperation freed before running";
           return;
         }
 
-        self->specializedRunImpl();
+        // `this` is valid if `self` is still alive
+        specializedRunImpl();
       })) {
     completeOperationInner(OperationResult::Failed);
   }
-  return this;
 }
 
 std::ostream& operator<<(std::ostream& os, ExpirationPolicy policy) {
@@ -169,22 +164,21 @@ std::ostream& operator<<(std::ostream& os, const PoolOptions& options) {
 }
 
 std::ostream& operator<<(std::ostream& os, const PoolKey& key) {
-  return os << "{key:" << key.getConnectionKey().getDisplayString()
+  return os << "{key:" << key.getConnectionKeyRef().getDisplayString()
             << ",options:" << key.getConnectionOptions().getDisplayString()
             << "}";
 }
 
 template <>
-std::string AsyncConnectPoolOperation::createTimeoutErrorMessage(
+std::string AsyncConnectPoolOperationImpl::createTimeoutErrorMessage(
     const PoolKeyStats& pool_key_stats,
     size_t per_key_limit) {
-  auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - start_time_);
-  auto cbDelayUs = client()->callbackDelayMicrosAvg();
+  auto delta = opElapsedMs();
+  auto cbDelayUs = conn().client().callbackDelayMicrosAvg();
   bool stalled = (cbDelayUs >= kCallbackDelayStallThresholdUs);
 
   std::vector<std::string> parts;
-  const auto& key = getConnectionKey();
+  const auto& key = getKeyRef();
   parts.push_back(fmt::format(
       "[{}]({})Connection to {}:{} timed out in pool",
       static_cast<uint16_t>(SquangleErrno::SQ_ERRNO_POOL_CONN_TIMEOUT),
@@ -203,6 +197,15 @@ std::string AsyncConnectPoolOperation::createTimeoutErrorMessage(
   return folly::join(" ", parts);
 }
 
-} // namespace mysql_client
-} // namespace common
-} // namespace facebook
+template <>
+std::unique_ptr<ConnectPoolOperationImpl<AsyncMysqlClient>>
+createConnectPoolOperationImpl(
+    std::weak_ptr<ConnectionPool<AsyncMysqlClient>> pool,
+    std::shared_ptr<AsyncMysqlClient> client,
+    std::shared_ptr<const ConnectionKey> conn_key) {
+  return std::make_unique<
+      mysql_protocol::MysqlConnectPoolOperationImpl<AsyncMysqlClient>>(
+      std::move(pool), client, std::move(conn_key));
+}
+
+} // namespace facebook::common::mysql_client

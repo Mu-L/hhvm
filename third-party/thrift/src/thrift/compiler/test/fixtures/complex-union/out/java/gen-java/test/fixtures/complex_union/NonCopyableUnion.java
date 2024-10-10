@@ -42,6 +42,11 @@ public final class NonCopyableUnion implements com.facebook.thrift.payload.Thrif
     private java.lang.Object value;
     private short id;
 
+    public enum TypeEnum {
+      __FBTHRIFT_EMPTY_UNION__,
+      S,
+    }
+
     public static NonCopyableUnion from(int _id, java.lang.Object _field) {
         return from((short) _id, _field);
     }
@@ -108,6 +113,17 @@ public final class NonCopyableUnion implements com.facebook.thrift.payload.Thrif
     @ThriftUnionId
     public short getThriftId() {
         return this.id;
+    }
+
+    public TypeEnum getThriftUnionType() {
+      switch(this.id) {
+        case 0:
+          return TypeEnum.__FBTHRIFT_EMPTY_UNION__;
+        case 1:
+          return TypeEnum.S;
+        default:
+          throw new IllegalStateException("unreachable");
+      }
     }
 
     public String getThriftName() {

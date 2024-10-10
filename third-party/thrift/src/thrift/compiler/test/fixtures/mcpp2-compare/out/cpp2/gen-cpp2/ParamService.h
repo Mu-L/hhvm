@@ -44,6 +44,7 @@ class ServiceHandler<::some::valid::ns::ParamService> : public apache::thrift::S
   typedef ::some::valid::ns::ParamServiceAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -311,6 +312,7 @@ class ServiceHandler<::some::valid::ns::ParamService> : public apache::thrift::S
 namespace some::valid::ns {
 using ParamServiceSvIf [[deprecated("Use apache::thrift::ServiceHandler<ParamService> instead")]] = ::apache::thrift::ServiceHandler<ParamService>;
 } // namespace some::valid::ns
+
 namespace some::valid::ns {
 class ParamServiceSvNull : public ::apache::thrift::ServiceHandler<ParamService> {
  public:

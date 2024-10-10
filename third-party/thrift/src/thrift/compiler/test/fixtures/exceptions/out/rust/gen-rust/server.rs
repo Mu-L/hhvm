@@ -22,6 +22,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait Raiser: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn doBland(
@@ -127,8 +128,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for Raiser's methods.
 #[derive(Clone, Debug)]
 pub struct RaiserProcessor<P, H, R, RS> {
@@ -136,6 +135,7 @@ pub struct RaiserProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_Raiser_doBland {
 }
@@ -161,6 +161,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ra
     }
 }
 
+
 struct Args_Raiser_doRaise {
 }
 
@@ -184,6 +185,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ra
         })
     }
 }
+
 
 struct Args_Raiser_get200 {
 }
@@ -209,6 +211,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ra
     }
 }
 
+
 struct Args_Raiser_get500 {
 }
 
@@ -232,7 +235,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Ra
         })
     }
 }
-
 
 impl<P, H, R, RS> RaiserProcessor<P, H, R, RS>
 where
@@ -298,7 +300,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "Raiser.doBland", exception = ?exn);
+                ::tracing::error!(method = "Raiser.doBland", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -359,7 +361,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "Raiser.doRaise", exception = ?exn);
+                ::tracing::error!(method = "Raiser.doRaise", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -420,7 +422,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "Raiser.get200", exception = ?exn);
+                ::tracing::error!(method = "Raiser.get200", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -481,7 +483,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "Raiser.get500", exception = ?exn);
+                ::tracing::error!(method = "Raiser.get500", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

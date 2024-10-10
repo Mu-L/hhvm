@@ -33,7 +33,7 @@ exception Not_in_class
 
 let get_decl_env env = env.Typing_env_types.decl_env
 
-let print_ty = Typing_print.full_strip_ns
+let print_ty = Typing_print.full_strip_ns ~hide_internals:true
 
 let print_decl_ty = Typing_print.full_strip_ns_decl ~verbose_fun:false
 
@@ -42,16 +42,13 @@ let print_error_ty = Typing_print.error
 let print_hint env hint =
   print_decl_ty env @@ Decl_hint.hint (get_decl_env env) hint
 
-let print_ty_with_identity env phase_ty sym_occurrence sym_definition =
-  match phase_ty with
-  | Typing_defs.DeclTy ty ->
-    let ((env, ty_err_opt), ty) =
-      Typing_phase.localize_no_subst env ~ignore_errors:true ty
-    in
-    Option.iter ty_err_opt ~f:(Typing_error_utils.add_typing_error ~env);
-    Typing_print.full_with_identity env ty sym_occurrence sym_definition
-  | Typing_defs.LoclTy ty ->
-    Typing_print.full_with_identity env ty sym_occurrence sym_definition
+let print_ty_with_identity env ty sym_occurrence sym_definition =
+  Typing_print.full_with_identity
+    ~hide_internals:true
+    env
+    ty
+    sym_occurrence
+    sym_definition
 
 let ty_to_json env ?show_like_ty ty = Typing_print.to_json env ?show_like_ty ty
 
@@ -97,7 +94,11 @@ let get_ctx = Typing_env.get_ctx
 
 let expand_type = Typing_env.expand_type
 
-let strip_dynamic = Typing_utils.strip_dynamic
+let strip_dynamic env ty = snd (Typing_dynamic_utils.strip_dynamic env ty)
+
+let strip_supportdyn env ty =
+  let (sd, _, ty) = Typing_utils.strip_supportdyn env ty in
+  (sd, ty)
 
 let set_static = Typing_env.set_static
 
@@ -198,6 +199,15 @@ let localize_hint_for_refinement env h =
     Typing_phase.localize_hint_for_refinement env h
   in
   (env, lty)
+
+let supports_new_refinement env h =
+  let (env, ty) = localize_hint_for_refinement env h in
+  if Typing_defs.is_nonnull ty then
+    Result.Ok ()
+  else
+    match Typing_refinement.TyPredicate.of_ty env ty with
+    | Result.Error err -> Result.Error err
+    | Result.Ok _ -> Result.Ok ()
 
 let localize_no_subst env ~ignore_errors dty =
   let ((env, ty_err_opt), lty) =

@@ -15,134 +15,21 @@
   limitations under the License.
 
 }}
-{{#service:interactions}}{{>lib/server}}
-{{/service:interactions}}
 
-{{#service:docs?}}
-#[doc = {{service:docs}}]
-{{/service:docs?}}
-#[::async_trait::async_trait]
-pub trait {{service:rust_name}}: ::std::marker::Send + ::std::marker::Sync + 'static {{>lib/block}}{{!
-}}{{#service:requestContext?}}
-    type RequestContext: ::std::marker::Sync;{{!
-}}{{/service:requestContext?}}
-{{#service:rustFunctions}}{{^function:starts_interaction?}}{{^function:sink?}}
-    {{#function:docs?}}
-    #[doc = {{function:docs}}]
-    {{/function:docs?}}
-    async fn {{function:rust_name}}(
-        &self,{{!
-        }}{{#service:requestContext?}}
-        _request_context: &Self::RequestContext,{{!
-        }}{{/service:requestContext?}}{{!
-        }}{{#function:args}}
-        _{{field:name}}: {{#field:type}}{{>lib/type}}{{/field:type}},{{!
-        }}{{/function:args}}
-    ) -> {{>lib/server_return_type}} {
-        ::std::result::Result::Err({{program:crate}}::services::{{service:snake}}::{{function:upcamel}}Exn::ApplicationException(
-            ::fbthrift::ApplicationException::unimplemented_method(
-                "{{service:name}}",
-                "{{function:name}}",
-            ),
-        ))
-    }
-{{/function:sink?}}{{/function:starts_interaction?}}{{#function:starts_interaction?}}
-    {{#function:docs?}}
-    #[doc = {{function:docs}}]
-    {{/function:docs?}}
-    fn {{function:rust_name}}(
-        &self,
-    ) -> ::anyhow::Result<::std::boxed::Box<dyn {{function:interaction_name}}>> {
-        ::anyhow::bail!("{{service:name}}.{{function:name}} not implemented");
-    }
-{{/function:starts_interaction?}}{{/service:rustFunctions}}
-{{#service:interaction?}}
-    async fn on_termination(&self) {}
-{{/service:interaction?}}
+{{#service:interactions?}}{{!
+}}pub mod {{service:snake}} {{>lib/block}}
+    use super::*;
+
+    {{#service:interactions}}
+    {{>lib/server}}
+    {{/service:interactions}}
+
 }
+{{/service:interactions?}}
 
-#[::async_trait::async_trait]
-impl<T> {{service:rust_name}} for ::std::boxed::Box<T>
-where
-    T: {{service:rust_name}} + Send + Sync + ?Sized,
-{{>lib/block}}
-{{#service:requestContext?}}
-    type RequestContext = T::RequestContext;{{!
-}}{{/service:requestContext?}}
-{{#service:rustFunctions}}{{^function:starts_interaction?}}{{^function:sink?}}
-    async fn {{function:rust_name}}(
-        &self,{{!
-        }}{{#service:requestContext?}}
-        request_context: &Self::RequestContext,{{!
-        }}{{/service:requestContext?}}{{!
-        }}{{#function:args}}
-        {{field:rust_name}}: {{#field:type}}{{>lib/type}}{{/field:type}},{{!
-        }}{{/function:args}}
-    ) -> {{>lib/server_return_type}} {
-        (**self).{{function:rust_name}}({{!
-            }}{{#service:requestContext?}}
-            request_context,{{!
-            }}{{/service:requestContext?}}{{!
-            }}{{#function:args}}
-            {{field:rust_name}},{{!
-            }}{{/function:args}}
-        ).await
-    }
-{{/function:sink?}}{{/function:starts_interaction?}}{{#function:starts_interaction?}}
-    fn {{function:rust_name}}(
-        &self,
-    ) -> ::anyhow::Result<::std::boxed::Box<dyn {{function:interaction_name}}>> {
-        (**self).{{function:rust_name}}()
-    }
-{{/function:starts_interaction?}}{{/service:rustFunctions}}
-{{#service:interaction?}}
-    async fn on_termination(&self) {
-        (**self).on_termination().await;
-    }
+{{^service:interaction?}}
+{{>lib/server_trait}}
 {{/service:interaction?}}
-}
-
-#[::async_trait::async_trait]
-impl<T> {{service:rust_name}} for ::std::sync::Arc<T>
-where
-    T: {{service:rust_name}} + Send + Sync + ?Sized,
-{{>lib/block}}
-{{#service:requestContext?}}
-    type RequestContext = T::RequestContext;{{!
-}}{{/service:requestContext?}}
-{{#service:rustFunctions}}{{^function:starts_interaction?}}{{^function:sink?}}
-    async fn {{function:rust_name}}(
-        &self,{{!
-        }}{{#service:requestContext?}}
-        request_context: &Self::RequestContext,{{!
-        }}{{/service:requestContext?}}{{!
-        }}{{#function:args}}
-        {{field:rust_name}}: {{#field:type}}{{>lib/type}}{{/field:type}},{{!
-        }}{{/function:args}}
-    ) -> {{>lib/server_return_type}} {
-        (**self).{{function:rust_name}}({{!
-            }}{{#service:requestContext?}}
-            request_context,{{!
-            }}{{/service:requestContext?}}{{!
-            }}{{#function:args}}
-            {{field:rust_name}},{{!
-            }}{{/function:args}}
-        ).await
-    }
-{{/function:sink?}}{{/function:starts_interaction?}}{{#function:starts_interaction?}}
-    fn {{function:rust_name}}(
-        &self,
-    ) -> ::anyhow::Result<::std::boxed::Box<dyn {{function:interaction_name}}>> {
-        (**self).{{function:rust_name}}()
-    }
-{{/function:starts_interaction?}}{{/service:rustFunctions}}
-{{#service:interaction?}}
-    async fn on_termination(&self) {
-        (**self).on_termination().await;
-    }
-{{/service:interaction?}}
-}
-
 
 /// Processor for {{service:rust_name}}'s methods.
 #[derive(Clone, Debug)]
@@ -160,54 +47,9 @@ pub struct {{service:rust_name}}Processor<P, H, R, RS{{!
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
 
-{{#service:rustFunctions}}{{^function:starts_interaction?}}{{^function:sink?}}
-struct Args_{{service:rust_name}}_{{function:name}} {
-    {{#function:args}}
-    {{field:rust_name}}: {{>lib/fieldtype}},
-    {{/function:args}}
-}
-
-impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_{{service:rust_name}}_{{function:name}} {
-    #[inline]{{! No cost because there's only one caller; with luck will mitigate move cost of args. }}
-    #[::tracing::instrument(skip_all, level = "trace", name = "deserialize_args", fields(method = "{{service:name}}.{{function:name}}"))]
-    fn read(p: &mut P) -> ::anyhow::Result<Self> {
-        static ARGS: &[::fbthrift::Field] = &[
-            {{#function:args_by_name}}
-            ::fbthrift::Field::new("{{field:name}}", {{#field:type}}{{>lib/ttype}}{{/field:type}}, {{field:key}}),
-            {{/function:args_by_name}}
-        ];
-        {{#function:args}}
-        let mut field_{{field:name}} = ::std::option::Option::None;
-        {{/function:args}}
-        let _ = p.read_struct_begin(|_| ())?;
-        loop {
-            let (_, fty, fid) = p.read_field_begin(|_| (), ARGS)?;
-            match (fty, fid as ::std::primitive::i32) {
-                (::fbthrift::TType::Stop, _) => break,{{!
-                }}{{#function:args}}
-                ({{#field:type}}{{>lib/ttype}}{{/field:type}}, {{field:key}}) => {{!
-                    }}field_{{field:name}} = ::std::option::Option::Some({{!
-                    }}{{#field:has_adapter?}}{{>lib/adapter/qualified}}::from_thrift_field::<fbthrift::metadata::NoThriftAnnotations>({{/field:has_adapter?}}{{!
-                    }}{{#field:type}}{{#field:type_annotation?}}{{>lib/annfieldread}}{{/field:type_annotation?}}{{^field:type_annotation?}}{{>lib/read}}{{/field:type_annotation?}}{{/field:type}}(p)?{{!
-                    }}{{#field:has_adapter?}}, {{field:key}})?{{/field:has_adapter?}}{{!
-                    }}),{{!
-                }}{{/function:args}}
-                (fty, _) => p.skip(fty)?,
-            }
-            p.read_field_end()?;
-        }
-        p.read_struct_end()?;
-        {{! Use formatting in errors to try to maximize string sharing }}
-        ::std::result::Result::Ok(Self {{>lib/block}}{{!
-            }}{{#function:args}}
-            {{field:rust_name}}: field_{{field:name}}.ok_or_else(|| ::anyhow::anyhow!("`{}` missing arg `{}`", "{{service:name}}.{{function:name}}", "{{field:name}}"))?,{{!
-            }}{{/function:args}}
-        })
-    }
-}
-
-{{/function:sink?}}{{/function:starts_interaction?}}{{/service:rustFunctions}}
-
+{{^service:interaction?}}
+{{>lib/server_arg}}
+{{/service:interaction?}}
 impl<P, H, R, RS{{!
     }}{{#service:extends?}}, SS{{/service:extends?}}{{!
 }}> {{service:rust_name}}Processor<P, H, R, RS{{!
@@ -296,7 +138,7 @@ where
                 {{/type:void?}}{{^type:void?}}
                 let (interaction_handler, res) = res;
                 {{/type:void?}}{{/function:return_type}}
-                let interaction_processor = ::std::sync::Arc::new({{function:interaction_name}}Processor::<P, ::std::boxed::Box<dyn {{function:interaction_name}}>, R, RS>::new(interaction_handler));
+                let interaction_processor = ::std::sync::Arc::new({{program:crate}}::server::{{service:snake}}::{{function:interaction_name}}Processor::<P, ::std::boxed::Box<dyn {{function:interaction_name}}>, R, RS>::new(interaction_handler));
                 reply_state.set_interaction_processor(interaction_processor)?;
                 {{/function:creates_interaction?}}
                 ::std::result::Result::Ok(res)
@@ -304,7 +146,7 @@ where
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
                 {{!TODO: Remove this once debug for stream is implemented.}}
                 {{^function:stream?}}
-                ::tracing::info!(method = "{{service:name}}.{{function:name}}", exception = ?exn);
+                ::tracing::error!(method = "{{service:name}}.{{function:name}}", exception = ?exn);
                 {{/function:stream?}}
                 ::std::result::Result::Err(exn)
             }
@@ -487,7 +329,7 @@ where
             }}{{#service:rustFunctions}}{{#function:starts_interaction?}}
             {{function:index}}usize => {
                 let handler = self.handle_{{function:name}}()?;
-                let server = ::std::sync::Arc::new({{function:interaction_name}}Processor::<P, ::std::boxed::Box<dyn {{function:interaction_name}}>, R, RS>::new(handler));
+                let server = ::std::sync::Arc::new({{program:crate}}::server::{{service:snake}}::{{function:interaction_name}}Processor::<P, ::std::boxed::Box<dyn {{function:interaction_name}}>, R, RS>::new(handler));
                 ::std::result::Result::Ok(server)
             }{{!
             }}{{/function:starts_interaction?}}{{/service:rustFunctions}}

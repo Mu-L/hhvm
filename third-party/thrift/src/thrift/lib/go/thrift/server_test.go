@@ -20,6 +20,8 @@ import (
 	"context"
 	"errors"
 	"testing"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // TestSimpleServer is a simple tests that simple sends an empty message to a server and receives an empty result.
@@ -42,11 +44,7 @@ func TestSimpleServer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create client socket: %s", err)
 	}
-	clientSocket, err := NewSocket(SocketConn(conn))
-	if err != nil {
-		t.Fatalf("could not create client socket: %s", err)
-	}
-	proto, err := NewHeaderProtocol(clientSocket)
+	proto, err := newHeaderProtocol(conn, types.ProtocolIDCompact, 0, nil)
 	if err != nil {
 		t.Fatalf("could not create client protocol: %s", err)
 	}
@@ -64,13 +62,13 @@ func TestSimpleServer(t *testing.T) {
 type testProcessor struct {
 }
 
-func (t *testProcessor) GetProcessorFunctionContext(name string) (ProcessorFunctionContext, error) {
-	return &testProcessorFunction{}, nil
+func (t *testProcessor) ProcessorFunctionMap() map[string]types.ProcessorFunction {
+	return map[string]types.ProcessorFunction{"test": &testProcessorFunction{}}
 }
 
 type testProcessorFunction struct{}
 
-func (p *testProcessorFunction) Read(prot Format) (Struct, Exception) {
+func (p *testProcessorFunction) Read(prot types.Decoder) (types.Struct, types.Exception) {
 	args := NewMyTestStruct()
 	if err := args.Read(prot); err != nil {
 		return nil, err
@@ -79,12 +77,12 @@ func (p *testProcessorFunction) Read(prot Format) (Struct, Exception) {
 	return args, nil
 }
 
-func (p *testProcessorFunction) Write(seqID int32, result WritableStruct, oprot Format) (err Exception) {
+func (p *testProcessorFunction) Write(seqID int32, result types.WritableStruct, oprot types.Encoder) (err types.Exception) {
 	var err2 error
-	messageType := REPLY
+	messageType := types.REPLY
 	switch result.(type) {
-	case ApplicationException:
-		messageType = EXCEPTION
+	case types.ApplicationException:
+		messageType = types.EXCEPTION
 	}
 
 	if err2 = oprot.WriteMessageBegin("test", messageType, seqID); err2 != nil {
@@ -102,8 +100,8 @@ func (p *testProcessorFunction) Write(seqID int32, result WritableStruct, oprot 
 	return err
 }
 
-func (p *testProcessorFunction) RunContext(ctx context.Context, reqStruct Struct) (WritableStruct, ApplicationException) {
-	return &MyTestStruct{}, nil
+func (p *testProcessorFunction) RunContext(ctx context.Context, reqStruct types.Struct) (types.WritableStruct, types.ApplicationException) {
+	return reqStruct, nil
 }
 
 // This tests that S425600 does not happen again.
@@ -127,17 +125,10 @@ func TestSimpleServerClientSetsDifferentProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatalf("could not create client socket: %s", err)
 	}
-	clientSocket, err := NewSocket(SocketConn(conn))
-	if err != nil {
-		t.Fatalf("could not create client socket: %s", err)
-	}
-	proto, err := NewHeaderProtocol(clientSocket)
+	// Sets the client serialization format to a non default.
+	proto, err := NewClient(WithHeader(), WithConn(conn), WithProtocolID(types.ProtocolIDBinary))
 	if err != nil {
 		t.Fatalf("could not create client protocol: %s", err)
-	}
-	// Sets the client serialization format to a non default.
-	if err := proto.SetProtocolID(ProtocolIDBinary); err != nil {
-		t.Fatal(err)
 	}
 	client := NewSerialChannel(proto)
 	if err := client.Call(context.Background(), "test", &MyTestStruct{}, &MyTestStruct{}); err != nil {

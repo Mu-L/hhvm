@@ -1,14 +1,14 @@
 error: Typing[4057] Invalid argument
 
- 11 | function passes_missing_a_alias(
- 12 |   missing_a $s,
+File "shape_subtyping_7.php", line 14, character 35 - line 14, character 36:
+
  13 | ): void {
  14 |   expects_required_a_at_int_alias(»$s«);
  15 | }
 
-File "shape_subtyping_7.php", line 14, character 35 - line 14, character 36:
-
 The field `b` is missing
+
+File "shape_subtyping_7.php", line 7, character 3 - line 7, character 19:
 
  3 | type required_a_at_int = shape('a' => int);
  4 | type missing_a = shape('b' => int);
@@ -18,9 +18,9 @@ The field `b` is missing
  8 | ): void {
  9 | }
 
-File "shape_subtyping_7.php", line 7, character 3 - line 7, character 19:
-
 The field `b` is defined
+
+File "shape_subtyping_7.php", line 4, character 24 - line 4, character 26:
 
  3 | type required_a_at_int = shape('a' => int);
  4 | type missing_a = shape(»'b'« => int);
@@ -30,313 +30,185 @@ The field `b` is defined
  8 | ): void {
  9 | }
 
-File "shape_subtyping_7.php", line 4, character 24 - line 4, character 26:
-
-This error has 7 steps, a maximum depth of 2 and contains 1 reversal.
-
-Here's why: this hint
-
- 3 | type required_a_at_int = shape('a' => int);
- 4 | type missing_a = shape('b' => »int«);
- 5 | 
- 6 | function expects_required_a_at_int_alias(
- 7 |   required_a_at_int $s,
- 8 | ): void {
- 9 | }
-
-File "shape_subtyping_7.php", line 4, character 31 - line 4, character 33:
-
-flows up into this hint as the required shape field `'b'`
-
- 11 | function passes_missing_a_alias(
- 12 |   »missing_a« $s,
- 13 | ): void {
- 14 |   expects_required_a_at_int_alias($s);
- 15 | }
-
-File "shape_subtyping_7.php", line 12, character 3 - line 12, character 11:
-
-which itself flows into this expression because it is a parameter hint
-
- 11 | function passes_missing_a_alias(
- 12 |   missing_a »$s«,
- 13 | ): void {
- 14 |   expects_required_a_at_int_alias($s);
- 15 | }
-
-File "shape_subtyping_7.php", line 12, character 13 - line 12, character 14:
-
-which itself flows into this expression because the local variable has this type
-
- 11 | function passes_missing_a_alias(
- 12 |   missing_a $s,
- 13 | ): void {
- 14 |   expects_required_a_at_int_alias(»$s«);
- 15 | }
-
-File "shape_subtyping_7.php", line 14, character 35 - line 14, character 36:
-
-which itself flows up into this expression as the 1st function parameter
-
- 11 | function passes_missing_a_alias(
- 12 |   missing_a $s,
- 13 | ): void {
- 14 |   »expects_required_a_at_int_alias($s)«;
- 15 | }
-
-File "shape_subtyping_7.php", line 14, character 3 - line 14, character 37:
-
-which itself flows from this function or method  because they are required to be subtypes
-
- 3 | type required_a_at_int = shape('a' => int);
- 4 | type missing_a = shape('b' => int);
- 5 | 
- 6 | function »expects_required_a_at_int_alias«(
- 7 |   required_a_at_int $s,
- 8 | ): void {
- 9 | }
-
-File "shape_subtyping_7.php", line 6, character 10 - line 6, character 40:
-
-which itself flows down into this hint as the 1st function parameter
-
- 3 | type required_a_at_int = shape('a' => int);
- 4 | type missing_a = shape('b' => int);
- 5 | 
- 6 | function expects_required_a_at_int_alias(
- 7 |   »required_a_at_int« $s,
- 8 | ): void {
- 9 | }
-
-File "shape_subtyping_7.php", line 7, character 3 - line 7, character 19:
-
-which itself flows down into no type since the shape field `'b'` is not defined
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-Raw:
-[
-  {
-    "Hint":[{"filename":"shape_subtyping_7.php","line":4,"char_start":31,"char_end":33}]
-  },
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{" Prj_symm_shape":["b",{"Required":[]},{"Absent":[]}]}]},
-      [
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":4,"char_start":6,"char_end":14},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
-              }
-            ]
-          ]
-        },
-        "Flow_param_hint",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
-        },
-        "Flow_local",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
-        },
-        "Flow_prj",
-        {
-          "Prj":[
-            {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-            [
-              {
-                "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
-              },
-              "Flow_subtype",
-              {
-                "Rev":[
-                  [
-                    {
-                      "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
-                    }
-                  ]
-                ]
-              }
-            ]
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":3,"char_start":6,"char_end":22},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
-              }
-            ]
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {"Missing_field":[]}
-]
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-Normalised:
-[
-  {
-    "Hint":[{"filename":"shape_subtyping_7.php","line":4,"char_start":31,"char_end":33}]
-  },
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{" Prj_symm_shape":["b",{"Required":[]},{"Absent":[]}]}]},
-      [
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":4,"char_start":6,"char_end":14},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
-              }
-            ]
-          ]
-        },
-        "Flow_param_hint",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
-        },
-        "Flow_local",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
-        },
-        "Flow_prj",
-        {
-          "Prj":[
-            {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-            [
-              {
-                "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
-              },
-              "Flow_subtype",
-              {
-                "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
-              }
-            ]
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":3,"char_start":6,"char_end":22},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
-              }
-            ]
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {"Missing_field":[]}
-]
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-Path:
+Derivation:
 {
-  "stats":{"max_depth":2,"length":7,"reversals":1},
-  "path_elems":[
-    [
-      {
-        "Hint":[{"filename":"shape_subtyping_7.php","line":4,"char_start":31,"char_end":33}]
-      }
-    ],
+  "Derivation":[
     {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_prj",
-        "in_to":{"Symm":[{" Prj_symm_shape":["b",{"Required":[]},{"Absent":[]}]}]}
-      }
-    },
-    [
-      {
-        "Def":[
-          {"filename":"shape_subtyping_7.php","line":4,"char_start":6,"char_end":14},
-          [
-            {
-              "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
-            }
-          ]
+      "Begin":{
+        "sub":[
+          {
+            "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
+          }
+        ],
+        "super":[
+          {
+            "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
+          }
         ]
       }
-    ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_param_hint"}},
-    [
-      {
-        "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
-      }
-    ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_local"}},
-    [
-      {
-        "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
-      }
-    ],
-    {
-      "Edge":{"dir":"Fwd","kind":"Flow_prj","in_to":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}}
     },
-    [
-      {
-        "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
-      }
-    ],
-    {"Edge":{"dir":"Bwd","kind":"Flow_subtype"}},
-    [
-      {
-        "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
-      }
-    ],
     {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_subtype",
-        "out_of":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}
-      }
-    },
-    [
-      {
-        "Def":[
-          {"filename":"shape_subtyping_7.php","line":3,"char_start":6,"char_end":22},
-          [
-            {
-              "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
+      "Step":{
+        "rule":{"Using_prj":{"Prj_symm_fn_param":[0,0]}},
+        "on_":"Both",
+        "sub":[
+          {
+            "Flow":{
+              "from":[
+                {
+                  "Def":[
+                    {"filename":"shape_subtyping_7.php","line":4,"char_start":18,"char_end":34},
+                    [
+                      {
+                        "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
+                      }
+                    ]
+                  ]
+                }
+              ],
+              "kind":"Flow_param_hint",
+              "into":[
+                {
+                  "Flow":{
+                    "from":[
+                      {
+                        "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
+                      }
+                    ],
+                    "kind":"Flow_local",
+                    "into":[
+                      {
+                        "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
+                      }
+                    ]
+                  }
+                }
+              ]
             }
-          ]
+          }
+        ],
+        "super":[
+          {
+            "Def":[
+              {"filename":"shape_subtyping_7.php","line":3,"char_start":26,"char_end":42},
+              [
+                {
+                  "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
+                }
+              ]
+            ]
+          }
         ]
       }
-    ],
-    {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_subtype_toplevel",
-        "out_of":{"Symm":[{" Prj_symm_shape":["b",{"Required":[]},{"Absent":[]}]}]}
-      }
     },
-    [{"Missing_field":[]}]
+    {
+      "Step":{
+        "rule":{"Using_prj":{" Prj_symm_shape":["b",{"Required":[]},{"Absent":[]}]}},
+        "on_":"Both",
+        "sub":[
+          {
+            "Hint":[{"filename":"shape_subtyping_7.php","line":4,"char_start":31,"char_end":33}]
+          }
+        ],
+        "super":[{"Missing_field":[]}]
+      }
+    }
   ]
 }
 
+File "", line 0, character 0 - line 0, character -1:
+
+
+Reason:
+{
+  "Subtype":{
+    "sub":[
+      {
+        "Prj_both":{
+          "sub_prj":[
+            {
+              "Hint":[{"filename":"shape_subtyping_7.php","line":4,"char_start":31,"char_end":33}]
+            }
+          ],
+          "prj":{" Prj_symm_shape":["b",{"Required":[]},{"Absent":[]}]},
+          "sub":[
+            {
+              "Prj_both":{
+                "sub_prj":[
+                  {
+                    "Flow":{
+                      "from":[
+                        {
+                          "Def":[
+                            {"filename":"shape_subtyping_7.php","line":4,"char_start":18,"char_end":34},
+                            [
+                              {
+                                "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
+                              }
+                            ]
+                          ]
+                        }
+                      ],
+                      "kind":"Flow_param_hint",
+                      "into":[
+                        {
+                          "Flow":{
+                            "from":[
+                              {
+                                "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
+                              }
+                            ],
+                            "kind":"Flow_local",
+                            "into":[
+                              {
+                                "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "prj":{"Prj_symm_fn_param":[0,0]},
+                "sub":[
+                  {
+                    "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
+                  }
+                ],
+                "super":[
+                  {
+                    "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
+                  }
+                ]
+              }
+            }
+          ],
+          "super":[
+            {
+              "Def":[
+                {"filename":"shape_subtyping_7.php","line":3,"char_start":26,"char_end":42},
+                [
+                  {
+                    "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "super":[{"Missing_field":[]}]
+  }
+}
 
 File "", line 0, character 0 - line 0, character -1:
 
+
 error: Typing[4057] Invalid argument
+
+File "shape_subtyping_7.php", line 14, character 35 - line 14, character 36:
 
  11 | function passes_missing_a_alias(
  12 |   missing_a $s,
@@ -344,9 +216,9 @@ error: Typing[4057] Invalid argument
  14 |   expects_required_a_at_int_alias(»$s«);
  15 | }
 
-File "shape_subtyping_7.php", line 14, character 35 - line 14, character 36:
-
 The field `a` is missing
+
+File "shape_subtyping_7.php", line 12, character 3 - line 12, character 11:
 
  11 | function passes_missing_a_alias(
  12 |   »missing_a« $s,
@@ -354,306 +226,187 @@ The field `a` is missing
  14 |   expects_required_a_at_int_alias($s);
  15 | }
 
-File "shape_subtyping_7.php", line 12, character 3 - line 12, character 11:
-
 The field `a` is defined
+
+File "shape_subtyping_7.php", line 3, character 32 - line 3, character 34:
 
  3 | type required_a_at_int = shape(»'a'« => int);
  4 | type missing_a = shape('b' => int);
 
-File "shape_subtyping_7.php", line 3, character 32 - line 3, character 34:
-
-This error has 7 steps, a maximum depth of 2 and contains 1 reversal.
-
-Here's why: no type
-
+Derivation:
+{
+  "Derivation":[
+    {
+      "Begin":{
+        "sub":[
+          {
+            "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
+          }
+        ],
+        "super":[
+          {
+            "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
+          }
+        ]
+      }
+    },
+    {
+      "Step":{
+        "rule":{"Using_prj":{"Prj_symm_fn_param":[0,0]}},
+        "on_":"Both",
+        "sub":[
+          {
+            "Flow":{
+              "from":[
+                {
+                  "Def":[
+                    {"filename":"shape_subtyping_7.php","line":4,"char_start":18,"char_end":34},
+                    [
+                      {
+                        "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
+                      }
+                    ]
+                  ]
+                }
+              ],
+              "kind":"Flow_param_hint",
+              "into":[
+                {
+                  "Flow":{
+                    "from":[
+                      {
+                        "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
+                      }
+                    ],
+                    "kind":"Flow_local",
+                    "into":[
+                      {
+                        "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "super":[
+          {
+            "Def":[
+              {"filename":"shape_subtyping_7.php","line":3,"char_start":26,"char_end":42},
+              [
+                {
+                  "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
+                }
+              ]
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Step":{
+        "rule":{"Using_prj":{" Prj_symm_shape":["a",{"Absent":[]},{"Required":[]}]}},
+        "on_":"Both",
+        "sub":[{"Missing_field":[]}],
+        "super":[
+          {
+            "Hint":[{"filename":"shape_subtyping_7.php","line":3,"char_start":39,"char_end":41}]
+          }
+        ]
+      }
+    }
+  ]
+}
 
 File "", line 0, character 0 - line 0, character -1:
 
-flows up into this hint since the shape field `'a'` is not defined
 
- 11 | function passes_missing_a_alias(
- 12 |   »missing_a« $s,
- 13 | ): void {
- 14 |   expects_required_a_at_int_alias($s);
- 15 | }
-
-File "shape_subtyping_7.php", line 12, character 3 - line 12, character 11:
-
-which itself flows into this expression because it is a parameter hint
-
- 11 | function passes_missing_a_alias(
- 12 |   missing_a »$s«,
- 13 | ): void {
- 14 |   expects_required_a_at_int_alias($s);
- 15 | }
-
-File "shape_subtyping_7.php", line 12, character 13 - line 12, character 14:
-
-which itself flows into this expression because the local variable has this type
-
- 11 | function passes_missing_a_alias(
- 12 |   missing_a $s,
- 13 | ): void {
- 14 |   expects_required_a_at_int_alias(»$s«);
- 15 | }
-
-File "shape_subtyping_7.php", line 14, character 35 - line 14, character 36:
-
-which itself flows up into this expression as the 1st function parameter
-
- 11 | function passes_missing_a_alias(
- 12 |   missing_a $s,
- 13 | ): void {
- 14 |   »expects_required_a_at_int_alias($s)«;
- 15 | }
-
-File "shape_subtyping_7.php", line 14, character 3 - line 14, character 37:
-
-which itself flows from this function or method  because they are required to be subtypes
-
- 6 | function »expects_required_a_at_int_alias«(
- 7 |   required_a_at_int $s,
- 8 | ): void {
- 9 | }
-
-File "shape_subtyping_7.php", line 6, character 10 - line 6, character 40:
-
-which itself flows down into this hint as the 1st function parameter
-
- 6 | function expects_required_a_at_int_alias(
- 7 |   »required_a_at_int« $s,
- 8 | ): void {
- 9 | }
-
-File "shape_subtyping_7.php", line 7, character 3 - line 7, character 19:
-
-which itself flows down into this hint as the required shape field `'a'`
-
- 3 | type required_a_at_int = shape('a' => »int«);
- 4 | type missing_a = shape('b' => int);
-
-File "shape_subtyping_7.php", line 3, character 39 - line 3, character 41:
-
-Raw:
-[
-  {"Missing_field":[]},
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{" Prj_symm_shape":["a",{"Absent":[]},{"Required":[]}]}]},
-      [
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":4,"char_start":6,"char_end":14},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
-              }
-            ]
-          ]
-        },
-        "Flow_param_hint",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
-        },
-        "Flow_local",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
-        },
-        "Flow_prj",
-        {
-          "Prj":[
-            {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-            [
-              {
-                "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
-              },
-              "Flow_subtype",
-              {
-                "Rev":[
-                  [
-                    {
-                      "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
+Reason:
+{
+  "Subtype":{
+    "sub":[
+      {
+        "Prj_both":{
+          "sub_prj":[{"Missing_field":[]}],
+          "prj":{" Prj_symm_shape":["a",{"Absent":[]},{"Required":[]}]},
+          "sub":[
+            {
+              "Prj_both":{
+                "sub_prj":[
+                  {
+                    "Flow":{
+                      "from":[
+                        {
+                          "Def":[
+                            {"filename":"shape_subtyping_7.php","line":4,"char_start":18,"char_end":34},
+                            [
+                              {
+                                "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
+                              }
+                            ]
+                          ]
+                        }
+                      ],
+                      "kind":"Flow_param_hint",
+                      "into":[
+                        {
+                          "Flow":{
+                            "from":[
+                              {
+                                "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
+                              }
+                            ],
+                            "kind":"Flow_local",
+                            "into":[
+                              {
+                                "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
+                              }
+                            ]
+                          }
+                        }
+                      ]
                     }
-                  ]
+                  }
+                ],
+                "prj":{"Prj_symm_fn_param":[0,0]},
+                "sub":[
+                  {
+                    "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
+                  }
+                ],
+                "super":[
+                  {
+                    "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
+                  }
                 ]
               }
-            ]
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":3,"char_start":6,"char_end":22},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
-              }
-            ]
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {
-    "Hint":[{"filename":"shape_subtyping_7.php","line":3,"char_start":39,"char_end":41}]
-  }
-]
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-Normalised:
-[
-  {"Missing_field":[]},
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{" Prj_symm_shape":["a",{"Absent":[]},{"Required":[]}]}]},
-      [
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":4,"char_start":6,"char_end":14},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
-              }
-            ]
-          ]
-        },
-        "Flow_param_hint",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
-        },
-        "Flow_local",
-        {
-          "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
-        },
-        "Flow_prj",
-        {
-          "Prj":[
-            {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-            [
-              {
-                "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
-              },
-              "Flow_subtype",
-              {
-                "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
-              }
-            ]
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Def":[
-            {"filename":"shape_subtyping_7.php","line":3,"char_start":6,"char_end":22},
-            [
-              {
-                "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
-              }
-            ]
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {
-    "Hint":[{"filename":"shape_subtyping_7.php","line":3,"char_start":39,"char_end":41}]
-  }
-]
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-Path:
-{
-  "stats":{"max_depth":2,"length":7,"reversals":1},
-  "path_elems":[
-    [{"Missing_field":[]}],
-    {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_prj",
-        "in_to":{"Symm":[{" Prj_symm_shape":["a",{"Absent":[]},{"Required":[]}]}]}
-      }
-    },
-    [
-      {
-        "Def":[
-          {"filename":"shape_subtyping_7.php","line":4,"char_start":6,"char_end":14},
-          [
+            }
+          ],
+          "super":[
             {
-              "Hint":[{"filename":"shape_subtyping_7.php","line":12,"char_start":3,"char_end":11}]
+              "Def":[
+                {"filename":"shape_subtyping_7.php","line":3,"char_start":26,"char_end":42},
+                [
+                  {
+                    "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
+                  }
+                ]
+              ]
             }
           ]
-        ]
+        }
       }
     ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_param_hint"}},
-    [
-      {
-        "Witness":[{"filename":"shape_subtyping_7.php","line":12,"char_start":13,"char_end":14}]
-      }
-    ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_local"}},
-    [
-      {
-        "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":35,"char_end":36}]
-      }
-    ],
-    {
-      "Edge":{"dir":"Fwd","kind":"Flow_prj","in_to":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}}
-    },
-    [
-      {
-        "Witness":[{"filename":"shape_subtyping_7.php","line":14,"char_start":3,"char_end":37}]
-      }
-    ],
-    {"Edge":{"dir":"Bwd","kind":"Flow_subtype"}},
-    [
-      {
-        "Support_dynamic_type":[{"filename":"shape_subtyping_7.php","line":6,"char_start":10,"char_end":40}]
-      }
-    ],
-    {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_subtype",
-        "out_of":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}
-      }
-    },
-    [
-      {
-        "Def":[
-          {"filename":"shape_subtyping_7.php","line":3,"char_start":6,"char_end":22},
-          [
-            {
-              "Hint":[{"filename":"shape_subtyping_7.php","line":7,"char_start":3,"char_end":19}]
-            }
-          ]
-        ]
-      }
-    ],
-    {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_subtype_toplevel",
-        "out_of":{"Symm":[{" Prj_symm_shape":["a",{"Absent":[]},{"Required":[]}]}]}
-      }
-    },
-    [
+    "super":[
       {
         "Hint":[{"filename":"shape_subtyping_7.php","line":3,"char_start":39,"char_end":41}]
       }
     ]
-  ]
+  }
 }
-
 
 File "", line 0, character 0 - line 0, character -1:
 
-2 errors found.
+
+2 errors found

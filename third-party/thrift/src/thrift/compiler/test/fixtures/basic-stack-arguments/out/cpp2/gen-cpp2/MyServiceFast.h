@@ -42,6 +42,7 @@ class ServiceHandler<::cpp2::MyServiceFast> : public apache::thrift::ServerInter
   typedef ::cpp2::MyServiceFastAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -59,6 +60,7 @@ class ServiceHandler<::cpp2::MyServiceFast> : public apache::thrift::ServerInter
 namespace cpp2 {
 using MyServiceFastSvIf [[deprecated("Use apache::thrift::ServiceHandler<MyServiceFast> instead")]] = ::apache::thrift::ServiceHandler<MyServiceFast>;
 } // namespace cpp2
+
 namespace cpp2 {
 class MyServiceFastSvNull : public ::apache::thrift::ServiceHandler<MyServiceFast> {
  public:

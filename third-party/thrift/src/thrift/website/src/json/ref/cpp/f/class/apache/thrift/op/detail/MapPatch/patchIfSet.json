@@ -15,6 +15,7 @@
       "definition_html": "void apache::thrift::op::detail::MapPatch&lt; Patch &gt;::patchIfSet",
       "argsstring_html": "(const P &amp;patches)",
       "name_html": "patchIfSet",
+      "qualifiedname_html": "apache::thrift::op::detail::MapPatch::patchIfSet",
       "param": [
         {
           "type_html": "const P &amp;",
@@ -23,11 +24,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "line": "454",
+        "line": "455",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/ContainerPatch.h",
-        "bodystart": "454",
-        "bodyend": "458"
+        "bodystart": "455",
+        "bodyend": "459"
       },
       "definition": {
         "simple_html": "void patchIfSet(const P&amp; patches)",

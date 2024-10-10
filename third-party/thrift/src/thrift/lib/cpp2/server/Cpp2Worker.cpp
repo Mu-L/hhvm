@@ -27,7 +27,6 @@
 #include <folly/io/async/EventBaseLocal.h>
 #include <folly/io/async/fdsock/AsyncFdSocket.h>
 #include <folly/portability/Sockets.h>
-#include <thrift/lib/cpp/async/TAsyncSSLSocket.h>
 #include <thrift/lib/cpp/concurrency/Util.h>
 #include <thrift/lib/cpp2/Flags.h>
 #include <thrift/lib/cpp2/async/ResponseChannel.h>
@@ -45,8 +44,7 @@
 // workloads that rely on passing FDs over Unix sockets + Thrift.
 THRIFT_FLAG_DEFINE_bool(enable_server_async_fd_socket, /* default = */ true);
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 namespace {
 folly::LeakySingleton<folly::EventBaseLocal<RequestsRegistry>> registry;
@@ -601,9 +599,7 @@ void Cpp2Worker::dispatchRequest(
         }
       } else if (
           // wildcard metadata do not specify rpcKind
-          (found->metadata.rpcKind ||
-           (found->metadata.isWildcard() &&
-            THRIFT_FLAG(allow_wildcard_process_via_execute_request))) &&
+          (found->metadata.rpcKind || found->metadata.isWildcard()) &&
           // executorType is defaulted to UNKNOWN for wildcard metadata
           // so only processors that implement createMethodMetadata can
           // pass this test
@@ -663,5 +659,4 @@ const std::string& Cpp2Worker::errorCodeFromTapplicationException(
   }
 }
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

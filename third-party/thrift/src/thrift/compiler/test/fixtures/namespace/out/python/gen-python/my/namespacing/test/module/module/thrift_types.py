@@ -24,6 +24,7 @@ class Foo(metaclass=_fbthrift_python_types.StructMeta):
             None,  # default value
             None,  # adapter info
             True, # field type is primitive
+            5, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -87,6 +88,7 @@ class _fbthrift_TestService_init_args(metaclass=_fbthrift_python_types.StructMet
             None,  # default value
             None,  # adapter info
             True, # field type is primitive
+            5, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -110,5 +112,4 @@ class _fbthrift_TestService_init_result(metaclass=_fbthrift_python_types.StructM
 _fbthrift_python_types.fill_specs(
     _fbthrift_TestService_init_args,
     _fbthrift_TestService_init_result,
-    
 )

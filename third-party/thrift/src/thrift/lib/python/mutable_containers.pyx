@@ -22,6 +22,7 @@ from collections.abc import (
     Set
 )
 from cpython.object cimport Py_LT, Py_EQ, PyCallable_Check
+import copy
 import itertools
 
 from thrift.python.types cimport (
@@ -131,6 +132,12 @@ cdef class MutableList:
         lst.extend(other)
         return lst
 
+    def __deepcopy__(self, memo):
+        return MutableList(self._val_typeinfo, copy.deepcopy(self._list_data, memo))
+
+    def __reduce__(self):
+        return (MutableList, (self._val_typeinfo, self._list_data))
+
     def count(self, value):
         try:
             internal_value = self._val_typeinfo.to_internal_data(value)
@@ -160,7 +167,6 @@ cdef class MutableSet:
     the [`MutableSet` abstract base class](https://docs.python.org/3.10/library/collections.abc.html#collections-abstract-base-classes).
     base class
     """
-    # DO_BEFORE(alperyoney,20240603): Implement missing methods from abstract
 
     def __cinit__(MutableSet self, TypeInfoBase value_typeinfo, set set_data):
         """
@@ -188,6 +194,50 @@ cdef class MutableSet:
 
     def __len__(MutableSet self):
         return len(self._set_data)
+
+    def __le__(MutableSet self, other):
+        if self._is_same_type_of_set(other):
+            return self._set_data <= (<MutableSet>other)._set_data
+
+        if not isinstance(other, Set):
+            return NotImplemented
+
+        if len(self) > len(other):
+            return False
+
+        for elem in self:
+            if elem not in other:
+                return False
+
+        return True
+
+    def __lt__(MutableSet self, other):
+        if not isinstance(other, Set):
+            return NotImplemented
+
+        return len(self) < len(other) and self <= other
+
+    def __ge__(MutableSet self, other):
+        if self._is_same_type_of_set(other):
+            return self._set_data >= (<MutableSet>other)._set_data
+
+        if not isinstance(other, Set):
+            return NotImplemented
+
+        if len(self) < len(other):
+            return False
+
+        for elem in other:
+            if elem not in self:
+                return False
+
+        return True
+
+    def __gt__(MutableSet self, other):
+        if not isinstance(other, Set):
+            return NotImplemented
+
+        return len(self) > len(other) and self >= other
 
     def isdisjoint(MutableSet self, other):
         if self._is_same_type_of_set(other):
@@ -219,6 +269,16 @@ cdef class MutableSet:
 
         return MutableSet(self._val_typeinfo, type_checked_set)
 
+    def __iand__(MutableSet self, other):
+        if self._is_same_type_of_set(other):
+            self._set_data &= (<MutableSet>other)._set_data
+            return self
+
+        for value in (self - other):
+            self.discard(value)
+
+        return self
+
     def __or__(MutableSet self, other):
         if self._is_same_type_of_set(other):
             result_set_data = self._set_data | (<MutableSet>other)._set_data
@@ -232,6 +292,16 @@ cdef class MutableSet:
             result_set.add(value)
 
         return result_set
+
+    def __ior__(MutableSet self, other):
+        if self._is_same_type_of_set(other):
+            self._set_data |= (<MutableSet>other)._set_data
+            return self
+
+        for value in other:
+            self.add(value)
+
+        return self
 
     def __sub__(MutableSet self, other):
         if self._is_same_type_of_set(other):
@@ -250,6 +320,16 @@ cdef class MutableSet:
                                          (value for value in self._set_data
                                           if typeinfo.to_python_value(value) not in other))
 
+    def __isub__(MutableSet self, other):
+        if self._is_same_type_of_set(other):
+            self._set_data -= (<MutableSet>other)._set_data
+            return self
+
+        for value in other:
+            self.discard(value)
+
+        return self
+
     def __xor__(MutableSet self, other):
         if self._is_same_type_of_set(other):
             result_set_data = self._set_data ^ (<MutableSet>other)._set_data
@@ -260,6 +340,15 @@ cdef class MutableSet:
 
         other = MutableSet._from_iterable(self._val_typeinfo, set(), other)
         return (self - other) | (other - self)
+
+    def __ixor__(MutableSet self, other):
+        if self._is_same_type_of_set(other):
+            self._set_data ^= (<MutableSet>other)._set_data
+            return self
+
+        other = MutableSet._from_iterable(self._val_typeinfo, set(), other)
+        self._set_data ^= (<MutableSet>other)._set_data
+        return self
 
     def __eq__(MutableSet self, other):
         if self is other:
@@ -280,6 +369,12 @@ cdef class MutableSet:
                 return False
 
         return True
+
+    def __deepcopy__(self, memo):
+        return MutableSet(self._val_typeinfo, copy.deepcopy(self._set_data, memo))
+
+    def __reduce__(self):
+        return (MutableSet, (self._val_typeinfo, self._set_data))
 
     def union(MutableSet self, other):
         return self | other
@@ -326,6 +421,9 @@ cdef class MutableSet:
         Returns `True` if `other` is a `MutableSet` with the same
         `_val_typeinfo` as `self`, `False` otherwise.
         """
+        if self is other:
+            return True
+
         if not isinstance(other, MutableSet):
             return False
 
@@ -353,7 +451,6 @@ cdef class MutableMap:
     the [`MutableMap` abstract base class](https://docs.python.org/3.10/library/collections.abc.html#collections-abstract-base-classes).
     """
 
-    # DO_BEFORE(alperyoney,20240617): Implement missing methods from abstract
     def __cinit__(MutableSet self, TypeInfoBase key_typeinfo, TypeInfoBase value_typeinfo, dict map_data not None):
         """
         map_data: It should contain valid elements. Any invalid elements within
@@ -409,6 +506,29 @@ cdef class MutableMap:
         internal_key = self._key_typeinfo.to_internal_data(key)
         return internal_key in self._map_data
 
+    def __reduce__(self):
+        return (MutableMap, (self._key_typeinfo, self._val_typeinfo, self._map_data))
+
+    __sentinel = object()
+
+    def pop(self, key, default=__sentinel):
+        try:
+            internal_key = self._key_typeinfo.to_internal_data(key)
+            return self._val_typeinfo.to_python_value(self._map_data.pop(internal_key))
+        except (TypeError, KeyError):
+            if default is self.__sentinel:
+                raise KeyError(f"{key}")
+            return default
+
+    def popitem(self):
+        """
+        Remove and return a (key, value) pair from the dictionary. Pairs are returned in LIFO order.
+        Changed in version Python 3.7: LIFO order is now guaranteed.
+        In prior versions, popitem() would return an arbitrary key/value pair.
+        """
+        k, v = self._map_data.popitem()
+        return self._key_typeinfo.to_python_value(k), self._val_typeinfo.to_python_value(v)
+
     def clear(self):
         self._map_data.clear()
 
@@ -421,10 +541,46 @@ cdef class MutableMap:
     def values(self):
         return MapValuesView(self._val_typeinfo, self._map_data.values())
 
+    def setdefault(self, key, default=None):
+        internal_key = self._key_typeinfo.to_internal_data(key)
+        internal_default = self._val_typeinfo.to_internal_data(default)
+        return self._val_typeinfo.to_python_value(
+                    self._map_data.setdefault(internal_key, internal_default))
+
+    def update(self, other=(), /, **keywords):
+        """
+        Update MutableMap from mapping/iterable other and keywords
+        """
+        if self._is_same_type_of_map(other):
+            self._map_data.update(<MutableMap>other._map_data)
+        elif isinstance(other, Mapping):
+            for key in other:
+                self[key] = other[key]
+        elif hasattr(other, "keys"):
+            for key in other.keys():
+                self[key] = other[key]
+        else:
+            for key, value in other:
+                self[key] = value
+
+        for key, value in keywords.items():
+            self[key] = value
+
     def __setitem__(self, key, value):
         internal_key = self._key_typeinfo.to_internal_data(key)
         internal_value = self._val_typeinfo.to_internal_data(value)
         self._map_data[internal_key] = internal_value
+
+    def __delitem__(self, key):
+        try:
+            internal_key = self._key_typeinfo.to_internal_data(key)
+        except TypeError:
+            raise KeyError(f"{key}")
+
+        del self._map_data[internal_key]
+
+    def __deepcopy__(self, memo):
+        return MutableMap(self._key_typeinfo, self._val_typeinfo, copy.deepcopy(self._map_data, memo))
 
     def _is_same_type_of_map(MutableMap self, other):
         """
@@ -436,6 +592,11 @@ cdef class MutableMap:
 
         return (self._key_typeinfo.same_as((<MutableMap>other)._key_typeinfo)
             and self._val_typeinfo.same_as((<MutableMap>other)._val_typeinfo))
+
+    def __repr__(self):
+        if not self:
+            return 'i{}'
+        return f'i{{{", ".join(map(lambda i: f"{repr(i[0])}: {repr(i[1])}", self.items()))}}}'
 
 
 MutableMapping.register(MutableMap)

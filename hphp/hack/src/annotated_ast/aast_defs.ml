@@ -46,7 +46,6 @@ type typedef_visibility = Ast_defs.typedef_visibility =
   | Transparent
   | Opaque
   | OpaqueModule
-  | CaseType
 [@@deriving eq, hash, ord, show { with_path = false }] [@@transform.opaque]
 
 type reify_kind = Ast_defs.reify_kind =
@@ -822,6 +821,7 @@ and ('ex, 'en) fun_param = {
   param_name: string;
   param_info: ('ex, 'en) fun_param_info;
   param_readonly: Ast_defs.readonly_kind option; [@transform.opaque]
+  param_splat: Ast_defs.splat_kind option; [@transform.opaque]
   param_callconv: Ast_defs.param_kind; [@transform.opaque]
   param_user_attributes: ('ex, 'en) user_attributes;
   param_visibility: visibility option; [@transform.opaque]
@@ -1079,18 +1079,33 @@ and ('ex, 'en) method_ = {
 
 and nsenv = (Namespace_env.env[@visitors.opaque]) [@@transform.opaque]
 
+and typedef_visibility_and_hint = {
+  tvh_vis: typedef_visibility; [@transform.opaque]
+  tvh_hint: hint; [@transform.explicit]
+}
+
+and typedef_case_type_variant = {
+  tctv_hint: hint;
+  tctv_where_constraints: where_constraint_hint list;
+}
+
+and typedef_assignment =
+  | SimpleTypeDef of typedef_visibility_and_hint
+  | CaseType of typedef_case_type_variant * typedef_case_type_variant list
+
 and ('ex, 'en) typedef = {
   t_annotation: 'en;
   t_name: sid;
   t_tparams: ('ex, 'en) tparam list;
   t_as_constraint: hint option;
   t_super_constraint: hint option;
-  t_kind: hint; [@transform.explicit]
-      (** The RHS of `=` in the type definition. *)
+  t_assignment: typedef_assignment;
+      (** The visibility and RHS of `=` in the type definition. *)
+  t_runtime_type: hint;
+      (** Always a single type -- excludes where clauses for case types *)
   t_user_attributes: ('ex, 'en) user_attributes;
   t_file_attributes: ('ex, 'en) file_attribute list;
   t_mode: FileInfo.mode; [@visitors.opaque] [@transform.opaque]
-  t_vis: typedef_visibility; [@transform.opaque]
   t_namespace: nsenv;
   t_span: pos; [@transform.opaque]
   t_emit_id: emit_id option;
@@ -1153,6 +1168,8 @@ and ('ex, 'en) def =
   | NamespaceUse of (ns_kind * sid * sid) list
   | SetNamespaceEnv of nsenv
   | FileAttributes of ('ex, 'en) file_attribute
+      (** NB: these are only there at the AAST level.
+        From NAST onwards, they've been copied to each top-level def and discarded. *)
   | Module of ('ex, 'en) module_def
   | SetModule of sid
 
@@ -1199,6 +1216,7 @@ and hf_param_info = {
   hfparam_kind: Ast_defs.param_kind;
   hfparam_readonlyness: Ast_defs.readonly_kind option;
   hfparam_optional: Ast_defs.optional_kind option;
+  hfparam_splat: Ast_defs.splat_kind option;
 }
 [@@transform.opaque]
 
@@ -1221,7 +1239,7 @@ and hint_ =
   | Hoption of hint
   | Hlike of hint
   | Hfun of hint_fun
-  | Htuple of hint list
+  | Htuple of tuple_info
   | Hclass_args of hint
   | Hshape of nast_shape_info
   | Haccess of hint * sid list
@@ -1249,6 +1267,7 @@ and hint_ =
   | Hwildcard
   | Hnonnull
   | Habstr of string * hint list
+      (** A type parameter *)
   | Hvec_or_dict of hint option * hint
   | Hthis
   | Hdynamic
@@ -1290,6 +1309,20 @@ and nast_shape_info = {
   nsi_allows_unknown_fields: bool;
   nsi_field_map: shape_field_info list;
 }
+
+and tuple_info = {
+  tup_required: hint list;
+  tup_extra: tuple_extra;
+}
+
+and tuple_extra_info = {
+  tup_optional: hint list;
+  tup_variadic: hint option;
+}
+
+and tuple_extra =
+  | Hextra of tuple_extra_info
+  | Hsplat of hint
 
 and kvc_kind =
   | Map

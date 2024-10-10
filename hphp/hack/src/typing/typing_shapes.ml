@@ -360,7 +360,10 @@ let idx_without_default env ~expr_pos ~shape_pos shape_ty field_name =
     ((env, ty_err_opt), res)
   in
   Option.iter ty_err_opt ~f:(Typing_error_utils.add_typing_error ~env);
-  match get_node (TUtils.strip_dynamic env shape_ty) with
+  let (env, stripped_shape_ty) =
+    Typing_dynamic_utils.strip_dynamic env shape_ty
+  in
+  match get_node stripped_shape_ty with
   | Tnewtype (n, _, _)
     when String.equal n Naming_special_names.Classes.cSupportDyn ->
     let r = get_reason shape_ty in
@@ -387,7 +390,7 @@ let to_collection env pos shape_ty res return_type =
             let (env, keys) =
               List.map_env env keys ~f:(fun env key ->
                   match key with
-                  | Typing_defs.TSFlit_int (p, _) ->
+                  | Typing_defs.TSFregex_group (p, _) ->
                     (env, MakeType.int (Reason.witness_from_decl p))
                   | Typing_defs.TSFlit_str (p, _) ->
                     (env, MakeType.string (Reason.witness_from_decl p))
@@ -483,8 +486,9 @@ let to_dict env pos shape_ty res =
       (env, MakeType.dict r key value))
 
 let shape_field_pos = function
-  | Ast_defs.SFlit_int (p, _)
-  | Ast_defs.SFlit_str (p, _) ->
+  | Ast_defs.SFregex_group (p, _)
+  | Ast_defs.SFlit_str (p, _)
+  | Ast_defs.SFclassname (p, _) ->
     p
   | Ast_defs.SFclass_const ((cls_pos, _), (mem_pos, _)) ->
     Pos.btw cls_pos mem_pos
@@ -496,7 +500,7 @@ let check_shape_keys_validity env keys =
     (* Empty strings or literals that start with numbers are not
          permitted as shape field names. *)
     match key with
-    | Ast_defs.SFlit_int _ -> (env, key_pos, None)
+    | Ast_defs.SFregex_group _ -> (env, key_pos, None)
     | Ast_defs.SFlit_str (_, key_name) ->
       (if Int.equal 0 (String.length key_name) then
         Typing_error_utils.add_typing_error ~env
@@ -505,6 +509,7 @@ let check_shape_keys_validity env keys =
              @@ Primary.Shape.Invalid_shape_field_name
                   { pos = key_pos; is_empty = true }));
       (env, key_pos, None)
+    | Ast_defs.SFclassname (_, _cls) -> (env, key_pos, None)
     | Ast_defs.SFclass_const ((_p, cls), (p, y)) -> begin
       match Env.get_class env cls with
       | Decl_entry.DoesNotExist

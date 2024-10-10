@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<7c9d5041978c1a0ca367241ee6a507af>>
+// @generated SignedSource<<246c9a0a03c9af934f72620470fed7b2>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -1402,6 +1402,8 @@ pub struct FunParam<Ex, En> {
     #[rust_to_ocaml(attr = "transform.opaque")]
     pub readonly: Option<ast_defs::ReadonlyKind>,
     #[rust_to_ocaml(attr = "transform.opaque")]
+    pub splat: Option<ast_defs::SplatKind>,
+    #[rust_to_ocaml(attr = "transform.opaque")]
     pub callconv: ast_defs::ParamKind,
     pub user_attributes: UserAttributes<Ex, En>,
     #[rust_to_ocaml(attr = "transform.opaque")]
@@ -2142,6 +2144,73 @@ pub type Nsenv = std::sync::Arc<namespace_env::Env>;
     ToOcamlRep
 )]
 #[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tvh_")]
+#[repr(C)]
+pub struct TypedefVisibilityAndHint {
+    #[rust_to_ocaml(attr = "transform.opaque")]
+    pub vis: TypedefVisibility,
+    #[rust_to_ocaml(attr = "transform.explicit")]
+    pub hint: Hint,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tctv_")]
+#[repr(C)]
+pub struct TypedefCaseTypeVariant {
+    pub hint: Hint,
+    pub where_constraints: Vec<WhereConstraintHint>,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C, u8)]
+pub enum TypedefAssignment {
+    SimpleTypeDef(TypedefVisibilityAndHint),
+    CaseType(TypedefCaseTypeVariant, Vec<TypedefCaseTypeVariant>),
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
 #[rust_to_ocaml(prefix = "t_")]
 #[repr(C)]
 pub struct Typedef<Ex, En> {
@@ -2150,16 +2219,15 @@ pub struct Typedef<Ex, En> {
     pub tparams: Vec<Tparam<Ex, En>>,
     pub as_constraint: Option<Hint>,
     pub super_constraint: Option<Hint>,
-    /// The RHS of `=` in the type definition.
-    #[rust_to_ocaml(attr = "transform.explicit")]
-    pub kind: Hint,
+    /// The visibility and RHS of `=` in the type definition.
+    pub assignment: TypedefAssignment,
+    /// Always a single type -- excludes where clauses for case types
+    pub runtime_type: Hint,
     pub user_attributes: UserAttributes<Ex, En>,
     pub file_attributes: Vec<FileAttribute<Ex, En>>,
     #[rust_to_ocaml(attr = "visitors.opaque")]
     #[rust_to_ocaml(attr = "transform.opaque")]
     pub mode: file_info::Mode,
-    #[rust_to_ocaml(attr = "transform.opaque")]
-    pub vis: TypedefVisibility,
     pub namespace: Nsenv,
     #[rust_to_ocaml(attr = "transform.opaque")]
     pub span: Pos,
@@ -2317,6 +2385,8 @@ pub enum Def<Ex, En> {
     Namespace(Box<(Sid, Vec<Def<Ex, En>>)>),
     NamespaceUse(Vec<(NsKind, Sid, Sid)>),
     SetNamespaceEnv(Box<Nsenv>),
+    /// NB: these are only there at the AAST level.
+    /// From NAST onwards, they've been copied to each top-level def and discarded.
     FileAttributes(Box<FileAttribute<Ex, En>>),
     Module(Box<ModuleDef<Ex, En>>),
     SetModule(Box<Sid>),
@@ -2515,6 +2585,7 @@ pub struct HfParamInfo {
     pub kind: ast_defs::ParamKind,
     pub readonlyness: Option<ast_defs::ReadonlyKind>,
     pub optional: Option<ast_defs::OptionalKind>,
+    pub splat: Option<ast_defs::SplatKind>,
 }
 
 #[derive(
@@ -2569,7 +2640,7 @@ pub enum Hint_ {
     Hoption(Hint),
     Hlike(Hint),
     Hfun(HintFun),
-    Htuple(Vec<Hint>),
+    Htuple(TupleInfo),
     #[rust_to_ocaml(name = "Hclass_args")]
     HclassArgs(Hint),
     Hshape(NastShapeInfo),
@@ -2595,6 +2666,7 @@ pub enum Hint_ {
     Hmixed,
     Hwildcard,
     Hnonnull,
+    /// A type parameter
     Habstr(String, Vec<Hint>),
     #[rust_to_ocaml(name = "Hvec_or_dict")]
     HvecOrDict(Option<Hint>, Hint),
@@ -2759,6 +2831,71 @@ pub struct ShapeFieldInfo {
 pub struct NastShapeInfo {
     pub allows_unknown_fields: bool,
     pub field_map: Vec<ShapeFieldInfo>,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tup_")]
+#[repr(C)]
+pub struct TupleInfo {
+    pub required: Vec<Hint>,
+    pub extra: TupleExtra,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[rust_to_ocaml(prefix = "tup_")]
+#[repr(C)]
+pub struct TupleExtraInfo {
+    pub optional: Vec<Hint>,
+    pub variadic: Option<Hint>,
+}
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(and)]
+#[repr(C, u8)]
+pub enum TupleExtra {
+    Hextra(TupleExtraInfo),
+    Hsplat(Hint),
 }
 
 #[derive(

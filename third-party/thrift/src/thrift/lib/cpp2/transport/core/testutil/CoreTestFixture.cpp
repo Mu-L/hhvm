@@ -23,8 +23,7 @@
 #include <thrift/lib/cpp2/protocol/Protocol.h>
 #include <thrift/lib/cpp2/server/Cpp2Worker.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 using namespace testutil::testservice;
 
@@ -48,9 +47,7 @@ std::unique_ptr<Cpp2ConnContext> CoreTestFixture::newCpp2ConnContext() {
       nullptr,
       nullptr,
       worker_.get(),
-      apache::thrift::detail::getServiceInterceptorsIfServerIsSetUp(
-          *worker_->getServer())
-          .size());
+      worker_->getServer()->getServiceInterceptors().size());
 }
 
 void CoreTestFixture::runInEventBaseThread(folly::Function<void()> test) {
@@ -125,5 +122,4 @@ bool CoreTestFixture::deserializeException(
   }
 }
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

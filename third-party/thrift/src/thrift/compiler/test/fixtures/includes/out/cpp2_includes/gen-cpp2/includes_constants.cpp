@@ -11,6 +11,7 @@
 
 #include "thrift/compiler/test/fixtures/includes/gen-cpp2/transitive_constants.h"
 
+
 namespace cpp2 {
 namespace includes_constants {
 
@@ -18,6 +19,8 @@ namespace includes_constants {
   static folly::Indestructible<::cpp2::Included> const instance{ ::apache::thrift::detail::make_structured_constant<::cpp2::Included>(::apache::thrift::detail::wrap_struct_argument<::apache::thrift::ident::MyIntField>(static_cast<::std::int64_t>(2)), ::apache::thrift::detail::wrap_struct_argument<::apache::thrift::ident::MyTransitiveField>(::cpp2::transitive_constants::ExampleFoo())) };
   return *instance;
 }
+
+
 
 
 } // namespace includes_constants

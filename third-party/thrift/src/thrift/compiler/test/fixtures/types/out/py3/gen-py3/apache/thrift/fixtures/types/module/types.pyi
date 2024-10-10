@@ -5,19 +5,15 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
 import apache.thrift.fixtures.types.included.types as _apache_thrift_fixtures_types_included_types
-
-
-__property__ = property
 
 
 class has_bitwise_ops(thrift.py3.types.Enum):
@@ -51,6 +47,7 @@ class empty_struct(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
 
+
     def __init__(
         self, 
     ) -> None: ...
@@ -77,7 +74,7 @@ class decorated_struct(thrift.py3.types.Struct, _typing.Hashable):
         field: bool
         pass
 
-    field: Final[str] = ...
+    field: _typing.Final[str] = ...
 
     def __init__(
         self, *,
@@ -86,7 +83,7 @@ class decorated_struct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field: _typing.Union[str, '__NotSet', None]=NOTSET
+        field: _typing.Union[str, None]=None
     ) -> decorated_struct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['decorated_struct'], bytes]]: ...
@@ -114,21 +111,14 @@ class ContainerStruct(thrift.py3.types.Struct, _typing.Hashable):
         fieldH: bool
         pass
 
-    fieldA: Final[_typing.Sequence[int]] = ...
-
-    fieldB: Final[_typing.Sequence[int]] = ...
-
-    fieldC: Final[_typing.Sequence[int]] = ...
-
-    fieldD: Final[_typing.Sequence[int]] = ...
-
-    fieldE: Final[_typing.Sequence[int]] = ...
-
-    fieldF: Final[_typing.AbstractSet[int]] = ...
-
-    fieldG: Final[_typing.Mapping[int, str]] = ...
-
-    fieldH: Final[_typing.Mapping[int, str]] = ...
+    fieldA: _typing.Final[_typing.Sequence[int]] = ...
+    fieldB: _typing.Final[_typing.Sequence[int]] = ...
+    fieldC: _typing.Final[_typing.Sequence[int]] = ...
+    fieldD: _typing.Final[_typing.Sequence[int]] = ...
+    fieldE: _typing.Final[_typing.Sequence[int]] = ...
+    fieldF: _typing.Final[_typing.AbstractSet[int]] = ...
+    fieldG: _typing.Final[_typing.Mapping[int, str]] = ...
+    fieldH: _typing.Final[_typing.Mapping[int, str]] = ...
 
     def __init__(
         self, *,
@@ -144,14 +134,14 @@ class ContainerStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        fieldA: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET,
-        fieldB: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET,
-        fieldC: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET,
-        fieldD: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET,
-        fieldE: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET,
-        fieldF: _typing.Union[_typing.AbstractSet[int], '__NotSet', None]=NOTSET,
-        fieldG: _typing.Union[_typing.Mapping[int, str], '__NotSet', None]=NOTSET,
-        fieldH: _typing.Union[_typing.Mapping[int, str], '__NotSet', None]=NOTSET
+        fieldA: _typing.Union[_typing.Sequence[int], None]=None,
+        fieldB: _typing.Union[_typing.Sequence[int], None]=None,
+        fieldC: _typing.Union[_typing.Sequence[int], None]=None,
+        fieldD: _typing.Union[_typing.Sequence[int], None]=None,
+        fieldE: _typing.Union[_typing.Sequence[int], None]=None,
+        fieldF: _typing.Union[_typing.AbstractSet[int], None]=None,
+        fieldG: _typing.Union[_typing.Mapping[int, str], None]=None,
+        fieldH: _typing.Union[_typing.Mapping[int, str], None]=None
     ) -> ContainerStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['ContainerStruct'], bytes]]: ...
@@ -172,7 +162,7 @@ class CppTypeStruct(thrift.py3.types.Struct, _typing.Hashable):
         fieldA: bool
         pass
 
-    fieldA: Final[_typing.Sequence[int]] = ...
+    fieldA: _typing.Final[_typing.Sequence[int]] = ...
 
     def __init__(
         self, *,
@@ -181,7 +171,7 @@ class CppTypeStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        fieldA: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET
+        fieldA: _typing.Union[_typing.Sequence[int], None]=None
     ) -> CppTypeStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['CppTypeStruct'], bytes]]: ...
@@ -202,7 +192,7 @@ class VirtualStruct(thrift.py3.types.Struct, _typing.Hashable):
         MyIntField: bool
         pass
 
-    MyIntField: Final[int] = ...
+    MyIntField: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -211,7 +201,7 @@ class VirtualStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        MyIntField: _typing.Union[int, '__NotSet', None]=NOTSET
+        MyIntField: _typing.Union[int, None]=None
     ) -> VirtualStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['VirtualStruct'], bytes]]: ...
@@ -233,9 +223,8 @@ class MyStructWithForwardRefEnum(thrift.py3.types.Struct, _typing.Hashable):
         b: bool
         pass
 
-    a: Final[MyForwardRefEnum] = ...
-
-    b: Final[MyForwardRefEnum] = ...
+    a: _typing.Final[MyForwardRefEnum] = ...
+    b: _typing.Final[MyForwardRefEnum] = ...
 
     def __init__(
         self, *,
@@ -245,8 +234,8 @@ class MyStructWithForwardRefEnum(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        a: _typing.Union[MyForwardRefEnum, '__NotSet', None]=NOTSET,
-        b: _typing.Union[MyForwardRefEnum, '__NotSet', None]=NOTSET
+        a: _typing.Union[MyForwardRefEnum, None]=None,
+        b: _typing.Union[MyForwardRefEnum, None]=None
     ) -> MyStructWithForwardRefEnum: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['MyStructWithForwardRefEnum'], bytes]]: ...
@@ -268,9 +257,8 @@ class TrivialNumeric(thrift.py3.types.Struct, _typing.Hashable):
         b: bool
         pass
 
-    a: Final[int] = ...
-
-    b: Final[bool] = ...
+    a: _typing.Final[int] = ...
+    b: _typing.Final[bool] = ...
 
     def __init__(
         self, *,
@@ -280,8 +268,8 @@ class TrivialNumeric(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        a: _typing.Union[int, '__NotSet', None]=NOTSET,
-        b: _typing.Union[bool, '__NotSet', None]=NOTSET
+        a: _typing.Union[int, None]=None,
+        b: _typing.Union[bool, None]=None
     ) -> TrivialNumeric: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['TrivialNumeric'], bytes]]: ...
@@ -303,9 +291,8 @@ class TrivialNestedWithDefault(thrift.py3.types.Struct, _typing.Hashable):
         n: bool
         pass
 
-    z: Final[int] = ...
-
-    n: Final[TrivialNumeric] = ...
+    z: _typing.Final[int] = ...
+    n: _typing.Final[TrivialNumeric] = ...
 
     def __init__(
         self, *,
@@ -315,8 +302,8 @@ class TrivialNestedWithDefault(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        z: _typing.Union[int, '__NotSet', None]=NOTSET,
-        n: _typing.Union[TrivialNumeric, '__NotSet', None]=NOTSET
+        z: _typing.Union[int, None]=None,
+        n: _typing.Union[TrivialNumeric, None]=None
     ) -> TrivialNestedWithDefault: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['TrivialNestedWithDefault'], bytes]]: ...
@@ -338,9 +325,8 @@ class ComplexString(thrift.py3.types.Struct, _typing.Hashable):
         b: bool
         pass
 
-    a: Final[str] = ...
-
-    b: Final[_typing.Mapping[str, int]] = ...
+    a: _typing.Final[str] = ...
+    b: _typing.Final[_typing.Mapping[str, int]] = ...
 
     def __init__(
         self, *,
@@ -350,8 +336,8 @@ class ComplexString(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        a: _typing.Union[str, '__NotSet', None]=NOTSET,
-        b: _typing.Union[_typing.Mapping[str, int], '__NotSet', None]=NOTSET
+        a: _typing.Union[str, None]=None,
+        b: _typing.Union[_typing.Mapping[str, int], None]=None
     ) -> ComplexString: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['ComplexString'], bytes]]: ...
@@ -373,9 +359,8 @@ class ComplexNestedWithDefault(thrift.py3.types.Struct, _typing.Hashable):
         n: bool
         pass
 
-    z: Final[str] = ...
-
-    n: Final[ComplexString] = ...
+    z: _typing.Final[str] = ...
+    n: _typing.Final[ComplexString] = ...
 
     def __init__(
         self, *,
@@ -385,8 +370,8 @@ class ComplexNestedWithDefault(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        z: _typing.Union[str, '__NotSet', None]=NOTSET,
-        n: _typing.Union[ComplexString, '__NotSet', None]=NOTSET
+        z: _typing.Union[str, None]=None,
+        n: _typing.Union[ComplexString, None]=None
     ) -> ComplexNestedWithDefault: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['ComplexNestedWithDefault'], bytes]]: ...
@@ -411,15 +396,11 @@ class MinPadding(thrift.py3.types.Struct, _typing.Hashable):
         tiny: bool
         pass
 
-    small: Final[int] = ...
-
-    big: Final[int] = ...
-
-    medium: Final[int] = ...
-
-    biggish: Final[int] = ...
-
-    tiny: Final[int] = ...
+    small: _typing.Final[int] = ...
+    big: _typing.Final[int] = ...
+    medium: _typing.Final[int] = ...
+    biggish: _typing.Final[int] = ...
+    tiny: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -432,11 +413,11 @@ class MinPadding(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        small: _typing.Union[int, '__NotSet', None]=NOTSET,
-        big: _typing.Union[int, '__NotSet', None]=NOTSET,
-        medium: _typing.Union[int, '__NotSet', None]=NOTSET,
-        biggish: _typing.Union[int, '__NotSet', None]=NOTSET,
-        tiny: _typing.Union[int, '__NotSet', None]=NOTSET
+        small: _typing.Union[int, None]=None,
+        big: _typing.Union[int, None]=None,
+        medium: _typing.Union[int, None]=None,
+        biggish: _typing.Union[int, None]=None,
+        tiny: _typing.Union[int, None]=None
     ) -> MinPadding: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['MinPadding'], bytes]]: ...
@@ -456,15 +437,11 @@ class MinPaddingWithCustomType(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
 
-    small: Final[int] = ...
-
-    big: Final[int] = ...
-
-    medium: Final[int] = ...
-
-    biggish: Final[int] = ...
-
-    tiny: Final[int] = ...
+    small: _typing.Final[int] = ...
+    big: _typing.Final[int] = ...
+    medium: _typing.Final[int] = ...
+    biggish: _typing.Final[int] = ...
+    tiny: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -477,11 +454,11 @@ class MinPaddingWithCustomType(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        small: _typing.Union[int, '__NotSet', None]=NOTSET,
-        big: _typing.Union[int, '__NotSet', None]=NOTSET,
-        medium: _typing.Union[int, '__NotSet', None]=NOTSET,
-        biggish: _typing.Union[int, '__NotSet', None]=NOTSET,
-        tiny: _typing.Union[int, '__NotSet', None]=NOTSET
+        small: _typing.Union[int, None]=None,
+        big: _typing.Union[int, None]=None,
+        medium: _typing.Union[int, None]=None,
+        biggish: _typing.Union[int, None]=None,
+        tiny: _typing.Union[int, None]=None
     ) -> MinPaddingWithCustomType: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['MinPaddingWithCustomType'], bytes]]: ...
@@ -505,13 +482,10 @@ class MyStruct(thrift.py3.types.Struct, _typing.Hashable):
         data: bool
         pass
 
-    MyIntField: Final[int] = ...
-
-    MyStringField: Final[str] = ...
-
-    majorVer: Final[int] = ...
-
-    data: Final[MyDataItem] = ...
+    MyIntField: _typing.Final[int] = ...
+    MyStringField: _typing.Final[str] = ...
+    majorVer: _typing.Final[int] = ...
+    data: _typing.Final[MyDataItem] = ...
 
     def __init__(
         self, *,
@@ -523,10 +497,10 @@ class MyStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        MyIntField: _typing.Union[int, '__NotSet', None]=NOTSET,
-        MyStringField: _typing.Union[str, '__NotSet', None]=NOTSET,
-        majorVer: _typing.Union[int, '__NotSet', None]=NOTSET,
-        data: _typing.Union[MyDataItem, '__NotSet', None]=NOTSET
+        MyIntField: _typing.Union[int, None]=None,
+        MyStringField: _typing.Union[str, None]=None,
+        majorVer: _typing.Union[int, None]=None,
+        data: _typing.Union[MyDataItem, None]=None
     ) -> MyStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['MyStruct'], bytes]]: ...
@@ -545,6 +519,7 @@ class MyStruct(thrift.py3.types.Struct, _typing.Hashable):
 class MyDataItem(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 
@@ -572,7 +547,7 @@ class Renaming(thrift.py3.types.Struct, _typing.Hashable):
         foo: bool
         pass
 
-    foo: Final[int] = ...
+    foo: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -581,7 +556,7 @@ class Renaming(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        foo: _typing.Union[int, '__NotSet', None]=NOTSET
+        foo: _typing.Union[int, None]=None
     ) -> Renaming: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Renaming'], bytes]]: ...
@@ -603,9 +578,8 @@ class AnnotatedTypes(thrift.py3.types.Struct, _typing.Hashable):
         list_field: bool
         pass
 
-    binary_field: Final[bytes] = ...
-
-    list_field: Final[_typing.Sequence[_typing.Mapping[int, str]]] = ...
+    binary_field: _typing.Final[bytes] = ...
+    list_field: _typing.Final[_typing.Sequence[_typing.Mapping[int, str]]] = ...
 
     def __init__(
         self, *,
@@ -615,8 +589,8 @@ class AnnotatedTypes(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        binary_field: _typing.Union[bytes, '__NotSet', None]=NOTSET,
-        list_field: _typing.Union[_typing.Sequence[_typing.Mapping[int, str]], '__NotSet', None]=NOTSET
+        binary_field: _typing.Union[bytes, None]=None,
+        list_field: _typing.Union[_typing.Sequence[_typing.Mapping[int, str]], None]=None
     ) -> AnnotatedTypes: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['AnnotatedTypes'], bytes]]: ...
@@ -637,9 +611,8 @@ class ForwardUsageRoot(thrift.py3.types.Struct, _typing.Hashable):
         ForwardUsageStruct: bool
         pass
 
-    ForwardUsageStruct: Final[_typing.Optional[ForwardUsageStruct]] = ...
-
-    ForwardUsageByRef: Final[_typing.Optional[ForwardUsageByRef]] = ...
+    ForwardUsageStruct: _typing.Final[_typing.Optional[ForwardUsageStruct]] = ...
+    ForwardUsageByRef: _typing.Final[_typing.Optional[ForwardUsageByRef]] = ...
 
     def __init__(
         self, *,
@@ -649,8 +622,8 @@ class ForwardUsageRoot(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        ForwardUsageStruct: _typing.Union[ForwardUsageStruct, '__NotSet', None]=NOTSET,
-        ForwardUsageByRef: _typing.Union[ForwardUsageByRef, '__NotSet', None]=NOTSET
+        ForwardUsageStruct: _typing.Union[ForwardUsageStruct, None]=None,
+        ForwardUsageByRef: _typing.Union[ForwardUsageByRef, None]=None
     ) -> ForwardUsageRoot: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['ForwardUsageRoot'], bytes]]: ...
@@ -670,7 +643,7 @@ class ForwardUsageStruct(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
 
-    foo: Final[_typing.Optional[ForwardUsageRoot]] = ...
+    foo: _typing.Final[_typing.Optional[ForwardUsageRoot]] = ...
 
     def __init__(
         self, *,
@@ -679,7 +652,7 @@ class ForwardUsageStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        foo: _typing.Union[ForwardUsageRoot, '__NotSet', None]=NOTSET
+        foo: _typing.Union[ForwardUsageRoot, None]=None
     ) -> ForwardUsageStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['ForwardUsageStruct'], bytes]]: ...
@@ -699,7 +672,7 @@ class ForwardUsageByRef(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
 
-    foo: Final[_typing.Optional[ForwardUsageRoot]] = ...
+    foo: _typing.Final[_typing.Optional[ForwardUsageRoot]] = ...
 
     def __init__(
         self, *,
@@ -708,7 +681,7 @@ class ForwardUsageByRef(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        foo: _typing.Union[ForwardUsageRoot, '__NotSet', None]=NOTSET
+        foo: _typing.Union[ForwardUsageRoot, None]=None
     ) -> ForwardUsageByRef: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['ForwardUsageByRef'], bytes]]: ...
@@ -729,7 +702,7 @@ class IncompleteMap(thrift.py3.types.Struct, _typing.Hashable):
         field: bool
         pass
 
-    field: Final[_typing.Optional[_typing.Mapping[int, IncompleteMapDep]]] = ...
+    field: _typing.Final[_typing.Optional[_typing.Mapping[int, IncompleteMapDep]]] = ...
 
     def __init__(
         self, *,
@@ -738,7 +711,7 @@ class IncompleteMap(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field: _typing.Union[_typing.Mapping[int, IncompleteMapDep], '__NotSet', None]=NOTSET
+        field: _typing.Union[_typing.Mapping[int, IncompleteMapDep], None]=None
     ) -> IncompleteMap: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['IncompleteMap'], bytes]]: ...
@@ -757,6 +730,7 @@ class IncompleteMap(thrift.py3.types.Struct, _typing.Hashable):
 class IncompleteMapDep(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 
@@ -784,7 +758,7 @@ class CompleteMap(thrift.py3.types.Struct, _typing.Hashable):
         field: bool
         pass
 
-    field: Final[_typing.Optional[_typing.Mapping[int, CompleteMapDep]]] = ...
+    field: _typing.Final[_typing.Optional[_typing.Mapping[int, CompleteMapDep]]] = ...
 
     def __init__(
         self, *,
@@ -793,7 +767,7 @@ class CompleteMap(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field: _typing.Union[_typing.Mapping[int, CompleteMapDep], '__NotSet', None]=NOTSET
+        field: _typing.Union[_typing.Mapping[int, CompleteMapDep], None]=None
     ) -> CompleteMap: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['CompleteMap'], bytes]]: ...
@@ -812,6 +786,7 @@ class CompleteMap(thrift.py3.types.Struct, _typing.Hashable):
 class CompleteMapDep(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 
@@ -839,7 +814,7 @@ class IncompleteList(thrift.py3.types.Struct, _typing.Hashable):
         field: bool
         pass
 
-    field: Final[_typing.Optional[_typing.Sequence[IncompleteListDep]]] = ...
+    field: _typing.Final[_typing.Optional[_typing.Sequence[IncompleteListDep]]] = ...
 
     def __init__(
         self, *,
@@ -848,7 +823,7 @@ class IncompleteList(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field: _typing.Union[_typing.Sequence[IncompleteListDep], '__NotSet', None]=NOTSET
+        field: _typing.Union[_typing.Sequence[IncompleteListDep], None]=None
     ) -> IncompleteList: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['IncompleteList'], bytes]]: ...
@@ -867,6 +842,7 @@ class IncompleteList(thrift.py3.types.Struct, _typing.Hashable):
 class IncompleteListDep(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 
@@ -894,7 +870,7 @@ class CompleteList(thrift.py3.types.Struct, _typing.Hashable):
         field: bool
         pass
 
-    field: Final[_typing.Optional[_typing.Sequence[CompleteListDep]]] = ...
+    field: _typing.Final[_typing.Optional[_typing.Sequence[CompleteListDep]]] = ...
 
     def __init__(
         self, *,
@@ -903,7 +879,7 @@ class CompleteList(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field: _typing.Union[_typing.Sequence[CompleteListDep], '__NotSet', None]=NOTSET
+        field: _typing.Union[_typing.Sequence[CompleteListDep], None]=None
     ) -> CompleteList: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['CompleteList'], bytes]]: ...
@@ -922,6 +898,7 @@ class CompleteList(thrift.py3.types.Struct, _typing.Hashable):
 class CompleteListDep(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 
@@ -949,7 +926,7 @@ class AdaptedList(thrift.py3.types.Struct, _typing.Hashable):
         field: bool
         pass
 
-    field: Final[_typing.Optional[_typing.Sequence[AdaptedListDep]]] = ...
+    field: _typing.Final[_typing.Optional[_typing.Sequence[AdaptedListDep]]] = ...
 
     def __init__(
         self, *,
@@ -958,7 +935,7 @@ class AdaptedList(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field: _typing.Union[_typing.Sequence[AdaptedListDep], '__NotSet', None]=NOTSET
+        field: _typing.Union[_typing.Sequence[AdaptedListDep], None]=None
     ) -> AdaptedList: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['AdaptedList'], bytes]]: ...
@@ -979,7 +956,7 @@ class DependentAdaptedList(thrift.py3.types.Struct, _typing.Hashable):
         field: bool
         pass
 
-    field: Final[_typing.Optional[_typing.Sequence[DependentAdaptedListDep]]] = ...
+    field: _typing.Final[_typing.Optional[_typing.Sequence[DependentAdaptedListDep]]] = ...
 
     def __init__(
         self, *,
@@ -988,7 +965,7 @@ class DependentAdaptedList(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field: _typing.Union[_typing.Sequence[DependentAdaptedListDep], '__NotSet', None]=NOTSET
+        field: _typing.Union[_typing.Sequence[DependentAdaptedListDep], None]=None
     ) -> DependentAdaptedList: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['DependentAdaptedList'], bytes]]: ...
@@ -1013,19 +990,13 @@ class AllocatorAware(thrift.py3.types.Struct, _typing.Hashable):
         not_a_container: bool
         pass
 
-    aa_list: Final[_typing.Sequence[int]] = ...
-
-    aa_set: Final[_typing.AbstractSet[int]] = ...
-
-    aa_map: Final[_typing.Mapping[int, int]] = ...
-
-    aa_string: Final[str] = ...
-
-    not_a_container: Final[int] = ...
-
-    aa_unique: Final[_typing.Optional[int]] = ...
-
-    aa_shared: Final[_typing.Optional[int]] = ...
+    aa_list: _typing.Final[_typing.Sequence[int]] = ...
+    aa_set: _typing.Final[_typing.AbstractSet[int]] = ...
+    aa_map: _typing.Final[_typing.Mapping[int, int]] = ...
+    aa_string: _typing.Final[str] = ...
+    not_a_container: _typing.Final[int] = ...
+    aa_unique: _typing.Final[_typing.Optional[int]] = ...
+    aa_shared: _typing.Final[_typing.Optional[int]] = ...
 
     def __init__(
         self, *,
@@ -1040,13 +1011,13 @@ class AllocatorAware(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        aa_list: _typing.Union[_typing.Sequence[int], '__NotSet', None]=NOTSET,
-        aa_set: _typing.Union[_typing.AbstractSet[int], '__NotSet', None]=NOTSET,
-        aa_map: _typing.Union[_typing.Mapping[int, int], '__NotSet', None]=NOTSET,
-        aa_string: _typing.Union[str, '__NotSet', None]=NOTSET,
-        not_a_container: _typing.Union[int, '__NotSet', None]=NOTSET,
-        aa_unique: _typing.Union[int, '__NotSet', None]=NOTSET,
-        aa_shared: _typing.Union[int, '__NotSet', None]=NOTSET
+        aa_list: _typing.Union[_typing.Sequence[int], None]=None,
+        aa_set: _typing.Union[_typing.AbstractSet[int], None]=None,
+        aa_map: _typing.Union[_typing.Mapping[int, int], None]=None,
+        aa_string: _typing.Union[str, None]=None,
+        not_a_container: _typing.Union[int, None]=None,
+        aa_unique: _typing.Union[int, None]=None,
+        aa_shared: _typing.Union[int, None]=None
     ) -> AllocatorAware: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['AllocatorAware'], bytes]]: ...
@@ -1068,9 +1039,8 @@ class AllocatorAware2(thrift.py3.types.Struct, _typing.Hashable):
         box_field: bool
         pass
 
-    not_a_container: Final[int] = ...
-
-    box_field: Final[_typing.Optional[int]] = ...
+    not_a_container: _typing.Final[int] = ...
+    box_field: _typing.Final[_typing.Optional[int]] = ...
 
     def __init__(
         self, *,
@@ -1080,8 +1050,8 @@ class AllocatorAware2(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        not_a_container: _typing.Union[int, '__NotSet', None]=NOTSET,
-        box_field: _typing.Union[int, '__NotSet', None]=NOTSET
+        not_a_container: _typing.Union[int, None]=None,
+        box_field: _typing.Union[int, None]=None
     ) -> AllocatorAware2: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['AllocatorAware2'], bytes]]: ...
@@ -1104,11 +1074,9 @@ class TypedefStruct(thrift.py3.types.Struct, _typing.Hashable):
         UintTypedef_field: bool
         pass
 
-    i32_field: Final[int] = ...
-
-    IntTypedef_field: Final[int] = ...
-
-    UintTypedef_field: Final[int] = ...
+    i32_field: _typing.Final[int] = ...
+    IntTypedef_field: _typing.Final[int] = ...
+    UintTypedef_field: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -1119,9 +1087,9 @@ class TypedefStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        i32_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        IntTypedef_field: _typing.Union[int, '__NotSet', None]=NOTSET,
-        UintTypedef_field: _typing.Union[int, '__NotSet', None]=NOTSET
+        i32_field: _typing.Union[int, None]=None,
+        IntTypedef_field: _typing.Union[int, None]=None,
+        UintTypedef_field: _typing.Union[int, None]=None
     ) -> TypedefStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['TypedefStruct'], bytes]]: ...
@@ -1142,7 +1110,7 @@ class StructWithDoubleUnderscores(thrift.py3.types.Struct, _typing.Hashable):
         __field: bool
         pass
 
-    __field: Final[int] = ...
+    __field: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -1151,7 +1119,7 @@ class StructWithDoubleUnderscores(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        __field: _typing.Union[int, '__NotSet', None]=NOTSET
+        __field: _typing.Union[int, None]=None
     ) -> StructWithDoubleUnderscores: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['StructWithDoubleUnderscores'], bytes]]: ...

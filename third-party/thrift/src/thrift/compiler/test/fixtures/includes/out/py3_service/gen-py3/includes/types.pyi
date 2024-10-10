@@ -5,19 +5,15 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
 import transitive.types as _transitive_types
-
-
-__property__ = property
 
 
 class Included(thrift.py3.types.Struct, _typing.Hashable):
@@ -26,9 +22,8 @@ class Included(thrift.py3.types.Struct, _typing.Hashable):
         MyTransitiveField: bool
         pass
 
-    MyIntField: Final[int] = ...
-
-    MyTransitiveField: Final[_transitive_types.Foo] = ...
+    MyIntField: _typing.Final[int] = ...
+    MyTransitiveField: _typing.Final[_transitive_types.Foo] = ...
 
     def __init__(
         self, *,
@@ -38,8 +33,8 @@ class Included(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        MyIntField: _typing.Union[int, '__NotSet', None]=NOTSET,
-        MyTransitiveField: _typing.Union[_transitive_types.Foo, '__NotSet', None]=NOTSET
+        MyIntField: _typing.Union[int, None]=None,
+        MyTransitiveField: _typing.Union[_transitive_types.Foo, None]=None
     ) -> Included: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Included'], bytes]]: ...

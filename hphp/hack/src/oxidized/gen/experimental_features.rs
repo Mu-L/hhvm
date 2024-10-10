@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<b045ad5706408666d2bda3c884960ead>>
+// @generated SignedSource<<838f105ad39a4398044c230f94aa32f8>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -88,14 +88,13 @@ pub enum FeatureName {
     TypeConstMultipleBounds,
     TypeConstSuperBound,
     ClassConstDefault,
-    TypeRefinements,
     MethodTraitDiamond,
     UpcastExpression,
     RequireClass,
     NewtypeSuperBounds,
-    ExpressionTreeBlocks,
     Package,
     CaseTypes,
+    CaseTypeWhereClauses,
     ModuleLevelTraits,
     ModuleLevelTraitsExtensions,
     TypedLocalVariables,
@@ -105,10 +104,13 @@ pub enum FeatureName {
     ClassType,
     FunctionReferences,
     FunctionTypeOptionalParams,
-    ExpressionTreeMap,
     ExpressionTreeNest,
     SealedMethods,
     AwaitInSplice,
+    OpenTuples,
+    TypeSplat,
+    ExpressionTreeNestedBindings,
+    LikeTypeHints,
 }
 impl TrivialDrop for FeatureName {}
 arena_deserializer::impl_deserialize_in_arena!(FeatureName);

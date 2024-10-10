@@ -5,20 +5,16 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
 import module0.types as _module0_types
 import module1.types as _module1_types
-
-
-__property__ = property
 
 
 class Struct(thrift.py3.types.Struct, _typing.Hashable):
@@ -27,9 +23,8 @@ class Struct(thrift.py3.types.Struct, _typing.Hashable):
         second: bool
         pass
 
-    first: Final[_module0_types.Struct] = ...
-
-    second: Final[_module1_types.Struct] = ...
+    first: _typing.Final[_module0_types.Struct] = ...
+    second: _typing.Final[_module1_types.Struct] = ...
 
     def __init__(
         self, *,
@@ -39,8 +34,8 @@ class Struct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        first: _typing.Union[_module0_types.Struct, '__NotSet', None]=NOTSET,
-        second: _typing.Union[_module1_types.Struct, '__NotSet', None]=NOTSET
+        first: _typing.Union[_module0_types.Struct, None]=None,
+        second: _typing.Union[_module1_types.Struct, None]=None
     ) -> Struct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Struct'], bytes]]: ...
@@ -62,9 +57,8 @@ class BigStruct(thrift.py3.types.Struct, _typing.Hashable):
         id: bool
         pass
 
-    s: Final[Struct] = ...
-
-    id: Final[int] = ...
+    s: _typing.Final[Struct] = ...
+    id: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -74,8 +68,8 @@ class BigStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        s: _typing.Union[Struct, '__NotSet', None]=NOTSET,
-        id: _typing.Union[int, '__NotSet', None]=NOTSET
+        s: _typing.Union[Struct, None]=None,
+        id: _typing.Union[int, None]=None
     ) -> BigStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['BigStruct'], bytes]]: ...

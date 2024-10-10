@@ -14,11 +14,9 @@ use bstr::ByteSlice;
 use core_utils_rust::add_ns;
 use error::ErrorKind;
 use hhbc::ClassName;
+use hhbc_string_utils::class_id_is_dynamic;
 use hhbc_string_utils::integer;
 use hhbc_string_utils::is_class;
-use hhbc_string_utils::is_parent;
-use hhbc_string_utils::is_self;
-use hhbc_string_utils::is_static;
 use hhbc_string_utils::is_xhp;
 use hhbc_string_utils::lstrip;
 use hhbc_string_utils::lstrip_bslice;
@@ -162,20 +160,6 @@ fn print_expr_varray(
     })
 }
 
-fn print_shape_field_name(
-    _: &Context<'_>,
-    w: &mut dyn Write,
-    _: &ExprEnv<'_>,
-    field: &ast::ShapeFieldName,
-) -> Result<()> {
-    use ast::ShapeFieldName as S;
-    match field {
-        S::SFlitInt((_, s)) => print_expr_int(w, s.as_ref()),
-        S::SFlitStr((_, s)) => print_expr_string(w, s),
-        S::SFclassConst(_, (_, s)) => print_expr_string(w, s.as_bytes()),
-    }
-}
-
 fn print_expr_int(w: &mut dyn Write, i: &str) -> Result<()> {
     match integer::to_decimal(i) {
         Ok(s) => w.write_all(s.as_bytes()),
@@ -295,13 +279,26 @@ fn print_expr(
             Some((
                 ast::ClassId(_, _, ast::ClassId_::CIexpr(ast::Expr(_, _, ast::Expr_::Id(id)))),
                 (_, s2),
-            )) if is_class(s2) && !(is_self(&id.1) || is_parent(&id.1) || is_static(&id.1)) => {
-                Ok(Some({
-                    let s1 = get_class_name_from_id(ctx, env, false, false, &id.1);
-                    print_expr_string(w, s1.as_bytes())?
-                }))
-            }
+            )) if is_class(s2) && !(class_id_is_dynamic(&id.1)) => Ok(Some({
+                let s1 = get_class_name_from_id(ctx, env, false, false, &id.1);
+                print_expr_string(w, s1.as_bytes())?
+            })),
             _ => Ok(None),
+        }
+    }
+    fn print_shape_field_name(
+        _: &Context<'_>,
+        w: &mut dyn Write,
+        env: &ExprEnv<'_>,
+        field: &ast::ShapeFieldName,
+    ) -> Result<()> {
+        use ast::ShapeFieldName as S;
+        match field {
+            S::SFregexGroup((_, s)) => print_expr_int(w, s.as_ref()),
+            S::SFlitStr((_, s)) => print_expr_string(w, s),
+            S::SFclassname(id) => print_expr_id(w, env, id.1.as_ref()),
+            // This is broken, it loses info about the class
+            S::SFclassConst(_, (_, s)) => print_expr_string(w, s.as_bytes()),
         }
     }
     use ast::Expr_;

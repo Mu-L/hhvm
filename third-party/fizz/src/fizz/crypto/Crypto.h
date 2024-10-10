@@ -16,33 +16,59 @@ namespace fizz {
 
 // AEAD Ciphers
 struct AESGCM128 {
-  static const size_t kKeyLength{16};
-  static const size_t kIVLength{12};
-  static const size_t kTagLength{16};
+  static constexpr size_t kKeyLength{16};
+  static constexpr size_t kIVLength{12};
+  static constexpr size_t kTagLength{16};
 };
 
 struct AESGCM256 {
-  static const size_t kKeyLength{32};
-  static const size_t kIVLength{12};
-  static const size_t kTagLength{16};
+  static constexpr size_t kKeyLength{32};
+  static constexpr size_t kIVLength{12};
+  static constexpr size_t kTagLength{16};
 };
 
 struct AESOCB128 {
-  static const size_t kKeyLength{16};
-  static const size_t kIVLength{12};
-  static const size_t kTagLength{16};
+  static constexpr size_t kKeyLength{16};
+  static constexpr size_t kIVLength{12};
+  static constexpr size_t kTagLength{16};
 };
 
 struct ChaCha20Poly1305 {
-  static const size_t kKeyLength{32};
-  static const size_t kIVLength{12};
-  static const size_t kTagLength{16};
+  static constexpr size_t kKeyLength{32};
+  static constexpr size_t kIVLength{12};
+  static constexpr size_t kTagLength{16};
 };
+
+struct AEGIS128L {
+  static constexpr size_t kKeyLength{16};
+  static constexpr size_t kIVLength{16};
+  static constexpr size_t kTagLength{16};
+};
+
+struct AEGIS256 {
+  static constexpr size_t kKeyLength{32};
+  static constexpr size_t kIVLength{32};
+  static constexpr size_t kTagLength{16};
+};
+
+enum class HashFunction { Sha256, Sha384, Sha512 };
+inline folly::StringPiece toString(HashFunction hash) {
+  switch (hash) {
+    case HashFunction::Sha256:
+      return "Sha256";
+    case HashFunction::Sha384:
+      return "Sha384";
+    case HashFunction::Sha512:
+      return "Sha512";
+  }
+  return "Invalid HashFunction";
+}
 
 // Hashing Algorithms
 // Please update HASH_MAX_BLOCK_SIZE if necessary if adding support for more
 // hashes.
 struct Sha256 {
+  static constexpr HashFunction HashId = HashFunction::Sha256;
   static constexpr size_t HashLen = 32;
   static constexpr size_t BlockSize = 64;
   static constexpr folly::StringPiece BlankHash{
@@ -50,6 +76,7 @@ struct Sha256 {
 };
 
 struct Sha384 {
+  static constexpr HashFunction HashId = HashFunction::Sha384;
   static constexpr size_t HashLen = 48;
   static constexpr size_t BlockSize = 128;
   static constexpr folly::StringPiece BlankHash{
@@ -57,11 +84,24 @@ struct Sha384 {
 };
 
 struct Sha512 {
+  static constexpr HashFunction HashId = HashFunction::Sha512;
   static constexpr size_t HashLen = 64;
   static constexpr size_t BlockSize = 128;
   static constexpr folly::StringPiece BlankHash{
       "\xcf\x83\xe1\x35\x7e\xef\xb8\xbd\xf1\x54\x28\x50\xd6\x6d\x80\x07\xd6\x20\xe4\x05\x0b\x57\x15\xdc\x83\xf4\xa9\x21\xd3\x6c\xe9\xce\x47\xd0\xd1\x3c\x5d\x85\xf2\xb0\xff\x83\x18\xd2\x87\x7e\xec\x2f\x63\xb9\x31\xbd\x47\x41\x7a\x81\xa5\x38\x32\x7a\xf9\x27\xda\x3e"};
 };
+
+inline folly::ByteRange getBlankHash(HashFunction hash) {
+  switch (hash) {
+    case HashFunction::Sha256:
+      return Sha256::BlankHash;
+    case HashFunction::Sha384:
+      return Sha384::BlankHash;
+    case HashFunction::Sha512:
+      return Sha512::BlankHash;
+  }
+  throw std::runtime_error("invalid hash");
+}
 
 constexpr size_t kHashMaxBlockSize =
     128; // The largest block size of the hashes that we support. Please keep
@@ -86,8 +126,23 @@ struct P521 {
   static constexpr int keyShareLength = coordinateLength * 2 + 1;
 };
 
+struct X25519 {};
+
+// KEMs
+struct Kyber512 {};
+struct Kyber768 {};
+
+constexpr size_t kEcMaxPublicKeyshareLength =
+    256; // The max possible size of a buffer storing an EC keyshare. Please
+         // keep this definition in close proximity to the EC Curve tag types.
+
+constexpr size_t kEcMaxSharedSecretLength =
+    256; // The max possible size of a buffer storing an EC shared secret.
+         // Please keep this definition in close proximity to the tag types.
+
+enum class KeyType { RSA, P256, P384, P521, ED25519 };
+
 using HashFunc = void (*)(const folly::IOBuf&, folly::MutableByteRange);
 using HmacFunc =
     void (*)(folly::ByteRange, const folly::IOBuf&, folly::MutableByteRange);
-
 } // namespace fizz

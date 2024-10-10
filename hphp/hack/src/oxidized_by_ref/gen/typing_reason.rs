@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<e37c81958de5f9a6cb828e4438894d53>>
+// @generated SignedSource<<20534e1077f6a68abb03a54b9f33e45a>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -179,14 +179,14 @@ pub enum PrjSymm<'a> {
     PrjSymmFnParamInout(&'a (isize, isize, &'a oxidized::typing_reason::VarianceDir)),
     #[rust_to_ocaml(name = "Prj_symm_fn_ret")]
     PrjSymmFnRet,
+    #[rust_to_ocaml(name = "Prj_symm_supportdyn")]
+    PrjSymmSupportdyn,
 }
 impl<'a> TrivialDrop for PrjSymm<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(PrjSymm<'arena>);
 
 pub use oxidized::typing_reason::PrjAsymm;
-pub use oxidized::typing_reason::Side;
 
-/// Top-level projections
 #[derive(
     Clone,
     Copy,
@@ -205,23 +205,30 @@ pub use oxidized::typing_reason::Side;
 )]
 #[rust_to_ocaml(attr = "deriving hash")]
 #[repr(C, u8)]
-pub enum Prj<'a> {
+pub enum FlowKind<'a> {
+    #[rust_to_ocaml(name = "Flow_assign")]
+    FlowAssign,
+    #[rust_to_ocaml(name = "Flow_call")]
+    FlowCall,
+    #[rust_to_ocaml(name = "Flow_prop_access")]
+    FlowPropAccess,
+    #[rust_to_ocaml(name = "Flow_local")]
+    FlowLocal,
+    #[rust_to_ocaml(name = "Flow_fun_return")]
+    FlowFunReturn,
+    #[rust_to_ocaml(name = "Flow_param_hint")]
+    FlowParamHint,
+    #[rust_to_ocaml(name = "Flow_return_expr")]
+    FlowReturnExpr,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    Symm(&'a PrjSymm<'a>),
-    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    #[rust_to_ocaml(inline_tuple)]
-    Asymm(
-        &'a (
-            &'a oxidized::typing_reason::Side,
-            &'a oxidized::typing_reason::PrjAsymm,
-        ),
-    ),
+    #[rust_to_ocaml(name = "Flow_instantiate")]
+    FlowInstantiate(&'a str),
 }
-impl<'a> TrivialDrop for Prj<'a> {}
-arena_deserializer::impl_deserialize_in_arena!(Prj<'arena>);
+impl<'a> TrivialDrop for FlowKind<'a> {}
+arena_deserializer::impl_deserialize_in_arena!(FlowKind<'arena>);
 
-pub use oxidized::typing_reason::FlowKind;
-
+/// Witness the reason for a type during typing using the position of a hint or
+/// expression
 #[derive(
     Clone,
     Copy,
@@ -358,14 +365,16 @@ pub enum WitnessLocl<'a> {
     Regex(&'a pos::Pos<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "Type_variable")]
-    TypeVariable(&'a pos::Pos<'a>),
+    #[rust_to_ocaml(inline_tuple)]
+    TypeVariable(&'a (&'a pos::Pos<'a>, isize)),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "Type_variable_generics")]
     #[rust_to_ocaml(inline_tuple)]
-    TypeVariableGenerics(&'a (&'a pos::Pos<'a>, &'a str, &'a str)),
+    TypeVariableGenerics(&'a (&'a pos::Pos<'a>, &'a str, &'a str, isize)),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "Type_variable_error")]
-    TypeVariableError(&'a pos::Pos<'a>),
+    #[rust_to_ocaml(inline_tuple)]
+    TypeVariableError(&'a (&'a pos::Pos<'a>, isize)),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(inline_tuple)]
     Shape(&'a (&'a pos::Pos<'a>, &'a str)),
@@ -399,10 +408,14 @@ pub enum WitnessLocl<'a> {
     UnsafeCast(&'a pos::Pos<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     Pattern(&'a pos::Pos<'a>),
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    #[rust_to_ocaml(name = "Join_point")]
+    JoinPoint(&'a pos::Pos<'a>),
 }
 impl<'a> TrivialDrop for WitnessLocl<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(WitnessLocl<'arena>);
 
+/// Witness the reason for a type during decling using the position of a hint
 #[derive(
     Clone,
     Copy,
@@ -437,6 +450,9 @@ pub enum WitnessDecl<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "Var_param_from_decl")]
     VarParamFromDecl(&'a pos_or_decl::PosOrDecl<'a>),
+    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    #[rust_to_ocaml(name = "Tuple_from_splat")]
+    TupleFromSplat(&'a pos_or_decl::PosOrDecl<'a>),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "Vec_or_dict_key")]
     VecOrDictKey(&'a pos_or_decl::PosOrDecl<'a>),
@@ -505,6 +521,8 @@ pub enum WitnessDecl<'a> {
 impl<'a> TrivialDrop for WitnessDecl<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(WitnessDecl<'arena>);
 
+pub use oxidized::typing_reason::Axiom;
+
 /// The reason why something is expected to have a certain type
 #[derive(
     Clone,
@@ -524,6 +542,7 @@ arena_deserializer::impl_deserialize_in_arena!(WitnessDecl<'arena>);
 #[rust_to_ocaml(attr = "deriving hash")]
 #[repr(C, u8)]
 pub enum T_<'a> {
+    /// Lift a decl-time witness into a reason
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "From_witness_decl")]
     FromWitnessDecl(&'a WitnessDecl<'a>),
@@ -532,20 +551,80 @@ pub enum T_<'a> {
     Instantiate(&'a (T_<'a>, &'a str, T_<'a>)),
     #[rust_to_ocaml(name = "No_reason")]
     NoReason,
+    /// Lift a typing-time witness into a reason
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(name = "From_witness_locl")]
     FromWitnessLocl(&'a WitnessLocl<'a>),
-    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    #[rust_to_ocaml(inline_tuple)]
-    Flow(&'a (T_<'a>, &'a oxidized::typing_reason::FlowKind, T_<'a>)),
-    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    #[rust_to_ocaml(inline_tuple)]
-    Prj(&'a (Prj<'a>, T_<'a>)),
-    #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
-    Rev(&'a T_<'a>),
+    /// Records that a type with reason [bound] acted as a lower bound
+    /// for the type with reason [of_]
+    #[rust_to_ocaml(name = "Lower_bound")]
+    LowerBound {
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        bound: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        of__: &'a T_<'a>,
+    },
+    /// Records the flow of a type from an expression or hint into an
+    /// expression during typing
+    Flow {
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        from: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        kind: FlowKind<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        into: &'a T_<'a>,
+    },
+    /// Represents the projection of the sub- and supertype during subtype
+    /// constraints simplifiction. [sub_prj] is the subtype resulting from the
+    /// projection whilst [sub] and [super] and the reasons for the parent
+    /// types
+    #[rust_to_ocaml(name = "Prj_both")]
+    PrjBoth {
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        sub_prj: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        prj: PrjSymm<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        sub: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        super_: &'a T_<'a>,
+    },
+    /// Represents the projection of the sub- or supertype during subtype
+    /// constraints simplifiction. [part] is the sub/supertype resulting from
+    /// the projection whilst [whole] is the reason for the parent type.
+    #[rust_to_ocaml(name = "Prj_one")]
+    PrjOne {
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        part: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        whole: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        prj: &'a oxidized::typing_reason::PrjAsymm,
+    },
+    /// Represents the use of a user-defined axiom about either the
+    /// subtype or supertype during subtype constraints simplifiction.
+    /// [next] is the sub/supertype resulting from the application of the
+    /// axiom whilst [prev] is reason for original type.
+    Axiom {
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        next: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        prev: &'a T_<'a>,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        axiom: &'a oxidized::typing_reason::Axiom,
+    },
+    /// Records the definition site of type alongside the reason recording its
+    /// use.
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     #[rust_to_ocaml(inline_tuple)]
     Def(&'a (&'a pos_or_decl::PosOrDecl<'a>, T_<'a>)),
+    Solved {
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        solution: &'a T_<'a>,
+        of__: isize,
+        #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+        in__: &'a T_<'a>,
+    },
     Invalid,
     #[rust_to_ocaml(name = "Missing_field")]
     MissingField,
@@ -638,8 +717,6 @@ pub enum T_<'a> {
 }
 impl<'a> TrivialDrop for T_<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(T_<'arena>);
-
-pub use oxidized::typing_reason::Direction;
 
 pub type Reason<'a> = T_<'a>;
 

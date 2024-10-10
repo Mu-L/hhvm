@@ -9,20 +9,18 @@ package module
 import (
     "context"
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = context.Background
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 var _ = metadata.GoUnusedProtection__
-
-
 
 type C interface {
     F(ctx context.Context) (error)
@@ -124,707 +122,43 @@ func (c *CClient) ThingContext(ctx context.Context, a int32, b string, c []int32
     return c.chClient.Thing(ctx, a, b, c)
 }
 
-type reqCF struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqCF)(nil)
-
-// Deprecated: CFArgsDeprecated is deprecated, since it is supposed to be internal.
-type CFArgsDeprecated = reqCF
-
-func newReqCF() *reqCF {
-    return (&reqCF{})
-}
-
-
-
-func (x *reqCF) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqCF"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqCF) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqCF) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqCF({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respCF struct {
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respCF)(nil)
-var _ thrift.WritableResult = (*respCF)(nil)
-
-// Deprecated: CFResultDeprecated is deprecated, since it is supposed to be internal.
-type CFResultDeprecated = respCF
-
-func newRespCF() *respCF {
-    return (&respCF{})
-}
-
-
-
-func (x *respCF) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respCF) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respCF"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respCF) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respCF) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respCF({")
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqCThing struct {
-    A int32 `thrift:"a,1" json:"a" db:"a"`
-    B string `thrift:"b,2" json:"b" db:"b"`
-    C []int32 `thrift:"c,3" json:"c" db:"c"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqCThing)(nil)
-
-// Deprecated: CThingArgsDeprecated is deprecated, since it is supposed to be internal.
-type CThingArgsDeprecated = reqCThing
-
-func newReqCThing() *reqCThing {
-    return (&reqCThing{}).
-        SetANonCompat(0).
-        SetBNonCompat("").
-        SetCNonCompat(make([]int32, 0))
-}
-
-func (x *reqCThing) GetA() int32 {
-    return x.A
-}
-
-func (x *reqCThing) GetB() string {
-    return x.B
-}
-
-func (x *reqCThing) GetC() []int32 {
-    if !x.IsSetC() {
-        return make([]int32, 0)
-    }
-
-    return x.C
-}
-
-func (x *reqCThing) SetANonCompat(value int32) *reqCThing {
-    x.A = value
-    return x
-}
-
-func (x *reqCThing) SetA(value int32) *reqCThing {
-    x.A = value
-    return x
-}
-
-func (x *reqCThing) SetBNonCompat(value string) *reqCThing {
-    x.B = value
-    return x
-}
-
-func (x *reqCThing) SetB(value string) *reqCThing {
-    x.B = value
-    return x
-}
-
-func (x *reqCThing) SetCNonCompat(value []int32) *reqCThing {
-    x.C = value
-    return x
-}
-
-func (x *reqCThing) SetC(value []int32) *reqCThing {
-    x.C = value
-    return x
-}
-
-func (x *reqCThing) IsSetC() bool {
-    return x != nil && x.C != nil
-}
-
-func (x *reqCThing) writeField1(p thrift.Format) error {  // A
-    if err := p.WriteFieldBegin("a", thrift.I32, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.A
-    if err := p.WriteI32(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqCThing) writeField2(p thrift.Format) error {  // B
-    if err := p.WriteFieldBegin("b", thrift.STRING, 2); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.B
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqCThing) writeField3(p thrift.Format) error {  // C
-    if err := p.WriteFieldBegin("c", thrift.SET, 3); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.C
-    if err := p.WriteSetBegin(thrift.I32, len(item)); err != nil {
-    return thrift.PrependError("error writing set begin: ", err)
-}
-for _, v := range item {
-    {
-        item := v
-        if err := p.WriteI32(item); err != nil {
-    return err
-}
-    }
-}
-if err := p.WriteSetEnd(); err != nil {
-    return thrift.PrependError("error writing set end: ", err)
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqCThing) readField1(p thrift.Format) error {  // A
-    result, err := p.ReadI32()
-if err != nil {
-    return err
-}
-
-    x.A = result
-    return nil
-}
-
-func (x *reqCThing) readField2(p thrift.Format) error {  // B
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.B = result
-    return nil
-}
-
-func (x *reqCThing) readField3(p thrift.Format) error {  // C
-    _ /* elemType */, size, err := p.ReadSetBegin()
-if err != nil {
-    return thrift.PrependError("error reading set begin: ", err)
-}
-
-setResult := make([]int32, 0, size)
-for i := 0; i < size; i++ {
-    var elem int32
-    {
-        result, err := p.ReadI32()
-if err != nil {
-    return err
-}
-        elem = result
-    }
-    setResult = append(setResult, elem)
-}
-
-if err := p.ReadSetEnd(); err != nil {
-    return thrift.PrependError("error reading set end: ", err)
-}
-result := setResult
-
-    x.C = result
-    return nil
-}
-
-func (x *reqCThing) toString1() string {  // A
-    return fmt.Sprintf("%v", x.A)
-}
-
-func (x *reqCThing) toString2() string {  // B
-    return fmt.Sprintf("%v", x.B)
-}
-
-func (x *reqCThing) toString3() string {  // C
-    return fmt.Sprintf("%v", x.C)
-}
-
-
-
-func (x *reqCThing) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqCThing"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := x.writeField2(p); err != nil {
-        return err
-    }
-
-    if err := x.writeField3(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqCThing) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.I32)):  // a
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // b
-            if err := x.readField2(p); err != nil {
-                return err
-            }
-        case (id == 3 && wireType == thrift.Type(thrift.SET)):  // c
-            if err := x.readField3(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqCThing) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqCThing({")
-    sb.WriteString(fmt.Sprintf("A:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("B:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("C:%s", x.toString3()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respCThing struct {
-    Success *string `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-    Bang *Bang `thrift:"bang,1,optional" json:"bang,omitempty" db:"bang"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respCThing)(nil)
-var _ thrift.WritableResult = (*respCThing)(nil)
-
-// Deprecated: CThingResultDeprecated is deprecated, since it is supposed to be internal.
-type CThingResultDeprecated = respCThing
-
-func newRespCThing() *respCThing {
-    return (&respCThing{})
-}
-
-func (x *respCThing) GetSuccess() string {
-    if !x.IsSetSuccess() {
-        return ""
-    }
-
-    return *x.Success
-}
-
-func (x *respCThing) GetBang() *Bang {
-    if !x.IsSetBang() {
-        return nil
-    }
-
-    return x.Bang
-}
-
-func (x *respCThing) SetSuccessNonCompat(value string) *respCThing {
-    x.Success = &value
-    return x
-}
-
-func (x *respCThing) SetSuccess(value *string) *respCThing {
-    x.Success = value
-    return x
-}
-
-func (x *respCThing) SetBangNonCompat(value Bang) *respCThing {
-    x.Bang = &value
-    return x
-}
-
-func (x *respCThing) SetBang(value *Bang) *respCThing {
-    x.Bang = value
-    return x
-}
-
-func (x *respCThing) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respCThing) IsSetBang() bool {
-    return x != nil && x.Bang != nil
-}
-
-func (x *respCThing) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRING, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := *x.Success
-    if err := p.WriteString(item); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respCThing) writeField1(p thrift.Format) error {  // Bang
-    if !x.IsSetBang() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("bang", thrift.STRUCT, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Bang
-    if err := item.Write(p); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respCThing) readField0(p thrift.Format) error {  // Success
-    result, err := p.ReadString()
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respCThing) readField1(p thrift.Format) error {  // Bang
-    result := *NewBang()
-err := result.Read(p)
-if err != nil {
-    return err
-}
-
-    x.Bang = &result
-    return nil
-}
-
-func (x *respCThing) toString0() string {  // Success
-    if x.IsSetSuccess() {
-        return fmt.Sprintf("%v", *x.Success)
-    }
-    return fmt.Sprintf("%v", x.Success)
-}
-
-func (x *respCThing) toString1() string {  // Bang
-    return fmt.Sprintf("%v", x.Bang)
-}
-
-
-// Deprecated: Use newRespCThing().GetBang() instead.
-func (x *respCThing) DefaultGetBang() *Bang {
-    if !x.IsSetBang() {
-        return NewBang()
-    }
-    return x.Bang
-}
-
-
-
-func (x *respCThing) Exception() thrift.WritableException {
-    if x.Bang != nil {
-        return x.Bang
-    }
-    return nil
-}
-
-func (x *respCThing) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respCThing"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respCThing) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRING)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        case (id == 1 && wireType == thrift.Type(thrift.STRUCT)):  // bang
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respCThing) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respCThing({")
-    sb.WriteString(fmt.Sprintf("Success:%s ", x.toString0()))
-    sb.WriteString(fmt.Sprintf("Bang:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-
 
 type CProcessor struct {
-    processorMap       map[string]thrift.ProcessorFunctionContext
-    functionServiceMap map[string]string
+    processorFunctionMap map[string]thrift.ProcessorFunction
+    functionServiceMap   map[string]string
     handler            C
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorContext = (*CProcessor)(nil)
+var _ thrift.Processor = (*CProcessor)(nil)
 
 func NewCProcessor(handler C) *CProcessor {
     p := &CProcessor{
-        handler:            handler,
-        processorMap:       make(map[string]thrift.ProcessorFunctionContext),
-        functionServiceMap: make(map[string]string),
+        handler:              handler,
+        processorFunctionMap: make(map[string]thrift.ProcessorFunction),
+        functionServiceMap:   make(map[string]string),
     }
-    p.AddToProcessorMap("f", &procFuncCF{handler: handler})
-    p.AddToProcessorMap("thing", &procFuncCThing{handler: handler})
+    p.AddToProcessorFunctionMap("f", &procFuncCF{handler: handler})
+    p.AddToProcessorFunctionMap("thing", &procFuncCThing{handler: handler})
     p.AddToFunctionServiceMap("f", "C")
     p.AddToFunctionServiceMap("thing", "C")
 
     return p
 }
 
-func (p *CProcessor) AddToProcessorMap(key string, processor thrift.ProcessorFunctionContext) {
-    p.processorMap[key] = processor
+func (p *CProcessor) AddToProcessorFunctionMap(key string, processorFunction thrift.ProcessorFunction) {
+    p.processorFunctionMap[key] = processorFunction
 }
 
 func (p *CProcessor) AddToFunctionServiceMap(key, service string) {
     p.functionServiceMap[key] = service
 }
 
-func (p *CProcessor) GetProcessorFunctionContext(key string) (processor thrift.ProcessorFunctionContext, err error) {
-    if processor, ok := p.processorMap[key]; ok {
-        return processor, nil
-    }
-    return nil, nil
+func (p *CProcessor) GetProcessorFunction(key string) (processor thrift.ProcessorFunction) {
+    return p.processorFunctionMap[key]
 }
 
-func (p *CProcessor) ProcessorMap() map[string]thrift.ProcessorFunctionContext {
-    return p.processorMap
+func (p *CProcessor) ProcessorFunctionMap() map[string]thrift.ProcessorFunction {
+    return p.processorFunctionMap
 }
 
 func (p *CProcessor) FunctionServiceMap() map[string]string {
@@ -840,9 +174,9 @@ type procFuncCF struct {
     handler C
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncCF)(nil)
+var _ thrift.ProcessorFunction = (*procFuncCF)(nil)
 
-func (p *procFuncCF) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncCF) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqCF()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -851,7 +185,7 @@ func (p *procFuncCF) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception)
     return args, nil
 }
 
-func (p *procFuncCF) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncCF) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -890,9 +224,9 @@ type procFuncCThing struct {
     handler C
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncCThing)(nil)
+var _ thrift.ProcessorFunction = (*procFuncCThing)(nil)
 
-func (p *procFuncCThing) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncCThing) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqCThing()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -901,7 +235,7 @@ func (p *procFuncCThing) Read(iprot thrift.Format) (thrift.Struct, thrift.Except
     return args, nil
 }
 
-func (p *procFuncCThing) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncCThing) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch v := result.(type) {

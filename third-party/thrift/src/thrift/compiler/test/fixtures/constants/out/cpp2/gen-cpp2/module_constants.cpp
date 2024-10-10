@@ -10,6 +10,7 @@
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
 
+
 namespace cpp2 {
 namespace module_constants {
 
@@ -288,6 +289,8 @@ namespace module_constants {
   static folly::Indestructible<::std::map<::std::int32_t, bool>> const instance{ ::cpp2::module_constants::I2B() };
   return *instance;
 }
+
+
 
 } // namespace module_constants
 } // namespace cpp2

@@ -23,6 +23,9 @@ namespace apache::thrift {
 class SchemaRegistry {
  public:
   static const type::Schema& getMergedSchema();
+  static type::Schema mergeSchemas(
+      folly::Range<const std::string_view*> schemas);
+  static type::Schema mergeSchemas(std::vector<type::Schema>&& schemas);
 };
 
 } // namespace apache::thrift

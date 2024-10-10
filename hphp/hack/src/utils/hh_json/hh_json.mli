@@ -21,6 +21,12 @@ type json =
 
 exception Syntax_error of string
 
+val of_yojson : Yojson.Safe.t -> json
+
+val of_yojson_opt : Yojson.Safe.t option -> json
+
+val of_opt : ('a -> json) -> 'a option -> json
+
 (* A function conforming to `show`'s pretty printing signature;
     calls `json_to_multiline` internally
 *)
@@ -82,9 +88,9 @@ val get_number_int_exn : json -> int
 
 val get_bool_exn : json -> bool
 
-val opt_string_to_json : string option -> json
+val string_opt : string option -> json
 
-val opt_int_to_json : int option -> json
+val int_opt : int option -> json
 
 val int_ : int -> json
 

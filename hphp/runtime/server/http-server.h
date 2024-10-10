@@ -17,7 +17,6 @@
 #pragma once
 
 #include "hphp/runtime/server/server.h"
-#include "hphp/runtime/server/satellite-server.h"
 #include "hphp/runtime/server/shutdown-stats.h"
 
 #include "hphp/util/async-func.h"
@@ -29,8 +28,7 @@
 namespace HPHP {
 ///////////////////////////////////////////////////////////////////////////////
 
-struct HttpServer : Synchronizable, TakeoverListener,
-                    Server::ServerEventListener {
+struct HttpServer : Synchronizable, Server::ServerEventListener {
  public:
   static std::shared_ptr<HttpServer> Server;
   static time_t StartTime;
@@ -71,14 +69,9 @@ struct HttpServer : Synchronizable, TakeoverListener,
 
   void flushLog();
 
-  void takeoverShutdown() override;
-
   void serverStopped(HPHP::Server* server) override;
 
   HPHP::Server* getPageServer() { return m_pageServer.get(); }
-  void getSatelliteStats(std::vector<std::pair<std::string, int>> *stats);
-  // Get total ongoing/queued request count for all satellite servers.
-  std::pair<int, int> getSatelliteRequestCount() const;
 
   static void MarkShutdownStat(ShutdownEvent event);
   static void LogShutdownStats();
@@ -147,7 +140,6 @@ private:
 
   ServerPtr m_pageServer;
   ServerPtr m_adminServer;
-  std::vector<std::unique_ptr<SatelliteServer>> m_satellites;
   ServiceData::CounterCallback m_counterCallback;
 };
 

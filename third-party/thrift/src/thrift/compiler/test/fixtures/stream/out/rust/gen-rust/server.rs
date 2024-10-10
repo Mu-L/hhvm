@@ -22,6 +22,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait PubSubStreamingService: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn returnstream(
@@ -346,8 +347,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for PubSubStreamingService's methods.
 #[derive(Clone, Debug)]
 pub struct PubSubStreamingServiceProcessor<P, H, R, RS> {
@@ -355,6 +354,7 @@ pub struct PubSubStreamingServiceProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_PubSubStreamingService_returnstream {
     i32_from: ::std::primitive::i32,
@@ -390,6 +390,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
     }
 }
 
+
 struct Args_PubSubStreamingService_streamthrows {
     foo: ::std::primitive::i32,
 }
@@ -418,6 +419,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
         })
     }
 }
+
 
 struct Args_PubSubStreamingService_servicethrows {
     foo: ::std::primitive::i32,
@@ -448,6 +450,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
     }
 }
 
+
 struct Args_PubSubStreamingService_servicethrows2 {
     foo: ::std::primitive::i32,
 }
@@ -476,6 +479,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
         })
     }
 }
+
 
 struct Args_PubSubStreamingService_boththrows {
     foo: ::std::primitive::i32,
@@ -506,6 +510,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
     }
 }
 
+
 struct Args_PubSubStreamingService_responseandstreamstreamthrows {
     foo: ::std::primitive::i32,
 }
@@ -534,6 +539,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
         })
     }
 }
+
 
 struct Args_PubSubStreamingService_responseandstreamservicethrows {
     foo: ::std::primitive::i32,
@@ -564,6 +570,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
     }
 }
 
+
 struct Args_PubSubStreamingService_responseandstreamboththrows {
     foo: ::std::primitive::i32,
 }
@@ -592,6 +599,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
         })
     }
 }
+
 
 struct Args_PubSubStreamingService_returnstreamFast {
     i32_from: ::std::primitive::i32,
@@ -626,7 +634,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Pu
         })
     }
 }
-
 
 impl<P, H, R, RS> PubSubStreamingServiceProcessor<P, H, R, RS>
 where

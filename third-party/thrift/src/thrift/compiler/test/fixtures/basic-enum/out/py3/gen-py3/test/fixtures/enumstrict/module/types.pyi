@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class EmptyEnum(thrift.py3.types.Enum):
@@ -30,6 +26,15 @@ class MyEnum(thrift.py3.types.Enum):
     TWO: MyEnum = ...
     def _to_python(self) -> "test.fixtures.enumstrict.module.thrift_types.MyEnum": ...   # type: ignore
     def _to_py3(self) -> MyEnum: ...
+    def _to_py_deprecated(self) -> int: ...
+
+
+class MyUseIntrinsicDefaultEnum(thrift.py3.types.Enum):
+    ZERO: MyUseIntrinsicDefaultEnum = ...
+    ONE: MyUseIntrinsicDefaultEnum = ...
+    TWO: MyUseIntrinsicDefaultEnum = ...
+    def _to_python(self) -> "test.fixtures.enumstrict.module.thrift_types.MyUseIntrinsicDefaultEnum": ...   # type: ignore
+    def _to_py3(self) -> MyUseIntrinsicDefaultEnum: ...
     def _to_py_deprecated(self) -> int: ...
 
 
@@ -65,9 +70,8 @@ class MyStruct(thrift.py3.types.Struct, _typing.Hashable):
         myBigEnum: bool
         pass
 
-    myEnum: Final[MyEnum] = ...
-
-    myBigEnum: Final[MyBigEnum] = ...
+    myEnum: _typing.Final[MyEnum] = ...
+    myBigEnum: _typing.Final[MyBigEnum] = ...
 
     def __init__(
         self, *,
@@ -77,8 +81,8 @@ class MyStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        myEnum: _typing.Union[MyEnum, '__NotSet', None]=NOTSET,
-        myBigEnum: _typing.Union[MyBigEnum, '__NotSet', None]=NOTSET
+        myEnum: _typing.Union[MyEnum, None]=None,
+        myBigEnum: _typing.Union[MyBigEnum, None]=None
     ) -> MyStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['MyStruct'], bytes]]: ...

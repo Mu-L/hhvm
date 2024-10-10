@@ -9,8 +9,6 @@
 #ifndef COMMON_DB_EVENT_LOGGER_H
 #define COMMON_DB_EVENT_LOGGER_H
 
-#include <errmsg.h> // MySQL
-
 #include <chrono>
 #include <string>
 
@@ -93,14 +91,42 @@ class EnumHelper {
 
 typedef std::chrono::duration<uint64_t, std::micro> Duration;
 
-struct SquangleLoggingData {
+class SquangleLoggingData {
+ public:
   SquangleLoggingData(
-      const common::mysql_client::ConnectionKey* conn_key,
-      const ConnectionContextBase* conn_context)
-      : connKey(conn_key), connContext(conn_context) {}
-  const common::mysql_client::ConnectionKey* connKey;
-  const ConnectionContextBase* connContext;
-  db::ClientPerfStats clientPerfStats;
+      std::shared_ptr<const common::mysql_client::ConnectionKey> conn_key,
+      const ConnectionContextBase* conn_context,
+      db::ClientPerfStats clientPerfStats = db::ClientPerfStats())
+      : connKey_(std::move(conn_key)),
+        connContext_(conn_context),
+        clientPerfStats_(clientPerfStats) {
+    if (!connKey_) {
+      connKey_ = std::make_shared<common::mysql_client::MysqlConnectionKey>();
+    }
+  }
+
+  [[nodiscard]] std::shared_ptr<const common::mysql_client::ConnectionKey>
+  getConnKey() const {
+    return connKey_;
+  }
+
+  [[nodiscard]] const common::mysql_client::ConnectionKey& getConnKeyRef()
+      const {
+    return *connKey_;
+  }
+
+  [[nodiscard]] const ConnectionContextBase* getConnContext() const {
+    return connContext_;
+  }
+
+  [[nodiscard]] const db::ClientPerfStats& getClientPerfStats() const {
+    return clientPerfStats_;
+  }
+
+ private:
+  std::shared_ptr<const common::mysql_client::ConnectionKey> connKey_;
+  const ConnectionContextBase* connContext_;
+  db::ClientPerfStats clientPerfStats_;
 };
 
 struct CommonLoggingData {
@@ -133,7 +159,7 @@ struct QueryLoggingData : CommonLoggingData {
       Duration duration,
       std::optional<Duration> timeout,
       int queries,
-      const std::string& queryString,
+      std::shared_ptr<folly::fbstring> queryString,
       int rows,
       uint64_t resultSize = 0,
       bool noIndexUsed = false,
@@ -142,7 +168,8 @@ struct QueryLoggingData : CommonLoggingData {
       AttributeMap responseAttributes = AttributeMap(),
       Duration maxThreadBlockTime = Duration(0),
       Duration totalThreadBlockTime = Duration(0),
-      bool wasSlow = false)
+      bool wasSlow = false,
+      unsigned int warningsCount = 0)
       : CommonLoggingData(
             op,
             duration,
@@ -150,16 +177,17 @@ struct QueryLoggingData : CommonLoggingData {
             maxThreadBlockTime,
             totalThreadBlockTime),
         queries_executed(queries),
-        query(queryString),
+        query(std::move(queryString)),
         rows_received(rows),
         result_size(resultSize),
         no_index_used(noIndexUsed),
         use_checksum(useChecksum),
         query_attributes(queryAttributes),
         response_attributes(std::move(responseAttributes)),
-        was_slow(wasSlow) {}
+        was_slow(wasSlow),
+        warnings_count(warningsCount) {}
   int queries_executed;
-  std::string query;
+  std::shared_ptr<folly::fbstring> query;
   int rows_received;
   uint64_t result_size;
   bool no_index_used;
@@ -167,6 +195,7 @@ struct QueryLoggingData : CommonLoggingData {
   AttributeMap query_attributes;
   AttributeMap response_attributes;
   bool was_slow;
+  unsigned int warnings_count;
 };
 
 // Base class for logging events of db client apis. This should be used as an

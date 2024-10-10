@@ -6,27 +6,108 @@
 package scope
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
 var (
+    premadeThriftType_scope_Transitive = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Transitive"),
+            )
+    premadeThriftType_scope_Program = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Program"),
+            )
+    premadeThriftType_scope_Struct = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Struct"),
+            )
+    premadeThriftType_scope_Union = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Union"),
+            )
+    premadeThriftType_scope_Exception = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Exception"),
+            )
+    premadeThriftType_scope_Field = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Field"),
+            )
+    premadeThriftType_scope_Typedef = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Typedef"),
+            )
+    premadeThriftType_scope_Service = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Service"),
+            )
+    premadeThriftType_scope_Interaction = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Interaction"),
+            )
+    premadeThriftType_scope_Function = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Function"),
+            )
+    premadeThriftType_scope_EnumValue = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.EnumValue"),
+            )
+    premadeThriftType_scope_Const = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Const"),
+            )
+    premadeThriftType_scope_Enum = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Enum"),
+            )
+    premadeThriftType_scope_Structured = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Structured"),
+            )
+    premadeThriftType_scope_Interface = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Interface"),
+            )
+    premadeThriftType_scope_RootDefinition = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.RootDefinition"),
+            )
+    premadeThriftType_scope_Definition = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("scope.Definition"),
+            )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "scope.Transitive": premadeThriftType_scope_Transitive,
+    "scope.Program": premadeThriftType_scope_Program,
+    "scope.Struct": premadeThriftType_scope_Struct,
+    "scope.Union": premadeThriftType_scope_Union,
+    "scope.Exception": premadeThriftType_scope_Exception,
+    "scope.Field": premadeThriftType_scope_Field,
+    "scope.Typedef": premadeThriftType_scope_Typedef,
+    "scope.Service": premadeThriftType_scope_Service,
+    "scope.Interaction": premadeThriftType_scope_Interaction,
+    "scope.Function": premadeThriftType_scope_Function,
+    "scope.EnumValue": premadeThriftType_scope_EnumValue,
+    "scope.Const": premadeThriftType_scope_Const,
+    "scope.Enum": premadeThriftType_scope_Enum,
+    "scope.Structured": premadeThriftType_scope_Structured,
+    "scope.Interface": premadeThriftType_scope_Interface,
+    "scope.RootDefinition": premadeThriftType_scope_RootDefinition,
+    "scope.Definition": premadeThriftType_scope_Definition,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
     metadata.NewThriftStruct().
@@ -89,6 +170,12 @@ var enumMetadatas = []*metadata.ThriftEnum{
 }
 
 var serviceMetadatas = []*metadata.ThriftService{
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.

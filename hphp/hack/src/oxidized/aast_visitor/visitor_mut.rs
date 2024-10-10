@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<519418627e987e6b5070896af2f4bf47>>
+// @generated SignedSource<<ab61dfa0ea1331c5a1351e4cb0479182>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -581,6 +581,13 @@ pub trait VisitorMut<'node> {
     ) -> Result<(), <Self::Params as Params>::Error> {
         p.recurse(c, self.object())
     }
+    fn visit_splat_kind(
+        &mut self,
+        c: &mut <Self::Params as Params>::Context,
+        p: &'node mut SplatKind,
+    ) -> Result<(), <Self::Params as Params>::Error> {
+        p.recurse(c, self.object())
+    }
     fn visit_stmt(
         &mut self,
         c: &mut <Self::Params as Params>::Context,
@@ -630,6 +637,27 @@ pub trait VisitorMut<'node> {
     ) -> Result<(), <Self::Params as Params>::Error> {
         p.recurse(c, self.object())
     }
+    fn visit_tuple_extra(
+        &mut self,
+        c: &mut <Self::Params as Params>::Context,
+        p: &'node mut TupleExtra,
+    ) -> Result<(), <Self::Params as Params>::Error> {
+        p.recurse(c, self.object())
+    }
+    fn visit_tuple_extra_info(
+        &mut self,
+        c: &mut <Self::Params as Params>::Context,
+        p: &'node mut TupleExtraInfo,
+    ) -> Result<(), <Self::Params as Params>::Error> {
+        p.recurse(c, self.object())
+    }
+    fn visit_tuple_info(
+        &mut self,
+        c: &mut <Self::Params as Params>::Context,
+        p: &'node mut TupleInfo,
+    ) -> Result<(), <Self::Params as Params>::Error> {
+        p.recurse(c, self.object())
+    }
     fn visit_type_hint(
         &mut self,
         c: &mut <Self::Params as Params>::Context,
@@ -658,10 +686,31 @@ pub trait VisitorMut<'node> {
     ) -> Result<(), <Self::Params as Params>::Error> {
         p.recurse(c, self.object())
     }
+    fn visit_typedef_assignment(
+        &mut self,
+        c: &mut <Self::Params as Params>::Context,
+        p: &'node mut TypedefAssignment,
+    ) -> Result<(), <Self::Params as Params>::Error> {
+        p.recurse(c, self.object())
+    }
+    fn visit_typedef_case_type_variant(
+        &mut self,
+        c: &mut <Self::Params as Params>::Context,
+        p: &'node mut TypedefCaseTypeVariant,
+    ) -> Result<(), <Self::Params as Params>::Error> {
+        p.recurse(c, self.object())
+    }
     fn visit_typedef_visibility(
         &mut self,
         c: &mut <Self::Params as Params>::Context,
         p: &'node mut TypedefVisibility,
+    ) -> Result<(), <Self::Params as Params>::Error> {
+        p.recurse(c, self.object())
+    }
+    fn visit_typedef_visibility_and_hint(
+        &mut self,
+        c: &mut <Self::Params as Params>::Context,
+        p: &'node mut TypedefVisibilityAndHint,
     ) -> Result<(), <Self::Params as Params>::Error> {
         p.recurse(c, self.object())
     }

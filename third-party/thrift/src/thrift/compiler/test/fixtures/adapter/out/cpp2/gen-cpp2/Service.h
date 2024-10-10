@@ -46,6 +46,7 @@ class ServiceHandler<::facebook::thrift::test::Service> : public apache::thrift:
   typedef ::facebook::thrift::test::ServiceAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -69,6 +70,7 @@ class ServiceHandler<::facebook::thrift::test::Service> : public apache::thrift:
 namespace facebook::thrift::test {
 using ServiceSvIf [[deprecated("Use apache::thrift::ServiceHandler<Service> instead")]] = ::apache::thrift::ServiceHandler<Service>;
 } // namespace facebook::thrift::test
+
 namespace facebook::thrift::test {
 class ServiceSvNull : public ::apache::thrift::ServiceHandler<Service> {
  public:

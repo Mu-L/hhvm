@@ -18,22 +18,19 @@
 
 #include <folly/Portability.h>
 #include <folly/Try.h>
+#include <folly/coro/AsyncGenerator.h>
 #include <folly/executors/GlobalExecutor.h>
-#include <folly/experimental/coro/AsyncGenerator.h>
 #include <thrift/lib/cpp2/async/ClientBufferedStream.h>
 #include <thrift/lib/cpp2/async/RpcTypes.h>
 #include <thrift/lib/cpp2/async/ServerGeneratorStream.h>
 #include <thrift/lib/cpp2/async/ServerPublisherStream.h>
 #include <thrift/lib/cpp2/async/StreamCallbacks.h>
 
-namespace yarpl {
-namespace flowable {
+namespace yarpl::flowable {
 class ThriftStreamShim;
-} // namespace flowable
-} // namespace yarpl
+} // namespace yarpl::flowable
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 namespace detail::test {
 class TestStreamProducerCallbackService;
 }
@@ -135,6 +132,6 @@ struct ResponseAndServerStreamFactory {
   apache::thrift::detail::ServerStreamFactory stream;
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift
+
 #include <thrift/lib/cpp2/async/ServerStream-inl.h>

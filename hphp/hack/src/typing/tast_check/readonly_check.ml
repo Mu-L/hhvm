@@ -191,8 +191,8 @@ let rec ty_expr env ((_, _, expr_) : Tast.expr) : rty =
 
 let is_value_collection_ty env ty =
   let mixed = MakeType.mixed Reason.none in
+  let ty = Tast_env.strip_dynamic env ty in
   let env = Tast_env.tast_env_as_typing_env env in
-  let ty = Typing_utils.strip_dynamic env ty in
   let hackarray = MakeType.any_array Reason.none mixed mixed in
   (* Subtype against an empty open shape (shape(...)) *)
   let shape =
@@ -219,8 +219,16 @@ let rec is_safe_mut_ty env (seen : SSet.t) ty =
   (* If it's a Tclass it's an array type by is_value_collection *)
   | Tintersection tyl -> List.exists tyl ~f:(fun l -> is_safe_mut_ty env seen l)
   (* Only error if there isn't a type that it could be that's primitive *)
-  | Tunion tyl -> List.exists tyl ~f:(fun l -> is_safe_mut_ty env seen l)
-  | Ttuple tyl -> List.for_all tyl ~f:(fun l -> is_safe_mut_ty env seen l)
+  | Tunion tyl -> List.exists tyl ~f:(is_safe_mut_ty env seen)
+  (* See comment about open shapes *)
+  | Ttuple { t_required; t_extra } ->
+    List.for_all t_required ~f:(is_safe_mut_ty env seen)
+    && begin
+         match t_extra with
+         | Textra { t_optional; t_variadic = _ } ->
+           List.for_all t_optional ~f:(is_safe_mut_ty env seen)
+         | Tsplat t_splat -> is_safe_mut_ty env seen t_splat
+       end
   | Tdependent (_, upper) ->
     (* check upper bounds *)
     is_safe_mut_ty env seen upper
@@ -480,7 +488,7 @@ let call
           "annotate this typehint as a " ^ suggested_fty_str
         (* Otherwise, it's likely from a Rwitness, but we suggest declaring it as readonly *)
         else
-          "declaring this as a `readonly` function"
+          "declare this as a `readonly` function"
       in
       Typing_error_utils.add_typing_error
         ~env:(Tast_env.tast_env_as_typing_env env)

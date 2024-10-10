@@ -6,22 +6,15 @@
 package included
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
@@ -46,7 +39,19 @@ var (
         metadata.NewThriftListType().
             SetValueType(premadeThriftType_included_SomeMap),
             )
+    premadeThriftType_included_SomeListOfTypeMap = metadata.NewThriftType().SetTTypedef(
+        metadata.NewThriftTypedefType().
+            SetName("included.SomeListOfTypeMap").
+            SetUnderlyingType(premadeThriftType_list_included_SomeMap),
+            )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "i32": premadeThriftType_i32,
+    "string": premadeThriftType_string,
+    "included.SomeMap": premadeThriftType_included_SomeMap,
+    "included.SomeListOfTypeMap": premadeThriftType_included_SomeListOfTypeMap,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
 }
@@ -58,6 +63,12 @@ var enumMetadatas = []*metadata.ThriftEnum{
 }
 
 var serviceMetadatas = []*metadata.ThriftService{
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.

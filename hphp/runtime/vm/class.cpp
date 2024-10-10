@@ -484,6 +484,12 @@ void Class::destroy() {
 
   releaseSProps();
 
+  for (size_t i = 0; i < numMethods(); i++) {
+    if (auto meth = getMethod(i)) {
+      if (meth->cls() == this) meth->atomicFlags().set(Func::Flags::Zombie);
+    }
+  }
+
   Treadmill::enqueue(
     [this] {
       releaseRefs();
@@ -2444,13 +2450,25 @@ void setConstVal(Class::Const& cns, const PreClass::Const& preConst) {
 }
 
 void Class::importTraitConsts(ConstMap::Builder& builder) {
-  auto importConst = [&] (const Const& tConst, bool isFromInterface) {
+  auto importConst = [&] (Const&& tConst, bool isFromInterface) {
+    auto const declCls = tConst.cls;
     auto const existing = builder.find(tConst.name);
+
+    // The declaring class for type constants can be used to resolve self:: and
+    // parent:: references and must therefore refer to the importing class and
+    // not the declaring trait.
+    if (tConst.kind() == ConstModifiers::Kind::Type && !isFromInterface) {
+      tConst.cls = this;
+    }
+
     if (existing == builder.end()) {
       builder.add(tConst.name, tConst);
       return;
     }
     auto& existingConst = builder[existing->second];
+    auto const existingConstName = existingConst.preConst->cls()
+      ? existingConst.preConst->cls()
+      : existingConst.cls->name();
 
     if (tConst.kind() != existingConst.kind()) {
       raise_error("%s cannot inherit the %s %s from %s, because it "
@@ -2458,9 +2476,9 @@ void Class::importTraitConsts(ConstMap::Builder& builder) {
                   m_preClass->name()->data(),
                   ConstModifiers::show(tConst.kind()),
                   tConst.name->data(),
-                  tConst.cls->name()->data(),
+                  declCls->name()->data(),
                   ConstModifiers::show(existingConst.kind()),
-                  existingConst.cls->name()->data());
+                  existingConstName->data());
     }
 
     if (tConst.isAbstractAndUninit()) {
@@ -2489,14 +2507,14 @@ void Class::importTraitConsts(ConstMap::Builder& builder) {
       } else { // existing is concrete
         // the existing constant will win over any incoming abstracts and retain a fatal when two
         // concrete constants collide
-        if (!tConst.isAbstract() && existingConst.cls != tConst.cls) {
+        if (!tConst.isAbstract() && existingConst.cls != declCls) {
           raise_error("%s cannot inherit the %s %s from %s, because "
                       "it was previously inherited from %s",
                       m_preClass->name()->data(),
                       ConstModifiers::show(tConst.kind()),
                       tConst.name->data(),
-                      tConst.cls->name()->data(),
-                      existingConst.cls->name()->data());
+                      declCls->name()->data(),
+                      existingConstName->data());
         }
       }
     } else {
@@ -2509,7 +2527,7 @@ void Class::importTraitConsts(ConstMap::Builder& builder) {
           tConst.kind() == ConstModifiers::Kind::Context)  {
         return;
       }
-      if (existingConst.cls != tConst.cls) {
+      if (existingConst.cls != declCls) {
 
         // Constants in traits conflict with constants in declared interfaces
         if (existingConst.cls->attrs() & AttrInterface) {
@@ -2521,7 +2539,7 @@ void Class::importTraitConsts(ConstMap::Builder& builder) {
                           m_preClass->name()->data(),
                           ConstModifiers::show(tConst.kind()),
                           tConst.name->data(),
-                          existingConst.cls->name()->data());
+                          existingConstName->data());
             }
           }
         }
@@ -2541,7 +2559,7 @@ void Class::importTraitConsts(ConstMap::Builder& builder) {
         tConst.name = preConst->name();
         tConst.preConst = preConst;
         setConstVal(tConst, *preConst);
-        importConst(tConst, false);
+        importConst(std::move(tConst), false);
     }
     // If we flatten, we need to check implemented interfaces for constants
     for (auto const& traitName : m_preClass->usedTraits()) {
@@ -2552,8 +2570,8 @@ void Class::importTraitConsts(ConstMap::Builder& builder) {
       for (int i = 0; i < numIfcs; i++) {
         auto interface = trait->m_interfaces[i];
         for (Slot slot = 0; slot < interface->m_constants.size(); ++slot) {
-          auto const tConst = interface->m_constants[slot];
-          importConst(tConst, true);
+          auto tConst = interface->m_constants[slot];
+          importConst(std::move(tConst), true);
         }
       }
     }
@@ -2561,8 +2579,9 @@ void Class::importTraitConsts(ConstMap::Builder& builder) {
     for (auto const& t : m_extra->m_usedTraits) {
       auto trait = t.get();
       for (Slot slot = 0; slot < trait->m_constants.size(); ++slot) {
-        auto const tConst = trait->m_constants[slot];
-        importConst(tConst, tConst.cls->attrs() & AttrInterface);
+        auto tConst = trait->m_constants[slot];
+        auto const isFromInterface = tConst.cls->attrs() & AttrInterface;
+        importConst(std::move(tConst), isFromInterface);
       }
     }
   }
@@ -4129,12 +4148,13 @@ void Class::setRequirements() {
 
 void Class::setEnumType() {
   if (attrs() & AttrEnum) {
-    m_enumBaseTy = m_preClass->enumBaseTy().underlyingDataTypeResolved();
+    allocExtraData();
+    auto const resolved = m_preClass->enumBaseTy().resolvedWithAutoload();
+    m_extra.raw()->m_enumBaseTy = resolved;
 
     // Make sure we've loaded a valid underlying type.
-    if (!m_preClass->enumBaseTy().validForEnumBase()) {
-      raise_error("Invalid base type for enum %s",
-                  m_preClass->name()->data());
+    if (!resolved.validForEnumBase()) {
+      raise_error("Invalid base type for enum %s", m_preClass->name()->data());
     }
   }
 }
@@ -4163,11 +4183,17 @@ void Class::setIncludedEnums() {
     }
     declIncludedEnums.emplace_back(cp);
     m_preClass->enforceInMaybeSealedParentWhitelist(cp->preClass());
-    auto cp_baseType = cp->m_enumBaseTy;
-    if (m_enumBaseTy &&
+
+    // N.B. This will check for int and string type compatibility, but not for
+    //      classname<T> which is also an allowed enum type. The type checker
+    //      currently does this and it could be added to HHVM as well.
+    auto my_enumBaseTy = enumBaseTy().underlyingDataType();
+    auto cp_baseType = cp->enumBaseTy().underlyingDataType();
+
+    if (my_enumBaseTy &&
         (!cp_baseType ||
-         isIntType(*cp_baseType) != isIntType(*m_enumBaseTy) ||
-         isStringType(*cp_baseType) != isStringType(*m_enumBaseTy))) {
+         isIntType(*cp_baseType) != isIntType(*my_enumBaseTy) ||
+         isStringType(*cp_baseType) != isStringType(*my_enumBaseTy))) {
       raise_error("%s cannot include %s - base type mismatch",
                   m_preClass->name()->data(), cp->name()->data());
     }

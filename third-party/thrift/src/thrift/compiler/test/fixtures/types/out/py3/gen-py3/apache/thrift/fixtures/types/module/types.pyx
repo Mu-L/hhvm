@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -61,6 +58,12 @@ import importlib
 cimport apache.thrift.fixtures.types.included.types as _apache_thrift_fixtures_types_included_types
 import apache.thrift.fixtures.types.included.types as _apache_thrift_fixtures_types_included_types
 
+from apache.thrift.fixtures.types.module.types_impl_FBTHRIFT_ONLY_DO_NOT_USE import (
+    has_bitwise_ops,
+    is_unscoped,
+    MyForwardRefEnum,
+)
+
 from apache.thrift.fixtures.types.module.containers_FBTHRIFT_ONLY_DO_NOT_USE import (
     List__i64,
     List__i32,
@@ -75,173 +78,6 @@ from apache.thrift.fixtures.types.module.containers_FBTHRIFT_ONLY_DO_NOT_USE imp
     List__AdaptedListDep,
     List__DependentAdaptedListDep,
 )
-
-
-
-cdef __EnumData __has_bitwise_ops_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[chas_bitwise_ops](), has_bitwise_ops)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __has_bitwise_opsMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __has_bitwise_ops_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __has_bitwise_ops_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __has_bitwise_ops_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __has_bitwise_ops_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class has_bitwise_ops(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __has_bitwise_ops_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[chas_bitwise_ops].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.has_bitwise_ops"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "apache.thrift.fixtures.types.module.thrift_types"
-        )
-        return python_types.has_bitwise_ops(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> has_bitwise_ops, <PyTypeObject*> __has_bitwise_opsMeta)
-
-
-cdef __EnumData __is_unscoped_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cis_unscoped](), is_unscoped)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __is_unscopedMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __is_unscoped_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __is_unscoped_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __is_unscoped_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __is_unscoped_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class is_unscoped(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __is_unscoped_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cis_unscoped].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.is_unscoped"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "apache.thrift.fixtures.types.module.thrift_types"
-        )
-        return python_types.is_unscoped(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> is_unscoped, <PyTypeObject*> __is_unscopedMeta)
-
-
-cdef __EnumData __MyForwardRefEnum_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyForwardRefEnum](), MyForwardRefEnum)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyForwardRefEnumMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyForwardRefEnum_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyForwardRefEnum_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyForwardRefEnum_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyForwardRefEnum_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyForwardRefEnum(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyForwardRefEnum_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyForwardRefEnum].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyForwardRefEnum"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "apache.thrift.fixtures.types.module.thrift_types"
-        )
-        return python_types.MyForwardRefEnum(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyForwardRefEnum, <PyTypeObject*> __MyForwardRefEnumMeta)
-
 
 
 cdef object get_types_reflection():
@@ -383,7 +219,6 @@ cdef class decorated_struct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline field_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().value()).decode('UTF-8')
 
     @property
@@ -507,7 +342,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline fieldA_impl(self):
-
         if self.__fbthrift_cached_fieldA is None:
             self.__fbthrift_cached_fieldA = List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldA_ref().ref())
         return self.__fbthrift_cached_fieldA
@@ -517,7 +351,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return self.fieldA_impl()
 
     cdef inline fieldB_impl(self):
-
         if self.__fbthrift_cached_fieldB is None:
             self.__fbthrift_cached_fieldB = std_list__List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldB_ref().ref())
         return self.__fbthrift_cached_fieldB
@@ -527,7 +360,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return self.fieldB_impl()
 
     cdef inline fieldC_impl(self):
-
         if self.__fbthrift_cached_fieldC is None:
             self.__fbthrift_cached_fieldC = std_deque__List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldC_ref().ref())
         return self.__fbthrift_cached_fieldC
@@ -537,7 +369,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return self.fieldC_impl()
 
     cdef inline fieldD_impl(self):
-
         if self.__fbthrift_cached_fieldD is None:
             self.__fbthrift_cached_fieldD = folly_fbvector__List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldD_ref().ref())
         return self.__fbthrift_cached_fieldD
@@ -547,7 +378,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return self.fieldD_impl()
 
     cdef inline fieldE_impl(self):
-
         if self.__fbthrift_cached_fieldE is None:
             self.__fbthrift_cached_fieldE = folly_small_vector__List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldE_ref().ref())
         return self.__fbthrift_cached_fieldE
@@ -557,7 +387,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return self.fieldE_impl()
 
     cdef inline fieldF_impl(self):
-
         if self.__fbthrift_cached_fieldF is None:
             self.__fbthrift_cached_fieldF = folly_sorted_vector_set__Set__i32._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldF_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_fieldF
@@ -567,7 +396,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return self.fieldF_impl()
 
     cdef inline fieldG_impl(self):
-
         if self.__fbthrift_cached_fieldG is None:
             self.__fbthrift_cached_fieldG = Map__i32_string._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldG_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_fieldG
@@ -577,7 +405,6 @@ cdef class ContainerStruct(thrift.py3.types.Struct):
         return self.fieldG_impl()
 
     cdef inline fieldH_impl(self):
-
         if self.__fbthrift_cached_fieldH is None:
             self.__fbthrift_cached_fieldH = std_unordered_map__Map__i32_string._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldH_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_fieldH
@@ -696,7 +523,6 @@ cdef class CppTypeStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline fieldA_impl(self):
-
         if self.__fbthrift_cached_fieldA is None:
             self.__fbthrift_cached_fieldA = std_list_int32_t__List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fieldA_ref().ref())
         return self.__fbthrift_cached_fieldA
@@ -815,7 +641,6 @@ cdef class VirtualStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline MyIntField_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).MyIntField_ref().value()
 
     @property
@@ -933,7 +758,6 @@ cdef class MyStructWithForwardRefEnum(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline a_impl(self):
-
         if self.__fbthrift_cached_a is None:
             self.__fbthrift_cached_a = translate_cpp_enum_to_python(MyForwardRefEnum, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).a_ref().value()))
         return self.__fbthrift_cached_a
@@ -943,7 +767,6 @@ cdef class MyStructWithForwardRefEnum(thrift.py3.types.Struct):
         return self.a_impl()
 
     cdef inline b_impl(self):
-
         if self.__fbthrift_cached_b is None:
             self.__fbthrift_cached_b = translate_cpp_enum_to_python(MyForwardRefEnum, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).b_ref().value()))
         return self.__fbthrift_cached_b
@@ -1063,7 +886,6 @@ cdef class TrivialNumeric(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline a_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).a_ref().value()
 
     @property
@@ -1071,7 +893,6 @@ cdef class TrivialNumeric(thrift.py3.types.Struct):
         return self.a_impl()
 
     cdef inline b_impl(self):
-
         return <pbool> deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).b_ref().value()
 
     @property
@@ -1189,7 +1010,6 @@ cdef class TrivialNestedWithDefault(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline z_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).z_ref().value()
 
     @property
@@ -1197,7 +1017,6 @@ cdef class TrivialNestedWithDefault(thrift.py3.types.Struct):
         return self.z_impl()
 
     cdef inline n_impl(self):
-
         if self.__fbthrift_cached_n is None:
             self.__fbthrift_cached_n = TrivialNumeric._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).n_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_n
@@ -1317,7 +1136,6 @@ cdef class ComplexString(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline a_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).a_ref().value()).decode('UTF-8')
 
     @property
@@ -1325,7 +1143,6 @@ cdef class ComplexString(thrift.py3.types.Struct):
         return self.a_impl()
 
     cdef inline b_impl(self):
-
         if self.__fbthrift_cached_b is None:
             self.__fbthrift_cached_b = Map__string_i32._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).b_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_b
@@ -1445,7 +1262,6 @@ cdef class ComplexNestedWithDefault(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline z_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).z_ref().value()).decode('UTF-8')
 
     @property
@@ -1453,7 +1269,6 @@ cdef class ComplexNestedWithDefault(thrift.py3.types.Struct):
         return self.z_impl()
 
     cdef inline n_impl(self):
-
         if self.__fbthrift_cached_n is None:
             self.__fbthrift_cached_n = ComplexString._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).n_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_n
@@ -1576,7 +1391,6 @@ cdef class MinPadding(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline small_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).small_ref().value()
 
     @property
@@ -1584,7 +1398,6 @@ cdef class MinPadding(thrift.py3.types.Struct):
         return self.small_impl()
 
     cdef inline big_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).big_ref().value()
 
     @property
@@ -1592,7 +1405,6 @@ cdef class MinPadding(thrift.py3.types.Struct):
         return self.big_impl()
 
     cdef inline medium_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).medium_ref().value()
 
     @property
@@ -1600,7 +1412,6 @@ cdef class MinPadding(thrift.py3.types.Struct):
         return self.medium_impl()
 
     cdef inline biggish_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).biggish_ref().value()
 
     @property
@@ -1608,7 +1419,6 @@ cdef class MinPadding(thrift.py3.types.Struct):
         return self.biggish_impl()
 
     cdef inline tiny_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).tiny_ref().value()
 
     @property
@@ -1724,7 +1534,6 @@ cdef class MinPaddingWithCustomType(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline small_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).small_ref().value()
 
     @property
@@ -1732,7 +1541,6 @@ cdef class MinPaddingWithCustomType(thrift.py3.types.Struct):
         return self.small_impl()
 
     cdef inline big_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).big_ref().value()
 
     @property
@@ -1740,7 +1548,6 @@ cdef class MinPaddingWithCustomType(thrift.py3.types.Struct):
         return self.big_impl()
 
     cdef inline medium_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).medium_ref().value()
 
     @property
@@ -1748,7 +1555,6 @@ cdef class MinPaddingWithCustomType(thrift.py3.types.Struct):
         return self.medium_impl()
 
     cdef inline biggish_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).biggish_ref().value()
 
     @property
@@ -1756,7 +1562,6 @@ cdef class MinPaddingWithCustomType(thrift.py3.types.Struct):
         return self.biggish_impl()
 
     cdef inline tiny_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).tiny_ref().value()
 
     @property
@@ -1876,7 +1681,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline MyIntField_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).MyIntField_ref().value()
 
     @property
@@ -1884,7 +1688,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return self.MyIntField_impl()
 
     cdef inline MyStringField_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).MyStringField_ref().value()).decode('UTF-8')
 
     @property
@@ -1892,7 +1695,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return self.MyStringField_impl()
 
     cdef inline majorVer_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).majorVer_ref().value()
 
     @property
@@ -1900,7 +1702,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return self.majorVer_impl()
 
     cdef inline data_impl(self):
-
         if self.__fbthrift_cached_data is None:
             self.__fbthrift_cached_data = MyDataItem._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).data_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_data
@@ -2110,7 +1911,6 @@ cdef class Renaming(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline foo_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).foo_ref().value()
 
     @property
@@ -2228,7 +2028,6 @@ cdef class AnnotatedTypes(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline binary_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).binary_field_ref().value()
 
     @property
@@ -2236,7 +2035,6 @@ cdef class AnnotatedTypes(thrift.py3.types.Struct):
         return self.binary_field_impl()
 
     cdef inline list_field_impl(self):
-
         if self.__fbthrift_cached_list_field is None:
             self.__fbthrift_cached_list_field = List__std_unordered_map__Map__i32_string__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).list_field_ref().ref())
         return self.__fbthrift_cached_list_field
@@ -2357,7 +2155,6 @@ cdef class ForwardUsageRoot(thrift.py3.types.Struct):
     cdef inline ForwardUsageStruct_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).ForwardUsageStruct_ref().has_value():
             return None
-
         if self.__fbthrift_cached_ForwardUsageStruct is None:
             self.__fbthrift_cached_ForwardUsageStruct = ForwardUsageStruct._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).ForwardUsageStruct_ref().ref_unchecked(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_ForwardUsageStruct
@@ -2367,7 +2164,6 @@ cdef class ForwardUsageRoot(thrift.py3.types.Struct):
         return self.ForwardUsageStruct_impl()
 
     cdef inline ForwardUsageByRef_impl(self):
-
         if self.__fbthrift_cached_ForwardUsageByRef is None:
             if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).ForwardUsageByRef_ref():
                 return None
@@ -2487,7 +2283,6 @@ cdef class ForwardUsageStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline foo_impl(self):
-
         if self.__fbthrift_cached_foo is None:
             if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).foo_ref():
                 return None
@@ -2607,7 +2402,6 @@ cdef class ForwardUsageByRef(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline foo_impl(self):
-
         if self.__fbthrift_cached_foo is None:
             if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).foo_ref():
                 return None
@@ -2730,7 +2524,6 @@ cdef class IncompleteMap(thrift.py3.types.Struct):
     cdef inline field_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().has_value():
             return None
-
         if self.__fbthrift_cached_field is None:
             self.__fbthrift_cached_field = Map__i32_IncompleteMapDep._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().ref_unchecked(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_field
@@ -2952,7 +2745,6 @@ cdef class CompleteMap(thrift.py3.types.Struct):
     cdef inline field_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().has_value():
             return None
-
         if self.__fbthrift_cached_field is None:
             self.__fbthrift_cached_field = std_unordered_map__Map__i32_CompleteMapDep._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().ref_unchecked(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_field
@@ -3174,7 +2966,6 @@ cdef class IncompleteList(thrift.py3.types.Struct):
     cdef inline field_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().has_value():
             return None
-
         if self.__fbthrift_cached_field is None:
             self.__fbthrift_cached_field = _std_list__List__IncompleteListDep__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().ref_unchecked())
         return self.__fbthrift_cached_field
@@ -3396,7 +3187,6 @@ cdef class CompleteList(thrift.py3.types.Struct):
     cdef inline field_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().has_value():
             return None
-
         if self.__fbthrift_cached_field is None:
             self.__fbthrift_cached_field = folly_small_vector__List__CompleteListDep__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().ref_unchecked())
         return self.__fbthrift_cached_field
@@ -3618,7 +3408,6 @@ cdef class AdaptedList(thrift.py3.types.Struct):
     cdef inline field_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().has_value():
             return None
-
         if self.__fbthrift_cached_field is None:
             self.__fbthrift_cached_field = List__AdaptedListDep__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().ref_unchecked())
         return self.__fbthrift_cached_field
@@ -3739,7 +3528,6 @@ cdef class DependentAdaptedList(thrift.py3.types.Struct):
     cdef inline field_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().has_value():
             return None
-
         if self.__fbthrift_cached_field is None:
             self.__fbthrift_cached_field = List__DependentAdaptedListDep__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).field_ref().ref_unchecked())
         return self.__fbthrift_cached_field
@@ -3862,7 +3650,6 @@ cdef class AllocatorAware(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline aa_list_impl(self):
-
         if self.__fbthrift_cached_aa_list is None:
             self.__fbthrift_cached_aa_list = List__i32__from_cpp(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).aa_list_ref().ref())
         return self.__fbthrift_cached_aa_list
@@ -3872,7 +3659,6 @@ cdef class AllocatorAware(thrift.py3.types.Struct):
         return self.aa_list_impl()
 
     cdef inline aa_set_impl(self):
-
         if self.__fbthrift_cached_aa_set is None:
             self.__fbthrift_cached_aa_set = Set__i32._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).aa_set_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_aa_set
@@ -3882,7 +3668,6 @@ cdef class AllocatorAware(thrift.py3.types.Struct):
         return self.aa_set_impl()
 
     cdef inline aa_map_impl(self):
-
         if self.__fbthrift_cached_aa_map is None:
             self.__fbthrift_cached_aa_map = Map__i32_i32._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).aa_map_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_aa_map
@@ -3892,7 +3677,6 @@ cdef class AllocatorAware(thrift.py3.types.Struct):
         return self.aa_map_impl()
 
     cdef inline aa_string_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).aa_string_ref().value()).decode('UTF-8')
 
     @property
@@ -3900,7 +3684,6 @@ cdef class AllocatorAware(thrift.py3.types.Struct):
         return self.aa_string_impl()
 
     cdef inline not_a_container_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).not_a_container_ref().value()
 
     @property
@@ -3908,7 +3691,6 @@ cdef class AllocatorAware(thrift.py3.types.Struct):
         return self.not_a_container_impl()
 
     cdef inline aa_unique_impl(self):
-
         if self.__fbthrift_cached_aa_unique is None:
             if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).aa_unique_ref():
                 return None
@@ -3920,7 +3702,6 @@ cdef class AllocatorAware(thrift.py3.types.Struct):
         return self.aa_unique_impl()
 
     cdef inline aa_shared_impl(self):
-
         if self.__fbthrift_cached_aa_shared is None:
             if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).aa_shared_ref():
                 return None
@@ -4042,7 +3823,6 @@ cdef class AllocatorAware2(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline not_a_container_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).not_a_container_ref().value()
 
     @property
@@ -4052,7 +3832,6 @@ cdef class AllocatorAware2(thrift.py3.types.Struct):
     cdef inline box_field_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).box_field_ref().has_value():
             return None
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).box_field_ref().value()
 
     @property
@@ -4171,7 +3950,6 @@ cdef class TypedefStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline i32_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).i32_field_ref().value()
 
     @property
@@ -4179,7 +3957,6 @@ cdef class TypedefStruct(thrift.py3.types.Struct):
         return self.i32_field_impl()
 
     cdef inline IntTypedef_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).IntTypedef_field_ref().value()
 
     @property
@@ -4187,7 +3964,6 @@ cdef class TypedefStruct(thrift.py3.types.Struct):
         return self.IntTypedef_field_impl()
 
     cdef inline UintTypedef_field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).UintTypedef_field_ref().value()
 
     @property
@@ -4304,7 +4080,6 @@ cdef class StructWithDoubleUnderscores(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline __field_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).__field_ref().value()
 
     @property

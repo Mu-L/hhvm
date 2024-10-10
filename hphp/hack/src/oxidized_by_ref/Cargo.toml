@@ -14,8 +14,8 @@ path = "lib.rs"
 arena_collections = { version = "0.0.0", path = "../arena_collections" }
 arena_deserializer = { version = "0.0.0", path = "../utils/arena_deserializer" }
 arena_trait = { version = "0.0.0", path = "../arena_trait" }
-bitflags = { version = "2.4", features = ["serde"] }
-bstr = { version = "1.4.0", features = ["serde", "std", "unicode"] }
+bitflags = { version = "2.6", features = ["serde"] }
+bstr = { version = "1.10.0", features = ["serde", "std", "unicode"] }
 bumpalo = { version = "3.14.0", features = ["allocator_api", "collections"] }
 eq_modulo_pos = { version = "0.0.0", path = "../utils/eq_modulo_pos" }
 hh24_types = { version = "0.0.0", path = "../utils/hh24_types" }
@@ -30,4 +30,4 @@ serde = { version = "1.0.185", features = ["derive", "rc"] }
 
 [dev-dependencies]
 pretty_assertions = { version = "1.2", features = ["alloc"], default-features = false }
-serde_json = { version = "1.0.100", features = ["float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.125", features = ["float_roundtrip", "unbounded_depth"] }

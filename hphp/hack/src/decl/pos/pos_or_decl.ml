@@ -9,6 +9,7 @@
 type t = Pos.t [@@deriving eq, ord, show]
 
 module Map = Pos.Map
+module Set = Pos.Set
 
 (** The decl and file of a position. *)
 type ctx = {
@@ -65,5 +66,7 @@ let fill_in_filename_if_in_current_decl :
 let get_raw_pos_or_decl_reference :
     t -> [> `Raw of Pos.t | `Decl_ref of Decl_reference.t ] =
  (fun p -> `Raw p)
+
+let merge p1 p2 = Pos.merge p1 p2
 
 let to_span p = Pos.set_file () p

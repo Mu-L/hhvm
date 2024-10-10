@@ -80,11 +80,6 @@ interface MyServicePrioParentClientIf extends \IThriftSyncIf {
 trait MyServicePrioParentClientBase {
   require extends \ThriftClientBase;
 
-}
-
-class MyServicePrioParentAsyncClient extends \ThriftClientBase implements MyServicePrioParentAsyncClientIf {
-  use MyServicePrioParentClientBase;
-
   /**
    * Original thrift definition:-
    * void
@@ -98,7 +93,7 @@ class MyServicePrioParentAsyncClient extends \ThriftClientBase implements MyServ
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = MyServicePrioParent_ping_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("MyServicePrioParent", "ping", $args);
-    $currentseqid = $this->sendImplHelper($args, "ping", false);
+    $currentseqid = $this->sendImplHelper($args, "ping", false, "MyServicePrioParent" );
     await $this->genAwaitResponse(MyServicePrioParent_ping_result::class, "ping", true, $currentseqid, $rpc_options);
   }
 
@@ -115,60 +110,31 @@ class MyServicePrioParentAsyncClient extends \ThriftClientBase implements MyServ
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = MyServicePrioParent_pong_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("MyServicePrioParent", "pong", $args);
-    $currentseqid = $this->sendImplHelper($args, "pong", false);
+    $currentseqid = $this->sendImplHelper($args, "pong", false, "MyServicePrioParent" );
     await $this->genAwaitResponse(MyServicePrioParent_pong_result::class, "pong", true, $currentseqid, $rpc_options);
   }
+
+}
+
+class MyServicePrioParentAsyncClient extends \ThriftClientBase implements MyServicePrioParentAsyncClientIf {
+  use MyServicePrioParentClientBase;
 
 }
 
 class MyServicePrioParentClient extends \ThriftClientBase implements MyServicePrioParentClientIf {
   use MyServicePrioParentClientBase;
 
-  /**
-   * Original thrift definition:-
-   * void
-   *   ping();
-   */
-  public async function ping(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = MyServicePrioParent_ping_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("MyServicePrioParent", "ping", $args);
-    $currentseqid = $this->sendImplHelper($args, "ping", false);
-    await $this->genAwaitResponse(MyServicePrioParent_ping_result::class, "ping", true, $currentseqid, $rpc_options);
-  }
-
-  /**
-   * Original thrift definition:-
-   * void
-   *   pong();
-   */
-  public async function pong(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = MyServicePrioParent_pong_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("MyServicePrioParent", "pong", $args);
-    $currentseqid = $this->sendImplHelper($args, "pong", false);
-    await $this->genAwaitResponse(MyServicePrioParent_pong_result::class, "pong", true, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_ping(): int {
     $args = MyServicePrioParent_ping_args::withDefaultValues();
-    return $this->sendImplHelper($args, "ping", false);
+    return $this->sendImplHelper($args, "ping", false, "MyServicePrioParent" );
   }
   public function recv_ping(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(MyServicePrioParent_ping_result::class, "ping", true, $expectedsequenceid);
   }
   public function send_pong(): int {
     $args = MyServicePrioParent_pong_args::withDefaultValues();
-    return $this->sendImplHelper($args, "pong", false);
+    return $this->sendImplHelper($args, "pong", false, "MyServicePrioParent" );
   }
   public function recv_pong(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(MyServicePrioParent_pong_result::class, "pong", true, $expectedsequenceid);

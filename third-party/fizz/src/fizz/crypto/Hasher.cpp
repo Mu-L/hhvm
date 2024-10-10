@@ -11,14 +11,13 @@
 namespace fizz {
 
 void hash(
-    HasherFactory makeHasher,
+    const HasherFactoryWithMetadata* makeHasher,
     const folly::IOBuf& in,
     folly::MutableByteRange out) {
-  auto hasher = makeHasher();
+  auto hasher = makeHasher->make();
 
   CHECK_GE(out.size(), hasher->getHashLen());
 
-  hasher->hash_init();
   hasher->hash_update(in);
   hasher->hash_final(out);
 }

@@ -7,14 +7,14 @@ package module2
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 
 
@@ -59,5 +59,6 @@ func EnumFromString(s string) (Enum, error) {
     }
     return Enum(0), fmt.Errorf("not a valid Enum string")
 }
+
 
 

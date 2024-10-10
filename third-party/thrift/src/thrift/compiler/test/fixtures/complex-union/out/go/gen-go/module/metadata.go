@@ -6,22 +6,15 @@
 package module
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
@@ -53,8 +46,20 @@ var (
             SetName("module.containerTypedef").
             SetUnderlyingType(premadeThriftType_map_i16_string),
             )
+    premadeThriftType_module_ComplexUnion = metadata.NewThriftType().SetTUnion(
+        metadata.NewThriftUnionType().
+            SetName("module.ComplexUnion"),
+            )
+    premadeThriftType_module_ListUnion = metadata.NewThriftType().SetTUnion(
+        metadata.NewThriftUnionType().
+            SetName("module.ListUnion"),
+            )
     premadeThriftType_binary = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_BINARY_TYPE.Ptr(),
+            )
+    premadeThriftType_module_DataUnion = metadata.NewThriftType().SetTUnion(
+        metadata.NewThriftUnionType().
+            SetName("module.DataUnion"),
             )
     premadeThriftType_i32 = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_I32_TYPE.Ptr(),
@@ -63,11 +68,40 @@ var (
         metadata.NewThriftStructType().
             SetName("module.Val"),
             )
+    premadeThriftType_module_ValUnion = metadata.NewThriftType().SetTUnion(
+        metadata.NewThriftUnionType().
+            SetName("module.ValUnion"),
+            )
+    premadeThriftType_module_VirtualComplexUnion = metadata.NewThriftType().SetTUnion(
+        metadata.NewThriftUnionType().
+            SetName("module.VirtualComplexUnion"),
+            )
     premadeThriftType_module_NonCopyableStruct = metadata.NewThriftType().SetTStruct(
         metadata.NewThriftStructType().
             SetName("module.NonCopyableStruct"),
             )
+    premadeThriftType_module_NonCopyableUnion = metadata.NewThriftType().SetTUnion(
+        metadata.NewThriftUnionType().
+            SetName("module.NonCopyableUnion"),
+            )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "i64": premadeThriftType_i64,
+    "string": premadeThriftType_string,
+    "i16": premadeThriftType_i16,
+    "module.containerTypedef": premadeThriftType_module_containerTypedef,
+    "module.ComplexUnion": premadeThriftType_module_ComplexUnion,
+    "module.ListUnion": premadeThriftType_module_ListUnion,
+    "binary": premadeThriftType_binary,
+    "module.DataUnion": premadeThriftType_module_DataUnion,
+    "i32": premadeThriftType_i32,
+    "module.Val": premadeThriftType_module_Val,
+    "module.ValUnion": premadeThriftType_module_ValUnion,
+    "module.VirtualComplexUnion": premadeThriftType_module_VirtualComplexUnion,
+    "module.NonCopyableStruct": premadeThriftType_module_NonCopyableStruct,
+    "module.NonCopyableUnion": premadeThriftType_module_NonCopyableUnion,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
     metadata.NewThriftStruct().
@@ -230,6 +264,12 @@ var enumMetadatas = []*metadata.ThriftEnum{
 }
 
 var serviceMetadatas = []*metadata.ThriftService{
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.

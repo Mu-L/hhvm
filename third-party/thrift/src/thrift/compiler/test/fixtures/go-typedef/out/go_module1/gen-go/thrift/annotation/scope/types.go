@@ -7,16 +7,15 @@ package scope
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
-
 
 type Transitive struct {
 }
@@ -24,15 +23,16 @@ type Transitive struct {
 var _ thrift.Struct = (*Transitive)(nil)
 
 func NewTransitive() *Transitive {
-    return (&Transitive{})
+    return (&Transitive{}).setDefaults()
 }
 
 
 
-func (x *Transitive) Write(p thrift.Format) error {
+func (x *Transitive) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Transitive"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -44,7 +44,7 @@ func (x *Transitive) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Transitive) Read(p thrift.Format) error {
+func (x *Transitive) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -59,11 +59,14 @@ func (x *Transitive) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -79,16 +82,11 @@ func (x *Transitive) Read(p thrift.Format) error {
 }
 
 func (x *Transitive) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Transitive({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Transitive) setDefaults() *Transitive {
+    return x
 }
 
 type Program struct {
@@ -97,15 +95,16 @@ type Program struct {
 var _ thrift.Struct = (*Program)(nil)
 
 func NewProgram() *Program {
-    return (&Program{})
+    return (&Program{}).setDefaults()
 }
 
 
 
-func (x *Program) Write(p thrift.Format) error {
+func (x *Program) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Program"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -117,7 +116,7 @@ func (x *Program) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Program) Read(p thrift.Format) error {
+func (x *Program) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -132,11 +131,14 @@ func (x *Program) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -152,16 +154,11 @@ func (x *Program) Read(p thrift.Format) error {
 }
 
 func (x *Program) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Program({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Program) setDefaults() *Program {
+    return x
 }
 
 type Struct struct {
@@ -170,15 +167,16 @@ type Struct struct {
 var _ thrift.Struct = (*Struct)(nil)
 
 func NewStruct() *Struct {
-    return (&Struct{})
+    return (&Struct{}).setDefaults()
 }
 
 
 
-func (x *Struct) Write(p thrift.Format) error {
+func (x *Struct) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Struct"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -190,7 +188,7 @@ func (x *Struct) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Struct) Read(p thrift.Format) error {
+func (x *Struct) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -205,11 +203,14 @@ func (x *Struct) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -225,16 +226,11 @@ func (x *Struct) Read(p thrift.Format) error {
 }
 
 func (x *Struct) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Struct({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Struct) setDefaults() *Struct {
+    return x
 }
 
 type Union struct {
@@ -243,15 +239,16 @@ type Union struct {
 var _ thrift.Struct = (*Union)(nil)
 
 func NewUnion() *Union {
-    return (&Union{})
+    return (&Union{}).setDefaults()
 }
 
 
 
-func (x *Union) Write(p thrift.Format) error {
+func (x *Union) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Union"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -263,7 +260,7 @@ func (x *Union) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Union) Read(p thrift.Format) error {
+func (x *Union) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -278,11 +275,14 @@ func (x *Union) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -298,16 +298,11 @@ func (x *Union) Read(p thrift.Format) error {
 }
 
 func (x *Union) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Union({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Union) setDefaults() *Union {
+    return x
 }
 
 type Exception struct {
@@ -316,15 +311,16 @@ type Exception struct {
 var _ thrift.Struct = (*Exception)(nil)
 
 func NewException() *Exception {
-    return (&Exception{})
+    return (&Exception{}).setDefaults()
 }
 
 
 
-func (x *Exception) Write(p thrift.Format) error {
+func (x *Exception) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Exception"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -336,7 +332,7 @@ func (x *Exception) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Exception) Read(p thrift.Format) error {
+func (x *Exception) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -351,11 +347,14 @@ func (x *Exception) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -371,16 +370,11 @@ func (x *Exception) Read(p thrift.Format) error {
 }
 
 func (x *Exception) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Exception({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Exception) setDefaults() *Exception {
+    return x
 }
 
 type Field struct {
@@ -389,15 +383,16 @@ type Field struct {
 var _ thrift.Struct = (*Field)(nil)
 
 func NewField() *Field {
-    return (&Field{})
+    return (&Field{}).setDefaults()
 }
 
 
 
-func (x *Field) Write(p thrift.Format) error {
+func (x *Field) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Field"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -409,7 +404,7 @@ func (x *Field) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Field) Read(p thrift.Format) error {
+func (x *Field) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -424,11 +419,14 @@ func (x *Field) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -444,16 +442,11 @@ func (x *Field) Read(p thrift.Format) error {
 }
 
 func (x *Field) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Field({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Field) setDefaults() *Field {
+    return x
 }
 
 type Typedef struct {
@@ -462,15 +455,16 @@ type Typedef struct {
 var _ thrift.Struct = (*Typedef)(nil)
 
 func NewTypedef() *Typedef {
-    return (&Typedef{})
+    return (&Typedef{}).setDefaults()
 }
 
 
 
-func (x *Typedef) Write(p thrift.Format) error {
+func (x *Typedef) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Typedef"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -482,7 +476,7 @@ func (x *Typedef) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Typedef) Read(p thrift.Format) error {
+func (x *Typedef) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -497,11 +491,14 @@ func (x *Typedef) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -517,16 +514,11 @@ func (x *Typedef) Read(p thrift.Format) error {
 }
 
 func (x *Typedef) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Typedef({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Typedef) setDefaults() *Typedef {
+    return x
 }
 
 type Service struct {
@@ -535,15 +527,16 @@ type Service struct {
 var _ thrift.Struct = (*Service)(nil)
 
 func NewService() *Service {
-    return (&Service{})
+    return (&Service{}).setDefaults()
 }
 
 
 
-func (x *Service) Write(p thrift.Format) error {
+func (x *Service) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Service"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -555,7 +548,7 @@ func (x *Service) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Service) Read(p thrift.Format) error {
+func (x *Service) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -570,11 +563,14 @@ func (x *Service) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -590,16 +586,11 @@ func (x *Service) Read(p thrift.Format) error {
 }
 
 func (x *Service) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Service({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Service) setDefaults() *Service {
+    return x
 }
 
 type Interaction struct {
@@ -608,15 +599,16 @@ type Interaction struct {
 var _ thrift.Struct = (*Interaction)(nil)
 
 func NewInteraction() *Interaction {
-    return (&Interaction{})
+    return (&Interaction{}).setDefaults()
 }
 
 
 
-func (x *Interaction) Write(p thrift.Format) error {
+func (x *Interaction) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Interaction"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -628,7 +620,7 @@ func (x *Interaction) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Interaction) Read(p thrift.Format) error {
+func (x *Interaction) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -643,11 +635,14 @@ func (x *Interaction) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -663,16 +658,11 @@ func (x *Interaction) Read(p thrift.Format) error {
 }
 
 func (x *Interaction) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Interaction({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Interaction) setDefaults() *Interaction {
+    return x
 }
 
 type Function struct {
@@ -681,15 +671,16 @@ type Function struct {
 var _ thrift.Struct = (*Function)(nil)
 
 func NewFunction() *Function {
-    return (&Function{})
+    return (&Function{}).setDefaults()
 }
 
 
 
-func (x *Function) Write(p thrift.Format) error {
+func (x *Function) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Function"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -701,7 +692,7 @@ func (x *Function) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Function) Read(p thrift.Format) error {
+func (x *Function) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -716,11 +707,14 @@ func (x *Function) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -736,16 +730,11 @@ func (x *Function) Read(p thrift.Format) error {
 }
 
 func (x *Function) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Function({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Function) setDefaults() *Function {
+    return x
 }
 
 type EnumValue struct {
@@ -754,15 +743,16 @@ type EnumValue struct {
 var _ thrift.Struct = (*EnumValue)(nil)
 
 func NewEnumValue() *EnumValue {
-    return (&EnumValue{})
+    return (&EnumValue{}).setDefaults()
 }
 
 
 
-func (x *EnumValue) Write(p thrift.Format) error {
+func (x *EnumValue) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("EnumValue"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -774,7 +764,7 @@ func (x *EnumValue) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *EnumValue) Read(p thrift.Format) error {
+func (x *EnumValue) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -789,11 +779,14 @@ func (x *EnumValue) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -809,16 +802,11 @@ func (x *EnumValue) Read(p thrift.Format) error {
 }
 
 func (x *EnumValue) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("EnumValue({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *EnumValue) setDefaults() *EnumValue {
+    return x
 }
 
 type Const struct {
@@ -827,15 +815,16 @@ type Const struct {
 var _ thrift.Struct = (*Const)(nil)
 
 func NewConst() *Const {
-    return (&Const{})
+    return (&Const{}).setDefaults()
 }
 
 
 
-func (x *Const) Write(p thrift.Format) error {
+func (x *Const) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Const"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -847,7 +836,7 @@ func (x *Const) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Const) Read(p thrift.Format) error {
+func (x *Const) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -862,11 +851,14 @@ func (x *Const) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -882,16 +874,11 @@ func (x *Const) Read(p thrift.Format) error {
 }
 
 func (x *Const) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Const({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Const) setDefaults() *Const {
+    return x
 }
 
 type Enum struct {
@@ -900,15 +887,16 @@ type Enum struct {
 var _ thrift.Struct = (*Enum)(nil)
 
 func NewEnum() *Enum {
-    return (&Enum{})
+    return (&Enum{}).setDefaults()
 }
 
 
 
-func (x *Enum) Write(p thrift.Format) error {
+func (x *Enum) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Enum"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -920,7 +908,7 @@ func (x *Enum) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Enum) Read(p thrift.Format) error {
+func (x *Enum) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -935,11 +923,14 @@ func (x *Enum) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -955,16 +946,11 @@ func (x *Enum) Read(p thrift.Format) error {
 }
 
 func (x *Enum) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Enum({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Enum) setDefaults() *Enum {
+    return x
 }
 
 type Structured struct {
@@ -973,15 +959,16 @@ type Structured struct {
 var _ thrift.Struct = (*Structured)(nil)
 
 func NewStructured() *Structured {
-    return (&Structured{})
+    return (&Structured{}).setDefaults()
 }
 
 
 
-func (x *Structured) Write(p thrift.Format) error {
+func (x *Structured) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Structured"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -993,7 +980,7 @@ func (x *Structured) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Structured) Read(p thrift.Format) error {
+func (x *Structured) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1008,11 +995,14 @@ func (x *Structured) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1028,16 +1018,11 @@ func (x *Structured) Read(p thrift.Format) error {
 }
 
 func (x *Structured) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Structured({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Structured) setDefaults() *Structured {
+    return x
 }
 
 type Interface struct {
@@ -1046,15 +1031,16 @@ type Interface struct {
 var _ thrift.Struct = (*Interface)(nil)
 
 func NewInterface() *Interface {
-    return (&Interface{})
+    return (&Interface{}).setDefaults()
 }
 
 
 
-func (x *Interface) Write(p thrift.Format) error {
+func (x *Interface) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Interface"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -1066,7 +1052,7 @@ func (x *Interface) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Interface) Read(p thrift.Format) error {
+func (x *Interface) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1081,11 +1067,14 @@ func (x *Interface) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1101,16 +1090,11 @@ func (x *Interface) Read(p thrift.Format) error {
 }
 
 func (x *Interface) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Interface({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Interface) setDefaults() *Interface {
+    return x
 }
 
 type RootDefinition struct {
@@ -1119,15 +1103,16 @@ type RootDefinition struct {
 var _ thrift.Struct = (*RootDefinition)(nil)
 
 func NewRootDefinition() *RootDefinition {
-    return (&RootDefinition{})
+    return (&RootDefinition{}).setDefaults()
 }
 
 
 
-func (x *RootDefinition) Write(p thrift.Format) error {
+func (x *RootDefinition) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("RootDefinition"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -1139,7 +1124,7 @@ func (x *RootDefinition) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *RootDefinition) Read(p thrift.Format) error {
+func (x *RootDefinition) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1154,11 +1139,14 @@ func (x *RootDefinition) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1174,16 +1162,11 @@ func (x *RootDefinition) Read(p thrift.Format) error {
 }
 
 func (x *RootDefinition) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("RootDefinition({")
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *RootDefinition) setDefaults() *RootDefinition {
+    return x
 }
 
 type Definition struct {
@@ -1192,15 +1175,16 @@ type Definition struct {
 var _ thrift.Struct = (*Definition)(nil)
 
 func NewDefinition() *Definition {
-    return (&Definition{})
+    return (&Definition{}).setDefaults()
 }
 
 
 
-func (x *Definition) Write(p thrift.Format) error {
+func (x *Definition) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Definition"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
+
 
     if err := p.WriteFieldStop(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
@@ -1212,7 +1196,7 @@ func (x *Definition) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Definition) Read(p thrift.Format) error {
+func (x *Definition) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1227,11 +1211,14 @@ func (x *Definition) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1247,17 +1234,14 @@ func (x *Definition) Read(p thrift.Format) error {
 }
 
 func (x *Definition) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("Definition({")
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *Definition) setDefaults() *Definition {
+    return x
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

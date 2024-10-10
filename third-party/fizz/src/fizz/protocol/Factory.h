@@ -11,8 +11,9 @@
 #include <memory>
 #include <string>
 
+#include <fizz/crypto/Crypto.h>
+#include <fizz/crypto/Hasher.h>
 #include <fizz/crypto/KeyDerivation.h>
-#include <fizz/crypto/RandomGenerator.h>
 #include <fizz/crypto/aead/Aead.h>
 #include <fizz/crypto/exchange/KeyExchange.h>
 #include <fizz/protocol/Certificate.h>
@@ -40,10 +41,7 @@ class PeerCert;
  */
 class Factory {
  public:
-  enum class KeyExchangeMode { Server, Client };
-
   virtual ~Factory();
-
   /**
    * Should not be overridden *unless* for testing.
    */
@@ -75,31 +73,21 @@ class Factory {
       CipherSuite cipher) const;
 
   virtual std::unique_ptr<KeyDerivation> makeKeyDeriver(
-      CipherSuite cipher) const = 0;
+      CipherSuite cipher) const;
 
   virtual std::unique_ptr<HandshakeContext> makeHandshakeContext(
-      CipherSuite cipher) const = 0;
+      CipherSuite cipher) const;
 
   virtual std::unique_ptr<KeyExchange> makeKeyExchange(
       NamedGroup group,
-      KeyExchangeMode mode) const = 0;
+      KeyExchangeRole role) const = 0;
+
+  virtual const HasherFactoryWithMetadata* makeHasherFactory(
+      HashFunction digest) const = 0;
 
   virtual std::unique_ptr<Aead> makeAead(CipherSuite cipher) const = 0;
 
-  /**
-   * Should not be overridden *unless* for testing.
-   */
-  virtual Random makeRandom() const;
-
-  /**
-   * Should not be overridden *unless* for testing.
-   */
-  virtual uint32_t makeTicketAgeAdd() const;
-
-  /**
-   * Should not be overridden *unless* for testing.
-   */
-  virtual std::unique_ptr<folly::IOBuf> makeRandomBytes(size_t count) const;
+  virtual void makeRandomBytes(unsigned char* out, size_t count) const = 0;
 
   virtual std::unique_ptr<PeerCert> makePeerCert(
       CertificateEntry certEntry,
@@ -109,10 +97,5 @@ class Factory {
    * Should not be overridden *unless* for testing.
    */
   virtual std::shared_ptr<Cert> makeIdentityOnlyCert(std::string ident) const;
-
-  /**
-   * Should not be overridden *unless* for testing.
-   */
-  virtual std::string getHkdfPrefix() const;
 };
 } // namespace fizz

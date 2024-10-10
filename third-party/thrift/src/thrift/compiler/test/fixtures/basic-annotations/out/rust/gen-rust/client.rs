@@ -15,14 +15,72 @@ pub mod errors;
 pub(crate) use crate as client;
 pub(crate) use ::::services;
 
+pub trait BadInteraction: ::std::marker::Send {
+    fn foo(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>>;
+}
 
-/// Client definitions for `MyService`.
-pub struct MyServiceImpl<P, T, S = ::fbthrift::NoopSpawner> {
+pub trait BadInteractionExt<T>: BadInteraction
+where
+    T: ::fbthrift::Transport,
+{
+    fn foo_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>>;
+
+    fn transport(&self) -> &T;
+}
+
+#[allow(deprecated)]
+impl<'a, S> BadInteraction for S
+where
+    S: ::std::convert::AsRef<dyn BadInteraction + 'a>,
+    S: ::std::marker::Send,
+{
+    fn foo(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
+        self.as_ref().foo(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> BadInteractionExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn BadInteraction + 'a> + ::std::convert::AsRef<dyn BadInteractionExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn foo_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
+        <Self as ::std::convert::AsRef<dyn BadInteractionExt<T>>>::as_ref(self).foo_with_rpc_opts(
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
+/// Client definitions for `BadInteraction`.
+pub struct BadInteractionImpl<P, T, S = ::fbthrift::NoopSpawner> {
+    #[allow(dead_code)]
+    names: &'static BadInteractionNames,
     transport: T,
     _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
 }
 
-impl<P, T, S> MyServiceImpl<P, T, S>
+pub struct BadInteractionNames {
+    pub service: &'static ::std::ffi::CStr,
+    pub method_foo: &'static ::std::ffi::CStr,
+}
+
+impl<P, T, S> BadInteractionImpl<P, T, S>
 where
     P: ::fbthrift::Protocol,
     T: ::fbthrift::Transport,
@@ -33,8 +91,10 @@ where
 {
     pub fn new(
         transport: T,
+        names: &'static BadInteractionNames,
     ) -> Self {
         Self {
+            names,
             transport,
             _phantom: ::std::marker::PhantomData,
         }
@@ -45,321 +105,53 @@ where
     }
 
 
-    fn _ping_impl(
+
+    fn _foo_impl(
         &self,
         rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PingError>> {
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyService.ping";
-        let args = self::Args_MyService_ping {
+        let service_name = self.names.service;
+        let service_method_name = self.names.method_foo;
+
+        let args = self::Args_BadInteraction_foo {
             _phantom: ::std::marker::PhantomData,
         };
 
         let transport = self.transport();
 
         // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("ping", &args) {
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("BadInteraction.foo", &args) {
             ::std::result::Result::Ok(res) => res,
             ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "MyService.ping"));
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "BadInteraction.foo"));
 
         async move {
             let reply_env = call.await?;
 
             let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::PingReader, S>(de).await?;
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::bad_interaction::FooReader, S>(de).await?;
 
             let res = match res {
                 ::std::result::Result::Ok(res) => res,
                 ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::my_service::PingError::ApplicationException(aexn))
+                    ::std::result::Result::Err(crate::errors::bad_interaction::FooError::ApplicationException(aexn))
                 }
             };
             res
         }
-        .instrument(::tracing::info_span!("stream", method = "MyService.ping"))
-        .boxed()
-    }
-
-    fn _getRandomData_impl(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetRandomDataError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyService.getRandomData";
-        let args = self::Args_MyService_getRandomData {
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("getRandomData", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "MyService.getRandomData"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::GetRandomDataReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::my_service::GetRandomDataError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "MyService.getRandomData"))
-        .boxed()
-    }
-
-    fn _hasDataById_impl(
-        &self,
-        arg_id: ::std::primitive::i64,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::bool, crate::errors::my_service::HasDataByIdError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyService.hasDataById";
-        let args = self::Args_MyService_hasDataById {
-            id: arg_id,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("hasDataById", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "MyService.hasDataById"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::HasDataByIdReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::my_service::HasDataByIdError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "MyService.hasDataById"))
-        .boxed()
-    }
-
-    fn _getDataById_impl(
-        &self,
-        arg_id: ::std::primitive::i64,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetDataByIdError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyService.getDataById";
-        let args = self::Args_MyService_getDataById {
-            id: arg_id,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("getDataById", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "MyService.getDataById"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::GetDataByIdReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::my_service::GetDataByIdError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "MyService.getDataById"))
-        .boxed()
-    }
-
-    fn _putDataById_impl(
-        &self,
-        arg_id: ::std::primitive::i64,
-        arg_data: &::std::primitive::str,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PutDataByIdError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyService.putDataById";
-        let args = self::Args_MyService_putDataById {
-            id: arg_id,
-            data: arg_data,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("putDataById", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "MyService.putDataById"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::PutDataByIdReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::my_service::PutDataByIdError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "MyService.putDataById"))
-        .boxed()
-    }
-
-    fn _lobDataById_impl(
-        &self,
-        arg_id: ::std::primitive::i64,
-        arg_data: &::std::primitive::str,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::LobDataByIdError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyService.lobDataById";
-        let args = self::Args_MyService_lobDataById {
-            id: arg_id,
-            data: arg_data,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("lobDataById", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "MyService.lobDataById"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::LobDataByIdReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::my_service::LobDataByIdError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "MyService.lobDataById"))
-        .boxed()
-    }
-
-    fn _doNothing_impl(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::DoNothingError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyService.doNothing";
-        let args = self::Args_MyService_doNothing {
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("doNothing", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "MyService.doNothing"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::DoNothingReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::my_service::DoNothingError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "MyService.doNothing"))
+        .instrument(::tracing::info_span!("stream", method = "BadInteraction.foo"))
         .boxed()
     }
 }
 
-impl<P, T, S> ::fbthrift::help::GetTransport<T> for MyServiceImpl<P, T, S>
+impl<P, T, S> ::fbthrift::help::GetTransport<T> for BadInteractionImpl<P, T, S>
 where
     T: ::fbthrift::Transport,
 {
@@ -367,6 +159,69 @@ where
         &self.transport
     }
 }
+
+
+
+struct Args_BadInteraction_foo<'a> {
+    _phantom: ::std::marker::PhantomData<&'a ()>,
+}
+
+impl<'a, P: ::fbthrift::ProtocolWriter> ::fbthrift::Serialize<P> for self::Args_BadInteraction_foo<'a> {
+    #[inline]
+    #[::tracing::instrument(skip_all, level = "trace", name = "serialize_args", fields(method = "BadInteraction.foo"))]
+    fn write(&self, p: &mut P) {
+        p.write_struct_begin("args");
+        p.write_field_stop();
+        p.write_struct_end();
+    }
+}
+
+impl<P, T, S> BadInteraction for BadInteractionImpl<P, T, S>
+where
+    P: ::fbthrift::Protocol,
+    T: ::fbthrift::Transport,
+    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
+    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
+    P::Deserializer: ::std::marker::Send,
+    S: ::fbthrift::help::Spawner,
+{
+    fn foo(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
+        let rpc_options = T::RpcOptions::default();
+        self._foo_impl(
+            rpc_options,
+        )
+    }
+}
+
+impl<P, T, S> BadInteractionExt<T> for BadInteractionImpl<P, T, S>
+where
+    P: ::fbthrift::Protocol,
+    T: ::fbthrift::Transport,
+    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
+    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
+    P::Deserializer: ::std::marker::Send,
+    S: ::fbthrift::help::Spawner,
+{
+    fn foo_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
+        self._foo_impl(
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        self.transport()
+    }
+}
+
+pub type BadInteractionDynClient = dyn BadInteraction + ::std::marker::Send + ::std::marker::Sync + 'static;
+pub type BadInteractionClient = ::std::sync::Arc<BadInteractionDynClient>;
+
+
 
 pub trait MyService: ::std::marker::Send {
     fn ping(
@@ -445,6 +300,511 @@ where
 
     fn transport(&self) -> &T;
 }
+
+#[allow(deprecated)]
+impl<'a, S> MyService for S
+where
+    S: ::std::convert::AsRef<dyn MyService + 'a>,
+    S: ::std::marker::Send,
+{
+    fn ping(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PingError>> {
+        self.as_ref().ping(
+        )
+    }
+    fn getRandomData(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetRandomDataError>> {
+        self.as_ref().getRandomData(
+        )
+    }
+    fn hasDataById(
+        &self,
+        arg_id: ::std::primitive::i64,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::bool, crate::errors::my_service::HasDataByIdError>> {
+        self.as_ref().hasDataById(
+            arg_id,
+        )
+    }
+    fn getDataById(
+        &self,
+        arg_id: ::std::primitive::i64,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetDataByIdError>> {
+        self.as_ref().getDataById(
+            arg_id,
+        )
+    }
+    fn putDataById(
+        &self,
+        arg_id: ::std::primitive::i64,
+        arg_data: &::std::primitive::str,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PutDataByIdError>> {
+        self.as_ref().putDataById(
+            arg_id,
+            arg_data,
+        )
+    }
+    fn lobDataById(
+        &self,
+        arg_id: ::std::primitive::i64,
+        arg_data: &::std::primitive::str,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::LobDataByIdError>> {
+        self.as_ref().lobDataById(
+            arg_id,
+            arg_data,
+        )
+    }
+    fn doNothing(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::DoNothingError>> {
+        self.as_ref().doNothing(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> MyServiceExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn MyService + 'a> + ::std::convert::AsRef<dyn MyServiceExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn ping_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PingError>> {
+        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).ping_with_rpc_opts(
+            rpc_options,
+        )
+    }
+    fn getRandomData_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetRandomDataError>> {
+        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).getRandomData_with_rpc_opts(
+            rpc_options,
+        )
+    }
+    fn hasDataById_with_rpc_opts(
+        &self,
+        arg_id: ::std::primitive::i64,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::bool, crate::errors::my_service::HasDataByIdError>> {
+        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).hasDataById_with_rpc_opts(
+            arg_id,
+            rpc_options,
+        )
+    }
+    fn getDataById_with_rpc_opts(
+        &self,
+        arg_id: ::std::primitive::i64,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetDataByIdError>> {
+        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).getDataById_with_rpc_opts(
+            arg_id,
+            rpc_options,
+        )
+    }
+    fn putDataById_with_rpc_opts(
+        &self,
+        arg_id: ::std::primitive::i64,
+        arg_data: &::std::primitive::str,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PutDataByIdError>> {
+        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).putDataById_with_rpc_opts(
+            arg_id,
+            arg_data,
+            rpc_options,
+        )
+    }
+    fn lobDataById_with_rpc_opts(
+        &self,
+        arg_id: ::std::primitive::i64,
+        arg_data: &::std::primitive::str,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::LobDataByIdError>> {
+        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).lobDataById_with_rpc_opts(
+            arg_id,
+            arg_data,
+            rpc_options,
+        )
+    }
+    fn doNothing_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::DoNothingError>> {
+        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).doNothing_with_rpc_opts(
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
+/// Client definitions for `MyService`.
+pub struct MyServiceImpl<P, T, S = ::fbthrift::NoopSpawner> {
+    transport: T,
+    _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
+}
+
+
+impl<P, T, S> MyServiceImpl<P, T, S>
+where
+    P: ::fbthrift::Protocol,
+    T: ::fbthrift::Transport,
+    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
+    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
+    P::Deserializer: ::std::marker::Send,
+    S: ::fbthrift::help::Spawner,
+{
+    pub fn new(
+        transport: T,
+    ) -> Self {
+        Self {
+            transport,
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+
+    pub fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+
+
+
+    fn _ping_impl(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PingError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"MyService";
+        let service_method_name = c"MyService.ping";
+
+        let args = self::Args_MyService_ping {
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("ping", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "MyService.ping"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::PingReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::my_service::PingError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "MyService.ping"))
+        .boxed()
+    }
+
+    fn _getRandomData_impl(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetRandomDataError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"MyService";
+        let service_method_name = c"MyService.getRandomData";
+
+        let args = self::Args_MyService_getRandomData {
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("getRandomData", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "MyService.getRandomData"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::GetRandomDataReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::my_service::GetRandomDataError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "MyService.getRandomData"))
+        .boxed()
+    }
+
+    fn _hasDataById_impl(
+        &self,
+        arg_id: ::std::primitive::i64,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::bool, crate::errors::my_service::HasDataByIdError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"MyService";
+        let service_method_name = c"MyService.hasDataById";
+
+        let args = self::Args_MyService_hasDataById {
+            id: arg_id,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("hasDataById", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "MyService.hasDataById"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::HasDataByIdReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::my_service::HasDataByIdError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "MyService.hasDataById"))
+        .boxed()
+    }
+
+    fn _getDataById_impl(
+        &self,
+        arg_id: ::std::primitive::i64,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetDataByIdError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"MyService";
+        let service_method_name = c"MyService.getDataById";
+
+        let args = self::Args_MyService_getDataById {
+            id: arg_id,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("getDataById", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "MyService.getDataById"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::GetDataByIdReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::my_service::GetDataByIdError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "MyService.getDataById"))
+        .boxed()
+    }
+
+    fn _putDataById_impl(
+        &self,
+        arg_id: ::std::primitive::i64,
+        arg_data: &::std::primitive::str,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PutDataByIdError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"MyService";
+        let service_method_name = c"MyService.putDataById";
+
+        let args = self::Args_MyService_putDataById {
+            id: arg_id,
+            data: arg_data,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("putDataById", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "MyService.putDataById"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::PutDataByIdReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::my_service::PutDataByIdError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "MyService.putDataById"))
+        .boxed()
+    }
+
+    fn _lobDataById_impl(
+        &self,
+        arg_id: ::std::primitive::i64,
+        arg_data: &::std::primitive::str,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::LobDataByIdError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"MyService";
+        let service_method_name = c"MyService.lobDataById";
+
+        let args = self::Args_MyService_lobDataById {
+            id: arg_id,
+            data: arg_data,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("lobDataById", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "MyService.lobDataById"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::LobDataByIdReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::my_service::LobDataByIdError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "MyService.lobDataById"))
+        .boxed()
+    }
+
+    fn _doNothing_impl(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::DoNothingError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"MyService";
+        let service_method_name = c"MyService.doNothing";
+
+        let args = self::Args_MyService_doNothing {
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("doNothing", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "MyService.doNothing"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::my_service::DoNothingReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::my_service::DoNothingError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "MyService.doNothing"))
+        .boxed()
+    }
+}
+
+impl<P, T, S> ::fbthrift::help::GetTransport<T> for MyServiceImpl<P, T, S>
+where
+    T: ::fbthrift::Transport,
+{
+    fn transport(&self) -> &T {
+        &self.transport
+    }
+}
+
+
 
 struct Args_MyService_ping<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -730,149 +1090,6 @@ where
     }
 }
 
-#[allow(deprecated)]
-impl<'a, S> MyService for S
-where
-    S: ::std::convert::AsRef<dyn MyService + 'a>,
-    S: ::std::marker::Send,
-{
-    fn ping(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PingError>> {
-        self.as_ref().ping(
-        )
-    }
-    fn getRandomData(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetRandomDataError>> {
-        self.as_ref().getRandomData(
-        )
-    }
-    fn hasDataById(
-        &self,
-        arg_id: ::std::primitive::i64,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::bool, crate::errors::my_service::HasDataByIdError>> {
-        self.as_ref().hasDataById(
-            arg_id,
-        )
-    }
-    fn getDataById(
-        &self,
-        arg_id: ::std::primitive::i64,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetDataByIdError>> {
-        self.as_ref().getDataById(
-            arg_id,
-        )
-    }
-    fn putDataById(
-        &self,
-        arg_id: ::std::primitive::i64,
-        arg_data: &::std::primitive::str,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PutDataByIdError>> {
-        self.as_ref().putDataById(
-            arg_id,
-            arg_data,
-        )
-    }
-    fn lobDataById(
-        &self,
-        arg_id: ::std::primitive::i64,
-        arg_data: &::std::primitive::str,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::LobDataByIdError>> {
-        self.as_ref().lobDataById(
-            arg_id,
-            arg_data,
-        )
-    }
-    fn doNothing(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::DoNothingError>> {
-        self.as_ref().doNothing(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> MyServiceExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn MyService + 'a> + ::std::convert::AsRef<dyn MyServiceExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn ping_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PingError>> {
-        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).ping_with_rpc_opts(
-            rpc_options,
-        )
-    }
-    fn getRandomData_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetRandomDataError>> {
-        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).getRandomData_with_rpc_opts(
-            rpc_options,
-        )
-    }
-    fn hasDataById_with_rpc_opts(
-        &self,
-        arg_id: ::std::primitive::i64,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::bool, crate::errors::my_service::HasDataByIdError>> {
-        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).hasDataById_with_rpc_opts(
-            arg_id,
-            rpc_options,
-        )
-    }
-    fn getDataById_with_rpc_opts(
-        &self,
-        arg_id: ::std::primitive::i64,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::string::String, crate::errors::my_service::GetDataByIdError>> {
-        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).getDataById_with_rpc_opts(
-            arg_id,
-            rpc_options,
-        )
-    }
-    fn putDataById_with_rpc_opts(
-        &self,
-        arg_id: ::std::primitive::i64,
-        arg_data: &::std::primitive::str,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::PutDataByIdError>> {
-        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).putDataById_with_rpc_opts(
-            arg_id,
-            arg_data,
-            rpc_options,
-        )
-    }
-    fn lobDataById_with_rpc_opts(
-        &self,
-        arg_id: ::std::primitive::i64,
-        arg_data: &::std::primitive::str,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::LobDataByIdError>> {
-        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).lobDataById_with_rpc_opts(
-            arg_id,
-            arg_data,
-            rpc_options,
-        )
-    }
-    fn doNothing_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service::DoNothingError>> {
-        <Self as ::std::convert::AsRef<dyn MyServiceExt<T>>>::as_ref(self).doNothing_with_rpc_opts(
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
-    }
-}
-
 #[derive(Clone)]
 pub struct make_MyService;
 
@@ -971,12 +1188,86 @@ impl ::fbthrift::ClientFactory for make_MyService {
     }
 }
 
+pub trait MyServicePrioParent: ::std::marker::Send {
+    fn ping(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>>;
 
+    fn pong(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>>;
+}
+
+pub trait MyServicePrioParentExt<T>: MyServicePrioParent
+where
+    T: ::fbthrift::Transport,
+{
+    fn ping_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>>;
+    fn pong_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>>;
+
+    fn transport(&self) -> &T;
+}
+
+#[allow(deprecated)]
+impl<'a, S> MyServicePrioParent for S
+where
+    S: ::std::convert::AsRef<dyn MyServicePrioParent + 'a>,
+    S: ::std::marker::Send,
+{
+    fn ping(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>> {
+        self.as_ref().ping(
+        )
+    }
+    fn pong(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>> {
+        self.as_ref().pong(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> MyServicePrioParentExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn MyServicePrioParent + 'a> + ::std::convert::AsRef<dyn MyServicePrioParentExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn ping_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>> {
+        <Self as ::std::convert::AsRef<dyn MyServicePrioParentExt<T>>>::as_ref(self).ping_with_rpc_opts(
+            rpc_options,
+        )
+    }
+    fn pong_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>> {
+        <Self as ::std::convert::AsRef<dyn MyServicePrioParentExt<T>>>::as_ref(self).pong_with_rpc_opts(
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
 /// Client definitions for `MyServicePrioParent`.
 pub struct MyServicePrioParentImpl<P, T, S = ::fbthrift::NoopSpawner> {
     transport: T,
     _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
 }
+
 
 impl<P, T, S> MyServicePrioParentImpl<P, T, S>
 where
@@ -1001,6 +1292,7 @@ where
     }
 
 
+
     fn _ping_impl(
         &self,
         rpc_options: T::RpcOptions,
@@ -1008,8 +1300,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyServicePrioParent";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyServicePrioParent.ping";
+        let service_name = c"MyServicePrioParent";
+        let service_method_name = c"MyServicePrioParent.ping";
+
         let args = self::Args_MyServicePrioParent_ping {
             _phantom: ::std::marker::PhantomData,
         };
@@ -1023,7 +1316,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "MyServicePrioParent.ping"));
 
         async move {
@@ -1051,8 +1344,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyServicePrioParent";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyServicePrioParent.pong";
+        let service_name = c"MyServicePrioParent";
+        let service_method_name = c"MyServicePrioParent.pong";
+
         let args = self::Args_MyServicePrioParent_pong {
             _phantom: ::std::marker::PhantomData,
         };
@@ -1066,7 +1360,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "MyServicePrioParent.pong"));
 
         async move {
@@ -1097,31 +1391,7 @@ where
     }
 }
 
-pub trait MyServicePrioParent: ::std::marker::Send {
-    fn ping(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>>;
 
-    fn pong(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>>;
-}
-
-pub trait MyServicePrioParentExt<T>: MyServicePrioParent
-where
-    T: ::fbthrift::Transport,
-{
-    fn ping_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>>;
-    fn pong_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>>;
-
-    fn transport(&self) -> &T;
-}
 
 struct Args_MyServicePrioParent_ping<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -1206,55 +1476,6 @@ where
 
     fn transport(&self) -> &T {
         self.transport()
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> MyServicePrioParent for S
-where
-    S: ::std::convert::AsRef<dyn MyServicePrioParent + 'a>,
-    S: ::std::marker::Send,
-{
-    fn ping(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>> {
-        self.as_ref().ping(
-        )
-    }
-    fn pong(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>> {
-        self.as_ref().pong(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> MyServicePrioParentExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn MyServicePrioParent + 'a> + ::std::convert::AsRef<dyn MyServicePrioParentExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn ping_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PingError>> {
-        <Self as ::std::convert::AsRef<dyn MyServicePrioParentExt<T>>>::as_ref(self).ping_with_rpc_opts(
-            rpc_options,
-        )
-    }
-    fn pong_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_parent::PongError>> {
-        <Self as ::std::convert::AsRef<dyn MyServicePrioParentExt<T>>>::as_ref(self).pong_with_rpc_opts(
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
     }
 }
 
@@ -1356,11 +1577,59 @@ impl ::fbthrift::ClientFactory for make_MyServicePrioParent {
     }
 }
 
+pub trait MyServicePrioChild: crate::client::MyServicePrioParent + ::std::marker::Send {
+    fn pang(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>>;
+}
 
+pub trait MyServicePrioChildExt<T>: MyServicePrioChild + crate::client::MyServicePrioParentExt<T>
+where
+    T: ::fbthrift::Transport,
+{
+    fn pang_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>>;
+}
+
+#[allow(deprecated)]
+impl<'a, S> MyServicePrioChild for S
+where
+    S: ::std::convert::AsRef<dyn MyServicePrioChild + 'a>,
+    S: crate::client::MyServicePrioParent,
+    S: ::std::marker::Send,
+{
+    fn pang(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>> {
+        self.as_ref().pang(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> MyServicePrioChildExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn MyServicePrioChild + 'a> + ::std::convert::AsRef<dyn MyServicePrioChildExt<T> + 'a>,
+    S: crate::client::MyServicePrioParent + crate::client::MyServicePrioParentExt<T>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn pang_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>> {
+        <Self as ::std::convert::AsRef<dyn MyServicePrioChildExt<T>>>::as_ref(self).pang_with_rpc_opts(
+            rpc_options,
+        )
+    }
+}
 /// Client definitions for `MyServicePrioChild`.
 pub struct MyServicePrioChildImpl<P, T, S = ::fbthrift::NoopSpawner> {
     parent: crate::client::MyServicePrioParentImpl<P, T, S>,
 }
+
 
 impl<P, T, S> MyServicePrioChildImpl<P, T, S>
 where
@@ -1374,13 +1643,15 @@ where
     pub fn new(
         transport: T,
     ) -> Self {
-        let parent = crate::client::MyServicePrioParentImpl::<P, T, S>::new(transport);
-        Self { parent }
+        Self {
+            parent: crate::client::MyServicePrioParentImpl::<P, T, S>::new(transport),
+        }
     }
 
     pub fn transport(&self) -> &T {
         ::fbthrift::help::GetTransport::transport(self)
     }
+
 
 
     fn _pang_impl(
@@ -1390,8 +1661,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"MyServicePrioChild";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"MyServicePrioChild.pang";
+        let service_name = c"MyServicePrioChild";
+        let service_method_name = c"MyServicePrioChild.pang";
+
         let args = self::Args_MyServicePrioChild_pang {
             _phantom: ::std::marker::PhantomData,
         };
@@ -1405,7 +1677,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "MyServicePrioChild.pang"));
 
         async move {
@@ -1468,21 +1740,7 @@ where
     }
 }
 
-pub trait MyServicePrioChild: crate::client::MyServicePrioParent + ::std::marker::Send {
-    fn pang(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>>;
-}
 
-pub trait MyServicePrioChildExt<T>: MyServicePrioChild + crate::client::MyServicePrioParentExt<T>
-where
-    T: ::fbthrift::Transport,
-{
-    fn pang_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>>;
-}
 
 struct Args_MyServicePrioChild_pang<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -1531,39 +1789,6 @@ where
         rpc_options: T::RpcOptions,
     ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>> {
         self._pang_impl(
-            rpc_options,
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> MyServicePrioChild for S
-where
-    S: ::std::convert::AsRef<dyn MyServicePrioChild + 'a>,
-    S: crate::client::MyServicePrioParent,
-    S: ::std::marker::Send,
-{
-    fn pang(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>> {
-        self.as_ref().pang(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> MyServicePrioChildExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn MyServicePrioChild + 'a> + ::std::convert::AsRef<dyn MyServicePrioChildExt<T> + 'a>,
-    S: crate::client::MyServicePrioParent + crate::client::MyServicePrioParentExt<T>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn pang_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::my_service_prio_child::PangError>> {
-        <Self as ::std::convert::AsRef<dyn MyServicePrioChildExt<T>>>::as_ref(self).pang_with_rpc_opts(
             rpc_options,
         )
     }
@@ -1667,189 +1892,59 @@ impl ::fbthrift::ClientFactory for make_MyServicePrioChild {
     }
 }
 
+pub trait BadService: ::std::marker::Send {
+    fn createBadInteraction(
+        &self,
+    ) -> ::std::result::Result<crate::client::BadInteractionClient, ::anyhow::Error>;
 
-/// Client definitions for `BadInteraction`.
-pub struct BadInteractionImpl<P, T, S = ::fbthrift::NoopSpawner> {
-    transport: T,
-    _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
+    fn bar(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>>;
 }
 
-impl<P, T, S> BadInteractionImpl<P, T, S>
+pub trait BadServiceExt<T>: BadService
 where
-    P: ::fbthrift::Protocol,
     T: ::fbthrift::Transport,
-    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
-    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
-    P::Deserializer: ::std::marker::Send,
-    S: ::fbthrift::help::Spawner,
 {
-    pub fn new(
-        transport: T,
-    ) -> Self {
-        Self {
-            transport,
-            _phantom: ::std::marker::PhantomData,
-        }
-    }
-
-    pub fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
-    }
-
-
-    fn _foo_impl(
+    fn bar_with_rpc_opts(
         &self,
         rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"BadService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"BadService.BadInteraction.foo";
-        let args = self::Args_BadInteraction_foo {
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("BadInteraction.foo", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "BadInteraction.foo"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::bad_interaction::FooReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::bad_interaction::FooError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "BadInteraction.foo"))
-        .boxed()
-    }
-}
-
-impl<P, T, S> ::fbthrift::help::GetTransport<T> for BadInteractionImpl<P, T, S>
-where
-    T: ::fbthrift::Transport,
-{
-    fn transport(&self) -> &T {
-        &self.transport
-    }
-}
-
-pub trait BadInteraction: ::std::marker::Send {
-    fn foo(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>>;
-}
-
-pub trait BadInteractionExt<T>: BadInteraction
-where
-    T: ::fbthrift::Transport,
-{
-    fn foo_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>>;
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>>;
 
     fn transport(&self) -> &T;
 }
 
-struct Args_BadInteraction_foo<'a> {
-    _phantom: ::std::marker::PhantomData<&'a ()>,
-}
-
-impl<'a, P: ::fbthrift::ProtocolWriter> ::fbthrift::Serialize<P> for self::Args_BadInteraction_foo<'a> {
-    #[inline]
-    #[::tracing::instrument(skip_all, level = "trace", name = "serialize_args", fields(method = "BadInteraction.foo"))]
-    fn write(&self, p: &mut P) {
-        p.write_struct_begin("args");
-        p.write_field_stop();
-        p.write_struct_end();
-    }
-}
-
-impl<P, T, S> BadInteraction for BadInteractionImpl<P, T, S>
-where
-    P: ::fbthrift::Protocol,
-    T: ::fbthrift::Transport,
-    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
-    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
-    P::Deserializer: ::std::marker::Send,
-    S: ::fbthrift::help::Spawner,
-{
-    fn foo(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
-        let rpc_options = T::RpcOptions::default();
-        self._foo_impl(
-            rpc_options,
-        )
-    }
-}
-
-impl<P, T, S> BadInteractionExt<T> for BadInteractionImpl<P, T, S>
-where
-    P: ::fbthrift::Protocol,
-    T: ::fbthrift::Transport,
-    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
-    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
-    P::Deserializer: ::std::marker::Send,
-    S: ::fbthrift::help::Spawner,
-{
-    fn foo_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
-        self._foo_impl(
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        self.transport()
-    }
-}
-
 #[allow(deprecated)]
-impl<'a, S> BadInteraction for S
+impl<'a, S> BadService for S
 where
-    S: ::std::convert::AsRef<dyn BadInteraction + 'a>,
+    S: ::std::convert::AsRef<dyn BadService + 'a>,
     S: ::std::marker::Send,
 {
-    fn foo(
+    fn createBadInteraction(
         &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
-        self.as_ref().foo(
+    ) -> ::std::result::Result<crate::client::BadInteractionClient, ::anyhow::Error> {
+        self.as_ref().createBadInteraction()
+    }
+    fn bar(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>> {
+        self.as_ref().bar(
         )
     }
 }
 
 #[allow(deprecated)]
-impl<'a, S, T> BadInteractionExt<T> for S
+impl<'a, S, T> BadServiceExt<T> for S
 where
-    S: ::std::convert::AsRef<dyn BadInteraction + 'a> + ::std::convert::AsRef<dyn BadInteractionExt<T> + 'a>,
+    S: ::std::convert::AsRef<dyn BadService + 'a> + ::std::convert::AsRef<dyn BadServiceExt<T> + 'a>,
     S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
     T: ::fbthrift::Transport,
 {
-    fn foo_with_rpc_opts(
+    fn bar_with_rpc_opts(
         &self,
         rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::bad_interaction::FooError>> {
-        <Self as ::std::convert::AsRef<dyn BadInteractionExt<T>>>::as_ref(self).foo_with_rpc_opts(
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>> {
+        <Self as ::std::convert::AsRef<dyn BadServiceExt<T>>>::as_ref(self).bar_with_rpc_opts(
             rpc_options,
         )
     }
@@ -1858,111 +1953,12 @@ where
         ::fbthrift::help::GetTransport::transport(self)
     }
 }
-
-#[derive(Clone)]
-pub struct make_BadInteraction;
-
-/// To be called by user directly setting up a client. Avoids
-/// needing ClientFactory trait in scope, avoids unidiomatic
-/// make_Trait name.
-///
-/// ```
-/// # const _: &str = stringify! {
-/// use bgs::client::BuckGraphService;
-///
-/// let protocol = BinaryProtocol::new();
-/// let transport = HttpClient::new();
-/// let client = <dyn BuckGraphService>::new(protocol, transport);
-/// # };
-/// ```
-impl dyn BadInteraction {
-    pub fn new<P, T>(
-        protocol: P,
-        transport: T,
-    ) -> ::std::sync::Arc<impl BadInteraction + ::std::marker::Send + ::std::marker::Sync + 'static>
-    where
-        P: ::fbthrift::Protocol<Frame = T>,
-        T: ::fbthrift::Transport,
-        P::Deserializer: ::std::marker::Send,
-    {
-        let spawner = ::fbthrift::help::NoopSpawner;
-        Self::with_spawner(protocol, transport, spawner)
-    }
-
-    pub fn with_spawner<P, T, S>(
-        protocol: P,
-        transport: T,
-        spawner: S,
-    ) -> ::std::sync::Arc<impl BadInteraction + ::std::marker::Send + ::std::marker::Sync + 'static>
-    where
-        P: ::fbthrift::Protocol<Frame = T>,
-        T: ::fbthrift::Transport,
-        P::Deserializer: ::std::marker::Send,
-        S: ::fbthrift::help::Spawner,
-    {
-        let _ = protocol;
-        let _ = spawner;
-        ::std::sync::Arc::new(BadInteractionImpl::<P, T, S>::new(transport))
-    }
-}
-
-impl<T> dyn BadInteractionExt<T>
-where
-    T: ::fbthrift::Transport,
-{
-    pub fn new<P>(
-        protocol: P,
-        transport: T,
-    ) -> ::std::sync::Arc<impl BadInteractionExt<T> + ::std::marker::Send + ::std::marker::Sync + 'static>
-    where
-        P: ::fbthrift::Protocol<Frame = T>,
-        P::Deserializer: ::std::marker::Send,
-    {
-        let spawner = ::fbthrift::help::NoopSpawner;
-        Self::with_spawner(protocol, transport, spawner)
-    }
-
-    pub fn with_spawner<P, S>(
-        protocol: P,
-        transport: T,
-        spawner: S,
-    ) -> ::std::sync::Arc<impl BadInteractionExt<T> + ::std::marker::Send + ::std::marker::Sync + 'static>
-    where
-        P: ::fbthrift::Protocol<Frame = T>,
-        P::Deserializer: ::std::marker::Send,
-        S: ::fbthrift::help::Spawner,
-    {
-        let _ = protocol;
-        let _ = spawner;
-        ::std::sync::Arc::new(BadInteractionImpl::<P, T, S>::new(transport))
-    }
-}
-
-pub type BadInteractionDynClient = <make_BadInteraction as ::fbthrift::ClientFactory>::Api;
-pub type BadInteractionClient = ::std::sync::Arc<BadInteractionDynClient>;
-
-/// The same thing, but to be called from generic contexts where we are
-/// working with a type parameter `C: ClientFactory` to produce clients.
-impl ::fbthrift::ClientFactory for make_BadInteraction {
-    type Api = dyn BadInteraction + ::std::marker::Send + ::std::marker::Sync + 'static;
-
-    fn with_spawner<P, T, S>(protocol: P, transport: T, spawner: S) -> ::std::sync::Arc<Self::Api>
-    where
-        P: ::fbthrift::Protocol<Frame = T>,
-        T: ::fbthrift::Transport,
-        P::Deserializer: ::std::marker::Send,
-        S: ::fbthrift::help::Spawner,
-    {
-        <dyn BadInteraction>::with_spawner(protocol, transport, spawner)
-    }
-}
-
-
 /// Client definitions for `BadService`.
 pub struct BadServiceImpl<P, T, S = ::fbthrift::NoopSpawner> {
     transport: T,
     _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
 }
+
 
 impl<P, T, S> BadServiceImpl<P, T, S>
 where
@@ -1986,6 +1982,11 @@ where
         ::fbthrift::help::GetTransport::transport(self)
     }
 
+    const NAMES_BadInteraction: crate::client::BadInteractionNames = crate::client::BadInteractionNames {
+        service: c"BadService",
+        method_foo: c"BadService.BadInteraction.foo",
+    };
+
 
     fn _bar_impl(
         &self,
@@ -1994,8 +1995,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"BadService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"BadService.bar";
+        let service_name = c"BadService";
+        let service_method_name = c"BadService.bar";
+
         let args = self::Args_BadService_bar {
             _phantom: ::std::marker::PhantomData,
         };
@@ -2009,7 +2011,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "BadService.bar"));
 
         async move {
@@ -2040,27 +2042,7 @@ where
     }
 }
 
-pub trait BadService: ::std::marker::Send {
-    fn createBadInteraction(
-        &self,
-    ) -> ::std::result::Result<BadInteractionClient, ::anyhow::Error>;
 
-    fn bar(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>>;
-}
-
-pub trait BadServiceExt<T>: BadService
-where
-    T: ::fbthrift::Transport,
-{
-    fn bar_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>>;
-
-    fn transport(&self) -> &T;
-}
 
 struct Args_BadService_bar<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -2088,11 +2070,12 @@ where
 
     fn createBadInteraction(
         &self,
-    ) -> ::std::result::Result<BadInteractionClient, ::anyhow::Error> {
+    ) -> ::std::result::Result<crate::client::BadInteractionClient, ::anyhow::Error> {
         ::std::result::Result::Ok(
             ::std::sync::Arc::new(
-                BadInteractionImpl::<P, T, S>::new(
-                    self.transport().create_interaction(c"BadInteraction")?
+                crate::client::BadInteractionImpl::<P, T, S>::new(
+                    self.transport().create_interaction(c"BadInteraction")?,
+                    &Self::NAMES_BadInteraction,
                 )
             )
         )
@@ -2127,46 +2110,6 @@ where
 
     fn transport(&self) -> &T {
         self.transport()
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> BadService for S
-where
-    S: ::std::convert::AsRef<dyn BadService + 'a>,
-    S: ::std::marker::Send,
-{
-    fn createBadInteraction(
-        &self,
-    ) -> ::std::result::Result<BadInteractionClient, ::anyhow::Error> {
-        self.as_ref().createBadInteraction()
-    }
-    fn bar(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>> {
-        self.as_ref().bar(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> BadServiceExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn BadService + 'a> + ::std::convert::AsRef<dyn BadServiceExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn bar_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<::std::primitive::i32, crate::errors::bad_service::BarError>> {
-        <Self as ::std::convert::AsRef<dyn BadServiceExt<T>>>::as_ref(self).bar_with_rpc_opts(
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
     }
 }
 
@@ -2268,175 +2211,6 @@ impl ::fbthrift::ClientFactory for make_BadService {
     }
 }
 
-
-/// Client definitions for `FooBarBazService`.
-pub struct FooBarBazServiceImpl<P, T, S = ::fbthrift::NoopSpawner> {
-    transport: T,
-    _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
-}
-
-impl<P, T, S> FooBarBazServiceImpl<P, T, S>
-where
-    P: ::fbthrift::Protocol,
-    T: ::fbthrift::Transport,
-    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
-    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
-    P::Deserializer: ::std::marker::Send,
-    S: ::fbthrift::help::Spawner,
-{
-    pub fn new(
-        transport: T,
-    ) -> Self {
-        Self {
-            transport,
-            _phantom: ::std::marker::PhantomData,
-        }
-    }
-
-    pub fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
-    }
-
-
-    fn _foo_impl(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::FooError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"FooBarBazService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"FooBarBazService.foo";
-        let args = self::Args_FooBarBazService_foo {
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("foo", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "FooBarBazService.foo"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::foo_bar_baz_service::FooReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::foo_bar_baz_service::FooError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "FooBarBazService.foo"))
-        .boxed()
-    }
-
-    fn _bar_impl(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BarError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"FooBarBazService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"FooBarBazService.bar";
-        let args = self::Args_FooBarBazService_bar {
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("bar", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "FooBarBazService.bar"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::foo_bar_baz_service::BarReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::foo_bar_baz_service::BarError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "FooBarBazService.bar"))
-        .boxed()
-    }
-
-    fn _baz_impl(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BazError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"FooBarBazService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"FooBarBazService.baz";
-        let args = self::Args_FooBarBazService_baz {
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("baz", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "FooBarBazService.baz"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::foo_bar_baz_service::BazReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::foo_bar_baz_service::BazError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "FooBarBazService.baz"))
-        .boxed()
-    }
-}
-
-impl<P, T, S> ::fbthrift::help::GetTransport<T> for FooBarBazServiceImpl<P, T, S>
-where
-    T: ::fbthrift::Transport,
-{
-    fn transport(&self) -> &T {
-        &self.transport
-    }
-}
-
 pub trait FooBarBazService: ::std::marker::Send {
     fn foo(
         &self,
@@ -2470,6 +2244,243 @@ where
 
     fn transport(&self) -> &T;
 }
+
+#[allow(deprecated)]
+impl<'a, S> FooBarBazService for S
+where
+    S: ::std::convert::AsRef<dyn FooBarBazService + 'a>,
+    S: ::std::marker::Send,
+{
+    fn foo(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::FooError>> {
+        self.as_ref().foo(
+        )
+    }
+    fn bar(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BarError>> {
+        self.as_ref().bar(
+        )
+    }
+    fn baz(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BazError>> {
+        self.as_ref().baz(
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> FooBarBazServiceExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn FooBarBazService + 'a> + ::std::convert::AsRef<dyn FooBarBazServiceExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn foo_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::FooError>> {
+        <Self as ::std::convert::AsRef<dyn FooBarBazServiceExt<T>>>::as_ref(self).foo_with_rpc_opts(
+            rpc_options,
+        )
+    }
+    fn bar_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BarError>> {
+        <Self as ::std::convert::AsRef<dyn FooBarBazServiceExt<T>>>::as_ref(self).bar_with_rpc_opts(
+            rpc_options,
+        )
+    }
+    fn baz_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BazError>> {
+        <Self as ::std::convert::AsRef<dyn FooBarBazServiceExt<T>>>::as_ref(self).baz_with_rpc_opts(
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
+/// Client definitions for `FooBarBazService`.
+pub struct FooBarBazServiceImpl<P, T, S = ::fbthrift::NoopSpawner> {
+    transport: T,
+    _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
+}
+
+
+impl<P, T, S> FooBarBazServiceImpl<P, T, S>
+where
+    P: ::fbthrift::Protocol,
+    T: ::fbthrift::Transport,
+    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
+    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
+    P::Deserializer: ::std::marker::Send,
+    S: ::fbthrift::help::Spawner,
+{
+    pub fn new(
+        transport: T,
+    ) -> Self {
+        Self {
+            transport,
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+
+    pub fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+
+
+
+    fn _foo_impl(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::FooError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"FooBarBazService";
+        let service_method_name = c"FooBarBazService.foo";
+
+        let args = self::Args_FooBarBazService_foo {
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("foo", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "FooBarBazService.foo"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::foo_bar_baz_service::FooReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::foo_bar_baz_service::FooError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "FooBarBazService.foo"))
+        .boxed()
+    }
+
+    fn _bar_impl(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BarError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"FooBarBazService";
+        let service_method_name = c"FooBarBazService.bar";
+
+        let args = self::Args_FooBarBazService_bar {
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("bar", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "FooBarBazService.bar"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::foo_bar_baz_service::BarReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::foo_bar_baz_service::BarError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "FooBarBazService.bar"))
+        .boxed()
+    }
+
+    fn _baz_impl(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BazError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"FooBarBazService";
+        let service_method_name = c"FooBarBazService.baz";
+
+        let args = self::Args_FooBarBazService_baz {
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("baz", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "FooBarBazService.baz"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::foo_bar_baz_service::BazReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::foo_bar_baz_service::BazError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "FooBarBazService.baz"))
+        .boxed()
+    }
+}
+
+impl<P, T, S> ::fbthrift::help::GetTransport<T> for FooBarBazServiceImpl<P, T, S>
+where
+    T: ::fbthrift::Transport,
+{
+    fn transport(&self) -> &T {
+        &self.transport
+    }
+}
+
+
 
 struct Args_FooBarBazService_foo<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -2584,69 +2595,6 @@ where
 
     fn transport(&self) -> &T {
         self.transport()
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> FooBarBazService for S
-where
-    S: ::std::convert::AsRef<dyn FooBarBazService + 'a>,
-    S: ::std::marker::Send,
-{
-    fn foo(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::FooError>> {
-        self.as_ref().foo(
-        )
-    }
-    fn bar(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BarError>> {
-        self.as_ref().bar(
-        )
-    }
-    fn baz(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BazError>> {
-        self.as_ref().baz(
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> FooBarBazServiceExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn FooBarBazService + 'a> + ::std::convert::AsRef<dyn FooBarBazServiceExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn foo_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::FooError>> {
-        <Self as ::std::convert::AsRef<dyn FooBarBazServiceExt<T>>>::as_ref(self).foo_with_rpc_opts(
-            rpc_options,
-        )
-    }
-    fn bar_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BarError>> {
-        <Self as ::std::convert::AsRef<dyn FooBarBazServiceExt<T>>>::as_ref(self).bar_with_rpc_opts(
-            rpc_options,
-        )
-    }
-    fn baz_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::foo_bar_baz_service::BazError>> {
-        <Self as ::std::convert::AsRef<dyn FooBarBazServiceExt<T>>>::as_ref(self).baz_with_rpc_opts(
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
     }
 }
 

@@ -111,23 +111,16 @@ class FizzClientContext {
   }
 
   /**
-   * This is a legacy api, prefer setClientCertManager.
-   * Sets the certificate to use if the server requests client authentication.
-   * This api is meant to be used when you expect
-   * to only be presenting one possible cert. This will overwrite any
-   * pre-existing configuration.
+   * Set the extension types to be placed in ECH OuterExtensions. Ordering does
+   * not matter, but vector search is expected to be faster than unordered_set
+   * at small sizes.
    */
-  [[deprecated("Use FizzClientContext::setClientCertManager")]]
-  void setClientCertificate(std::shared_ptr<SelfCert> cert) {
-    // Blow away any existing certs on the context.
-    if (cert != nullptr) {
-      auto certMgr = std::make_shared<CertManager>();
-      clientCert_ = cert;
-      certMgr->addCertAndOverride(std::move(cert));
-      certManager_ = std::move(certMgr);
-    } else {
-      certManager_ = nullptr;
-    }
+  void setECHOuterExtensionTypes(std::vector<ExtensionType> types) {
+    echOuterExtensionTypes_ = std::move(types);
+  }
+
+  const auto& getECHOuterExtensionTypes() const {
+    return echOuterExtensionTypes_;
   }
 
   /*
@@ -140,24 +133,6 @@ class FizzClientContext {
 
   std::shared_ptr<CertManager> getCertManager() const {
     return certManager_;
-  }
-
-  /*
-   * Retrieves the default client cert used for the ctx. This is a legacy api,
-   * do not use.
-   */
-  [[deprecated(
-      "FizzClientContext will no longer allow access to the client certificate. The application is responsible for keeping track of the client certificate installed")]]
-  std::shared_ptr<SelfCert> getClientCertificate() const {
-    if (clientCert_) {
-      return clientCert_;
-    }
-    if (certManager_) {
-      auto result = certManager_->getCert(
-          folly::none, supportedSigSchemes_, supportedSigSchemes_, {});
-      return result ? result->cert : nullptr;
-    }
-    return nullptr;
   }
 
   void setECHPolicy(std::shared_ptr<ECHPolicy> echPolicy) {
@@ -334,6 +309,18 @@ class FizzClientContext {
     return sendKeyShare_;
   }
 
+  /**
+   * Option to place the SNI extension first in the ClientHello. Default is
+   * false.
+   */
+  void setSniExtFirst(bool sniExtFirst) {
+    sniExtFirst_ = sniExtFirst;
+  }
+
+  bool getSniExtFirst() const {
+    return sniExtFirst_;
+  }
+
  private:
   std::shared_ptr<Factory> factory_;
 
@@ -358,6 +345,8 @@ class FizzClientContext {
       PskKeyExchangeMode::psk_dhe_ke,
       PskKeyExchangeMode::psk_ke};
   std::vector<std::string> supportedAlpns_;
+  std::vector<ExtensionType> echOuterExtensionTypes_ = {
+      ExtensionType::key_share};
   bool sendEarlyData_{false};
 
   bool compatMode_{false};
@@ -377,6 +366,8 @@ class FizzClientContext {
   std::shared_ptr<Clock> clock_;
 
   std::chrono::seconds maxPskHandshakeLife_{std::chrono::hours(168)};
+
+  bool sniExtFirst_{false};
 };
 } // namespace client
 } // namespace fizz

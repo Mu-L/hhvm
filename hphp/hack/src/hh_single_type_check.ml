@@ -76,7 +76,7 @@ type options = {
   files: string list;
   extra_builtins: string list;
   mode: mode;
-  error_format: Errors.format;
+  error_format: Errors.format option;
   no_builtins: bool;
   max_errors: int option;
   tcopt: GlobalOptions.t;
@@ -140,7 +140,8 @@ let print_error format ?(oc = stderr) l =
   let absolute_errors = User_error.to_absolute l in
   Out_channel.output_string oc (formatter absolute_errors)
 
-let write_error_list format errors oc max_errors =
+let write_error_list format (errors : Errors.t) oc max_errors =
+  let errors = Errors.get_sorted_error_list errors in
   let (shown_errors, dropped_errors) =
     match max_errors with
     | Some max_errors -> List.split_n errors max_errors
@@ -151,7 +152,8 @@ let write_error_list format errors oc max_errors =
     match
       Errors.format_summary
         format
-        ~displayed_count:(List.length errors)
+        ~error_count:(List.length errors)
+        ~warning_count:0
         ~dropped_count:(Some (List.length dropped_errors))
         ~max_errors
     with
@@ -161,7 +163,8 @@ let write_error_list format errors oc max_errors =
     Out_channel.output_string oc "No errors\n";
   Out_channel.close oc
 
-let print_error_list format errors max_errors =
+let print_error_list format (errors : Errors.t) max_errors =
+  let errors = Errors.get_sorted_error_list errors in
   let (shown_errors, dropped_errors) =
     match max_errors with
     | Some max_errors -> List.split_n errors max_errors
@@ -172,7 +175,8 @@ let print_error_list format errors max_errors =
     match
       Errors.format_summary
         format
-        ~displayed_count:(List.length errors)
+        ~error_count:(List.length errors)
+        ~warning_count:0
         ~dropped_count:(Some (List.length dropped_errors))
         ~max_errors
     with
@@ -182,11 +186,13 @@ let print_error_list format errors max_errors =
     Printf.printf "No errors\n"
 
 let print_errors format (errors : Errors.t) max_errors : unit =
-  print_error_list format (Errors.get_sorted_error_list errors) max_errors
+  print_error_list format errors max_errors
 
-let print_errors_if_present (errors : Errors.error list) =
-  if not (List.is_empty errors) then (
-    let errors_output = Errors.convert_errors_to_string errors in
+let print_errors_if_present (errors : Errors.t) =
+  if not (Errors.is_empty errors) then (
+    let errors_output =
+      Errors.convert_errors_to_string @@ Errors.get_sorted_error_list errors
+    in
     Printf.printf "Errors:\n";
     List.iter errors_output ~f:(fun err_output ->
         Printf.printf "  %s\n" err_output)
@@ -226,7 +232,7 @@ let parse_options () =
     | _ -> raise (Arg.Bad "only a single mode should be specified")
   in
   let config_overrides = ref [] in
-  let error_format = ref Errors.Highlighted in
+  let error_format = ref None in
   let forbid_nullable_cast = ref false in
   let deregister_attributes = ref None in
   let auto_namespace_map = ref None in
@@ -252,6 +258,7 @@ let parse_options () =
   let const_static_props = ref false in
   let disable_legacy_attribute_syntax = ref false in
   let const_attribute = ref false in
+  let type_refinement_partition_shapes = ref false in
   let const_default_func_args = ref false in
   let const_default_lambda_args = ref false in
   let disallow_silence = ref false in
@@ -373,11 +380,11 @@ let parse_options () =
         Arg.String
           (fun s ->
             match s with
-            | "raw" -> error_format := Errors.Raw
-            | "context" -> error_format := Errors.Context
-            | "highlighted" -> error_format := Errors.Highlighted
-            | "plain" -> error_format := Errors.Plain
-            | "extended" -> error_format := Errors.Extended
+            | "raw" -> error_format := Some Errors.Raw
+            | "context" -> error_format := Some Errors.Context
+            | "highlighted" -> error_format := Some Errors.Highlighted
+            | "plain" -> error_format := Some Errors.Plain
+            | "extended" -> error_format := Some Errors.Extended
             | _ -> print_string "Warning: unrecognized error format.\n"),
         "<raw|context|highlighted|plain|flow> Error formatting style; (default: highlighted)"
       );
@@ -760,16 +767,9 @@ let parse_options () =
   in
 
   (match !mode with
-  | Get_some_file_deps { depth; _ } ->
-    if Option.is_none !naming_table then
-      raise (Arg.Bad "--get-some-file-deps requires --naming-table");
-    if Option.is_none !root then
-      raise (Arg.Bad "--get-some-file-deps requires --root");
-    mode :=
-      Get_some_file_deps
-        { depth; full_hierarchy = !get_some_file_deps_full_hierarchy }
+  | Get_some_file_deps _ when Option.is_none !root ->
+    raise (Arg.Bad "--get-some-file-deps requires --root")
   | _ -> ());
-
   if Option.is_some !naming_table && Option.is_none !root then
     failwith "--naming-table needs --root";
 
@@ -808,10 +808,7 @@ let parse_options () =
         |> Config_file.Getters.string_opt "allowed_fixme_codes_strict"
         |> Option.map ~f:comma_string_to_iset;
       sharedmem_config :=
-        ServerConfig.make_sharedmem_config
-          config
-          (ServerArgs.default_options ~root)
-          ServerLocalConfig.default;
+        ServerConfig.make_sharedmem_config config ServerLocalConfigLoad.default;
       no_builtins := true;
       (* Now let CLI options override whatever we just picked *)
       Arg.parse options (fun _ -> ()) usage;
@@ -820,6 +817,15 @@ let parse_options () =
       (* Path.make canonicalizes it, i.e. resolves symlinks *)
       Path.make root
   in
+  (match !mode with
+  | Get_some_file_deps { depth; _ } ->
+    if Option.is_none !naming_table then
+      raise (Arg.Bad "--get-some-file-deps requires --naming-table");
+    mode :=
+      Get_some_file_deps
+        { depth; full_hierarchy = !get_some_file_deps_full_hierarchy }
+  | _ -> ());
+
   let ( >?? ) x y = Option.value x ~default:y in
   let po =
     ParserOptions.
@@ -831,17 +837,16 @@ let parse_options () =
         disable_lval_as_an_expression = default.disable_lval_as_an_expression;
         disallow_static_constants_in_default_func_args =
           default.disallow_static_constants_in_default_func_args;
-        disallow_direct_superglobals_refs =
-          default.disallow_direct_superglobals_refs;
         stack_size = default.stack_size;
         unwrap_concurrent = default.unwrap_concurrent;
         parser_errors_only = default.parser_errors_only;
         no_parser_readonly_check = default.no_parser_readonly_check;
         experimental_features = default.experimental_features;
+        consider_unspecified_experimental_features_released =
+          default.consider_unspecified_experimental_features_released;
         (* These are set specifically for single type check *)
         use_legacy_experimental_feature_config = false;
         allow_unstable_features = true;
-        consider_unspecified_experimental_features_released = true;
         (* The remainder are set by the command line options *)
         is_systemlib = !is_systemlib;
         disable_legacy_soft_typehints = !disable_legacy_soft_typehints;
@@ -888,6 +893,7 @@ let parse_options () =
       ~po_disallow_toplevel_requires:(not !allow_toplevel_requires)
       ~tco_const_attribute:!const_attribute
       ~tco_check_attribute_locations:true
+      ~tco_type_refinement_partition_shapes:!type_refinement_partition_shapes
       ~tco_error_php_lambdas:!error_php_lambdas
       ~tco_disallow_discarded_nullable_awaitables:
         !disallow_discarded_nullable_awaitables
@@ -916,7 +922,6 @@ let parse_options () =
       ~tco_allow_all_files_for_module_declarations:
         !allow_all_files_for_module_declarations
       ~tco_loop_iteration_upper_bound:!loop_iteration_upper_bound
-      ~tco_rust_elab:false
       GlobalOptions.default
   in
 
@@ -1022,7 +1027,9 @@ let print_elapsed fn desc ~start_time =
     desc
     elapsed_ms
 
-let check_file ctx errors files_info ~profile_type_check_multi ~memtrace =
+let check_file
+    ctx (errors : Errors.t) files_info ~profile_type_check_multi ~memtrace :
+    Errors.t =
   let profiling = Option.is_some profile_type_check_multi in
   if profiling then
     Relative_path.Map.iter files_info ~f:(fun fn (_fileinfo : FileInfo.t) ->
@@ -1048,7 +1055,7 @@ let check_file ctx errors files_info ~profile_type_check_multi ~memtrace =
     let timings = Relative_path.Map.update fn add_sample timings in
     (result, timings)
   in
-  let rec go n timings =
+  let rec go n timings : Errors.t * _ =
     let (errors, timings) =
       Relative_path.Map.fold
         files_info
@@ -1058,7 +1065,7 @@ let check_file ctx errors files_info ~profile_type_check_multi ~memtrace =
             add_timing fn timings
             @@ lazy (Typing_check_job.calc_errors_and_tast ctx fn ~full_ast)
           in
-          (errors @ Errors.get_sorted_error_list new_errors, timings))
+          (Errors.merge errors new_errors, timings))
         ~init:(errors, timings)
     in
     if n > 1 then
@@ -1321,12 +1328,11 @@ let compute_tasts_expand_types ctx files_info interesting_files =
 
 let decl_parse_typecheck_and_then ctx files_contents f =
   let (parse_errors, files_info) = parse_name_and_decl ctx files_contents in
-  let parse_errors = Errors.get_sorted_error_list parse_errors in
   let (errors, _tasts) =
     compute_tasts_expand_types ctx files_info files_contents
   in
-  let errors = parse_errors @ Errors.get_sorted_error_list errors in
-  if List.is_empty errors then
+  let errors = Errors.merge parse_errors errors in
+  if Errors.is_empty errors then
     f files_info
   else
     print_errors_if_present errors
@@ -1414,7 +1420,11 @@ let handle_constraint_mode
          files to analyse *)
       ()
   in
-  let print_errors = List.iter ~f:(print_error ~oc:stdout error_format) in
+  let print_errors errors =
+    List.iter
+      (Errors.get_sorted_error_list errors)
+      ~f:(print_error ~oc:stdout error_format)
+  in
   (* Process a multifile that is not typechecked *)
   let process_multifile filename =
     Printf.printf
@@ -1423,11 +1433,10 @@ let handle_constraint_mode
       (Relative_path.to_absolute filename);
     let files_contents = Multifile.file_to_files filename in
     let (parse_errors, file_info) = parse_name_and_decl ctx files_contents in
-    let error_list = Errors.get_sorted_error_list parse_errors in
     let check_errors =
-      check_file ctx error_list file_info ~profile_type_check_multi ~memtrace
+      check_file ctx parse_errors file_info ~profile_type_check_multi ~memtrace
     in
-    if not (List.is_empty check_errors) then
+    if not (Errors.is_empty check_errors) then
       print_errors check_errors
     else
       Relative_path.Map.iter file_info ~f:process_file
@@ -1761,7 +1770,7 @@ let handle_mode
     builtins
     files_contents
     files_info
-    parse_errors
+    (parse_errors : Errors.t)
     max_errors
     error_format
     batch_mode
@@ -1969,7 +1978,13 @@ let handle_mode
     let (ctx, entry) = Provider_context.add_entry_if_missing ~ctx ~path in
     let src = Provider_context.read_file_contents_exn entry in
     let range = find_ide_range_exn src in
-    Code_actions_cli_lib.run ctx entry range ~title_prefix ~use_snippet_edits
+    Code_actions_cli_lib.run
+      ctx
+      ~error_filter:Tast_provider.ErrorFilter.default
+      entry
+      range
+      ~title_prefix
+      ~use_snippet_edits
   | Ide_diagnostics ->
     let path = expect_single_file () in
     let (ctx, entry) = Provider_context.add_entry_if_missing ~ctx ~path in
@@ -1998,7 +2013,7 @@ let handle_mode
         FileOutline.print ~short_pos:true results)
   | Dump_nast ->
     let (errors, nasts) = Errors.do_ (fun () -> create_nasts ctx files_info) in
-    print_errors_if_present (Errors.get_sorted_error_list errors);
+    print_errors_if_present errors;
 
     print_nasts
       ~should_print_position
@@ -2008,7 +2023,7 @@ let handle_mode
     let (errors, tasts) =
       compute_tasts_expand_types ctx files_info files_contents
     in
-    print_errors_if_present (parse_errors @ Errors.get_sorted_error_list errors);
+    print_errors_if_present (Errors.merge parse_errors errors);
     print_tasts ~should_print_position tasts ctx
   | Dump_stripped_tast ->
     iter_over_files (fun filename ->
@@ -2125,7 +2140,7 @@ let handle_mode
           Out_channel.create (Relative_path.to_absolute filename ^ out_extension)
         in
         (* This means builtins had errors, so lets just print those if we see them *)
-        if not (List.is_empty parse_errors) then
+        if not (Errors.is_empty parse_errors) then
           (* This closes the out channel *)
           write_error_list error_format parse_errors oc max_errors
         else (
@@ -2142,7 +2157,7 @@ let handle_mode
               let errors =
                 check_file
                   ctx
-                  (Errors.get_sorted_error_list parse_errors)
+                  parse_errors
                   individual_file_info
                   ~profile_type_check_multi
                   ~memtrace
@@ -2155,7 +2170,7 @@ let handle_mode
       check_file ctx parse_errors files_info ~profile_type_check_multi ~memtrace
     in
     print_error_list error_format errors max_errors;
-    if not (List.is_empty errors) then exit 2
+    if not (Errors.is_empty errors) then exit 2
   | Shallow_class_diff ->
     print_errors_if_present parse_errors;
     let filename = expect_single_file () in
@@ -2333,7 +2348,7 @@ let handle_mode
       Printf.printf "%s" (Hh_json.json_to_string json)
   | Map_reduce_mode ->
     let (errors, tasts) = compute_tasts_by_name ctx files_info files_contents in
-    print_errors_if_present (parse_errors @ Errors.get_sorted_error_list errors);
+    print_errors_if_present (Errors.merge parse_errors errors);
     let mapped =
       Relative_path.Map.elements tasts
       |> List.map ~f:(fun (fn, tasts) -> Map_reduce.map ctx fn tasts errors)
@@ -2485,6 +2500,8 @@ let decl_and_run_mode
     | Some _ ->
       let (errors, info) =
         PackageConfig.load_and_parse
+          ~package_v2:tcopt.GlobalOptions.tco_package_v2
+          ~strict:false
           ~pkgs_config_abs_path:packages_config_path
           ()
       in
@@ -2545,6 +2562,7 @@ let decl_and_run_mode
     parse_name_and_decl ctx to_decl
   in
   let errors = Errors.merge package_config_errors naming_and_parsing_errors in
+  let error_format = Errors.format_or_default error_format in
   handle_mode
     mode
     files
@@ -2552,7 +2570,7 @@ let decl_and_run_mode
     builtins
     files_contents
     files_info
-    (Errors.get_sorted_error_list errors)
+    errors
     max_errors
     error_format
     batch_mode

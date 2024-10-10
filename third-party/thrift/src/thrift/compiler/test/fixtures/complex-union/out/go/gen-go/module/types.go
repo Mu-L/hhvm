@@ -7,14 +7,14 @@ package module
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 
 
@@ -24,7 +24,7 @@ func NewContainerTypedef() ContainerTypedef {
     return make(map[int16]string)
 }
 
-func WriteContainerTypedef(item ContainerTypedef, p thrift.Format) error {
+func WriteContainerTypedef(item ContainerTypedef, p thrift.Encoder) error {
     if err := p.WriteMapBegin(thrift.I16, thrift.STRING, len(item)); err != nil {
     return thrift.PrependError("error writing map begin: ", err)
 }
@@ -49,7 +49,7 @@ if err := p.WriteMapEnd(); err != nil {
     return nil
 }
 
-func ReadContainerTypedef(p thrift.Format) (ContainerTypedef, error) {
+func ReadContainerTypedef(p thrift.Decoder) (ContainerTypedef, error) {
     var decodeResult ContainerTypedef
     decodeErr := func() error {
         _ /* keyType */, _ /* valueType */, size, err := p.ReadMapBegin()
@@ -89,7 +89,6 @@ result := mapResult
     }()
     return decodeResult, decodeErr
 }
-
 type ComplexUnion struct {
     IntValue *int64 `thrift:"intValue,1" json:"intValue,omitempty" db:"intValue"`
     IntListValue []int64 `thrift:"intListValue,2" json:"intListValue,omitempty" db:"intListValue"`
@@ -102,14 +101,13 @@ type ComplexUnion struct {
 var _ thrift.Struct = (*ComplexUnion)(nil)
 
 func NewComplexUnion() *ComplexUnion {
-    return (&ComplexUnion{})
+    return (&ComplexUnion{}).setDefaults()
 }
 
 func (x *ComplexUnion) GetIntValue() int64 {
     if !x.IsSetIntValue() {
         return 0
     }
-
     return *x.IntValue
 }
 
@@ -117,7 +115,6 @@ func (x *ComplexUnion) GetIntListValue() []int64 {
     if !x.IsSetIntListValue() {
         return make([]int64, 0)
     }
-
     return x.IntListValue
 }
 
@@ -125,7 +122,6 @@ func (x *ComplexUnion) GetStringListValue() []string {
     if !x.IsSetStringListValue() {
         return make([]string, 0)
     }
-
     return x.StringListValue
 }
 
@@ -133,7 +129,6 @@ func (x *ComplexUnion) GetStringValue() string {
     if !x.IsSetStringValue() {
         return ""
     }
-
     return *x.StringValue
 }
 
@@ -141,7 +136,6 @@ func (x *ComplexUnion) GetTypedefValue() ContainerTypedef {
     if !x.IsSetTypedefValue() {
         return NewContainerTypedef()
     }
-
     return x.TypedefValue
 }
 
@@ -149,7 +143,6 @@ func (x *ComplexUnion) GetStringRef() string {
     if !x.IsSetStringRef() {
         return ""
     }
-
     return *x.StringRef
 }
 
@@ -237,7 +230,7 @@ func (x *ComplexUnion) IsSetStringRef() bool {
     return x != nil && x.StringRef != nil
 }
 
-func (x *ComplexUnion) writeField1(p thrift.Format) error {  // IntValue
+func (x *ComplexUnion) writeField1(p thrift.Encoder) error {  // IntValue
     if !x.IsSetIntValue() {
         return nil
     }
@@ -257,7 +250,7 @@ func (x *ComplexUnion) writeField1(p thrift.Format) error {  // IntValue
     return nil
 }
 
-func (x *ComplexUnion) writeField2(p thrift.Format) error {  // IntListValue
+func (x *ComplexUnion) writeField2(p thrift.Encoder) error {  // IntListValue
     if !x.IsSetIntListValue() {
         return nil
     }
@@ -288,7 +281,7 @@ if err := p.WriteListEnd(); err != nil {
     return nil
 }
 
-func (x *ComplexUnion) writeField3(p thrift.Format) error {  // StringListValue
+func (x *ComplexUnion) writeField3(p thrift.Encoder) error {  // StringListValue
     if !x.IsSetStringListValue() {
         return nil
     }
@@ -319,7 +312,7 @@ if err := p.WriteListEnd(); err != nil {
     return nil
 }
 
-func (x *ComplexUnion) writeField5(p thrift.Format) error {  // StringValue
+func (x *ComplexUnion) writeField5(p thrift.Encoder) error {  // StringValue
     if !x.IsSetStringValue() {
         return nil
     }
@@ -339,7 +332,7 @@ func (x *ComplexUnion) writeField5(p thrift.Format) error {  // StringValue
     return nil
 }
 
-func (x *ComplexUnion) writeField9(p thrift.Format) error {  // TypedefValue
+func (x *ComplexUnion) writeField9(p thrift.Encoder) error {  // TypedefValue
     if !x.IsSetTypedefValue() {
         return nil
     }
@@ -360,7 +353,7 @@ if err != nil {
     return nil
 }
 
-func (x *ComplexUnion) writeField14(p thrift.Format) error {  // StringRef
+func (x *ComplexUnion) writeField14(p thrift.Encoder) error {  // StringRef
     if !x.IsSetStringRef() {
         return nil
     }
@@ -380,7 +373,7 @@ func (x *ComplexUnion) writeField14(p thrift.Format) error {  // StringRef
     return nil
 }
 
-func (x *ComplexUnion) readField1(p thrift.Format) error {  // IntValue
+func (x *ComplexUnion) readField1(p thrift.Decoder) error {  // IntValue
     result, err := p.ReadI64()
 if err != nil {
     return err
@@ -390,7 +383,7 @@ if err != nil {
     return nil
 }
 
-func (x *ComplexUnion) readField2(p thrift.Format) error {  // IntListValue
+func (x *ComplexUnion) readField2(p thrift.Decoder) error {  // IntListValue
     _ /* elemType */, size, err := p.ReadListBegin()
 if err != nil {
     return thrift.PrependError("error reading list begin: ", err)
@@ -418,7 +411,7 @@ result := listResult
     return nil
 }
 
-func (x *ComplexUnion) readField3(p thrift.Format) error {  // StringListValue
+func (x *ComplexUnion) readField3(p thrift.Decoder) error {  // StringListValue
     _ /* elemType */, size, err := p.ReadListBegin()
 if err != nil {
     return thrift.PrependError("error reading list begin: ", err)
@@ -446,7 +439,7 @@ result := listResult
     return nil
 }
 
-func (x *ComplexUnion) readField5(p thrift.Format) error {  // StringValue
+func (x *ComplexUnion) readField5(p thrift.Decoder) error {  // StringValue
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -456,7 +449,7 @@ if err != nil {
     return nil
 }
 
-func (x *ComplexUnion) readField9(p thrift.Format) error {  // TypedefValue
+func (x *ComplexUnion) readField9(p thrift.Decoder) error {  // TypedefValue
     result, err := ReadContainerTypedef(p)
 if err != nil {
     return err
@@ -466,7 +459,7 @@ if err != nil {
     return nil
 }
 
-func (x *ComplexUnion) readField14(p thrift.Format) error {  // StringRef
+func (x *ComplexUnion) readField14(p thrift.Decoder) error {  // StringRef
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -474,39 +467,6 @@ if err != nil {
 
     x.StringRef = &result
     return nil
-}
-
-func (x *ComplexUnion) toString1() string {  // IntValue
-    if x.IsSetIntValue() {
-        return fmt.Sprintf("%v", *x.IntValue)
-    }
-    return fmt.Sprintf("%v", x.IntValue)
-}
-
-func (x *ComplexUnion) toString2() string {  // IntListValue
-    return fmt.Sprintf("%v", x.IntListValue)
-}
-
-func (x *ComplexUnion) toString3() string {  // StringListValue
-    return fmt.Sprintf("%v", x.StringListValue)
-}
-
-func (x *ComplexUnion) toString5() string {  // StringValue
-    if x.IsSetStringValue() {
-        return fmt.Sprintf("%v", *x.StringValue)
-    }
-    return fmt.Sprintf("%v", x.StringValue)
-}
-
-func (x *ComplexUnion) toString9() string {  // TypedefValue
-    return fmt.Sprintf("%v", x.TypedefValue)
-}
-
-func (x *ComplexUnion) toString14() string {  // StringRef
-    if x.IsSetStringRef() {
-        return fmt.Sprintf("%v", *x.StringRef)
-    }
-    return fmt.Sprintf("%v", x.StringRef)
 }
 
 
@@ -541,7 +501,7 @@ func (x *ComplexUnion) CountSetFieldsComplexUnion() int {
 
 
 
-func (x *ComplexUnion) Write(p thrift.Format) error {
+func (x *ComplexUnion) Write(p thrift.Encoder) error {
     if countSet := x.countSetFields(); countSet > 1 {
         return fmt.Errorf("%T write union: no more than one field must be set (%d set).", x, countSet)
     }
@@ -552,23 +512,18 @@ func (x *ComplexUnion) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
-
     if err := x.writeField3(p); err != nil {
         return err
     }
-
     if err := x.writeField5(p); err != nil {
         return err
     }
-
     if err := x.writeField9(p); err != nil {
         return err
     }
-
     if err := x.writeField14(p); err != nil {
         return err
     }
@@ -583,7 +538,7 @@ func (x *ComplexUnion) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *ComplexUnion) Read(p thrift.Format) error {
+func (x *ComplexUnion) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -598,35 +553,26 @@ func (x *ComplexUnion) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.I64)):  // intValue
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.LIST)):  // intListValue
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         case (id == 3 && wireType == thrift.Type(thrift.LIST)):  // stringListValue
-            if err := x.readField3(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField3(p)
         case (id == 5 && wireType == thrift.Type(thrift.STRING)):  // stringValue
-            if err := x.readField5(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField5(p)
         case (id == 9 && wireType == thrift.Type(thrift.MAP)):  // typedefValue
-            if err := x.readField9(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField9(p)
         case (id == 14 && wireType == thrift.Type(thrift.STRING)):  // stringRef
-            if err := x.readField14(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField14(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -642,22 +588,11 @@ func (x *ComplexUnion) Read(p thrift.Format) error {
 }
 
 func (x *ComplexUnion) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("ComplexUnion({")
-    sb.WriteString(fmt.Sprintf("IntValue:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("IntListValue:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("StringListValue:%s ", x.toString3()))
-    sb.WriteString(fmt.Sprintf("StringValue:%s ", x.toString5()))
-    sb.WriteString(fmt.Sprintf("TypedefValue:%s ", x.toString9()))
-    sb.WriteString(fmt.Sprintf("StringRef:%s", x.toString14()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *ComplexUnion) setDefaults() *ComplexUnion {
+    return x
 }
 
 type ListUnion struct {
@@ -668,14 +603,13 @@ type ListUnion struct {
 var _ thrift.Struct = (*ListUnion)(nil)
 
 func NewListUnion() *ListUnion {
-    return (&ListUnion{})
+    return (&ListUnion{}).setDefaults()
 }
 
 func (x *ListUnion) GetIntListValue() []int64 {
     if !x.IsSetIntListValue() {
         return make([]int64, 0)
     }
-
     return x.IntListValue
 }
 
@@ -683,7 +617,6 @@ func (x *ListUnion) GetStringListValue() []string {
     if !x.IsSetStringListValue() {
         return make([]string, 0)
     }
-
     return x.StringListValue
 }
 
@@ -715,7 +648,7 @@ func (x *ListUnion) IsSetStringListValue() bool {
     return x != nil && x.StringListValue != nil
 }
 
-func (x *ListUnion) writeField2(p thrift.Format) error {  // IntListValue
+func (x *ListUnion) writeField2(p thrift.Encoder) error {  // IntListValue
     if !x.IsSetIntListValue() {
         return nil
     }
@@ -746,7 +679,7 @@ if err := p.WriteListEnd(); err != nil {
     return nil
 }
 
-func (x *ListUnion) writeField3(p thrift.Format) error {  // StringListValue
+func (x *ListUnion) writeField3(p thrift.Encoder) error {  // StringListValue
     if !x.IsSetStringListValue() {
         return nil
     }
@@ -777,7 +710,7 @@ if err := p.WriteListEnd(); err != nil {
     return nil
 }
 
-func (x *ListUnion) readField2(p thrift.Format) error {  // IntListValue
+func (x *ListUnion) readField2(p thrift.Decoder) error {  // IntListValue
     _ /* elemType */, size, err := p.ReadListBegin()
 if err != nil {
     return thrift.PrependError("error reading list begin: ", err)
@@ -805,7 +738,7 @@ result := listResult
     return nil
 }
 
-func (x *ListUnion) readField3(p thrift.Format) error {  // StringListValue
+func (x *ListUnion) readField3(p thrift.Decoder) error {  // StringListValue
     _ /* elemType */, size, err := p.ReadListBegin()
 if err != nil {
     return thrift.PrependError("error reading list begin: ", err)
@@ -833,14 +766,6 @@ result := listResult
     return nil
 }
 
-func (x *ListUnion) toString2() string {  // IntListValue
-    return fmt.Sprintf("%v", x.IntListValue)
-}
-
-func (x *ListUnion) toString3() string {  // StringListValue
-    return fmt.Sprintf("%v", x.StringListValue)
-}
-
 func (x *ListUnion) countSetFields() int {
     count := int(0)
     if (x.IsSetIntListValue()) {
@@ -858,7 +783,7 @@ func (x *ListUnion) CountSetFieldsListUnion() int {
 
 
 
-func (x *ListUnion) Write(p thrift.Format) error {
+func (x *ListUnion) Write(p thrift.Encoder) error {
     if countSet := x.countSetFields(); countSet > 1 {
         return fmt.Errorf("%T write union: no more than one field must be set (%d set).", x, countSet)
     }
@@ -869,7 +794,6 @@ func (x *ListUnion) Write(p thrift.Format) error {
     if err := x.writeField2(p); err != nil {
         return err
     }
-
     if err := x.writeField3(p); err != nil {
         return err
     }
@@ -884,7 +808,7 @@ func (x *ListUnion) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *ListUnion) Read(p thrift.Format) error {
+func (x *ListUnion) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -899,19 +823,18 @@ func (x *ListUnion) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 2 && wireType == thrift.Type(thrift.LIST)):  // intListValue
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         case (id == 3 && wireType == thrift.Type(thrift.LIST)):  // stringListValue
-            if err := x.readField3(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField3(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -927,18 +850,11 @@ func (x *ListUnion) Read(p thrift.Format) error {
 }
 
 func (x *ListUnion) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("ListUnion({")
-    sb.WriteString(fmt.Sprintf("IntListValue:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("StringListValue:%s", x.toString3()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *ListUnion) setDefaults() *ListUnion {
+    return x
 }
 
 type DataUnion struct {
@@ -949,14 +865,13 @@ type DataUnion struct {
 var _ thrift.Struct = (*DataUnion)(nil)
 
 func NewDataUnion() *DataUnion {
-    return (&DataUnion{})
+    return (&DataUnion{}).setDefaults()
 }
 
 func (x *DataUnion) GetBinaryData() []byte {
     if !x.IsSetBinaryData() {
         return []byte("")
     }
-
     return x.BinaryData
 }
 
@@ -964,7 +879,6 @@ func (x *DataUnion) GetStringData() string {
     if !x.IsSetStringData() {
         return ""
     }
-
     return *x.StringData
 }
 
@@ -996,7 +910,7 @@ func (x *DataUnion) IsSetStringData() bool {
     return x != nil && x.StringData != nil
 }
 
-func (x *DataUnion) writeField1(p thrift.Format) error {  // BinaryData
+func (x *DataUnion) writeField1(p thrift.Encoder) error {  // BinaryData
     if !x.IsSetBinaryData() {
         return nil
     }
@@ -1016,7 +930,7 @@ func (x *DataUnion) writeField1(p thrift.Format) error {  // BinaryData
     return nil
 }
 
-func (x *DataUnion) writeField2(p thrift.Format) error {  // StringData
+func (x *DataUnion) writeField2(p thrift.Encoder) error {  // StringData
     if !x.IsSetStringData() {
         return nil
     }
@@ -1036,7 +950,7 @@ func (x *DataUnion) writeField2(p thrift.Format) error {  // StringData
     return nil
 }
 
-func (x *DataUnion) readField1(p thrift.Format) error {  // BinaryData
+func (x *DataUnion) readField1(p thrift.Decoder) error {  // BinaryData
     result, err := p.ReadBinary()
 if err != nil {
     return err
@@ -1046,7 +960,7 @@ if err != nil {
     return nil
 }
 
-func (x *DataUnion) readField2(p thrift.Format) error {  // StringData
+func (x *DataUnion) readField2(p thrift.Decoder) error {  // StringData
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -1054,17 +968,6 @@ if err != nil {
 
     x.StringData = &result
     return nil
-}
-
-func (x *DataUnion) toString1() string {  // BinaryData
-    return fmt.Sprintf("%v", x.BinaryData)
-}
-
-func (x *DataUnion) toString2() string {  // StringData
-    if x.IsSetStringData() {
-        return fmt.Sprintf("%v", *x.StringData)
-    }
-    return fmt.Sprintf("%v", x.StringData)
 }
 
 
@@ -1085,7 +988,7 @@ func (x *DataUnion) CountSetFieldsDataUnion() int {
 
 
 
-func (x *DataUnion) Write(p thrift.Format) error {
+func (x *DataUnion) Write(p thrift.Encoder) error {
     if countSet := x.countSetFields(); countSet > 1 {
         return fmt.Errorf("%T write union: no more than one field must be set (%d set).", x, countSet)
     }
@@ -1096,7 +999,6 @@ func (x *DataUnion) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
@@ -1111,7 +1013,7 @@ func (x *DataUnion) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *DataUnion) Read(p thrift.Format) error {
+func (x *DataUnion) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1126,19 +1028,18 @@ func (x *DataUnion) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // binaryData
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // stringData
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1154,18 +1055,11 @@ func (x *DataUnion) Read(p thrift.Format) error {
 }
 
 func (x *DataUnion) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("DataUnion({")
-    sb.WriteString(fmt.Sprintf("BinaryData:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("StringData:%s", x.toString2()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *DataUnion) setDefaults() *DataUnion {
+    return x
 }
 
 type Val struct {
@@ -1177,10 +1071,7 @@ type Val struct {
 var _ thrift.Struct = (*Val)(nil)
 
 func NewVal() *Val {
-    return (&Val{}).
-        SetStrValNonCompat("").
-        SetIntValNonCompat(0).
-        SetTypedefValueNonCompat(NewContainerTypedef())
+    return (&Val{}).setDefaults()
 }
 
 func (x *Val) GetStrVal() string {
@@ -1195,7 +1086,6 @@ func (x *Val) GetTypedefValue() ContainerTypedef {
     if !x.IsSetTypedefValue() {
         return NewContainerTypedef()
     }
-
     return x.TypedefValue
 }
 
@@ -1233,7 +1123,7 @@ func (x *Val) IsSetTypedefValue() bool {
     return x != nil && x.TypedefValue != nil
 }
 
-func (x *Val) writeField1(p thrift.Format) error {  // StrVal
+func (x *Val) writeField1(p thrift.Encoder) error {  // StrVal
     if err := p.WriteFieldBegin("strVal", thrift.STRING, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -1249,7 +1139,7 @@ func (x *Val) writeField1(p thrift.Format) error {  // StrVal
     return nil
 }
 
-func (x *Val) writeField2(p thrift.Format) error {  // IntVal
+func (x *Val) writeField2(p thrift.Encoder) error {  // IntVal
     if err := p.WriteFieldBegin("intVal", thrift.I32, 2); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -1265,7 +1155,7 @@ func (x *Val) writeField2(p thrift.Format) error {  // IntVal
     return nil
 }
 
-func (x *Val) writeField9(p thrift.Format) error {  // TypedefValue
+func (x *Val) writeField9(p thrift.Encoder) error {  // TypedefValue
     if err := p.WriteFieldBegin("typedefValue", thrift.MAP, 9); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -1282,7 +1172,7 @@ if err != nil {
     return nil
 }
 
-func (x *Val) readField1(p thrift.Format) error {  // StrVal
+func (x *Val) readField1(p thrift.Decoder) error {  // StrVal
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -1292,7 +1182,7 @@ if err != nil {
     return nil
 }
 
-func (x *Val) readField2(p thrift.Format) error {  // IntVal
+func (x *Val) readField2(p thrift.Decoder) error {  // IntVal
     result, err := p.ReadI32()
 if err != nil {
     return err
@@ -1302,7 +1192,7 @@ if err != nil {
     return nil
 }
 
-func (x *Val) readField9(p thrift.Format) error {  // TypedefValue
+func (x *Val) readField9(p thrift.Decoder) error {  // TypedefValue
     result, err := ReadContainerTypedef(p)
 if err != nil {
     return err
@@ -1312,21 +1202,9 @@ if err != nil {
     return nil
 }
 
-func (x *Val) toString1() string {  // StrVal
-    return fmt.Sprintf("%v", x.StrVal)
-}
-
-func (x *Val) toString2() string {  // IntVal
-    return fmt.Sprintf("%v", x.IntVal)
-}
-
-func (x *Val) toString9() string {  // TypedefValue
-    return fmt.Sprintf("%v", x.TypedefValue)
-}
 
 
-
-func (x *Val) Write(p thrift.Format) error {
+func (x *Val) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Val"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -1334,11 +1212,9 @@ func (x *Val) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
-
     if err := x.writeField9(p); err != nil {
         return err
     }
@@ -1353,7 +1229,7 @@ func (x *Val) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Val) Read(p thrift.Format) error {
+func (x *Val) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1368,23 +1244,20 @@ func (x *Val) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // strVal
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.I32)):  // intVal
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         case (id == 9 && wireType == thrift.Type(thrift.MAP)):  // typedefValue
-            if err := x.readField9(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField9(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1400,19 +1273,14 @@ func (x *Val) Read(p thrift.Format) error {
 }
 
 func (x *Val) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Val({")
-    sb.WriteString(fmt.Sprintf("StrVal:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("IntVal:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("TypedefValue:%s", x.toString9()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Val) setDefaults() *Val {
+    return x.
+        SetStrValNonCompat("").
+        SetIntValNonCompat(0).
+        SetTypedefValueNonCompat(NewContainerTypedef())
 }
 
 type ValUnion struct {
@@ -1423,14 +1291,13 @@ type ValUnion struct {
 var _ thrift.Struct = (*ValUnion)(nil)
 
 func NewValUnion() *ValUnion {
-    return (&ValUnion{})
+    return (&ValUnion{}).setDefaults()
 }
 
 func (x *ValUnion) GetV1() *Val {
     if !x.IsSetV1() {
         return nil
     }
-
     return x.V1
 }
 
@@ -1438,12 +1305,11 @@ func (x *ValUnion) GetV2() *Val {
     if !x.IsSetV2() {
         return nil
     }
-
     return x.V2
 }
 
-func (x *ValUnion) SetV1NonCompat(value Val) *ValUnion {
-    x.V1 = &value
+func (x *ValUnion) SetV1NonCompat(value *Val) *ValUnion {
+    x.V1 = value
     return x
 }
 
@@ -1452,8 +1318,8 @@ func (x *ValUnion) SetV1(value *Val) *ValUnion {
     return x
 }
 
-func (x *ValUnion) SetV2NonCompat(value Val) *ValUnion {
-    x.V2 = &value
+func (x *ValUnion) SetV2NonCompat(value *Val) *ValUnion {
+    x.V2 = value
     return x
 }
 
@@ -1470,7 +1336,7 @@ func (x *ValUnion) IsSetV2() bool {
     return x != nil && x.V2 != nil
 }
 
-func (x *ValUnion) writeField1(p thrift.Format) error {  // V1
+func (x *ValUnion) writeField1(p thrift.Encoder) error {  // V1
     if !x.IsSetV1() {
         return nil
     }
@@ -1490,7 +1356,7 @@ func (x *ValUnion) writeField1(p thrift.Format) error {  // V1
     return nil
 }
 
-func (x *ValUnion) writeField2(p thrift.Format) error {  // V2
+func (x *ValUnion) writeField2(p thrift.Encoder) error {  // V2
     if !x.IsSetV2() {
         return nil
     }
@@ -1510,34 +1376,26 @@ func (x *ValUnion) writeField2(p thrift.Format) error {  // V2
     return nil
 }
 
-func (x *ValUnion) readField1(p thrift.Format) error {  // V1
-    result := *NewVal()
+func (x *ValUnion) readField1(p thrift.Decoder) error {  // V1
+    result := NewVal()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.V1 = &result
+    x.V1 = result
     return nil
 }
 
-func (x *ValUnion) readField2(p thrift.Format) error {  // V2
-    result := *NewVal()
+func (x *ValUnion) readField2(p thrift.Decoder) error {  // V2
+    result := NewVal()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.V2 = &result
+    x.V2 = result
     return nil
-}
-
-func (x *ValUnion) toString1() string {  // V1
-    return fmt.Sprintf("%v", x.V1)
-}
-
-func (x *ValUnion) toString2() string {  // V2
-    return fmt.Sprintf("%v", x.V2)
 }
 
 // Deprecated: Use NewValUnion().GetV1() instead.
@@ -1573,7 +1431,7 @@ func (x *ValUnion) CountSetFieldsValUnion() int {
 
 
 
-func (x *ValUnion) Write(p thrift.Format) error {
+func (x *ValUnion) Write(p thrift.Encoder) error {
     if countSet := x.countSetFields(); countSet > 1 {
         return fmt.Errorf("%T write union: no more than one field must be set (%d set).", x, countSet)
     }
@@ -1584,7 +1442,6 @@ func (x *ValUnion) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
@@ -1599,7 +1456,7 @@ func (x *ValUnion) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *ValUnion) Read(p thrift.Format) error {
+func (x *ValUnion) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1614,19 +1471,18 @@ func (x *ValUnion) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRUCT)):  // v1
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRUCT)):  // v2
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1642,18 +1498,11 @@ func (x *ValUnion) Read(p thrift.Format) error {
 }
 
 func (x *ValUnion) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("ValUnion({")
-    sb.WriteString(fmt.Sprintf("V1:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("V2:%s", x.toString2()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *ValUnion) setDefaults() *ValUnion {
+    return x
 }
 
 type VirtualComplexUnion struct {
@@ -1664,14 +1513,13 @@ type VirtualComplexUnion struct {
 var _ thrift.Struct = (*VirtualComplexUnion)(nil)
 
 func NewVirtualComplexUnion() *VirtualComplexUnion {
-    return (&VirtualComplexUnion{})
+    return (&VirtualComplexUnion{}).setDefaults()
 }
 
 func (x *VirtualComplexUnion) GetThingOne() string {
     if !x.IsSetThingOne() {
         return ""
     }
-
     return *x.ThingOne
 }
 
@@ -1679,7 +1527,6 @@ func (x *VirtualComplexUnion) GetThingTwo() string {
     if !x.IsSetThingTwo() {
         return ""
     }
-
     return *x.ThingTwo
 }
 
@@ -1711,7 +1558,7 @@ func (x *VirtualComplexUnion) IsSetThingTwo() bool {
     return x != nil && x.ThingTwo != nil
 }
 
-func (x *VirtualComplexUnion) writeField1(p thrift.Format) error {  // ThingOne
+func (x *VirtualComplexUnion) writeField1(p thrift.Encoder) error {  // ThingOne
     if !x.IsSetThingOne() {
         return nil
     }
@@ -1731,7 +1578,7 @@ func (x *VirtualComplexUnion) writeField1(p thrift.Format) error {  // ThingOne
     return nil
 }
 
-func (x *VirtualComplexUnion) writeField2(p thrift.Format) error {  // ThingTwo
+func (x *VirtualComplexUnion) writeField2(p thrift.Encoder) error {  // ThingTwo
     if !x.IsSetThingTwo() {
         return nil
     }
@@ -1751,7 +1598,7 @@ func (x *VirtualComplexUnion) writeField2(p thrift.Format) error {  // ThingTwo
     return nil
 }
 
-func (x *VirtualComplexUnion) readField1(p thrift.Format) error {  // ThingOne
+func (x *VirtualComplexUnion) readField1(p thrift.Decoder) error {  // ThingOne
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -1761,7 +1608,7 @@ if err != nil {
     return nil
 }
 
-func (x *VirtualComplexUnion) readField2(p thrift.Format) error {  // ThingTwo
+func (x *VirtualComplexUnion) readField2(p thrift.Decoder) error {  // ThingTwo
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -1769,20 +1616,6 @@ if err != nil {
 
     x.ThingTwo = &result
     return nil
-}
-
-func (x *VirtualComplexUnion) toString1() string {  // ThingOne
-    if x.IsSetThingOne() {
-        return fmt.Sprintf("%v", *x.ThingOne)
-    }
-    return fmt.Sprintf("%v", x.ThingOne)
-}
-
-func (x *VirtualComplexUnion) toString2() string {  // ThingTwo
-    if x.IsSetThingTwo() {
-        return fmt.Sprintf("%v", *x.ThingTwo)
-    }
-    return fmt.Sprintf("%v", x.ThingTwo)
 }
 
 
@@ -1804,7 +1637,7 @@ func (x *VirtualComplexUnion) CountSetFieldsVirtualComplexUnion() int {
 
 
 
-func (x *VirtualComplexUnion) Write(p thrift.Format) error {
+func (x *VirtualComplexUnion) Write(p thrift.Encoder) error {
     if countSet := x.countSetFields(); countSet > 1 {
         return fmt.Errorf("%T write union: no more than one field must be set (%d set).", x, countSet)
     }
@@ -1815,7 +1648,6 @@ func (x *VirtualComplexUnion) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
@@ -1830,7 +1662,7 @@ func (x *VirtualComplexUnion) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *VirtualComplexUnion) Read(p thrift.Format) error {
+func (x *VirtualComplexUnion) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1845,19 +1677,18 @@ func (x *VirtualComplexUnion) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // thingOne
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // thingTwo
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1873,18 +1704,11 @@ func (x *VirtualComplexUnion) Read(p thrift.Format) error {
 }
 
 func (x *VirtualComplexUnion) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("VirtualComplexUnion({")
-    sb.WriteString(fmt.Sprintf("ThingOne:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("ThingTwo:%s", x.toString2()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *VirtualComplexUnion) setDefaults() *VirtualComplexUnion {
+    return x
 }
 
 type NonCopyableStruct struct {
@@ -1894,8 +1718,7 @@ type NonCopyableStruct struct {
 var _ thrift.Struct = (*NonCopyableStruct)(nil)
 
 func NewNonCopyableStruct() *NonCopyableStruct {
-    return (&NonCopyableStruct{}).
-        SetNumNonCompat(0)
+    return (&NonCopyableStruct{}).setDefaults()
 }
 
 func (x *NonCopyableStruct) GetNum() int64 {
@@ -1912,7 +1735,7 @@ func (x *NonCopyableStruct) SetNum(value int64) *NonCopyableStruct {
     return x
 }
 
-func (x *NonCopyableStruct) writeField1(p thrift.Format) error {  // Num
+func (x *NonCopyableStruct) writeField1(p thrift.Encoder) error {  // Num
     if err := p.WriteFieldBegin("num", thrift.I64, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -1928,7 +1751,7 @@ func (x *NonCopyableStruct) writeField1(p thrift.Format) error {  // Num
     return nil
 }
 
-func (x *NonCopyableStruct) readField1(p thrift.Format) error {  // Num
+func (x *NonCopyableStruct) readField1(p thrift.Decoder) error {  // Num
     result, err := p.ReadI64()
 if err != nil {
     return err
@@ -1938,13 +1761,9 @@ if err != nil {
     return nil
 }
 
-func (x *NonCopyableStruct) toString1() string {  // Num
-    return fmt.Sprintf("%v", x.Num)
-}
 
 
-
-func (x *NonCopyableStruct) Write(p thrift.Format) error {
+func (x *NonCopyableStruct) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("NonCopyableStruct"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -1963,7 +1782,7 @@ func (x *NonCopyableStruct) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *NonCopyableStruct) Read(p thrift.Format) error {
+func (x *NonCopyableStruct) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1978,15 +1797,16 @@ func (x *NonCopyableStruct) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.I64)):  // num
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -2002,17 +1822,12 @@ func (x *NonCopyableStruct) Read(p thrift.Format) error {
 }
 
 func (x *NonCopyableStruct) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("NonCopyableStruct({")
-    sb.WriteString(fmt.Sprintf("Num:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *NonCopyableStruct) setDefaults() *NonCopyableStruct {
+    return x.
+        SetNumNonCompat(0)
 }
 
 type NonCopyableUnion struct {
@@ -2022,19 +1837,18 @@ type NonCopyableUnion struct {
 var _ thrift.Struct = (*NonCopyableUnion)(nil)
 
 func NewNonCopyableUnion() *NonCopyableUnion {
-    return (&NonCopyableUnion{})
+    return (&NonCopyableUnion{}).setDefaults()
 }
 
 func (x *NonCopyableUnion) GetS() *NonCopyableStruct {
     if !x.IsSetS() {
         return nil
     }
-
     return x.S
 }
 
-func (x *NonCopyableUnion) SetSNonCompat(value NonCopyableStruct) *NonCopyableUnion {
-    x.S = &value
+func (x *NonCopyableUnion) SetSNonCompat(value *NonCopyableStruct) *NonCopyableUnion {
+    x.S = value
     return x
 }
 
@@ -2047,7 +1861,7 @@ func (x *NonCopyableUnion) IsSetS() bool {
     return x != nil && x.S != nil
 }
 
-func (x *NonCopyableUnion) writeField1(p thrift.Format) error {  // S
+func (x *NonCopyableUnion) writeField1(p thrift.Encoder) error {  // S
     if !x.IsSetS() {
         return nil
     }
@@ -2067,19 +1881,15 @@ func (x *NonCopyableUnion) writeField1(p thrift.Format) error {  // S
     return nil
 }
 
-func (x *NonCopyableUnion) readField1(p thrift.Format) error {  // S
-    result := *NewNonCopyableStruct()
+func (x *NonCopyableUnion) readField1(p thrift.Decoder) error {  // S
+    result := NewNonCopyableStruct()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.S = &result
+    x.S = result
     return nil
-}
-
-func (x *NonCopyableUnion) toString1() string {  // S
-    return fmt.Sprintf("%v", x.S)
 }
 
 // Deprecated: Use NewNonCopyableUnion().GetS() instead.
@@ -2104,7 +1914,7 @@ func (x *NonCopyableUnion) CountSetFieldsNonCopyableUnion() int {
 
 
 
-func (x *NonCopyableUnion) Write(p thrift.Format) error {
+func (x *NonCopyableUnion) Write(p thrift.Encoder) error {
     if countSet := x.countSetFields(); countSet > 1 {
         return fmt.Errorf("%T write union: no more than one field must be set (%d set).", x, countSet)
     }
@@ -2126,7 +1936,7 @@ func (x *NonCopyableUnion) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *NonCopyableUnion) Read(p thrift.Format) error {
+func (x *NonCopyableUnion) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -2141,15 +1951,16 @@ func (x *NonCopyableUnion) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRUCT)):  // s
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -2165,18 +1976,14 @@ func (x *NonCopyableUnion) Read(p thrift.Format) error {
 }
 
 func (x *NonCopyableUnion) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("NonCopyableUnion({")
-    sb.WriteString(fmt.Sprintf("S:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *NonCopyableUnion) setDefaults() *NonCopyableUnion {
+    return x
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

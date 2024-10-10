@@ -171,6 +171,7 @@ function intersect<Tv as arraykey>(
   Traversable<Tv> $second,
   Container<Tv> ...$rest
 )[]: keyset<Tv> {
+  /* HH_IGNORE[12006] suppress sketchy null check */
   if (!$first || !$second) {
     return keyset[];
   }

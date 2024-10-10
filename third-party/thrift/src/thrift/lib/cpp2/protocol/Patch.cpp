@@ -35,12 +35,11 @@
 #include <thrift/lib/cpp2/type/Id.h>
 #include <thrift/lib/cpp2/type/NativeType.h>
 #include <thrift/lib/cpp2/type/Tag.h>
+#include <thrift/lib/thrift/gen-cpp2/any_patch_detail_types.h>
 #include <thrift/lib/thrift/gen-cpp2/patch_op_types.h>
 #include <thrift/lib/thrift/gen-cpp2/protocol_types.h>
 
-namespace apache {
-namespace thrift {
-namespace protocol {
+namespace apache::thrift::protocol {
 namespace detail {
 namespace {
 
@@ -418,7 +417,9 @@ void impl(Patch&& patch, Object& value) {
        PatchOp::EnsureStruct,
        PatchOp::EnsureUnion,
        PatchOp::PatchAfter,
-       PatchOp::Add});
+       PatchOp::PatchIfTypeIsPrior,
+       PatchOp::EnsureAny,
+       PatchOp::PatchIfTypeIsAfter});
   if (applyAssign<type::struct_c>(std::forward<Patch>(patch), value)) {
     return; // Ignore all other ops.
   }
@@ -507,9 +508,97 @@ void impl(Patch&& patch, Object& value) {
           util::enumNameSafe(to_remove->getType())));
     }
   }
-  if (auto* addFields = findOp(patch, PatchOp::Add)) {
-    // TODO(afuller): Implement field-wise add.
+
+  // Handling Thrift AnyPatch operations.
+  const auto* typePatchPriorVal = findOp(patch, PatchOp::PatchIfTypeIsPrior);
+  const auto* ensureAnyVal = findOp(patch, PatchOp::EnsureAny);
+  const auto* typePatchAfterVal = findOp(patch, PatchOp::PatchIfTypeIsAfter);
+
+  if (!typePatchPriorVal && !ensureAnyVal && !typePatchAfterVal) {
+    return;
   }
+
+  type::AnyStruct anyStruct;
+  if (!ProtocolValueToThriftValue<type::struct_t<type::AnyStruct>>{}(
+          value, anyStruct)) {
+    throw std::runtime_error("Failed to convert current object to AnyStruct");
+  }
+
+  auto applyTypePatch = [&](const Value* typePatchListPrior,
+                            const Value* typePatchListAfter) {
+    std::optional<protocol::Value> val;
+
+    if (typePatchListPrior) {
+      for (const auto& typePatchVal : typePatchListPrior->as_list()) {
+        op::TypeToPatchInternalDoNotUse type_to_patch;
+        if (!ProtocolValueToThriftValue<
+                type::struct_t<op::TypeToPatchInternalDoNotUse>>{}(
+                typePatchVal, type_to_patch)) {
+          throw std::runtime_error("Invalid AnyPatch PatchIfTypeIsPrior");
+        }
+        if (type::identicalType(
+                type_to_patch.type().value(), anyStruct.type().value())) {
+          val = protocol::detail::parseValueFromAny(anyStruct);
+          auto dynPatch =
+              protocol::detail::parseValueFromAny(type_to_patch.patch().value())
+                  .as_object();
+          ApplyPatch{}(dynPatch, val.value());
+          break;
+        }
+      }
+    }
+
+    if (typePatchListAfter) {
+      for (const auto& typePatchVal : typePatchListAfter->as_list()) {
+        op::TypeToPatchInternalDoNotUse type_to_patch;
+        if (!ProtocolValueToThriftValue<
+                type::struct_t<op::TypeToPatchInternalDoNotUse>>{}(
+                typePatchVal, type_to_patch)) {
+          throw std::runtime_error("Invalid AnyPatch PatchIfTypeIsAfter");
+        }
+        if (type::identicalType(
+                type_to_patch.type().value(), anyStruct.type().value())) {
+          if (!val) {
+            val = protocol::detail::parseValueFromAny(anyStruct);
+          }
+          auto dynPatch =
+              protocol::detail::parseValueFromAny(type_to_patch.patch().value())
+                  .as_object();
+          ApplyPatch{}(dynPatch, val.value());
+          break;
+        }
+      }
+    }
+
+    if (val) {
+      anyStruct = protocol::detail::toAny(
+                      val.value(),
+                      anyStruct.type().value(),
+                      anyStruct.protocol().value())
+                      .toThrift();
+    }
+  };
+
+  if (ensureAnyVal) {
+    type::AnyStruct ensureAny;
+    if (!ProtocolValueToThriftValue<type::struct_t<type::AnyStruct>>{}(
+            *ensureAnyVal, ensureAny)) {
+      throw std::runtime_error("Invalid AnyPatch ensureAny");
+    }
+    // If 'ensureAny' type does not match the type of stored value in Thrift
+    // Any, we can ignore 'patchIfTypeIsPrior'.
+    if (!type::identicalType(
+            ensureAny.type().value(), anyStruct.type().value())) {
+      anyStruct = std::move(ensureAny);
+      applyTypePatch(nullptr, typePatchAfterVal);
+      value =
+          asValueStruct<type::struct_t<type::AnyStruct>>(anyStruct).as_object();
+      return;
+    }
+  }
+
+  applyTypePatch(typePatchPriorVal, typePatchAfterVal);
+  value = asValueStruct<type::struct_t<type::AnyStruct>>(anyStruct).as_object();
 }
 
 void ApplyPatch::operator()(const Object& patch, Object& value) const {
@@ -615,6 +704,13 @@ void insertEnsureReadKeysToMask(
       tryInsertAllMask(mask, getStringFromValue(key), getIncludesStringMapRef);
     }
   }
+}
+
+void insertTypeToMask(Mask& mask, const type::Type& type) {
+  if (mask == allMask()) {
+    return;
+  }
+  mask.includes_type_ref().ensure().emplace(type, allMask());
 }
 
 template <typename T>
@@ -729,6 +825,39 @@ void insertFieldsToMask(
   }
 }
 
+void insertTypesToMask(
+    ExtractedMasksFromPatch& masks,
+    const Value& patchTypes,
+    bool recursive,
+    bool view) {
+  auto getIncludesTypeRef = [&](Mask& mask) {
+    return mask.includes_type_ref();
+  };
+  for (const auto& typePatchVal : patchTypes.as_list()) {
+    op::TypeToPatchInternalDoNotUse type_to_patch;
+    if (!ProtocolValueToThriftValue<
+            type::struct_t<op::TypeToPatchInternalDoNotUse>>{}(
+            typePatchVal, type_to_patch)) {
+      throw std::runtime_error(
+          "Invalid AnyPatch PatchIfTypeIsPrior/PatchIfTypeIsAfter");
+    }
+    if (!type_to_patch.type()->isValid()) {
+      throw std::runtime_error("Invalid Type");
+    }
+    auto dynPatch =
+        protocol::detail::parseValueFromAny(type_to_patch.patch().value());
+    insertNextMask(
+        masks,
+        dynPatch,
+        type_to_patch.type().value(),
+        type_to_patch.type().value(),
+        recursive,
+        view,
+        getIncludesTypeRef);
+    insertTypeToMask(masks.read, type_to_patch.type().value());
+  }
+}
+
 ExtractedMasksFromPatch extractMaskFromPatch(
     const protocol::Object& patch, bool view) {
   ExtractedMasksFromPatch masks = {noneMask(), noneMask()};
@@ -802,6 +931,28 @@ ExtractedMasksFromPatch extractMaskFromPatch(
     masks.write = allMask();
   }
 
+  // If PatchIfTypeIsPrior or PatchIfTypeIsAfter, recursively constructs the
+  // mask each type patch.
+  for (auto op : {PatchOp::PatchIfTypeIsPrior, PatchOp::PatchIfTypeIsAfter}) {
+    if (auto* patchTypes = findOp(patch, op)) {
+      insertTypesToMask(masks, *patchTypes, true, view);
+    }
+  }
+
+  // If EnsureAny, add type to mask for read mask and all mask for write mask.
+  if (auto* ensureAny = findOp(patch, PatchOp::EnsureAny)) {
+    type::AnyStruct anyStruct;
+    if (!ProtocolValueToThriftValue<type::struct_t<type::AnyStruct>>{}(
+            *ensureAny, anyStruct)) {
+      throw std::runtime_error("Failed to convert current object to AnyStruct");
+    }
+    if (!type::AnyData::isValid(anyStruct)) {
+      throw std::runtime_error("Invalid AnyStruct");
+    }
+    insertTypeToMask(masks.read, anyStruct.type().value());
+    masks.write = allMask();
+  }
+
   // Read mask should be always subset of write mask. If not, make read mask
   // equal to write mask. This can happen for struct or map fields with patch
   // operations that returns noneMask for read mask (i.e. assign).
@@ -810,6 +961,52 @@ ExtractedMasksFromPatch extractMaskFromPatch(
   }
 
   return masks;
+}
+
+int32_t calculateMinSafePatchVersion(const protocol::Object& patch) {
+  int32_t version = 1;
+  for (const auto& [fieldId, patch] : *patch.members()) {
+    switch (static_cast<PatchOp>(fieldId)) {
+      case PatchOp::Assign:
+      case PatchOp::Clear:
+      case PatchOp::EnsureUnion:
+      case PatchOp::EnsureStruct:
+      case PatchOp::Remove:
+      case PatchOp::Add:
+      case PatchOp::Put:
+        version = std::max(version, 1);
+        break;
+      case PatchOp::PatchPrior:
+      case PatchOp::PatchAfter: {
+        // We need to handle both StructPatch and MapPatch here.
+        if (const auto* fieldPatch = patch.if_object()) {
+          for (const auto& [_, p] : *fieldPatch) {
+            version =
+                std::max(version, calculateMinSafePatchVersion(p.as_object()));
+          }
+        } else if (const auto* elemPatch = patch.if_map()) {
+          for (const auto& [_, p] : *elemPatch) {
+            version =
+                std::max(version, calculateMinSafePatchVersion(p.as_object()));
+          }
+        } else {
+          folly::throw_exception<std::runtime_error>(
+              "Invalid PatchOp::PatchPrior/PatchAfter");
+        }
+        break;
+      }
+      case PatchOp::PatchIfTypeIsPrior:
+      case PatchOp::PatchIfTypeIsAfter:
+      case PatchOp::EnsureAny:
+        // For now, we don't need to peek into AnyPatch to calculate Thrift
+        // SafePatch version.
+        version = std::max(version, 2);
+        break;
+      case PatchOp::Unspecified:
+        folly::throw_exception<std::runtime_error>("Invalid patch operation");
+    }
+  }
+  return version;
 }
 
 } // namespace detail
@@ -870,19 +1067,17 @@ Object fromSafePatch(const protocol::Object& safePatch) {
         fmt::format("Unsupported patch version: {}", version->as_i32()));
   }
   Object patch =
-      parseObject<CompactProtocolReader>(safePatch[FieldId{2}].as_binary());
+      parseObject<CompactProtocolReader>(safePatch.at(FieldId{2}).as_binary());
   return patch;
 }
 
 Object toSafePatch(const protocol::Object& patch) {
   Object safePatch;
   safePatch[detail::kSafePatchVersionId].emplace_i32(
-      op::detail::kThriftDynamicPatchVersion);
+      detail::calculateMinSafePatchVersion(patch));
   safePatch[detail::kSafePatchDataId].emplace_binary(
       *serializeObject<CompactProtocolWriter>(patch));
   return safePatch;
 }
 
-} // namespace protocol
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::protocol

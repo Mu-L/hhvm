@@ -45,6 +45,11 @@ public final class UnionToBeRenamed implements com.facebook.thrift.payload.Thrif
     private java.lang.Object value;
     private short id;
 
+    public enum TypeEnum {
+      __FBTHRIFT_EMPTY_UNION__,
+      RESERVED_FIELD,
+    }
+
     public static UnionToBeRenamed from(int _id, java.lang.Object _field) {
         return from((short) _id, _field);
     }
@@ -105,6 +110,17 @@ public final class UnionToBeRenamed implements com.facebook.thrift.payload.Thrif
     @ThriftUnionId
     public short getThriftId() {
         return this.id;
+    }
+
+    public TypeEnum getThriftUnionType() {
+      switch(this.id) {
+        case 0:
+          return TypeEnum.__FBTHRIFT_EMPTY_UNION__;
+        case 1:
+          return TypeEnum.RESERVED_FIELD;
+        default:
+          throw new IllegalStateException("unreachable");
+      }
     }
 
     public String getThriftName() {

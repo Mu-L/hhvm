@@ -17,6 +17,8 @@
 package com.facebook.thrift.util;
 
 import com.facebook.thrift.test.EveryLayout;
+import com.facebook.thrift.test.universalname.TestRequest;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -92,6 +94,24 @@ public class SerializerUtilTest {
     Assert.assertEquals(this.everyLayout, everyLayout);
   }
 
+  @Test(expected = IndexOutOfBoundsException.class)
+  public void testBadDataWithoutStopTagThrowsIndexOutOfBoundsException() {
+    ByteBuffer in =
+        SerializerUtil.toByteBuffer(
+            new TestRequest.Builder().setAString("abcd").build(), SerializationProtocol.TCompact);
+
+    // Remove Trailing byte tha would normally indicate STOP
+    byte[] slice = new byte[in.capacity() - 1];
+    in.get(slice, 0, in.capacity() - 1);
+
+    // Use ByteArrayInputStream to simulate use of input stream
+    TestRequest everyLayout =
+        SerializerUtil.fromInputStream(
+            TestRequest.asReader(),
+            new ByteArrayInputStream(slice),
+            SerializationProtocol.TCompact);
+  }
+
   @Test
   public void testToOutputStream() {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -108,6 +128,15 @@ public class SerializerUtilTest {
     SerializerUtil.toOutStream(everyLayout, bos, SerializationProtocol.TSimpleJSONBase64);
     String json = new String(bos.toByteArray(), StandardCharsets.UTF_8);
     EveryLayout everyLayout = SerializerUtil.fromJsonStringBase64(EveryLayout.asReader(), json);
+    Assert.assertEquals(this.everyLayout, everyLayout);
+  }
+
+  @Test
+  public void testFromsTJsonString() {
+    ByteArrayOutputStream bos = new ByteArrayOutputStream();
+    SerializerUtil.toOutStream(everyLayout, bos, SerializationProtocol.TJSON);
+    String json = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+    EveryLayout everyLayout = SerializerUtil.fromTJsonString(EveryLayout.asReader(), json);
     Assert.assertEquals(this.everyLayout, everyLayout);
   }
 

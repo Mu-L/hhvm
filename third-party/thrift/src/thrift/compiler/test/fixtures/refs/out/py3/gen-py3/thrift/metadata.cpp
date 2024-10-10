@@ -23,13 +23,13 @@ namespace annotation {
   ::apache::thrift::detail::md::StructMetadata<SerializeInFieldIdOrder>::gen(metadata);
   ::apache::thrift::detail::md::StructMetadata<BitmaskEnum>::gen(metadata);
   ::apache::thrift::detail::md::StructMetadata<ExceptionMessage>::gen(metadata);
-  ::apache::thrift::detail::md::StructMetadata<GenerateRuntimeSchema>::gen(metadata);
   ::apache::thrift::detail::md::StructMetadata<InternBox>::gen(metadata);
   ::apache::thrift::detail::md::StructMetadata<Serial>::gen(metadata);
   ::apache::thrift::detail::md::StructMetadata<Uri>::gen(metadata);
   ::apache::thrift::detail::md::StructMetadata<Priority>::gen(metadata);
   ::apache::thrift::detail::md::StructMetadata<DeprecatedUnvalidatedAnnotations>::gen(metadata);
-  ::apache::thrift::detail::md::StructMetadata<AllowReservedIdentifierName>::gen(metadata);
+  ::apache::thrift::detail::md::StructMetadata<AllowReservedIdentifier>::gen(metadata);
+  ::apache::thrift::detail::md::StructMetadata<AllowReservedFilename>::gen(metadata);
   return metadata;
 }
 } // namespace facebook

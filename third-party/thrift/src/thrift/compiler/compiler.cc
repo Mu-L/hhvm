@@ -44,8 +44,8 @@
 #include <thrift/compiler/generate/t_generator.h>
 #include <thrift/compiler/parse/parse_ast.h>
 #include <thrift/compiler/sema/ast_validator.h>
-#include <thrift/compiler/sema/diagnostic_context.h>
-#include <thrift/compiler/sema/standard_mutator.h>
+#include <thrift/compiler/sema/sema.h>
+#include <thrift/compiler/sema/sema_context.h>
 #include <thrift/compiler/sema/standard_validator.h>
 
 namespace apache {
@@ -135,6 +135,9 @@ void usage() {
   fprintf(
       stderr,
       "  --inject-schema-const  Inject generated schema constant (must use thrift2ast)\n");
+  fprintf(
+      stderr,
+      "  --extra-validation  Comma-separated list of opt-in validators to run\n");
   fprintf(stderr, "\n");
   fprintf(stderr, "Available generators (and options):\n");
 
@@ -277,7 +280,8 @@ std::string parse_args(
     const std::vector<std::string>& arguments,
     parsing_params& pparams,
     gen_params& gparams,
-    diagnostic_params& dparams) {
+    diagnostic_params& dparams,
+    sema_params& sparams) {
   // Check for necessary arguments, you gotta have at least a filename and
   // an output language flag.
   if (arguments.size() < 3 && gparams.targets.empty()) {
@@ -374,6 +378,26 @@ std::string parse_args(
       gparams.add_gen_dir = (flag == "o");
     } else if (flag == "inject-schema-const") {
       gparams.inject_schema_const = true;
+    } else if (flag == "extra-validation") {
+      const std::string* arg = consume_arg("extra validation");
+      if (arg == nullptr) {
+        return {};
+      }
+      std::vector<std::string> validators;
+      boost::algorithm::split(
+          validators, *arg, [](char c) { return c == ','; });
+      for (const auto& validator : validators) {
+        if (validator == "unstructured_annotations_on_field_type") {
+          sparams.forbid_unstructured_annotations_on_field_types = true;
+        } else if (validator == "implicit_field_ids") {
+          sparams.forbid_implicit_field_ids = true;
+        } else {
+          fprintf(
+              stderr, "!!! Unrecognized validator: %s\n\n", validator.c_str());
+          usage();
+          return {};
+        }
+      }
     } else {
       fprintf(
           stderr, "!!! Unrecognized option: %s\n\n", arguments[arg_i].c_str());
@@ -475,18 +499,18 @@ generator_specs parse_generator_specs(const std::string& target) {
  * @return successfully created generator, or `nullptr` on failure.
  *
  * @throws std::exception if the generator options could not be processed (see
- * `t_generator::process_options()`).
+ * `t_generator::process_options`).
  */
 std::unique_ptr<t_generator> create_generator(
     const std::string& target,
     const gen_params& params,
     t_program& program,
     t_program_bundle& program_bundle,
-    source_manager& source_mgr) {
+    diagnostics_engine& diags) {
   const auto [generator_name, generator_options] =
       parse_generator_specs(target);
   std::unique_ptr<t_generator> generator = generator_registry::make_generator(
-      generator_name, program, source_mgr, program_bundle);
+      generator_name, program, program_bundle, diags);
   if (generator == nullptr) {
     fmt::print(stderr, "Error: Invalid generator name: {}\n", generator_name);
     usage();
@@ -508,7 +532,7 @@ std::unique_ptr<t_generator> create_generator(
  */
 bool validate_program(t_generator& generator, diagnostics_engine& diags) {
   bool success = true;
-  diagnostic_context validator_ctx(
+  sema_context validator_ctx(
       diags.source_mgr(),
       [&](diagnostic d) {
         if (d.level() == diagnostic_level::error) {
@@ -519,7 +543,7 @@ bool validate_program(t_generator& generator, diagnostics_engine& diags) {
       diags.params());
   ast_validator validator;
   generator.fill_validator_visitors(validator);
-  validator(validator_ctx, *(generator.get_program()));
+  validator(validator_ctx, *generator.get_program());
   return success;
 }
 
@@ -542,8 +566,8 @@ bool generate_code_for_single_program(
     }
 
     for (const std::string& target : params.targets) {
-      std::unique_ptr<t_generator> generator = create_generator(
-          target, params, program, program_bundle, diags.source_mgr());
+      std::unique_ptr<t_generator> generator =
+          create_generator(target, params, program, program_bundle, diags);
       if (generator == nullptr) {
         continue;
       }
@@ -566,7 +590,7 @@ bool generate_code_for_single_program(
         }
       }
     }
-    return all_targets_successful;
+    return all_targets_successful && !diags.has_errors();
   } catch (const std::string& s) {
     printf("Error: %s\n", s.c_str());
     return false;
@@ -626,7 +650,7 @@ bool generate_code_recursively(
 compile_retcode generate_code_for_program_bundle(
     t_program_bundle& program_bundle,
     const gen_params& gparams,
-    diagnostic_context& ctx) {
+    sema_context& ctx) {
   compile_retcode retcode = compile_retcode::failure;
 
   ctx.begin_visit(*program_bundle.root_program());
@@ -699,29 +723,25 @@ std::string get_include_path(
  */
 std::unique_ptr<t_program_bundle> parse_and_mutate(
     source_manager& source_mgr,
-    diagnostic_context& ctx,
+    sema_context& ctx,
     const std::string& input_filename,
     const parsing_params& pparams,
     const gen_params& gparams) {
   // Parse it!
-  std::unique_ptr<t_program_bundle> program_bundle = parse_and_mutate_program(
-      source_mgr,
-      ctx,
-      input_filename,
-      pparams,
-      true /* return_nullptr_on_failure */);
-  if (program_bundle == nullptr) {
+  std::unique_ptr<t_program_bundle> program_bundle = parse_ast(
+      source_mgr, ctx, input_filename, pparams, &ctx.sema_parameters());
+  if (!program_bundle || ctx.has_errors()) {
     return nullptr;
   }
 
   // Load standard library if available.
-  static const std::string kSchemaPath = "thrift/lib/thrift/schema.thrift";
+  static const std::string schema_path = "thrift/lib/thrift/schema.thrift";
   auto found_or_error =
-      source_mgr.find_include_file(kSchemaPath, "", pparams.incl_searchpath);
+      source_mgr.find_include_file(schema_path, "", pparams.incl_searchpath);
   if (found_or_error.index() == 0) {
     // Found
-    if (!program_bundle->find_program(kSchemaPath)) {
-      diagnostic_context stdlib_ctx(
+    if (!program_bundle->find_program(schema_path)) {
+      sema_context stdlib_ctx(
           source_mgr,
           [&](diagnostic&& d) {
             ctx.report(
@@ -731,62 +751,37 @@ std::unique_ptr<t_program_bundle> parse_and_mutate(
                 d);
           },
           diagnostic_params::only_errors());
-      std::unique_ptr<t_program_bundle> inc = parse_and_mutate_program(
+      std::unique_ptr<t_program_bundle> inc = parse_ast(
           source_mgr,
           stdlib_ctx,
-          kSchemaPath,
+          schema_path,
           pparams,
-          true /* return_nullptr_on_failure */,
+          nullptr,
           program_bundle.get());
-      if (inc) {
+      if (inc && !stdlib_ctx.has_errors()) {
         program_bundle->add_implicit_includes(std::move(inc));
       }
     }
   } else {
-    // Not found
     ctx.warning(
-        source_location{},
+        source_location(),
         "Could not load Thrift standard libraries: {}",
         std::get<1>(found_or_error));
   }
+
+  // C++ codegen inserts an empty const if this is false. Other languages may
+  // dynamically determine whether the schema const exists.
   if (gparams.inject_schema_const) {
-    mutator_context mctx;
-    mctx.bundle = program_bundle.get();
-    schema_mutator()(ctx, mctx, *program_bundle->root_program());
+    sema::add_schema(ctx, *program_bundle);
   }
 
   program_bundle->root_program()->set_include_prefix(
       get_include_path(gparams.targets, input_filename));
 
-  standard_validator()(ctx, *program_bundle->root_program());
   return ctx.has_errors() ? nullptr : std::move(program_bundle);
 }
 
 } // namespace
-
-std::unique_ptr<t_program_bundle> parse_and_mutate_program(
-    source_manager& sm,
-    diagnostics_engine& diags,
-    const std::string& filename,
-    parsing_params params,
-    bool return_nullptr_on_failure,
-    t_program_bundle* already_parsed) {
-  bool use_legacy_type_ref_resolution = params.use_legacy_type_ref_resolution;
-  auto programs =
-      parse_ast(sm, diags, filename, std::move(params), already_parsed);
-  if (!programs || diags.has_errors()) {
-    // Mutations should be only performed on a valid AST.
-    return !return_nullptr_on_failure ? std::move(programs) : nullptr;
-  }
-  auto ctx = diagnostic_context(diags);
-  auto result =
-      standard_mutators(use_legacy_type_ref_resolution)(ctx, *programs);
-  if (result.unresolvable_typeref && return_nullptr_on_failure) {
-    // Stop processing if there is unresolvable typeref.
-    programs = nullptr;
-  }
-  return programs;
-}
 
 std::pair<std::unique_ptr<t_program_bundle>, diagnostic_results>
 parse_and_mutate_program(
@@ -795,9 +790,8 @@ parse_and_mutate_program(
     parsing_params params,
     diagnostic_params dparams) {
   diagnostic_results results;
-  diagnostic_context ctx(sm, results, std::move(dparams));
-  return {
-      parse_and_mutate_program(sm, ctx, filename, std::move(params)), results};
+  diagnostics_engine diags(sm, results, std::move(dparams));
+  return {parse_ast(sm, diags, filename, std::move(params)), results};
 }
 
 std::unique_ptr<t_program_bundle> parse_and_dump_diagnostics(
@@ -806,13 +800,12 @@ std::unique_ptr<t_program_bundle> parse_and_dump_diagnostics(
     parsing_params pparams,
     diagnostic_params dparams) {
   diagnostic_results results;
-  diagnostic_context ctx(sm, results, std::move(dparams));
-  auto program =
-      parse_and_mutate_program(sm, ctx, filename, std::move(pparams));
+  diagnostics_engine diags(sm, results, std::move(dparams));
+  auto programs = parse_ast(sm, diags, filename, std::move(pparams));
   for (const auto& diag : results.diagnostics()) {
     fmt::print(stderr, "{}\n", diag);
   }
-  return program;
+  return programs;
 }
 
 std::unique_ptr<t_program_bundle> parse_and_get_program(
@@ -822,17 +815,20 @@ std::unique_ptr<t_program_bundle> parse_and_get_program(
   pparams.allow_missing_includes = true;
   gen_params gparams;
   diagnostic_params dparams;
+  sema_params sparams;
   gparams.targets.push_back(""); // Avoid needing to pass --gen
-  std::string filename = parse_args(arguments, pparams, gparams, dparams);
+  std::string filename =
+      parse_args(arguments, pparams, gparams, dparams, sparams);
   if (filename.empty()) {
     return {};
   }
 
-  diagnostic_context ctx(
+  diagnostics_engine diags(
       sm,
       [](const diagnostic& d) { fmt::print(stderr, "{}\n", d); },
       diagnostic_params::only_errors());
-  return parse_ast(sm, ctx, filename, std::move(pparams));
+  sparams.skip_lowering_type_annotations = true;
+  return parse_ast(sm, diags, filename, std::move(pparams), &sparams);
 }
 
 compile_result compile(
@@ -843,11 +839,14 @@ compile_result compile(
   parsing_params pparams;
   gen_params gparams;
   diagnostic_params dparams;
-  std::string input_filename = parse_args(arguments, pparams, gparams, dparams);
+  sema_params sparams;
+  std::string input_filename =
+      parse_args(arguments, pparams, gparams, dparams, sparams);
   if (input_filename.empty()) {
     return result;
   }
-  diagnostic_context ctx(source_mgr, result.detail, std::move(dparams));
+  sema_context ctx(source_mgr, result.detail, std::move(dparams));
+  ctx.sema_parameters() = std::move(sparams);
 
   std::unique_ptr<t_program_bundle> program_bundle =
       parse_and_mutate(source_mgr, ctx, input_filename, pparams, gparams);

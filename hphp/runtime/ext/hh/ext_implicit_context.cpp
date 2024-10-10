@@ -47,11 +47,8 @@ const StaticString
   s_ImplicitContextDataClassName("HH\\ImplicitContext\\_Private\\ImplicitContextData"),
   s_ICAgnostic("%MemoAgnostic%"),
   // matches HH\ImplicitContext\State
-  s_ICStateNull("NULL"),
   s_ICStateValue("VALUE"),
-  s_ICStateSoftSet("SOFT_SET"),
-  s_ICStateInaccessible("INACCESSIBLE"),
-  s_ICStateSoftInaccessible("SOFT_INACCESSIBLE");
+  s_ICStateInaccessible("INACCESSIBLE");
 
 RDS_LOCAL(int64_t, rl_nextMemoKey);
 // key 0 reserved for all agnostic and empty ICs
@@ -85,7 +82,7 @@ int64_t memoKeyForInsert(StringData* key, const Variant& serializedValue) {
 
   auto& existing_m_map = prev_ctx->m_map;
   for (auto const& p : existing_m_map) {
-    if (p.second.second.m_type != KindOfUninit) {
+    if (p.second.second.m_type != KindOfUninit && !p.first->same(key)) {
       vec.push_back(std::make_pair(p.first, p.second.second));
     }
   }
@@ -220,13 +217,6 @@ bool HHVM_FUNCTION(has_key, StringArg keyArg) {
   return context->m_map.find(key) != context->m_map.end();
 }
 
-bool HHVM_FUNCTION(is_inaccessible) {
-  assertx(*ImplicitContext::activeCtx);
-  auto const obj = *ImplicitContext::activeCtx;
-  auto const context = Native::data<ImplicitContext>(obj);
-  return context->m_memoKey == kAgnosticMemoKey;
-}
-
 String HHVM_FUNCTION(get_state_unsafe) {
   assertx(*ImplicitContext::activeCtx);
   auto const obj = *ImplicitContext::activeCtx;
@@ -337,11 +327,6 @@ Variant coeffects_call_helper(const Variant& function, const char* name,
 
 } // namespace
 
-Variant HHVM_FUNCTION(enter_zoned_with, const Variant& function) {
-  return coeffects_call_helper(function,
-                               "HH\\Coeffects\\_Private\\enter_zoned_with",
-                               RuntimeCoeffects::zoned_with(), false);
-}
 
 static struct HHImplicitContext final : Extension {
   HHImplicitContext(): Extension("implicit_context", NO_EXTENSION_VERSION_YET, NO_ONCALL_YET) { }
@@ -359,14 +344,10 @@ static struct HHImplicitContext final : Extension {
                   HHVM_FN(create_implicit_context));
     HHVM_NAMED_FE(HH\\ImplicitContext\\_Private\\get_implicit_context_memo_key,
                   HHVM_FN(get_implicit_context_memo_key));
-    HHVM_NAMED_FE(HH\\ImplicitContext\\is_inaccessible,
-                  HHVM_FN(is_inaccessible));
     HHVM_NAMED_FE(HH\\ImplicitContext\\_Private\\has_key,
                   HHVM_FN(has_key));
     HHVM_NAMED_FE(HH\\ImplicitContext\\_Private\\get_implicit_context_debug_info,
                   HHVM_FN(get_implicit_context_debug_info));
-    HHVM_NAMED_FE(HH\\Coeffects\\_Private\\enter_zoned_with,
-                  HHVM_FN(enter_zoned_with));
 
   }
 } s_hh_implicit_context;

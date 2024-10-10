@@ -52,9 +52,9 @@ impl<'a> WitnessLocl<'a> {
             | WitnessLocl::ArithRetInt(p)
             | WitnessLocl::BitwiseDynamic(p)
             | WitnessLocl::IncdecDynamic(p)
-            | WitnessLocl::TypeVariable(p)
-            | WitnessLocl::TypeVariableGenerics((p, _, _))
-            | WitnessLocl::TypeVariableError(p)
+            | WitnessLocl::TypeVariable((p, _))
+            | WitnessLocl::TypeVariableGenerics((p, _, _, _))
+            | WitnessLocl::TypeVariableError((p, _))
             | WitnessLocl::Shape((p, _))
             | WitnessLocl::ShapeLiteral(p)
             | WitnessLocl::Destructure(p)
@@ -66,7 +66,8 @@ impl<'a> WitnessLocl<'a> {
             | WitnessLocl::MissingClass(p)
             | WitnessLocl::CapturedLike(p)
             | WitnessLocl::UnsafeCast(p)
-            | WitnessLocl::Pattern(p) => p,
+            | WitnessLocl::Pattern(p)
+            | WitnessLocl::JoinPoint(p) => p,
         }
     }
 }
@@ -80,6 +81,7 @@ impl<'a> WitnessDecl<'a> {
             | WitnessDecl::Hint(p)
             | WitnessDecl::ClassClass((p, _))
             | WitnessDecl::VarParamFromDecl(p)
+            | WitnessDecl::TupleFromSplat(p)
             | WitnessDecl::InoutParam(p)
             | WitnessDecl::TconstNoCstr((p, _))
             | WitnessDecl::VarrayOrDarrayKey(p)
@@ -112,16 +114,6 @@ impl<'a> Reason<'a> {
         Reason::Instantiate(args)
     }
 
-    pub fn rev_pos(&self) -> Option<&'a Pos<'a>> {
-        match self {
-            T_::Flow((r, _, _)) => r.rev_pos(),
-            T_::Prj((_, r)) => r.rev_pos(),
-            T_::Def((_, r)) => r.rev_pos(),
-            T_::Rev(r) => r.pos(),
-            _ => self.pos(),
-        }
-    }
-
     pub fn pos(&self) -> Option<&'a Pos<'a>> {
         use T_::*;
         match self {
@@ -145,10 +137,7 @@ impl<'a> Reason<'a> {
             | ExprDepType((r, _, _))
             | Typeconst((r, _, _, _))
             | Instantiate((_, _, r)) => r.pos(),
-            Flow(r) => r.0.pos(),
-            Prj(r) => r.1.pos(),
-            Def(r) => r.1.pos(),
-            Rev(r) => r.rev_pos(),
+            _ => None,
         }
     }
 }
@@ -204,10 +193,13 @@ impl<'a> std::fmt::Debug for T_<'a> {
                 .finish(),
             DynamicCoercion(p) => f.debug_tuple("RdynamicCoercion").field(p).finish(),
             Invalid => f.debug_tuple("Rinvalid").finish(),
-            Flow(p) => f.debug_tuple("Rflow").field(p).finish(),
-            Rev(p) => f.debug_tuple("Rrev").field(p).finish(),
-            Prj(p) => f.debug_tuple("Rprj").field(p).finish(),
-            Def(p) => f.debug_tuple("Rdef").field(p).finish(),
+            LowerBound { .. }
+            | Flow { .. }
+            | PrjBoth { .. }
+            | PrjOne { .. }
+            | Axiom { .. }
+            | Solved { .. }
+            | Def(_) => Ok(()),
         }
     }
 }

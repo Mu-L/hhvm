@@ -59,16 +59,6 @@ cdef extern from "thrift/compiler/test/fixtures/basic/gen-cpp2/module_types.h" n
         pass
 
 
-
-
-
-cdef class MyEnum(thrift.py3.types.CompiledEnum):
-    pass
-
-
-cdef class HackEnum(thrift.py3.types.CompiledEnum):
-    pass
-
 cdef extern from "thrift/compiler/test/fixtures/basic/gen-cpp2/module_metadata.h" namespace "apache::thrift::detail::md":
     cdef cppclass ExceptionMetadata[T]:
         @staticmethod
@@ -254,22 +244,18 @@ cdef class MyDataItem(thrift.py3.types.Struct):
     @staticmethod
     cdef _create_FBTHRIFT_ONLY_DO_NOT_USE(shared_ptr[cMyDataItem])
 
-cdef class __MyUnionType(thrift.py3.types.CompiledEnum):
-    pass
-
-
 
 
 cdef class MyUnion(thrift.py3.types.Union):
     cdef shared_ptr[cMyUnion] _cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE
-    cdef readonly __MyUnionType type
+    cdef readonly object type
     cdef readonly object value
     cdef _load_cache(MyUnion self)
 
     @staticmethod
     cdef unique_ptr[cMyUnion] _make_instance(
         cMyUnion* base_instance,
-        MyEnum myEnum,
+        object myEnum,
         MyStruct myStruct,
         MyDataItem myDataItem,
         object floatSet
@@ -318,15 +304,11 @@ cdef class ReservedKeyword(thrift.py3.types.Struct):
     @staticmethod
     cdef _create_FBTHRIFT_ONLY_DO_NOT_USE(shared_ptr[cReservedKeyword])
 
-cdef class __UnionToBeRenamedType(thrift.py3.types.CompiledEnum):
-    pass
-
-
 
 
 cdef class UnionToBeRenamed(thrift.py3.types.Union):
     cdef shared_ptr[cUnionToBeRenamed] _cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE
-    cdef readonly __UnionToBeRenamedType type
+    cdef readonly object type
     cdef readonly object value
     cdef _load_cache(UnionToBeRenamed self)
 

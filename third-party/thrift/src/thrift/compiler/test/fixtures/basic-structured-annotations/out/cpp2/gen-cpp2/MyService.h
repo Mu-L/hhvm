@@ -48,6 +48,7 @@ class ServiceHandler<::test::fixtures::basic-structured-annotations::MyService> 
   typedef ::test::fixtures::basic-structured-annotations::MyServiceAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -81,6 +82,7 @@ class ServiceHandler<::test::fixtures::basic-structured-annotations::MyService> 
 namespace test::fixtures::basic-structured-annotations {
 using MyServiceSvIf [[deprecated("Use apache::thrift::ServiceHandler<MyService> instead")]] = ::apache::thrift::ServiceHandler<MyService>;
 } // namespace test::fixtures::basic-structured-annotations
+
 namespace test::fixtures::basic-structured-annotations {
 class MyServiceSvNull : public ::apache::thrift::ServiceHandler<MyService> {
  public:

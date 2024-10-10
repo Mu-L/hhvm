@@ -10,6 +10,7 @@
 
 #include "thrift/compiler/test/fixtures/interactions/gen-cpp2/PerformAsyncClient.h"
 #include "thrift/compiler/test/fixtures/interactions/gen-cpp2/module_types.h"
+#include "thrift/compiler/test/fixtures/interactions/gen-cpp2/shared_types.h"
 #include <thrift/lib/cpp2/async/ServerStream.h>
 #include <thrift/lib/cpp2/async/Sink.h>
 
@@ -44,6 +45,7 @@ class ServiceHandler<::cpp2::Perform> : public apache::thrift::ServerInterface {
   typedef ::cpp2::PerformAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -52,6 +54,7 @@ class MyInteractionServiceInfoHolder : public apache::thrift::ServiceInfoHolder 
    apache::thrift::ServiceRequestInfoMap const& requestInfoMap() const override;
    static apache::thrift::ServiceRequestInfoMap staticRequestInfoMap();
 };
+
 
 class MyInteractionIf : public apache::thrift::Tile, public apache::thrift::ServerInterface {
  public:
@@ -107,6 +110,7 @@ class MyInteractionIf : public apache::thrift::Tile, public apache::thrift::Serv
    static apache::thrift::ServiceRequestInfoMap staticRequestInfoMap();
 };
 
+
 class MyInteractionFastIf : public apache::thrift::EventBaseTile, public apache::thrift::ServerInterface {
  public:
   std::string_view getGeneratedName() const override { return "MyInteractionFast"; }
@@ -128,6 +132,7 @@ class MyInteractionFastIf : public apache::thrift::EventBaseTile, public apache:
    apache::thrift::ServiceRequestInfoMap const& requestInfoMap() const override;
    static apache::thrift::ServiceRequestInfoMap staticRequestInfoMap();
 };
+
 
 class SerialInteractionIf : public apache::thrift::SerialInteractionTile, public apache::thrift::ServerInterface {
  public:
@@ -176,6 +181,7 @@ class SerialInteractionIf : public apache::thrift::SerialInteractionTile, public
 namespace cpp2 {
 using PerformSvIf [[deprecated("Use apache::thrift::ServiceHandler<Perform> instead")]] = ::apache::thrift::ServiceHandler<Perform>;
 } // namespace cpp2
+
 namespace cpp2 {
 class PerformSvNull : public ::apache::thrift::ServiceHandler<Perform> {
  public:

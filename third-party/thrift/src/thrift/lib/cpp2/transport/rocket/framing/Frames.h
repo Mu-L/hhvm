@@ -32,9 +32,7 @@
 #include <thrift/lib/cpp2/transport/rocket/framing/FrameType.h>
 #include <thrift/lib/cpp2/transport/rocket/framing/Util.h>
 
-namespace apache {
-namespace thrift {
-namespace rocket {
+namespace apache::thrift::rocket {
 
 class Serializer;
 
@@ -42,16 +40,20 @@ class SetupFrame {
  public:
   explicit SetupFrame(std::unique_ptr<folly::IOBuf> frame);
 
-  explicit SetupFrame(Payload&& payload, bool rocketMimeTypes)
-      : payload_(std::move(payload)), rocketMimeTypes_(rocketMimeTypes) {}
+  explicit SetupFrame(Payload&& payload, bool encodeMetadataUsingBinary)
+      : payload_(std::move(payload)),
+        rocketMimeTypes_(true),
+        encodeMetadataUsingBinary_(encodeMetadataUsingBinary) {}
 
   static constexpr FrameType frameType() { return FrameType::SETUP; }
 
   size_t frameHeaderSize() const {
+    size_t metadataMimeTypeSize = encodeMetadataUsingBinary_
+        ? kRocketMetadataBinaryMimeType.size()
+        : kRocketMetadataCompactMimeType.size();
     size_t frameSize = 20 +
-        (rocketMimeTypes_
-             ? kRocketMetadataMimeType.size() + kRocketPayloadMimeType.size()
-             : 2 * kLegacyMimeType.size());
+        (rocketMimeTypes_ ? metadataMimeTypeSize + kRocketPayloadMimeType.size()
+                          : 2 * kLegacyMimeType.size());
     if (hasResumeIdentificationToken()) {
       frameSize +=
           2 /* bytes for token length */ + resumeIdentificationToken_.size();
@@ -70,14 +72,18 @@ class SetupFrame {
 
   bool rocketMimeTypes() const { return rocketMimeTypes_; }
 
+  bool encodeMetadataUsingBinary() const { return encodeMetadataUsingBinary_; }
+
   std::unique_ptr<folly::IOBuf> serialize() &&;
   void serialize(Serializer& writer) &&;
 
  private:
-  static constexpr folly::StringPiece kLegacyMimeType{"text/plain"};
-  static constexpr folly::StringPiece kRocketMetadataMimeType{
+  static constexpr std::string_view kLegacyMimeType{"text/plain"};
+  static constexpr std::string_view kRocketMetadataCompactMimeType{
       "application/x-rocket-metadata+compact"};
-  static constexpr folly::StringPiece kRocketPayloadMimeType{
+  static constexpr std::string_view kRocketMetadataBinaryMimeType{
+      "application/x-rocket-metadata+binary"};
+  static constexpr std::string_view kRocketPayloadMimeType{
       "application/x-rocket-payload"};
 
   // Resume ID token and Lease flags are not currently supported/used.
@@ -85,6 +91,7 @@ class SetupFrame {
   std::string resumeIdentificationToken_;
   Payload payload_;
   bool rocketMimeTypes_;
+  bool encodeMetadataUsingBinary_;
 };
 
 class RequestResponseFrame {
@@ -508,6 +515,4 @@ class ExtFrame {
 // All frame sizes (header size + payload size) are encoded in 3 bytes
 constexpr size_t kMaxFragmentedPayloadSize = 0xffffff - 512;
 
-} // namespace rocket
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::rocket

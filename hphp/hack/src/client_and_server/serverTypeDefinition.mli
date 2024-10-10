@@ -6,6 +6,7 @@
  *
  *)
 
+(** To do with "go to type definition" functionality *)
 val go_quarantined :
   ctx:Provider_context.t ->
   entry:Provider_context.entry ->

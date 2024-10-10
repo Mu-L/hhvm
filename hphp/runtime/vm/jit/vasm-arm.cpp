@@ -75,6 +75,7 @@
 #include "hphp/runtime/vm/jit/timer.h"
 #include "hphp/runtime/vm/jit/vasm-gen.h"
 #include "hphp/runtime/vm/jit/vasm.h"
+#include "hphp/runtime/vm/jit/vasm-block-counters.h"
 #include "hphp/runtime/vm/jit/vasm-instr.h"
 #include "hphp/runtime/vm/jit/vasm-internal.h"
 #include "hphp/runtime/vm/jit/vasm-lower.h"
@@ -342,6 +343,7 @@ struct Vgen {
   void emit(const decl& i) { a->Sub(W(i.d), W(i.s), 1, UF(i.fl)); }
   void emit(const decq& i) { a->Sub(X(i.d), X(i.s), 1, UF(i.fl)); }
   void emit(const decqmlock& i);
+  void emit(const decqmlocknosf& i);
   void emit(const divint& i) { a->Sdiv(X(i.d), X(i.s0), X(i.s1)); }
   void emit(const divsd& i) { a->Fdiv(D(i.d), D(i.s1), D(i.s0)); }
   void emit(const imul& i);
@@ -378,7 +380,6 @@ struct Vgen {
   void emit(const movswl& i) { a->Sxth(W(i.d), W(i.s)); }
   void emit(const movtqb& i) { a->Uxtb(W(i.d), W(i.s)); }
   void emit(const movtqw& i) { a->Uxth(W(i.d), W(i.s)); }
-  void emit(const movtql& i) { a->Uxtw(W(i.d), W(i.s)); }
   void emit(const movzbq& i) { a->Uxtb(X(i.d), W(i.s).X()); }
   void emit(const movzwq& i) { a->Uxth(X(i.d), W(i.s).X()); }
   void emit(const movzlq& i) { a->Uxtw(X(i.d), W(i.s).X()); }
@@ -435,6 +436,7 @@ struct Vgen {
   void emit(const xorl& i);
   void emit(const xorq& i);
   void emit(const xorqi& i);
+  void emit(const crc32q& i) { a->Crc32cx(W(i.d), W(i.s1), X(i.s0)); }
 
   // arm intrinsics
   void emit(const prefetch& /*i*/) { /* ignored */ }
@@ -442,6 +444,10 @@ struct Vgen {
   void emit(const mrs& i) { a->Mrs(X(i.r), vixl::SystemRegister(i.s.l())); }
   void emit(const msr& i) { a->Msr(vixl::SystemRegister(i.s.l()), X(i.r)); }
   void emit(const ubfmli& i) { a->ubfm(W(i.d), W(i.s), i.mr.w(), i.ms.w()); }
+  void emit(const storepair& i) { a->Stp(X(i.s0), X(i.s1), M(i.d)); }
+  void emit(const storepairl& i) { a->Stp(W(i.s0), W(i.s1), M(i.d)); }
+  void emit(const loadpair& i) { a->Ldp(X(i.d0), X(i.d1), M(i.s)); }
+  void emit(const loadpairl& i) { a->Ldp(W(i.d0), W(i.d1), M(i.s)); }
 
   void emit_nop() { a->Nop(); }
 
@@ -970,6 +976,27 @@ void Vgen::emit(const decqmlock& i) {
   a->SetScratchRegisters(rVixlScratch0, rVixlScratch1);
 }
 
+void Vgen::emit(const decqmlocknosf& i) {
+  auto adr = M(i.m);
+  /* Use VIXL's macroassembler scratch regs. */
+  a->SetScratchRegisters(vixl::NoReg, vixl::NoReg);
+  if (Cfg::Jit::ArmLse) {
+    a->Mov(rVixlScratch0, -1);
+    a->ldaddal(rVixlScratch0, rVixlScratch0, adr);
+    a->Sub(rAsm, rVixlScratch0, 1, LeaveFlags);
+  } else {
+    vixl::Label again;
+    a->bind(&again);
+    a->ldxr(rAsm, adr);
+    a->Sub(rAsm, rAsm, 1, LeaveFlags);
+    a->stxr(rVixlScratch0, rAsm, adr);
+    recordAddressImmediate();
+    a->Cbnz(rVixlScratch0, &again);
+  }
+  /* Restore VIXL's scratch regs. */
+  a->SetScratchRegisters(rVixlScratch0, rVixlScratch1);
+}
+
 void Vgen::emit(const jcc& i) {
   if (i.targets[1] != i.targets[0]) {
     if (next == i.targets[1]) {
@@ -1169,7 +1196,7 @@ void Vgen::emit(const srem& i) {
 void Vgen::emit(const trap& i) {
   env.meta.trapReasons.emplace_back(a->frontier(), i.reason);
   if (i.fix.isValid()) {
-    env.meta.fixups.emplace_back(a->frontier(), i.fix);
+    env.meta.trapFixups.emplace_back(a->frontier(), i.fix);
     env.record_inline_stack(a->frontier());
   }
   a->Brk(1);
@@ -1409,10 +1436,62 @@ void lower(const VLS& /*env*/, Inst& /*inst*/, Vlabel /*b*/, size_t /*i*/) {}
 
 ///////////////////////////////////////////////////////////////////////////////
 
+enum ImmediateStyle : uint16_t {
+  kUnscaledSignedImmediate9 = 0,
+  kXPositiveImmediate12,
+  kWPositiveImmediate12,
+  kHPositiveImmediate12,
+  kBPositiveImmediate12,
+  kLegacyStyle = kUnscaledSignedImmediate9,
+};
+
+static const struct {
+  const int16_t immMin;
+  const int16_t immMax;
+  const uint8_t immStep;
+  const bool assertOnOutOfRange;
+} ImmediateCharacteristics[] = {
+  // kUnscaledSignedImmediate9
+  {
+    .immMin = -256,
+    .immMax = 255,
+    .immStep = 1,
+    .assertOnOutOfRange = false,
+  },
+  // kXPositiveImmediate12
+  {
+    .immMin = 0,
+    .immMax = 32760,
+    .immStep = 8,
+    .assertOnOutOfRange = false,
+  },
+  // kWPositiveImmediate12
+  {
+    .immMin = 0,
+    .immMax = 16380,
+    .immStep = 4,
+    .assertOnOutOfRange = false,
+  },
+  // kHPositiveImmediate12
+  {
+    .immMin = 0,
+    .immMax = 8190,
+    .immStep = 2,
+    .assertOnOutOfRange = false,
+  },
+  // kBPositiveImmediate12
+  {
+    .immMin = 0,
+    .immMax = 4095,
+    .immStep = 1,
+    .assertOnOutOfRange = false,
+  },
+};
+
 /*
  * TODO: Using load size (ldr[bh]?), apply scaled address if 'disp' is unsigned
  */
-void lowerVptr(Vptr& p, Vout& v) {
+void lowerVptr(Vptr& p, Vout& v, ImmediateStyle is = kLegacyStyle, ImmediateStyle alt = kLegacyStyle) {
   enum {
     BASE = 1,
     INDEX = 2,
@@ -1450,9 +1529,19 @@ void lowerVptr(Vptr& p, Vout& v) {
       break;
 
     case BASE | DISP: {
-      // ldr/str allow [base, #imm], where #imm is [-256 .. 255].
-      if (p.disp >= -256 && p.disp <= 255)
+      // if the immediate value can be directly encoded we have nothing to do
+      if (p.disp >= ImmediateCharacteristics[is].immMin &&
+          p.disp <= ImmediateCharacteristics[is].immMax &&
+          (p.disp % ImmediateCharacteristics[is].immStep) == 0)
         break;
+      if (is != alt &&
+          p.disp >= ImmediateCharacteristics[alt].immMin &&
+          p.disp <= ImmediateCharacteristics[alt].immMax &&
+          (p.disp % ImmediateCharacteristics[alt].immStep) == 0)
+        break;
+      if (ImmediateCharacteristics[is].assertOnOutOfRange) {
+        always_assert(!"Immediate value out of range");
+      }
 
       // #imm is out of range, convert to [base, index]
       auto index = v.makeReg();
@@ -1513,6 +1602,74 @@ void lowerVptr(Vptr& p, Vout& v) {
   }
 }
 
+#define Y(vasm_opc, m, n)                                   \
+void lower(const VLS& e, vasm_opc& i, Vlabel b, size_t z) { \
+  lower_impl(e.unit, b, z, [&] (Vout& v) {                  \
+    if (i.n.isGP())                                         \
+      lowerVptr(i.m, v, kXPositiveImmediate12,              \
+          kUnscaledSignedImmediate9);                       \
+    else                                                    \
+      lowerVptr(i.m, v, kUnscaledSignedImmediate9,          \
+          kUnscaledSignedImmediate9);                       \
+    v << i;                                                 \
+  });                                                       \
+}
+
+Y(load, s, d)
+Y(store, d, s)
+
+#undef Y
+
+#define Y(vasm_opc, m)                                      \
+void lower(const VLS& e, vasm_opc& i, Vlabel b, size_t z) { \
+  lower_impl(e.unit, b, z, [&] (Vout& v) {                  \
+    lowerVptr(i.m, v, kWPositiveImmediate12,                \
+        kUnscaledSignedImmediate9);                         \
+    v << i;                                                 \
+  });                                                       \
+}
+
+Y(loadl, s)
+Y(loadtql, s)
+Y(loadzlq, s)
+Y(storel, m)
+
+#undef Y
+
+#define Y(vasm_opc, m)                                      \
+void lower(const VLS& e, vasm_opc& i, Vlabel b, size_t z) { \
+  lower_impl(e.unit, b, z, [&] (Vout& v) {                  \
+    lowerVptr(i.m, v, kBPositiveImmediate12,                \
+        kUnscaledSignedImmediate9);                         \
+    v << i;                                                 \
+  });                                                       \
+}
+
+Y(loadb, s)
+Y(loadtqb, s)
+Y(loadzbl, s)
+Y(loadzbq, s)
+Y(storeb, m)
+Y(loadsbq, s)
+Y(loadsbl, s)
+
+#undef Y
+
+#define Y(vasm_opc, m)                                      \
+void lower(const VLS& e, vasm_opc& i, Vlabel b, size_t z) { \
+  lower_impl(e.unit, b, z, [&] (Vout& v) {                  \
+    lowerVptr(i.m, v, kHPositiveImmediate12,                \
+        kUnscaledSignedImmediate9);                         \
+    v << i;                                                 \
+  });                                                       \
+}
+
+Y(loadw, s)
+Y(loadzwq, s)
+Y(storew, m)
+
+#undef Y
+
 #define Y(vasm_opc, m)                                      \
 void lower(const VLS& e, vasm_opc& i, Vlabel b, size_t z) { \
   lower_impl(e.unit, b, z, [&] (Vout& v) {                  \
@@ -1522,25 +1679,12 @@ void lower(const VLS& e, vasm_opc& i, Vlabel b, size_t z) { \
 }
 
 Y(decqmlock, m)
+Y(decqmlocknosf, m)
 Y(lea, s)
-Y(load, s)
-Y(loadb, s)
-Y(loadl, s)
 Y(loadsd, s)
-Y(loadtqb, s)
-Y(loadtql, s)
 Y(loadups, s)
-Y(loadw, s)
-Y(loadzbl, s)
-Y(loadzbq, s)
-Y(loadzwq, s)
-Y(loadzlq, s)
-Y(store, d)
-Y(storeb, m)
-Y(storel, m)
 Y(storesd, m)
 Y(storeups, m)
-Y(storew, m)
 
 #undef Y
 
@@ -1890,6 +2034,12 @@ void lower(const VLS& e, movzwl& i, Vlabel b, size_t z) {
   lower_movz(e, i, b, z);
 }
 
+void lower(const VLS& e, movtql& i, Vlabel b, size_t z) {
+  lower_impl(e.unit, b, z, [&] (Vout& v) {
+    v << copy{i.s, i.d};
+  });
+}
+
 void lower(const VLS& e, movtdb& i, Vlabel b, size_t z) {
   lower_impl(e.unit, b, z, [&] (Vout& v) {
     auto d = v.makeReg();
@@ -2004,6 +2154,8 @@ void optimizeARM(Vunit& unit, const Abi& abi, bool regalloc) {
     if (regalloc) {
       splitCriticalEdges(unit);
 
+      VasmBlockCounters::profileGuidedUpdate(unit);
+
       if (RuntimeOption::EvalUseGraphColor &&
           unit.context &&
           (unit.context->kind == TransKind::Optimize ||
@@ -2012,6 +2164,8 @@ void optimizeARM(Vunit& unit, const Abi& abi, bool regalloc) {
       } else {
         allocateRegistersWithXLS(unit, abi);
       }
+
+      postRASimplify(unit);
     }
   }
 

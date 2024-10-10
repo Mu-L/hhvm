@@ -20,12 +20,10 @@ type status_single = {
 }
 
 type client_mode =
-  | MODE_XHP_AUTOCOMPLETE_SNIPPET of string
   | MODE_CST_SEARCH of string list option
   | MODE_DUMP_SYMBOL_INFO of string
   | MODE_FIND_CLASS_REFS of string
   | MODE_FIND_REFS of string
-  | MODE_FORMAT of int * int
   | MODE_FULL_FIDELITY_PARSE of string
   | MODE_FULL_FIDELITY_SCHEMA
   | MODE_GO_TO_IMPL_CLASS of string
@@ -45,6 +43,7 @@ type client_mode =
   | MODE_METHOD_JUMP_ANCESTORS of string * string
   | MODE_METHOD_JUMP_ANCESTORS_BATCH of string list * string
   | MODE_METHOD_JUMP_CHILDREN of string
+  | MODE_NOTEBOOK_TO_HACK of string
   | MODE_OUTLINE
   | MODE_OUTLINE2
   | MODE_RENAME of rename_mode * string * string
@@ -77,7 +76,7 @@ type client_check_env = {
   config: (string * string) list;
   custom_hhi_path: string option;
   custom_telemetry_data: (string * string) list;
-  error_format: Errors.format;
+  error_format: Errors.format option;
   force_dormant_start: bool;
   from: string;
   show_spinner: bool;
@@ -85,7 +84,6 @@ type client_check_env = {
   ignore_hh_version: bool;
   saved_state_ignore_hhconfig: bool;
   paths: string list;
-  log_inference_constraints: bool;
   max_errors: int option;
   preexisting_warnings: bool;
       (** Whether to show preexisint warnings in typechecked files *)
@@ -104,6 +102,10 @@ type client_check_env = {
   allow_non_opt_build: bool;
       (** desc is a human-readable string description, to appear in "hh_server busy [desc]" *)
   desc: string;
+  is_interactive: bool;
+      (** Determined based on the --from option. Affects UI behaviour in a
+      number of places, e.g., error formatting and spinners. *)
+  warning_switches: Filter_errors.switch list;
 }
 
 let string_to_rename_mode = function

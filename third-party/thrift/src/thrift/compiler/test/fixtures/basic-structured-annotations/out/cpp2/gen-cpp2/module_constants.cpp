@@ -9,6 +9,9 @@
 
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
+#include "thrift/compiler/test/fixtures/basic-structured-annotations/gen-cpp2/included_constants.h"
+#include "thrift/compiler/test/fixtures/basic-structured-annotations/gen-cpp2/namespaced_constants.h"
+
 
 namespace test::fixtures::basic-structured-annotations {
 namespace module_constants {
@@ -18,6 +21,8 @@ namespace module_constants {
   { apache::thrift::StringTraits<std::string>::fromStringLiteral("CONST"), apache::thrift::StringTraits<std::string>::fromStringLiteral("const") } } };
   return *instance;
 }
+
+
 
 } // namespace module_constants
 } // namespace test::fixtures::basic-structured-annotations

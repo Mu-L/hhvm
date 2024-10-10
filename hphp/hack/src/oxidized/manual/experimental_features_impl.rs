@@ -11,11 +11,10 @@ use crate::gen::experimental_features::FeatureName;
 use crate::gen::experimental_features::FeatureName::*;
 use crate::gen::experimental_features::FeatureStatus;
 use crate::gen::experimental_features::FeatureStatus::*;
-use crate::namespace_env::Mode;
 use crate::parser_options::ParserOptions;
 
 impl FeatureName {
-    fn get_feature_status_deprecated(&self) -> FeatureStatus {
+    pub fn get_feature_status_deprecated(&self) -> FeatureStatus {
         match self {
             UnionIntersectionTypeHints => Unstable,
             ExpressionTrees => Unstable,
@@ -26,14 +25,13 @@ impl FeatureName {
             TypeConstMultipleBounds => Preview,
             TypeConstSuperBound => Unstable,
             ClassConstDefault => Migration,
-            TypeRefinements => OngoingRelease,
             MethodTraitDiamond => OngoingRelease,
             UpcastExpression => Unstable,
             RequireClass => OngoingRelease,
             NewtypeSuperBounds => Unstable,
-            ExpressionTreeBlocks => OngoingRelease,
             Package => OngoingRelease,
             CaseTypes => Preview,
+            CaseTypeWhereClauses => Unstable,
             ModuleLevelTraits => OngoingRelease,
             ModuleLevelTraitsExtensions => OngoingRelease,
             TypedLocalVariables => Preview,
@@ -43,33 +41,37 @@ impl FeatureName {
             ClassType => Unstable,
             FunctionReferences => Unstable,
             FunctionTypeOptionalParams => OngoingRelease,
-            ExpressionTreeMap => OngoingRelease,
             ExpressionTreeNest => Preview,
             SealedMethods => Unstable,
-            AwaitInSplice => Preview,
+            AwaitInSplice => OngoingRelease,
+            OpenTuples => Preview,
+            TypeSplat => Preview,
+            ExpressionTreeNestedBindings => Unstable,
+            LikeTypeHints => Unstable,
         }
     }
 
     pub fn parse_experimental_feature(
-        (name, status): &(String, String),
-    ) -> Result<(FeatureName, FeatureStatus), anyhow::Error> {
-        let n = FeatureName::from_str(name).map_err(|_| ExperimentalFeatureError {
+        (name, status): (String, String),
+    ) -> Result<(String, FeatureStatus), anyhow::Error> {
+        let n = FeatureName::from_str(&name).map_err(|_| ExperimentalFeatureError {
             kind: "name".to_string(),
             bad_name: name.to_string(),
         })?;
-        let s = FeatureStatus::from_str(status).map_err(|_| ExperimentalFeatureError {
-            kind: "status".to_string(),
-            bad_name: status.to_string(),
-        })?;
+        let config_status =
+            FeatureStatus::from_str(&status).map_err(|_| ExperimentalFeatureError {
+                kind: "status".to_string(),
+                bad_name: status.to_string(),
+            })?;
         let hard_coded_status = n.get_feature_status_deprecated();
         // For now, force the config to be consistent with the hard coded status.
-        if s == hard_coded_status {
-            Ok((n, s))
+        if feature_more_restrictive_or_eq(config_status, hard_coded_status) {
+            Ok((name, config_status))
         } else {
             Err(anyhow::Error::new(ExperimentalFeatureError {
                 kind: "mismatch".to_string(),
                 bad_name: format!(
-                    "for feature {}: {} in config must be {:?} during experimental feature config roll-out",
+                    "for feature {}: {} in config must be {:?} (or more restrictive) during experimental feature config roll-out",
                     name, status, hard_coded_status
                 ),
             }))
@@ -81,27 +83,23 @@ impl FeatureName {
             self.get_feature_status_deprecated()
         } else {
             po.experimental_features
-                .iter()
-                .find_map(|(name, status)| if name == self { Some(status) } else { None })
+                .get(&self.to_string())
                 .unwrap_or_else(|| get_unspecified_feature(po))
                 .clone()
         }
     }
 
-    // Experimental features with an ongoing release should be allowed by the
-    // runtime, but not the typechecker
+    // Experimental features with an ongoing release should be allowed
     pub fn can_use(
         &self,
         po: &ParserOptions,
-        mode: &Mode,
         active_experimental_features: &hash::HashSet<FeatureName>,
     ) -> bool {
         (match self {
             UnionIntersectionTypeHints => po.union_intersection_type_hints,
             _ => false,
         }) || active_experimental_features.contains(self)
-            || (matches!(mode, Mode::ForCodegen)
-                && matches!(self.get_feature_status(po), OngoingRelease))
+            || matches!(self.get_feature_status(po), OngoingRelease)
     }
 
     pub fn enable(
@@ -123,6 +121,17 @@ impl FeatureName {
             ))
         }
     }
+}
+
+fn feature_more_restrictive(more: FeatureStatus, less: FeatureStatus) -> bool {
+    match (more, less) {
+        (Unstable, Preview) | (Unstable, OngoingRelease) | (Preview, OngoingRelease) => true,
+        _ => false,
+    }
+}
+
+fn feature_more_restrictive_or_eq(more: FeatureStatus, less: FeatureStatus) -> bool {
+    more == less || feature_more_restrictive(more, less)
 }
 
 fn get_unspecified_feature(po: &ParserOptions) -> &FeatureStatus {

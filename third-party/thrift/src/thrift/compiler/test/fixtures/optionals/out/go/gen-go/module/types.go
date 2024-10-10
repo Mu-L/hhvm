@@ -7,14 +7,14 @@ package module
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 
 
@@ -24,14 +24,14 @@ func NewPersonID() PersonID {
     return 0
 }
 
-func WritePersonID(item PersonID, p thrift.Format) error {
+func WritePersonID(item PersonID, p thrift.Encoder) error {
     if err := p.WriteI64(item); err != nil {
     return err
 }
     return nil
 }
 
-func ReadPersonID(p thrift.Format) (PersonID, error) {
+func ReadPersonID(p thrift.Decoder) (PersonID, error) {
     var decodeResult PersonID
     decodeErr := func() error {
         result, err := p.ReadI64()
@@ -86,7 +86,6 @@ func AnimalFromString(s string) (Animal, error) {
     return Animal(0), fmt.Errorf("not a valid Animal string")
 }
 
-
 type Color struct {
     Red float64 `thrift:"red,1" json:"red" db:"red"`
     Green float64 `thrift:"green,2" json:"green" db:"green"`
@@ -97,11 +96,7 @@ type Color struct {
 var _ thrift.Struct = (*Color)(nil)
 
 func NewColor() *Color {
-    return (&Color{}).
-        SetRedNonCompat(0.0).
-        SetGreenNonCompat(0.0).
-        SetBlueNonCompat(0.0).
-        SetAlphaNonCompat(0.0)
+    return (&Color{}).setDefaults()
 }
 
 func (x *Color) GetRed() float64 {
@@ -160,7 +155,7 @@ func (x *Color) SetAlpha(value float64) *Color {
     return x
 }
 
-func (x *Color) writeField1(p thrift.Format) error {  // Red
+func (x *Color) writeField1(p thrift.Encoder) error {  // Red
     if err := p.WriteFieldBegin("red", thrift.DOUBLE, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -176,7 +171,7 @@ func (x *Color) writeField1(p thrift.Format) error {  // Red
     return nil
 }
 
-func (x *Color) writeField2(p thrift.Format) error {  // Green
+func (x *Color) writeField2(p thrift.Encoder) error {  // Green
     if err := p.WriteFieldBegin("green", thrift.DOUBLE, 2); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -192,7 +187,7 @@ func (x *Color) writeField2(p thrift.Format) error {  // Green
     return nil
 }
 
-func (x *Color) writeField3(p thrift.Format) error {  // Blue
+func (x *Color) writeField3(p thrift.Encoder) error {  // Blue
     if err := p.WriteFieldBegin("blue", thrift.DOUBLE, 3); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -208,7 +203,7 @@ func (x *Color) writeField3(p thrift.Format) error {  // Blue
     return nil
 }
 
-func (x *Color) writeField4(p thrift.Format) error {  // Alpha
+func (x *Color) writeField4(p thrift.Encoder) error {  // Alpha
     if err := p.WriteFieldBegin("alpha", thrift.DOUBLE, 4); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -224,7 +219,7 @@ func (x *Color) writeField4(p thrift.Format) error {  // Alpha
     return nil
 }
 
-func (x *Color) readField1(p thrift.Format) error {  // Red
+func (x *Color) readField1(p thrift.Decoder) error {  // Red
     result, err := p.ReadDouble()
 if err != nil {
     return err
@@ -234,7 +229,7 @@ if err != nil {
     return nil
 }
 
-func (x *Color) readField2(p thrift.Format) error {  // Green
+func (x *Color) readField2(p thrift.Decoder) error {  // Green
     result, err := p.ReadDouble()
 if err != nil {
     return err
@@ -244,7 +239,7 @@ if err != nil {
     return nil
 }
 
-func (x *Color) readField3(p thrift.Format) error {  // Blue
+func (x *Color) readField3(p thrift.Decoder) error {  // Blue
     result, err := p.ReadDouble()
 if err != nil {
     return err
@@ -254,7 +249,7 @@ if err != nil {
     return nil
 }
 
-func (x *Color) readField4(p thrift.Format) error {  // Alpha
+func (x *Color) readField4(p thrift.Decoder) error {  // Alpha
     result, err := p.ReadDouble()
 if err != nil {
     return err
@@ -264,25 +259,9 @@ if err != nil {
     return nil
 }
 
-func (x *Color) toString1() string {  // Red
-    return fmt.Sprintf("%v", x.Red)
-}
-
-func (x *Color) toString2() string {  // Green
-    return fmt.Sprintf("%v", x.Green)
-}
-
-func (x *Color) toString3() string {  // Blue
-    return fmt.Sprintf("%v", x.Blue)
-}
-
-func (x *Color) toString4() string {  // Alpha
-    return fmt.Sprintf("%v", x.Alpha)
-}
 
 
-
-func (x *Color) Write(p thrift.Format) error {
+func (x *Color) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Color"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -290,15 +269,12 @@ func (x *Color) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
-
     if err := x.writeField3(p); err != nil {
         return err
     }
-
     if err := x.writeField4(p); err != nil {
         return err
     }
@@ -313,7 +289,7 @@ func (x *Color) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Color) Read(p thrift.Format) error {
+func (x *Color) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -328,27 +304,22 @@ func (x *Color) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.DOUBLE)):  // red
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.DOUBLE)):  // green
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         case (id == 3 && wireType == thrift.Type(thrift.DOUBLE)):  // blue
-            if err := x.readField3(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField3(p)
         case (id == 4 && wireType == thrift.Type(thrift.DOUBLE)):  // alpha
-            if err := x.readField4(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField4(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -364,20 +335,15 @@ func (x *Color) Read(p thrift.Format) error {
 }
 
 func (x *Color) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Color({")
-    sb.WriteString(fmt.Sprintf("Red:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("Green:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("Blue:%s ", x.toString3()))
-    sb.WriteString(fmt.Sprintf("Alpha:%s", x.toString4()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Color) setDefaults() *Color {
+    return x.
+        SetRedNonCompat(0.0).
+        SetGreenNonCompat(0.0).
+        SetBlueNonCompat(0.0).
+        SetAlphaNonCompat(0.0)
 }
 
 type Vehicle struct {
@@ -391,16 +357,13 @@ type Vehicle struct {
 var _ thrift.Struct = (*Vehicle)(nil)
 
 func NewVehicle() *Vehicle {
-    return (&Vehicle{}).
-        SetColorNonCompat(*NewColor()).
-        SetHasACNonCompat(false)
+    return (&Vehicle{}).setDefaults()
 }
 
 func (x *Vehicle) GetColor() *Color {
     if !x.IsSetColor() {
         return nil
     }
-
     return x.Color
 }
 
@@ -408,7 +371,6 @@ func (x *Vehicle) GetLicensePlate() string {
     if !x.IsSetLicensePlate() {
         return ""
     }
-
     return *x.LicensePlate
 }
 
@@ -416,7 +378,6 @@ func (x *Vehicle) GetDescription() string {
     if !x.IsSetDescription() {
         return ""
     }
-
     return *x.Description
 }
 
@@ -424,7 +385,6 @@ func (x *Vehicle) GetName() string {
     if !x.IsSetName() {
         return ""
     }
-
     return *x.Name
 }
 
@@ -432,12 +392,11 @@ func (x *Vehicle) GetHasAC() bool {
     if !x.IsSetHasAC() {
         return false
     }
-
     return *x.HasAC
 }
 
-func (x *Vehicle) SetColorNonCompat(value Color) *Vehicle {
-    x.Color = &value
+func (x *Vehicle) SetColorNonCompat(value *Color) *Vehicle {
+    x.Color = value
     return x
 }
 
@@ -506,7 +465,7 @@ func (x *Vehicle) IsSetHasAC() bool {
     return x != nil && x.HasAC != nil
 }
 
-func (x *Vehicle) writeField1(p thrift.Format) error {  // Color
+func (x *Vehicle) writeField1(p thrift.Encoder) error {  // Color
     if !x.IsSetColor() {
         return nil
     }
@@ -526,7 +485,7 @@ func (x *Vehicle) writeField1(p thrift.Format) error {  // Color
     return nil
 }
 
-func (x *Vehicle) writeField2(p thrift.Format) error {  // LicensePlate
+func (x *Vehicle) writeField2(p thrift.Encoder) error {  // LicensePlate
     if !x.IsSetLicensePlate() {
         return nil
     }
@@ -546,7 +505,7 @@ func (x *Vehicle) writeField2(p thrift.Format) error {  // LicensePlate
     return nil
 }
 
-func (x *Vehicle) writeField3(p thrift.Format) error {  // Description
+func (x *Vehicle) writeField3(p thrift.Encoder) error {  // Description
     if !x.IsSetDescription() {
         return nil
     }
@@ -566,7 +525,7 @@ func (x *Vehicle) writeField3(p thrift.Format) error {  // Description
     return nil
 }
 
-func (x *Vehicle) writeField4(p thrift.Format) error {  // Name
+func (x *Vehicle) writeField4(p thrift.Encoder) error {  // Name
     if !x.IsSetName() {
         return nil
     }
@@ -586,7 +545,7 @@ func (x *Vehicle) writeField4(p thrift.Format) error {  // Name
     return nil
 }
 
-func (x *Vehicle) writeField5(p thrift.Format) error {  // HasAC
+func (x *Vehicle) writeField5(p thrift.Encoder) error {  // HasAC
     if !x.IsSetHasAC() {
         return nil
     }
@@ -606,18 +565,18 @@ func (x *Vehicle) writeField5(p thrift.Format) error {  // HasAC
     return nil
 }
 
-func (x *Vehicle) readField1(p thrift.Format) error {  // Color
-    result := *NewColor()
+func (x *Vehicle) readField1(p thrift.Decoder) error {  // Color
+    result := NewColor()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.Color = &result
+    x.Color = result
     return nil
 }
 
-func (x *Vehicle) readField2(p thrift.Format) error {  // LicensePlate
+func (x *Vehicle) readField2(p thrift.Decoder) error {  // LicensePlate
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -627,7 +586,7 @@ if err != nil {
     return nil
 }
 
-func (x *Vehicle) readField3(p thrift.Format) error {  // Description
+func (x *Vehicle) readField3(p thrift.Decoder) error {  // Description
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -637,7 +596,7 @@ if err != nil {
     return nil
 }
 
-func (x *Vehicle) readField4(p thrift.Format) error {  // Name
+func (x *Vehicle) readField4(p thrift.Decoder) error {  // Name
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -647,7 +606,7 @@ if err != nil {
     return nil
 }
 
-func (x *Vehicle) readField5(p thrift.Format) error {  // HasAC
+func (x *Vehicle) readField5(p thrift.Decoder) error {  // HasAC
     result, err := p.ReadBool()
 if err != nil {
     return err
@@ -655,38 +614,6 @@ if err != nil {
 
     x.HasAC = &result
     return nil
-}
-
-func (x *Vehicle) toString1() string {  // Color
-    return fmt.Sprintf("%v", x.Color)
-}
-
-func (x *Vehicle) toString2() string {  // LicensePlate
-    if x.IsSetLicensePlate() {
-        return fmt.Sprintf("%v", *x.LicensePlate)
-    }
-    return fmt.Sprintf("%v", x.LicensePlate)
-}
-
-func (x *Vehicle) toString3() string {  // Description
-    if x.IsSetDescription() {
-        return fmt.Sprintf("%v", *x.Description)
-    }
-    return fmt.Sprintf("%v", x.Description)
-}
-
-func (x *Vehicle) toString4() string {  // Name
-    if x.IsSetName() {
-        return fmt.Sprintf("%v", *x.Name)
-    }
-    return fmt.Sprintf("%v", x.Name)
-}
-
-func (x *Vehicle) toString5() string {  // HasAC
-    if x.IsSetHasAC() {
-        return fmt.Sprintf("%v", *x.HasAC)
-    }
-    return fmt.Sprintf("%v", x.HasAC)
 }
 
 // Deprecated: Use NewVehicle().GetColor() instead.
@@ -703,7 +630,7 @@ func (x *Vehicle) DefaultGetColor() *Color {
 
 
 
-func (x *Vehicle) Write(p thrift.Format) error {
+func (x *Vehicle) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Vehicle"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -711,19 +638,15 @@ func (x *Vehicle) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
-
     if err := x.writeField3(p); err != nil {
         return err
     }
-
     if err := x.writeField4(p); err != nil {
         return err
     }
-
     if err := x.writeField5(p); err != nil {
         return err
     }
@@ -738,7 +661,7 @@ func (x *Vehicle) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Vehicle) Read(p thrift.Format) error {
+func (x *Vehicle) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -753,31 +676,24 @@ func (x *Vehicle) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRUCT)):  // color
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // licensePlate
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         case (id == 3 && wireType == thrift.Type(thrift.STRING)):  // description
-            if err := x.readField3(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField3(p)
         case (id == 4 && wireType == thrift.Type(thrift.STRING)):  // name
-            if err := x.readField4(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField4(p)
         case (id == 5 && wireType == thrift.Type(thrift.BOOL)):  // hasAC
-            if err := x.readField5(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField5(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -793,21 +709,13 @@ func (x *Vehicle) Read(p thrift.Format) error {
 }
 
 func (x *Vehicle) String() string {
-    if x == nil {
-        return "<nil>"
-    }
+    return thrift.StructToString(reflect.ValueOf(x))
+}
 
-    var sb strings.Builder
-
-    sb.WriteString("Vehicle({")
-    sb.WriteString(fmt.Sprintf("Color:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("LicensePlate:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("Description:%s ", x.toString3()))
-    sb.WriteString(fmt.Sprintf("Name:%s ", x.toString4()))
-    sb.WriteString(fmt.Sprintf("HasAC:%s", x.toString5()))
-    sb.WriteString("})")
-
-    return sb.String()
+func (x *Vehicle) setDefaults() *Vehicle {
+    return x.
+        SetColorNonCompat(NewColor()).
+        SetHasACNonCompat(false)
 }
 
 type Person struct {
@@ -826,9 +734,7 @@ type Person struct {
 var _ thrift.Struct = (*Person)(nil)
 
 func NewPerson() *Person {
-    return (&Person{}).
-        SetIdNonCompat(NewPersonID()).
-        SetNameNonCompat("")
+    return (&Person{}).setDefaults()
 }
 
 func (x *Person) GetId() PersonID {
@@ -843,7 +749,6 @@ func (x *Person) GetAge() int16 {
     if !x.IsSetAge() {
         return 0
     }
-
     return *x.Age
 }
 
@@ -851,7 +756,6 @@ func (x *Person) GetAddress() string {
     if !x.IsSetAddress() {
         return ""
     }
-
     return *x.Address
 }
 
@@ -859,7 +763,6 @@ func (x *Person) GetFavoriteColor() *Color {
     if !x.IsSetFavoriteColor() {
         return nil
     }
-
     return x.FavoriteColor
 }
 
@@ -867,7 +770,6 @@ func (x *Person) GetFriends() []PersonID {
     if !x.IsSetFriends() {
         return make([]PersonID, 0)
     }
-
     return x.Friends
 }
 
@@ -875,7 +777,6 @@ func (x *Person) GetBestFriend() PersonID {
     if !x.IsSetBestFriend() {
         return NewPersonID()
     }
-
     return *x.BestFriend
 }
 
@@ -883,7 +784,6 @@ func (x *Person) GetPetNames() map[Animal]string {
     if !x.IsSetPetNames() {
         return make(map[Animal]string)
     }
-
     return x.PetNames
 }
 
@@ -891,7 +791,6 @@ func (x *Person) GetAfraidOfAnimal() Animal {
     if !x.IsSetAfraidOfAnimal() {
         return 0
     }
-
     return *x.AfraidOfAnimal
 }
 
@@ -899,7 +798,6 @@ func (x *Person) GetVehicles() []*Vehicle {
     if !x.IsSetVehicles() {
         return make([]*Vehicle, 0)
     }
-
     return x.Vehicles
 }
 
@@ -943,8 +841,8 @@ func (x *Person) SetAddress(value *string) *Person {
     return x
 }
 
-func (x *Person) SetFavoriteColorNonCompat(value Color) *Person {
-    x.FavoriteColor = &value
+func (x *Person) SetFavoriteColorNonCompat(value *Color) *Person {
+    x.FavoriteColor = value
     return x
 }
 
@@ -1035,7 +933,7 @@ func (x *Person) IsSetVehicles() bool {
     return x != nil && x.Vehicles != nil
 }
 
-func (x *Person) writeField1(p thrift.Format) error {  // Id
+func (x *Person) writeField1(p thrift.Encoder) error {  // Id
     if err := p.WriteFieldBegin("id", thrift.I64, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -1052,7 +950,7 @@ if err != nil {
     return nil
 }
 
-func (x *Person) writeField2(p thrift.Format) error {  // Name
+func (x *Person) writeField2(p thrift.Encoder) error {  // Name
     if err := p.WriteFieldBegin("name", thrift.STRING, 2); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -1068,7 +966,7 @@ func (x *Person) writeField2(p thrift.Format) error {  // Name
     return nil
 }
 
-func (x *Person) writeField3(p thrift.Format) error {  // Age
+func (x *Person) writeField3(p thrift.Encoder) error {  // Age
     if !x.IsSetAge() {
         return nil
     }
@@ -1088,7 +986,7 @@ func (x *Person) writeField3(p thrift.Format) error {  // Age
     return nil
 }
 
-func (x *Person) writeField4(p thrift.Format) error {  // Address
+func (x *Person) writeField4(p thrift.Encoder) error {  // Address
     if !x.IsSetAddress() {
         return nil
     }
@@ -1108,7 +1006,7 @@ func (x *Person) writeField4(p thrift.Format) error {  // Address
     return nil
 }
 
-func (x *Person) writeField5(p thrift.Format) error {  // FavoriteColor
+func (x *Person) writeField5(p thrift.Encoder) error {  // FavoriteColor
     if !x.IsSetFavoriteColor() {
         return nil
     }
@@ -1128,7 +1026,7 @@ func (x *Person) writeField5(p thrift.Format) error {  // FavoriteColor
     return nil
 }
 
-func (x *Person) writeField6(p thrift.Format) error {  // Friends
+func (x *Person) writeField6(p thrift.Encoder) error {  // Friends
     if !x.IsSetFriends() {
         return nil
     }
@@ -1160,7 +1058,7 @@ if err := p.WriteSetEnd(); err != nil {
     return nil
 }
 
-func (x *Person) writeField7(p thrift.Format) error {  // BestFriend
+func (x *Person) writeField7(p thrift.Encoder) error {  // BestFriend
     if !x.IsSetBestFriend() {
         return nil
     }
@@ -1181,7 +1079,7 @@ if err != nil {
     return nil
 }
 
-func (x *Person) writeField8(p thrift.Format) error {  // PetNames
+func (x *Person) writeField8(p thrift.Encoder) error {  // PetNames
     if !x.IsSetPetNames() {
         return nil
     }
@@ -1219,7 +1117,7 @@ if err := p.WriteMapEnd(); err != nil {
     return nil
 }
 
-func (x *Person) writeField9(p thrift.Format) error {  // AfraidOfAnimal
+func (x *Person) writeField9(p thrift.Encoder) error {  // AfraidOfAnimal
     if !x.IsSetAfraidOfAnimal() {
         return nil
     }
@@ -1239,7 +1137,7 @@ func (x *Person) writeField9(p thrift.Format) error {  // AfraidOfAnimal
     return nil
 }
 
-func (x *Person) writeField10(p thrift.Format) error {  // Vehicles
+func (x *Person) writeField10(p thrift.Encoder) error {  // Vehicles
     if !x.IsSetVehicles() {
         return nil
     }
@@ -1270,7 +1168,7 @@ if err := p.WriteListEnd(); err != nil {
     return nil
 }
 
-func (x *Person) readField1(p thrift.Format) error {  // Id
+func (x *Person) readField1(p thrift.Decoder) error {  // Id
     result, err := ReadPersonID(p)
 if err != nil {
     return err
@@ -1280,7 +1178,7 @@ if err != nil {
     return nil
 }
 
-func (x *Person) readField2(p thrift.Format) error {  // Name
+func (x *Person) readField2(p thrift.Decoder) error {  // Name
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -1290,7 +1188,7 @@ if err != nil {
     return nil
 }
 
-func (x *Person) readField3(p thrift.Format) error {  // Age
+func (x *Person) readField3(p thrift.Decoder) error {  // Age
     result, err := p.ReadI16()
 if err != nil {
     return err
@@ -1300,7 +1198,7 @@ if err != nil {
     return nil
 }
 
-func (x *Person) readField4(p thrift.Format) error {  // Address
+func (x *Person) readField4(p thrift.Decoder) error {  // Address
     result, err := p.ReadString()
 if err != nil {
     return err
@@ -1310,18 +1208,18 @@ if err != nil {
     return nil
 }
 
-func (x *Person) readField5(p thrift.Format) error {  // FavoriteColor
-    result := *NewColor()
+func (x *Person) readField5(p thrift.Decoder) error {  // FavoriteColor
+    result := NewColor()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.FavoriteColor = &result
+    x.FavoriteColor = result
     return nil
 }
 
-func (x *Person) readField6(p thrift.Format) error {  // Friends
+func (x *Person) readField6(p thrift.Decoder) error {  // Friends
     _ /* elemType */, size, err := p.ReadSetBegin()
 if err != nil {
     return thrift.PrependError("error reading set begin: ", err)
@@ -1349,7 +1247,7 @@ result := setResult
     return nil
 }
 
-func (x *Person) readField7(p thrift.Format) error {  // BestFriend
+func (x *Person) readField7(p thrift.Decoder) error {  // BestFriend
     result, err := ReadPersonID(p)
 if err != nil {
     return err
@@ -1359,7 +1257,7 @@ if err != nil {
     return nil
 }
 
-func (x *Person) readField8(p thrift.Format) error {  // PetNames
+func (x *Person) readField8(p thrift.Decoder) error {  // PetNames
     _ /* keyType */, _ /* valueType */, size, err := p.ReadMapBegin()
 if err != nil {
     return thrift.PrependError("error reading map begin: ", err)
@@ -1398,7 +1296,7 @@ result := mapResult
     return nil
 }
 
-func (x *Person) readField9(p thrift.Format) error {  // AfraidOfAnimal
+func (x *Person) readField9(p thrift.Decoder) error {  // AfraidOfAnimal
     enumResult, err := p.ReadI32()
 if err != nil {
     return err
@@ -1409,7 +1307,7 @@ result := Animal(enumResult)
     return nil
 }
 
-func (x *Person) readField10(p thrift.Format) error {  // Vehicles
+func (x *Person) readField10(p thrift.Decoder) error {  // Vehicles
     _ /* elemType */, size, err := p.ReadListBegin()
 if err != nil {
     return thrift.PrependError("error reading list begin: ", err)
@@ -1417,16 +1315,16 @@ if err != nil {
 
 listResult := make([]*Vehicle, 0, size)
 for i := 0; i < size; i++ {
-    var elem Vehicle
+    var elem *Vehicle
     {
-        result := *NewVehicle()
+        result := NewVehicle()
 err := result.Read(p)
 if err != nil {
     return err
 }
         elem = result
     }
-    listResult = append(listResult, &elem)
+    listResult = append(listResult, elem)
 }
 
 if err := p.ReadListEnd(); err != nil {
@@ -1436,58 +1334,6 @@ result := listResult
 
     x.Vehicles = result
     return nil
-}
-
-func (x *Person) toString1() string {  // Id
-    return fmt.Sprintf("%v", x.Id)
-}
-
-func (x *Person) toString2() string {  // Name
-    return fmt.Sprintf("%v", x.Name)
-}
-
-func (x *Person) toString3() string {  // Age
-    if x.IsSetAge() {
-        return fmt.Sprintf("%v", *x.Age)
-    }
-    return fmt.Sprintf("%v", x.Age)
-}
-
-func (x *Person) toString4() string {  // Address
-    if x.IsSetAddress() {
-        return fmt.Sprintf("%v", *x.Address)
-    }
-    return fmt.Sprintf("%v", x.Address)
-}
-
-func (x *Person) toString5() string {  // FavoriteColor
-    return fmt.Sprintf("%v", x.FavoriteColor)
-}
-
-func (x *Person) toString6() string {  // Friends
-    return fmt.Sprintf("%v", x.Friends)
-}
-
-func (x *Person) toString7() string {  // BestFriend
-    if x.IsSetBestFriend() {
-        return fmt.Sprintf("%v", *x.BestFriend)
-    }
-    return fmt.Sprintf("%v", x.BestFriend)
-}
-
-func (x *Person) toString8() string {  // PetNames
-    return fmt.Sprintf("%v", x.PetNames)
-}
-
-func (x *Person) toString9() string {  // AfraidOfAnimal
-    if x.IsSetAfraidOfAnimal() {
-        return fmt.Sprintf("%v", *x.AfraidOfAnimal)
-    }
-    return fmt.Sprintf("%v", x.AfraidOfAnimal)
-}
-
-func (x *Person) toString10() string {  // Vehicles
-    return fmt.Sprintf("%v", x.Vehicles)
 }
 
 
@@ -1504,7 +1350,7 @@ func (x *Person) DefaultGetFavoriteColor() *Color {
 
 
 
-func (x *Person) Write(p thrift.Format) error {
+func (x *Person) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Person"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -1512,39 +1358,30 @@ func (x *Person) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
-
     if err := x.writeField3(p); err != nil {
         return err
     }
-
     if err := x.writeField4(p); err != nil {
         return err
     }
-
     if err := x.writeField5(p); err != nil {
         return err
     }
-
     if err := x.writeField6(p); err != nil {
         return err
     }
-
     if err := x.writeField7(p); err != nil {
         return err
     }
-
     if err := x.writeField8(p); err != nil {
         return err
     }
-
     if err := x.writeField9(p); err != nil {
         return err
     }
-
     if err := x.writeField10(p); err != nil {
         return err
     }
@@ -1559,7 +1396,7 @@ func (x *Person) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Person) Read(p thrift.Format) error {
+func (x *Person) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -1574,51 +1411,34 @@ func (x *Person) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.I64)):  // id
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRING)):  // name
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         case (id == 3 && wireType == thrift.Type(thrift.I16)):  // age
-            if err := x.readField3(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField3(p)
         case (id == 4 && wireType == thrift.Type(thrift.STRING)):  // address
-            if err := x.readField4(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField4(p)
         case (id == 5 && wireType == thrift.Type(thrift.STRUCT)):  // favoriteColor
-            if err := x.readField5(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField5(p)
         case (id == 6 && wireType == thrift.Type(thrift.SET)):  // friends
-            if err := x.readField6(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField6(p)
         case (id == 7 && wireType == thrift.Type(thrift.I64)):  // bestFriend
-            if err := x.readField7(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField7(p)
         case (id == 8 && wireType == thrift.Type(thrift.MAP)):  // petNames
-            if err := x.readField8(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField8(p)
         case (id == 9 && wireType == thrift.Type(thrift.I32)):  // afraidOfAnimal
-            if err := x.readField9(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField9(p)
         case (id == 10 && wireType == thrift.Type(thrift.LIST)):  // vehicles
-            if err := x.readField10(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField10(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -1634,27 +1454,16 @@ func (x *Person) Read(p thrift.Format) error {
 }
 
 func (x *Person) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("Person({")
-    sb.WriteString(fmt.Sprintf("Id:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("Name:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("Age:%s ", x.toString3()))
-    sb.WriteString(fmt.Sprintf("Address:%s ", x.toString4()))
-    sb.WriteString(fmt.Sprintf("FavoriteColor:%s ", x.toString5()))
-    sb.WriteString(fmt.Sprintf("Friends:%s ", x.toString6()))
-    sb.WriteString(fmt.Sprintf("BestFriend:%s ", x.toString7()))
-    sb.WriteString(fmt.Sprintf("PetNames:%s ", x.toString8()))
-    sb.WriteString(fmt.Sprintf("AfraidOfAnimal:%s ", x.toString9()))
-    sb.WriteString(fmt.Sprintf("Vehicles:%s", x.toString10()))
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *Person) setDefaults() *Person {
+    return x.
+        SetIdNonCompat(NewPersonID()).
+        SetNameNonCompat("")
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

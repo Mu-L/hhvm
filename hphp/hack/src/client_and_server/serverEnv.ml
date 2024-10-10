@@ -9,6 +9,7 @@
 
 open Hh_prelude
 open Option.Monad_infix
+open Ppx_yojson_conv_lib.Yojson_conv.Primitives
 
 (*****************************************************************************)
 (* Recheck loop types. *)
@@ -142,7 +143,6 @@ module Init_telemetry = struct
   type reason =
     | Init_lazy_dirty
     | Init_typecheck_disabled_after_init
-    | Init_eager
     | Init_lazy_full
     | Init_prechecked_fanout
   [@@deriving show { with_path = false }]
@@ -167,11 +167,65 @@ end
     Distance tracks the number of revisions between X and Y, using globalrev.
     Age tracks the time elapsed between X and Y in seconds, according to hg log data.
 *)
-type saved_state_delta = {
-  distance: int;
-  age: int;
+
+type saved_state_revs_info = {
+  distance: int option;
+  age: int option;
+  saved_state_rev: Hg.Rev.t;
+  saved_state_globalrev: Hg.global_rev option;
+  saved_state_rev_timestamp: int option;
+  mergebase_rev: Hg.Rev.t option;
+  mergebase_globalrev: Hg.global_rev option;
+  mergebase_rev_timestamp: int option;
 }
-[@@deriving show]
+[@@deriving show, yojson]
+
+module SavedStateRevsInfo = struct
+  type t = saved_state_revs_info [@@deriving yojson]
+
+  let default ~saved_state_rev =
+    {
+      distance = None;
+      age = None;
+      saved_state_rev;
+      saved_state_globalrev = None;
+      saved_state_rev_timestamp = None;
+      mergebase_rev = None;
+      mergebase_globalrev = None;
+      mergebase_rev_timestamp = None;
+    }
+
+  let to_telemetry
+      {
+        distance;
+        age;
+        saved_state_rev;
+        saved_state_globalrev;
+        saved_state_rev_timestamp;
+        mergebase_rev;
+        mergebase_globalrev;
+        mergebase_rev_timestamp;
+      } =
+    Telemetry.create ()
+    |> Telemetry.int_opt ~key:"distance" ~value:distance
+    |> Telemetry.int_opt ~key:"age_seconds" ~value:age
+    |> Telemetry.string_
+         ~key:"saved_state_rev"
+         ~value:(Hg.Rev.to_string saved_state_rev)
+    |> Telemetry.int_opt
+         ~key:"saved_state_globalrev"
+         ~value:saved_state_globalrev
+    |> Telemetry.int_opt
+         ~key:"saved_state_rev_timestamp"
+         ~value:saved_state_rev_timestamp
+    |> Telemetry.string_opt
+         ~key:"mergebase_rev"
+         ~value:(Option.map ~f:Hg.Rev.to_string mergebase_rev)
+    |> Telemetry.int_opt ~key:"mergebase_globalrev" ~value:mergebase_globalrev
+    |> Telemetry.int_opt
+         ~key:"mergebase_rev_timestamp"
+         ~value:mergebase_rev_timestamp
+end
 
 type dirty_deps = {
   dirty_local_deps: Typing_deps.DepSet.t;
@@ -206,7 +260,7 @@ type init_env = {
   init_start_t: float;
   init_type: string;
   mergebase: Hg.Rev.t option;
-  mergebase_warning_hashes: Warnings_saved_state.t;
+  mergebase_warning_hashes: Warnings_saved_state.t option;
   why_needed_full_check: Init_telemetry.t option; [@opaque]
       (** This is about the first full check (if any) which was deferred after init.
       It gets reset after that first full check is completed.
@@ -214,7 +268,7 @@ type init_env = {
   recheck_id: string option;
   (* Additional data associated with init that we want to log when a first full
    * check completes. *)
-  saved_state_delta: saved_state_delta option;
+  saved_state_revs_info: saved_state_revs_info option;
   naming_table_manifold_path: string option;
       (** The manifold path for remote typechecker workers to download the naming table
           saved state. This value will be None in the case of full init *)
@@ -298,14 +352,16 @@ type env = {
 }
 [@@deriving show]
 
-let list_files env =
+let list_files_with_errors env =
   let acc =
     List.fold_right
       ~f:
         begin
-          fun error (acc : SSet.t) ->
-            let pos = User_error.get_pos error in
-            SSet.add (Relative_path.to_absolute (Pos.filename pos)) acc
+          fun { User_error.claim = (pos, _); severity; _ } (acc : SSet.t) ->
+            match severity with
+            | User_error.Err ->
+              SSet.add (Relative_path.to_absolute (Pos.filename pos)) acc
+            | User_error.Warning -> acc
         end
       ~init:SSet.empty
       (Errors.get_error_list env.errorl)

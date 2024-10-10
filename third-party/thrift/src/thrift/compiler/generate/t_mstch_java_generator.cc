@@ -28,7 +28,7 @@
 #include <openssl/evp.h>
 #include <thrift/compiler/ast/t_typedef.h>
 #include <thrift/compiler/detail/mustache/mstch.h>
-#include <thrift/compiler/gen/cpp/type_resolver.h>
+#include <thrift/compiler/generate/cpp/name_resolver.h>
 #include <thrift/compiler/generate/t_mstch_generator.h>
 #include <thrift/compiler/lib/uri.h>
 
@@ -782,6 +782,7 @@ class mstch_java_field : public mstch_field {
         {
             {"field:javaName", &mstch_java_field::java_name},
             {"field:javaCapitalName", &mstch_java_field::java_capital_name},
+            {"field:javaConstantName", &mstch_java_field::java_constant_name},
             {"field:javaDefaultValue", &mstch_java_field::java_default_value},
             {"field:javaAllCapsName", &mstch_java_field::java_all_caps_name},
             {"field:recursive?", &mstch_java_field::is_recursive_reference},
@@ -994,6 +995,10 @@ class mstch_java_field : public mstch_field {
     return java::mangle_java_name(
         field_->get_annotation("java.swift.name", &field_->get_name()), true);
   }
+  mstch::node java_constant_name() {
+    return constant_name(
+        field_->get_annotation("java.swift.name", &field_->get_name()));
+  }
   mstch::node java_all_caps_name() {
     auto field_name = field_->get_name();
     boost::to_upper(field_name);
@@ -1090,6 +1095,9 @@ class mstch_java_enum : public mstch_enum {
             {"enum:skipEnumNameMap?",
              &mstch_java_enum::java_skip_enum_name_map},
             {"enum:numValues", &mstch_java_enum::num_values},
+            {"enum:useIntrinsicDefault?",
+             &mstch_java_enum::use_intrinsic_default},
+            {"enum:findValueZero", &mstch_java_enum::find_value_zero},
         });
   }
   mstch::node java_package() {
@@ -1102,6 +1110,25 @@ class mstch_java_enum : public mstch_enum {
     return enum_->has_annotation("java.swift.skip_enum_name_map");
   }
   mstch::node num_values() { return enum_->get_enum_values().size(); }
+  mstch::node use_intrinsic_default() {
+    if (enum_->find_structured_annotation_or_null(
+            kJavaUseIntrinsicDefaultUri) != nullptr) {
+      if (enum_->find_value(0) == nullptr) {
+        throw std::runtime_error(
+            "Enum " + enum_->get_name() +
+            " does not have a value for 0! You have to have value for 0 to use intrinsic default annotation.");
+      }
+      return true;
+    }
+    return false;
+  }
+  mstch::node find_value_zero() {
+    if (enum_->find_structured_annotation_or_null(
+            kJavaUseIntrinsicDefaultUri) != nullptr) {
+      return java::mangle_java_constant_name(enum_->find_value(0)->get_name());
+    }
+    return mstch::node();
+  }
 };
 
 class mstch_java_enum_value : public mstch_enum_value {

@@ -10,6 +10,7 @@
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
 
+
 namespace cpp2 {
 namespace module_constants {
 
@@ -32,6 +33,8 @@ namespace module_constants {
   static folly::Indestructible<::cpp2::StructWithRefTypeSharedConst> const instance{ ::apache::thrift::detail::make_structured_constant<::cpp2::StructWithRefTypeSharedConst>(::apache::thrift::detail::wrap_struct_argument<::apache::thrift::ident::def_field>(::apache::thrift::detail::make_structured_constant<::cpp2::Empty>()), ::apache::thrift::detail::wrap_struct_argument<::apache::thrift::ident::opt_field>(::apache::thrift::detail::make_structured_constant<::cpp2::Empty>()), ::apache::thrift::detail::wrap_struct_argument<::apache::thrift::ident::req_field>(::apache::thrift::detail::make_structured_constant<::cpp2::Empty>())) };
   return *instance;
 }
+
+
 
 } // namespace module_constants
 } // namespace cpp2

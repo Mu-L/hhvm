@@ -7,16 +7,15 @@ package transitive
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
-
 
 type Foo struct {
     A int64 `thrift:"a,1" json:"a" db:"a"`
@@ -25,8 +24,7 @@ type Foo struct {
 var _ thrift.Struct = (*Foo)(nil)
 
 func NewFoo() *Foo {
-    return (&Foo{}).
-        SetANonCompat(2)
+    return (&Foo{}).setDefaults()
 }
 
 func (x *Foo) GetA() int64 {
@@ -43,7 +41,7 @@ func (x *Foo) SetA(value int64) *Foo {
     return x
 }
 
-func (x *Foo) writeField1(p thrift.Format) error {  // A
+func (x *Foo) writeField1(p thrift.Encoder) error {  // A
     if err := p.WriteFieldBegin("a", thrift.I64, 1); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -59,7 +57,7 @@ func (x *Foo) writeField1(p thrift.Format) error {  // A
     return nil
 }
 
-func (x *Foo) readField1(p thrift.Format) error {  // A
+func (x *Foo) readField1(p thrift.Decoder) error {  // A
     result, err := p.ReadI64()
 if err != nil {
     return err
@@ -69,13 +67,9 @@ if err != nil {
     return nil
 }
 
-func (x *Foo) toString1() string {  // A
-    return fmt.Sprintf("%v", x.A)
-}
 
 
-
-func (x *Foo) Write(p thrift.Format) error {
+func (x *Foo) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("Foo"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -94,7 +88,7 @@ func (x *Foo) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *Foo) Read(p thrift.Format) error {
+func (x *Foo) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -109,15 +103,16 @@ func (x *Foo) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.I64)):  // a
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -133,18 +128,15 @@ func (x *Foo) Read(p thrift.Format) error {
 }
 
 func (x *Foo) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("Foo({")
-    sb.WriteString(fmt.Sprintf("A:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *Foo) setDefaults() *Foo {
+    return x.
+        SetANonCompat(2)
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

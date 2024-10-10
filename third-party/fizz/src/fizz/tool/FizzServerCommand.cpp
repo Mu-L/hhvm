@@ -18,9 +18,11 @@
 #ifdef FIZZ_TOOL_ENABLE_ZSTD
 #include <fizz/compression/ZstdCertificateCompressor.h>
 #endif
+#include <fizz/backend/libsodium/crypto/exchange/X25519.h>
 #include <fizz/backend/openssl/certificate/CertUtils.h>
 #include <fizz/backend/openssl/certificate/OpenSSLSelfCertImpl.h>
-#include <fizz/protocol/test/Utilities.h>
+#include <fizz/crypto/RandomGenerator.h>
+#include <fizz/protocol/test/CertUtil.h>
 #include <fizz/server/AsyncFizzServer.h>
 #include <fizz/server/SlidingBloomReplayCache.h>
 #include <fizz/server/TicketTypes.h>
@@ -419,7 +421,7 @@ class FizzHTTPServer : public FizzExampleServer {
         folly::io::Appender appender(response.get(), 10);
         std::string responseBody =
             transport_ ? respondHandshakeSuccess() : respondFallbackSuccess();
-        format(
+        folly::format(
             "HTTP/1.0 200 OK\r\n"
             "Content-Type: text/plain\r\n"
             "Content-Length: {}\r\n\r\n"
@@ -582,7 +584,8 @@ std::shared_ptr<ech::Decrypter> setupDecrypterFromInputs(
     return nullptr;
   }
 
-  auto decrypter = std::make_shared<ech::ECHConfigManager>();
+  auto decrypter = std::make_shared<ech::ECHConfigManager>(
+      std::make_shared<fizz::DefaultFactory>());
 
   // If more that 1 ECH config is provided, we use the first one.
   ech::ECHConfig gotConfig = gotECHConfigs.value().configs[0];
@@ -617,11 +620,12 @@ std::shared_ptr<ech::Decrypter> setupDefaultDecrypter() {
       "8a07563949fac6232936ed6f36c4fa735930ecdeaef6734e314aeac35a56fd0a"));
 
   ech::ECHConfig chosenConfig = getDefaultECHConfigs()[0];
-  auto kex = std::make_unique<X25519KeyExchange>();
+  auto kex = std::make_unique<libsodium::X25519KeyExchange>();
   kex->setPrivateKey(std::move(defaultPrivateKey));
 
   // Configure ECH decrpyter to be used server side.
-  auto decrypter = std::make_shared<ech::ECHConfigManager>();
+  auto decrypter = std::make_shared<ech::ECHConfigManager>(
+      std::make_shared<fizz::DefaultFactory>());
   decrypter->addDecryptionConfig(
       ech::DecrypterParams{chosenConfig, std::move(kex)});
 
@@ -1003,7 +1007,7 @@ int fizzServerCommand(const std::vector<std::string>& args) {
         try {
           leafPeer->verify(
               cred->credential_scheme,
-              CertificateVerifyContext::DelegatedCredential,
+              CertificateVerifyContext::ServerDelegatedCredential,
               toSign->coalesce(),
               cred->signature->coalesce());
           // Verification succeeded, so make the credential.
@@ -1029,6 +1033,7 @@ int fizzServerCommand(const std::vector<std::string>& args) {
               cert = std::make_unique<
                   fizz::extensions::SelfDelegatedCredentialImpl<
                       openssl::KeyType::RSA>>(
+                  fizz::extensions::DelegatedCredentialMode::Server,
                   std::move(certs),
                   std::move(credPrivKey),
                   std::move(*cred),
@@ -1038,6 +1043,7 @@ int fizzServerCommand(const std::vector<std::string>& args) {
               cert = std::make_unique<
                   fizz::extensions::SelfDelegatedCredentialImpl<
                       openssl::KeyType::P256>>(
+                  fizz::extensions::DelegatedCredentialMode::Server,
                   std::move(certs),
                   std::move(credPrivKey),
                   std::move(*cred),
@@ -1047,6 +1053,7 @@ int fizzServerCommand(const std::vector<std::string>& args) {
               cert = std::make_unique<
                   fizz::extensions::SelfDelegatedCredentialImpl<
                       openssl::KeyType::P384>>(
+                  fizz::extensions::DelegatedCredentialMode::Server,
                   std::move(certs),
                   std::move(credPrivKey),
                   std::move(*cred),
@@ -1056,6 +1063,7 @@ int fizzServerCommand(const std::vector<std::string>& args) {
               cert = std::make_unique<
                   fizz::extensions::SelfDelegatedCredentialImpl<
                       openssl::KeyType::P521>>(
+                  fizz::extensions::DelegatedCredentialMode::Server,
                   std::move(certs),
                   std::move(credPrivKey),
                   std::move(*cred),
@@ -1065,6 +1073,7 @@ int fizzServerCommand(const std::vector<std::string>& args) {
               cert = std::make_unique<
                   fizz::extensions::SelfDelegatedCredentialImpl<
                       openssl::KeyType::ED25519>>(
+                  fizz::extensions::DelegatedCredentialMode::Server,
                   std::move(certs),
                   std::move(credPrivKey),
                   std::move(*cred),

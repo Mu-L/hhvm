@@ -22,6 +22,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait Foo: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn r#return(
@@ -93,8 +94,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for Foo's methods.
 #[derive(Clone, Debug)]
 pub struct FooProcessor<P, H, R, RS> {
@@ -102,6 +101,7 @@ pub struct FooProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_Foo_return {
     bar: crate::types::ThereAreNoPascalCaseKeywords,
@@ -132,6 +132,7 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Fo
     }
 }
 
+
 struct Args_Foo_super {
     bar: crate::types::ThereAreNoPascalCaseKeywords,
 }
@@ -160,7 +161,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_Fo
         })
     }
 }
-
 
 impl<P, H, R, RS> FooProcessor<P, H, R, RS>
 where
@@ -227,7 +227,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "Foo.return", exception = ?exn);
+                ::tracing::error!(method = "Foo.return", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -289,7 +289,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "Foo.super", exception = ?exn);
+                ::tracing::error!(method = "Foo.super", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

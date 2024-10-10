@@ -194,9 +194,10 @@
   default_injector_config
   folly_stubs
   hackfmt
+  hg
   linttool
   hackfmt_debug
-  utils_config_file
+  config_file
   utils_ocaml_overrides))
 
 (executable

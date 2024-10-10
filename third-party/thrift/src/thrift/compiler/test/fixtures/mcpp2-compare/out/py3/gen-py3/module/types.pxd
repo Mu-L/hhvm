@@ -383,24 +383,6 @@ cdef extern from "thrift/compiler/test/fixtures/mcpp2-compare/gen-cpp2/module_ty
         pass
 
 
-
-
-
-cdef class MyEnumA(thrift.py3.types.CompiledEnum):
-    pass
-
-
-cdef class AnnotatedEnum(thrift.py3.types.CompiledEnum):
-    pass
-
-
-cdef class AnnotatedEnum2(thrift.py3.types.CompiledEnum):
-    pass
-
-
-cdef class MyEnumB(thrift.py3.types.CompiledEnum):
-    pass
-
 cdef extern from "thrift/compiler/test/fixtures/mcpp2-compare/gen-cpp2/module_metadata.h" namespace "apache::thrift::detail::md":
     cdef cppclass ExceptionMetadata[T]:
         @staticmethod
@@ -852,15 +834,11 @@ cdef class MyStruct(thrift.py3.types.Struct):
     @staticmethod
     cdef _create_FBTHRIFT_ONLY_DO_NOT_USE(shared_ptr[cMyStruct])
 
-cdef class __SimpleUnionType(thrift.py3.types.CompiledEnum):
-    pass
-
-
 
 
 cdef class SimpleUnion(thrift.py3.types.Union):
     cdef shared_ptr[cSimpleUnion] _cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE
-    cdef readonly __SimpleUnionType type
+    cdef readonly object type
     cdef readonly object value
     cdef _load_cache(SimpleUnion self)
 
@@ -874,15 +852,11 @@ cdef class SimpleUnion(thrift.py3.types.Union):
     @staticmethod
     cdef _create_FBTHRIFT_ONLY_DO_NOT_USE(shared_ptr[cSimpleUnion])
 
-cdef class __ComplexUnionType(thrift.py3.types.CompiledEnum):
-    pass
-
-
 
 
 cdef class ComplexUnion(thrift.py3.types.Union):
     cdef shared_ptr[cComplexUnion] _cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE
-    cdef readonly __ComplexUnionType type
+    cdef readonly object type
     cdef readonly object value
     cdef _load_cache(ComplexUnion self)
 
@@ -901,7 +875,7 @@ cdef class ComplexUnion(thrift.py3.types.Union):
         object union_set,
         object union_map,
         object opt_union_map,
-        MyEnumA enum_field,
+        object enum_field,
         object enum_container,
         MyStruct a_struct,
         object a_set_struct,
@@ -1191,15 +1165,11 @@ cdef class FloatStruct(thrift.py3.types.Struct):
     @staticmethod
     cdef _create_FBTHRIFT_ONLY_DO_NOT_USE(shared_ptr[cFloatStruct])
 
-cdef class __FloatUnionType(thrift.py3.types.CompiledEnum):
-    pass
-
-
 
 
 cdef class FloatUnion(thrift.py3.types.Union):
     cdef shared_ptr[cFloatUnion] _cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE
-    cdef readonly __FloatUnionType type
+    cdef readonly object type
     cdef readonly object value
     cdef _load_cache(FloatUnion self)
 

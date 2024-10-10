@@ -26,7 +26,20 @@ let rec strip_ty ty =
     | Tvar _ -> ty
     | Tgeneric (name, args) -> Tgeneric (name, strip_tyl args)
     | Tvec_or_dict (ty1, ty2) -> Tvec_or_dict (strip_ty ty1, strip_ty ty2)
-    | Ttuple tyl -> Ttuple (strip_tyl tyl)
+    | Ttuple { t_required; t_extra } ->
+      Ttuple
+        {
+          t_required = strip_tyl t_required;
+          t_extra =
+            (match t_extra with
+            | Textra { t_optional; t_variadic } ->
+              Textra
+                {
+                  t_optional = strip_tyl t_optional;
+                  t_variadic = strip_ty t_variadic;
+                }
+            | Tsplat t_splat -> Tsplat (strip_ty t_splat));
+        }
     | Toption ty -> Toption (strip_ty ty)
     | Tnewtype (name, tparams, ty) ->
       Tnewtype (name, strip_tyl tparams, strip_ty ty)
@@ -43,9 +56,10 @@ let rec strip_ty ty =
             Typing_defs.make_fp_flags
               ~mode:(get_fp_mode fp)
               ~accept_disposable:false
-              ~has_default:false
+              ~is_optional:false
               ~readonly:false
-              ~ignore_readonly_error:false;
+              ~ignore_readonly_error:false
+              ~splat:false;
           (* Dummy values: these aren't currently serialized. *)
           fp_pos = Pos_or_decl.none;
           fp_name = None;

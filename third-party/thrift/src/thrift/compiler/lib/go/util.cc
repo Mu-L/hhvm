@@ -147,13 +147,21 @@ void codegen_data::compute_service_to_req_resp_structs() {
 
 void codegen_data::add_to_thrift_metadata_types(
     const t_type* type, std::set<std::string>& visited_type_names) {
-  // skip over typedefs that are not "defined"
+  // Check if we have already visited this type.
   auto type_name = type->get_full_name();
   if (visited_type_names.count(type_name) > 0) {
-    return; // Already visited
+    return;
   }
 
-  // skip over a chain of non-defined typedefs
+  // Filter out external types (i.e. types defined in other programs).
+  // Primitive (base) types should be treated as internal and kept.
+  // For those types - 'program' will be null, so account for that.
+  if (type->get_program() != nullptr &&
+      !is_current_program(type->get_program())) {
+    return;
+  }
+
+  // Skip over a chain of "non-defined" typedefs.
   if (type->is_typedef()) {
     auto typedef_ = dynamic_cast<const t_typedef*>(type);
     if (typedef_->typedef_kind() != t_typedef::kind::defined) {
@@ -201,21 +209,34 @@ void codegen_data::compute_thrift_metadata_types() {
 
   std::set<std::string> visited_type_names;
 
+  for (auto const& enum_ : current_program_->enums()) {
+    // Visit each enum
+    add_to_thrift_metadata_types(enum_, visited_type_names);
+  }
   for (auto const& struct_ : current_program_->structs_and_unions()) {
+    // Visit struct fields
     for (auto const& field : struct_->fields()) {
       auto type = field.type().get_type();
       add_to_thrift_metadata_types(type, visited_type_names);
     }
+    // Visit struct itself
+    add_to_thrift_metadata_types(struct_, visited_type_names);
   }
   for (auto const& exception : current_program_->exceptions()) {
+    // Visit exception members
     for (auto const& field : exception->get_members()) {
       auto type = field->get_type();
       add_to_thrift_metadata_types(type, visited_type_names);
     }
+    // Visit exception itself
+    add_to_thrift_metadata_types(exception, visited_type_names);
   }
   for (auto const& typedef_ : current_program_->typedefs()) {
     auto type = typedef_->get_type();
+    // Visit the underlying type
     add_to_thrift_metadata_types(type, visited_type_names);
+    // Visit the typedef itself
+    add_to_thrift_metadata_types(typedef_, visited_type_names);
   }
 
   for (auto const& service : current_program_->services()) {
@@ -303,6 +324,9 @@ std::string get_go_package_name(
 std::string get_go_package_dir(
     const t_program* program, std::string name_override) {
   auto go_package = get_go_package_name(program, name_override);
+  if (go_package.find('/') != std::string::npos) {
+    return go_package;
+  }
   return boost::replace_all_copy(go_package, ".", "/");
 }
 

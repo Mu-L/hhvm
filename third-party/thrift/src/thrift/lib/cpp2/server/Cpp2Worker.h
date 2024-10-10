@@ -24,13 +24,13 @@
 #include <variant>
 
 #include <folly/container/F14Map.h>
+#include <folly/io/async/AsyncSSLSocket.h>
 #include <folly/io/async/AsyncServerSocket.h>
 #include <folly/io/async/AsyncTransport.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/EventHandler.h>
 #include <folly/io/async/HHWheelTimer.h>
 #include <folly/net/NetworkSocket.h>
-#include <thrift/lib/cpp/async/TAsyncSSLSocket.h>
 #include <thrift/lib/cpp2/security/FizzPeeker.h>
 #include <thrift/lib/cpp2/server/IOWorkerContext.h>
 #include <thrift/lib/cpp2/server/MemoryTracker.h>
@@ -41,8 +41,7 @@
 #include <wangle/acceptor/ConnectionManager.h>
 #include <wangle/acceptor/PeekingAcceptorHandshakeHelper.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 // Forward declaration of classes
 class Cpp2Connection;
@@ -388,14 +387,13 @@ class Cpp2Worker : public IOWorkerContext,
       folly::EventBase* base,
       int fd,
       const folly::SocketAddress* peerAddress) override {
-    return folly::AsyncSSLSocket::UniquePtr(
-        new apache::thrift::async::TAsyncSSLSocket(
-            ctx,
-            base,
-            folly::NetworkSocket::fromFd(fd),
-            true, /* set server */
-            true /* defer the security negotiation until sslAccept. */,
-            peerAddress));
+    return folly::AsyncSSLSocket::newSocket(
+        ctx,
+        base,
+        folly::NetworkSocket::fromFd(fd),
+        true, /* set server */
+        true /* defer the security negotiation until sslAccept. */,
+        peerAddress);
   }
 
   void cancelQueuedRequests();
@@ -442,5 +440,4 @@ class Cpp2Worker : public IOWorkerContext,
   friend class TestRoutingHandler;
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

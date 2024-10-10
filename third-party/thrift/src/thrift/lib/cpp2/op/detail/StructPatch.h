@@ -27,10 +27,7 @@
 #include <thrift/lib/cpp2/type/Id.h>
 #include <thrift/lib/cpp2/type/NativeType.h>
 
-namespace apache {
-namespace thrift {
-namespace op {
-namespace detail {
+namespace apache::thrift::op::detail {
 
 struct FieldIdListToSetAdapter {
   using FieldIdSet = std::unordered_set<FieldId>;
@@ -141,6 +138,13 @@ class BaseEnsurePatch : public BaseClearPatch<Patch, Derived> {
     }
   };
 
+ protected:
+  template <typename U, typename R = void>
+  using if_union_patch = std::enable_if_t<is_thrift_union_v<U>, R>;
+  template <typename U, typename R = void>
+  using if_not_union_patch = std::enable_if_t<!is_thrift_union_v<U>, R>;
+
+ private:
   template <typename Id>
   void removeImpl() {
     ensurePatchable();
@@ -200,14 +204,18 @@ class BaseEnsurePatch : public BaseClearPatch<Patch, Derived> {
     return hasAssign() || data_.clear() == true ||
         (getEnsure<Id>(data_) && type::is_optional_or_union_field_v<T, Id>) ||
         !getRawPatch<Id>(data_.patchPrior()).empty() ||
-        !getRawPatch<Id>(data_.patch()).empty();
+        !getRawPatch<Id>(data_.patch()).empty() ||
+        (!data_.remove()->empty() &&
+         data_.remove()->contains(op::get_field_id_v<T, Id>));
   }
 
   template <typename Id, typename... Ids>
   std::enable_if_t<sizeof...(Ids) != 0, bool> modifies() const {
     // If hasAssign() == true, the whole struct (all fields) will be replaced.
     if (hasAssign() || data_.clear() == true ||
-        (getEnsure<Id>(data_) && type::is_optional_or_union_field_v<T, Id>)) {
+        (getEnsure<Id>(data_) && type::is_optional_or_union_field_v<T, Id>) ||
+        (!data_.remove()->empty() &&
+         data_.remove()->contains(op::get_field_id_v<T, Id>))) {
       return true;
     }
 
@@ -329,20 +337,33 @@ class BaseEnsurePatch : public BaseClearPatch<Patch, Derived> {
 
     data_.patchPrior()->customVisit(std::forward<Visitor>(v));
 
-    // TODO: Optimize ensure for UnionPatch
-    for_each_field_id<T>([&](auto id) {
-      using Id = decltype(id);
-      if constexpr (!apache::thrift::detail::is_shared_ptr_v<
-                        op::get_field_ref<T, Id>>) {
-        if (auto p = op::get<Id>(*data_.ensure())) {
-          if constexpr (type::is_optional_or_union_field_v<T, Id>) {
-            std::forward<Visitor>(v).template ensure<Id>(*p);
-          } else {
-            std::forward<Visitor>(v).template ensure<Id>();
+    if constexpr (!is_thrift_union_v<T>) {
+      for_each_field_id<T>([&](auto id) {
+        using Id = decltype(id);
+        if constexpr (!apache::thrift::detail::is_shared_ptr_v<
+                          op::get_field_ref<T, Id>>) {
+          if (auto p = op::get<Id>(*data_.ensure())) {
+            if constexpr (type::is_optional_or_union_field_v<T, Id>) {
+              std::forward<Visitor>(v).template ensure<Id>(*p);
+            } else {
+              std::forward<Visitor>(v).template ensure<Id>();
+            }
           }
         }
-      }
-    });
+      });
+    } else {
+      // For Thrift Union, we only need to visit the active field.
+      op::invoke_by_field_id<T>(
+          static_cast<FieldId>(data_.ensure().value().getType()),
+          [&](auto id) {
+            using Id = decltype(id);
+            std::forward<Visitor>(v).template ensure<Id>(
+                *op::get<Id>(*data_.ensure()));
+          },
+          []() {
+            // Ignore if the union is empty.
+          });
+    }
 
     data_.patch()->customVisit(std::forward<Visitor>(v));
 
@@ -401,16 +422,30 @@ class BaseEnsurePatch : public BaseClearPatch<Patch, Derived> {
     return (ensurePatchable(), getRawPatch<Id>(data_.patch()));
   }
 
-  void ensurePatchable() {
+  // If Assign operation exists, we need to replace it with Ensure + Patch
+  // operation so that we can have sub-patches.
+  template <typename U = T>
+  if_union_patch<U> ensurePatchable() {
+    if (data_.assign().has_value()) {
+      data_.clear() = true;
+      *data_.ensure() = std::move(*data_.assign());
+      // Unset assign.
+      data_.assign().reset();
+    }
+  }
+
+  // For Thrift Struct, we always ensure the patch is patchable.
+  template <typename U = T>
+  if_not_union_patch<U> ensurePatchable() {
     if (data_.assign().has_value()) {
       for_each_field_id<T>([&](auto id) {
-        using Id = decltype(id);
+        using FId = decltype(id);
         if constexpr (!apache::thrift::detail::is_shared_ptr_v<
-                          op::get_field_ref<T, Id>>) {
+                          op::get_field_ref<T, FId>>) {
           auto&& field = op::get<>(id, *data_.assign());
-          auto&& prior = getRawPatch<Id>(data_.patchPrior());
+          auto&& prior = getRawPatch<FId>(data_.patchPrior());
           auto&& ensure = op::get<>(id, *data_.ensure());
-          auto&& after = getRawPatch<Id>(data_.patch());
+          auto&& after = getRawPatch<FId>(data_.patch());
           if (isAbsent(field)) {
             prior.toThrift().clear() = true;
           } else {
@@ -426,13 +461,23 @@ class BaseEnsurePatch : public BaseClearPatch<Patch, Derived> {
 
   template <typename Id>
   bool maybeEnsure() {
-    if (*patchAfter<Id>().toThrift().clear()) {
-      // Since we cleared the field in PatchAfter, we should remove any existing
-      // ensured value.
-      op::clear<Id>(*data_.ensure());
+    // If Thrift Union, we move assign operation to clear and ensure operations
+    // so that we can ensure.
+    if constexpr (is_thrift_union_v<T>) {
+      if (data_.assign().has_value()) {
+        data_.clear() = true;
+        data_.ensure() = std::move(*data_.assign());
+        data_.assign().reset();
+      }
     }
 
     if constexpr (!is_thrift_union_v<T>) {
+      if (*patchAfter<Id>().toThrift().clear()) {
+        // Since we cleared the field in PatchAfter, we should remove any
+        // existing ensured value.
+        op::clear<Id>(*data_.ensure());
+      }
+
       auto removeRef = Base::toThrift().remove();
       auto iter = removeRef->find(op::get_field_id_v<T, Id>);
       if (iter != removeRef->end()) {
@@ -450,6 +495,24 @@ class BaseEnsurePatch : public BaseClearPatch<Patch, Derived> {
     if (ensures<Id>()) {
       return false;
     }
+
+    // If the union patch already ensured to a different field, we need to set
+    // clear so that `ensure` becomes logically `assign`.
+    // Why is this necessary? Without this change, consider the following patch
+    //
+    //   UnionPatch{ensure = {field1: 10}}
+    //
+    // Now let's do `unionPatch.ensure<field2>(20)`, if we just change to
+    //
+    //   UnionPatch{ensure = {field2: 20}}
+    //
+    // This is incorrect when patching union like `{field2: 10}` since the
+    // result should be `{field2: 20}` instead of `{field2: 10}`.
+
+    if (is_thrift_union_v<T> && !apache::thrift::empty(*data_.ensure())) {
+      clear();
+    }
+
     // Merge anything (oddly) in patchAfter into patchPrior.
     if (!patchAfter<Id>().empty()) {
       patchPrior<Id>().merge(std::move(patchAfter<Id>()));
@@ -633,7 +696,4 @@ class UnionPatch : public BaseEnsurePatch<Patch, UnionPatch<Patch>> {
   }
 };
 
-} // namespace detail
-} // namespace op
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::op::detail

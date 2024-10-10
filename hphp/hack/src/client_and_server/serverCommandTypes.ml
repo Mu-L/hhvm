@@ -332,12 +332,19 @@ type cst_search_input = {
 (* The following datatypes can be interpreted as follows:
  * MESSAGE_TAG : Argument type (sent from client to server) -> return type t *)
 type _ t =
-  | STATUS : { max_errors: int option } -> Server_status.t t
+  | STATUS : {
+      max_errors: int option;
+      error_filter: Filter_errors.Filter.t;
+    }
+      -> Server_status.t t
   | STATUS_SINGLE : {
       file_names: file_input list;
       max_errors: int option;
+      error_filter: Filter_errors.Filter.t;
       return_expanded_tast: bool;
       preexisting_warnings: bool;
+          (** Whether to show preexisting warnings
+            (the ones that were there prior to saved state revision) *)
     }
       -> ((Errors.finalized_error list * int)
          * Tast.program Tast_with_dynamic.t Relative_path.Map.t option)
@@ -350,7 +357,6 @@ type _ t =
   | IS_SUBTYPE : string -> (string, string) result t
   | TAST_HOLES : file_input * Tast_hole.filter -> TastHolesService.result t
   | TAST_HOLES_BATCH : string list -> TastHolesService.result t
-  | XHP_AUTOCOMPLETE_SNIPPET : string -> string option t
   | IDENTIFY_SYMBOL : string -> string SymbolDefinition.t list t
   | IDENTIFY_FUNCTION :
       string * file_input * int * int
@@ -392,7 +398,6 @@ type _ t =
   | LINT_STDIN : lint_stdin_input -> ServerLintTypes.result t
   | LINT_ALL : int -> ServerLintTypes.result t
   | STATS : Stats.t t
-  | FORMAT : ServerFormatTypes.action -> ServerFormatTypes.result t
   | DUMP_FULL_FIDELITY_PARSE : string -> string t
   | RAGE : ServerRageTypes.result t
   | CST_SEARCH : cst_search_input -> (Hh_json.json, string) result t
@@ -479,7 +484,6 @@ let rpc_command_needs_full_check : type a. a t -> bool =
   | IS_SUBTYPE _ -> false
   | TAST_HOLES _ -> false
   | TAST_HOLES_BATCH _ -> false
-  | XHP_AUTOCOMPLETE_SNIPPET _ -> true
   | IDENTIFY_FUNCTION _ -> false
   | IDENTIFY_SYMBOL _ -> false
   | METHOD_JUMP_BATCH _ -> false
@@ -487,7 +491,6 @@ let rpc_command_needs_full_check : type a. a t -> bool =
   | LINT _ -> false
   | LINT_STDIN _ -> false
   | LINT_ALL _ -> false
-  | FORMAT _ -> false
   | DUMP_FULL_FIDELITY_PARSE _ -> false
   | RAGE -> false
   | CST_SEARCH _ -> false

@@ -118,14 +118,16 @@ class TServerObserver {
     }
 
     folly::Optional<uint64_t> writeDelayLatencyUsec() const {
-      if (writeBegin != clock::time_point()) {
+      if (writeBegin != clock::time_point() &&
+          processEnd != clock::time_point()) {
         return to_microseconds(writeBegin - processEnd);
       }
       return {};
     }
 
     folly::Optional<uint64_t> writeLatencyUsec() const {
-      if (writeBegin != clock::time_point()) {
+      if (writeBegin != clock::time_point() &&
+          writeEnd != clock::time_point()) {
         return to_microseconds(writeEnd - writeBegin);
       }
       return {};
@@ -197,15 +199,17 @@ class TServerObserver {
 
   virtual void undeclaredException() {}
 
-  virtual void resourcePoolsEnabled(std::string /*explanation*/) {}
+  virtual void resourcePoolsEnabled(const std::string& /*explanation*/) {}
 
-  virtual void resourcePoolsDisabled(std::string /*explanation*/) {}
+  virtual void resourcePoolsDisabled(const std::string& /*explanation*/) {}
 
   virtual void resourcePoolsInitialized(
-      std::vector<std::string> /*resourcePoolsDescriptions*/) {}
+      const std::vector<std::string>& /*resourcePoolsDescriptions*/) {}
 
   // The observer has to specify a sample rate for callCompleted notifications
   inline uint32_t getSampleRate() const { return sampleRate_; }
+
+  virtual std::string getName() const final { return typeid(*this).name(); }
 
  protected:
   uint32_t sampleRate_;

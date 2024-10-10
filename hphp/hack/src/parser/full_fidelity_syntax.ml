@@ -218,6 +218,8 @@ module WithToken (Token : TokenType) = struct
       | ClosureTypeSpecifier _ -> SyntaxKind.ClosureTypeSpecifier
       | ClosureParameterTypeSpecifier _ ->
         SyntaxKind.ClosureParameterTypeSpecifier
+      | TupleOrUnionOrIntersectionElementTypeSpecifier _ ->
+        SyntaxKind.TupleOrUnionOrIntersectionElementTypeSpecifier
       | TypeRefinement _ -> SyntaxKind.TypeRefinement
       | TypeInRefinement _ -> SyntaxKind.TypeInRefinement
       | CtxInRefinement _ -> SyntaxKind.CtxInRefinement
@@ -606,6 +608,9 @@ module WithToken (Token : TokenType) = struct
     let is_closure_parameter_type_specifier =
       has_kind SyntaxKind.ClosureParameterTypeSpecifier
 
+    let is_tuple_or_union_or_intersection_element_type_specifier =
+      has_kind SyntaxKind.TupleOrUnionOrIntersectionElementTypeSpecifier
+
     let is_type_refinement = has_kind SyntaxKind.TypeRefinement
 
     let is_type_in_refinement = has_kind SyntaxKind.TypeInRefinement
@@ -969,9 +974,15 @@ module WithToken (Token : TokenType) = struct
         let acc = f acc case_type_variants in
         let acc = f acc case_type_semicolon in
         acc
-      | CaseTypeVariant { case_type_variant_bar; case_type_variant_type } ->
+      | CaseTypeVariant
+          {
+            case_type_variant_bar;
+            case_type_variant_type;
+            case_type_variant_where_clause;
+          } ->
         let acc = f acc case_type_variant_bar in
         let acc = f acc case_type_variant_type in
+        let acc = f acc case_type_variant_where_clause in
         acc
       | PropertyDeclaration
           {
@@ -1265,6 +1276,7 @@ module WithToken (Token : TokenType) = struct
             parameter_optional;
             parameter_call_convention;
             parameter_readonly;
+            parameter_pre_ellipsis;
             parameter_type;
             parameter_ellipsis;
             parameter_name;
@@ -1276,6 +1288,7 @@ module WithToken (Token : TokenType) = struct
         let acc = f acc parameter_optional in
         let acc = f acc parameter_call_convention in
         let acc = f acc parameter_readonly in
+        let acc = f acc parameter_pre_ellipsis in
         let acc = f acc parameter_type in
         let acc = f acc parameter_ellipsis in
         let acc = f acc parameter_name in
@@ -2344,14 +2357,28 @@ module WithToken (Token : TokenType) = struct
             closure_parameter_optional;
             closure_parameter_call_convention;
             closure_parameter_readonly;
+            closure_parameter_pre_ellipsis;
             closure_parameter_type;
             closure_parameter_ellipsis;
           } ->
         let acc = f acc closure_parameter_optional in
         let acc = f acc closure_parameter_call_convention in
         let acc = f acc closure_parameter_readonly in
+        let acc = f acc closure_parameter_pre_ellipsis in
         let acc = f acc closure_parameter_type in
         let acc = f acc closure_parameter_ellipsis in
+        acc
+      | TupleOrUnionOrIntersectionElementTypeSpecifier
+          {
+            tuple_or_union_or_intersection_element_optional;
+            tuple_or_union_or_intersection_element_pre_ellipsis;
+            tuple_or_union_or_intersection_element_type;
+            tuple_or_union_or_intersection_element_ellipsis;
+          } ->
+        let acc = f acc tuple_or_union_or_intersection_element_optional in
+        let acc = f acc tuple_or_union_or_intersection_element_pre_ellipsis in
+        let acc = f acc tuple_or_union_or_intersection_element_type in
+        let acc = f acc tuple_or_union_or_intersection_element_ellipsis in
         acc
       | TypeRefinement
           {
@@ -2834,8 +2861,17 @@ module WithToken (Token : TokenType) = struct
           case_type_variants;
           case_type_semicolon;
         ]
-      | CaseTypeVariant { case_type_variant_bar; case_type_variant_type } ->
-        [case_type_variant_bar; case_type_variant_type]
+      | CaseTypeVariant
+          {
+            case_type_variant_bar;
+            case_type_variant_type;
+            case_type_variant_where_clause;
+          } ->
+        [
+          case_type_variant_bar;
+          case_type_variant_type;
+          case_type_variant_where_clause;
+        ]
       | PropertyDeclaration
           {
             property_attribute_spec;
@@ -3111,6 +3147,7 @@ module WithToken (Token : TokenType) = struct
             parameter_optional;
             parameter_call_convention;
             parameter_readonly;
+            parameter_pre_ellipsis;
             parameter_type;
             parameter_ellipsis;
             parameter_name;
@@ -3123,6 +3160,7 @@ module WithToken (Token : TokenType) = struct
           parameter_optional;
           parameter_call_convention;
           parameter_readonly;
+          parameter_pre_ellipsis;
           parameter_type;
           parameter_ellipsis;
           parameter_name;
@@ -4125,6 +4163,7 @@ module WithToken (Token : TokenType) = struct
             closure_parameter_optional;
             closure_parameter_call_convention;
             closure_parameter_readonly;
+            closure_parameter_pre_ellipsis;
             closure_parameter_type;
             closure_parameter_ellipsis;
           } ->
@@ -4132,8 +4171,22 @@ module WithToken (Token : TokenType) = struct
           closure_parameter_optional;
           closure_parameter_call_convention;
           closure_parameter_readonly;
+          closure_parameter_pre_ellipsis;
           closure_parameter_type;
           closure_parameter_ellipsis;
+        ]
+      | TupleOrUnionOrIntersectionElementTypeSpecifier
+          {
+            tuple_or_union_or_intersection_element_optional;
+            tuple_or_union_or_intersection_element_pre_ellipsis;
+            tuple_or_union_or_intersection_element_type;
+            tuple_or_union_or_intersection_element_ellipsis;
+          } ->
+        [
+          tuple_or_union_or_intersection_element_optional;
+          tuple_or_union_or_intersection_element_pre_ellipsis;
+          tuple_or_union_or_intersection_element_type;
+          tuple_or_union_or_intersection_element_ellipsis;
         ]
       | TypeRefinement
           {
@@ -4599,8 +4652,17 @@ module WithToken (Token : TokenType) = struct
           "case_type_variants";
           "case_type_semicolon";
         ]
-      | CaseTypeVariant { case_type_variant_bar; case_type_variant_type } ->
-        ["case_type_variant_bar"; "case_type_variant_type"]
+      | CaseTypeVariant
+          {
+            case_type_variant_bar;
+            case_type_variant_type;
+            case_type_variant_where_clause;
+          } ->
+        [
+          "case_type_variant_bar";
+          "case_type_variant_type";
+          "case_type_variant_where_clause";
+        ]
       | PropertyDeclaration
           {
             property_attribute_spec;
@@ -4884,6 +4946,7 @@ module WithToken (Token : TokenType) = struct
             parameter_optional;
             parameter_call_convention;
             parameter_readonly;
+            parameter_pre_ellipsis;
             parameter_type;
             parameter_ellipsis;
             parameter_name;
@@ -4896,6 +4959,7 @@ module WithToken (Token : TokenType) = struct
           "parameter_optional";
           "parameter_call_convention";
           "parameter_readonly";
+          "parameter_pre_ellipsis";
           "parameter_type";
           "parameter_ellipsis";
           "parameter_name";
@@ -5915,6 +5979,7 @@ module WithToken (Token : TokenType) = struct
             closure_parameter_optional;
             closure_parameter_call_convention;
             closure_parameter_readonly;
+            closure_parameter_pre_ellipsis;
             closure_parameter_type;
             closure_parameter_ellipsis;
           } ->
@@ -5922,8 +5987,22 @@ module WithToken (Token : TokenType) = struct
           "closure_parameter_optional";
           "closure_parameter_call_convention";
           "closure_parameter_readonly";
+          "closure_parameter_pre_ellipsis";
           "closure_parameter_type";
           "closure_parameter_ellipsis";
+        ]
+      | TupleOrUnionOrIntersectionElementTypeSpecifier
+          {
+            tuple_or_union_or_intersection_element_optional;
+            tuple_or_union_or_intersection_element_pre_ellipsis;
+            tuple_or_union_or_intersection_element_type;
+            tuple_or_union_or_intersection_element_ellipsis;
+          } ->
+        [
+          "tuple_or_union_or_intersection_element_optional";
+          "tuple_or_union_or_intersection_element_pre_ellipsis";
+          "tuple_or_union_or_intersection_element_type";
+          "tuple_or_union_or_intersection_element_ellipsis";
         ]
       | TypeRefinement
           {
@@ -6497,8 +6576,17 @@ module WithToken (Token : TokenType) = struct
             case_type_semicolon;
           }
       | ( SyntaxKind.CaseTypeVariant,
-          [case_type_variant_bar; case_type_variant_type] ) ->
-        CaseTypeVariant { case_type_variant_bar; case_type_variant_type }
+          [
+            case_type_variant_bar;
+            case_type_variant_type;
+            case_type_variant_where_clause;
+          ] ) ->
+        CaseTypeVariant
+          {
+            case_type_variant_bar;
+            case_type_variant_type;
+            case_type_variant_where_clause;
+          }
       | ( SyntaxKind.PropertyDeclaration,
           [
             property_attribute_spec;
@@ -6800,6 +6888,7 @@ module WithToken (Token : TokenType) = struct
             parameter_optional;
             parameter_call_convention;
             parameter_readonly;
+            parameter_pre_ellipsis;
             parameter_type;
             parameter_ellipsis;
             parameter_name;
@@ -6813,6 +6902,7 @@ module WithToken (Token : TokenType) = struct
             parameter_optional;
             parameter_call_convention;
             parameter_readonly;
+            parameter_pre_ellipsis;
             parameter_type;
             parameter_ellipsis;
             parameter_name;
@@ -7917,6 +8007,7 @@ module WithToken (Token : TokenType) = struct
             closure_parameter_optional;
             closure_parameter_call_convention;
             closure_parameter_readonly;
+            closure_parameter_pre_ellipsis;
             closure_parameter_type;
             closure_parameter_ellipsis;
           ] ) ->
@@ -7925,8 +8016,23 @@ module WithToken (Token : TokenType) = struct
             closure_parameter_optional;
             closure_parameter_call_convention;
             closure_parameter_readonly;
+            closure_parameter_pre_ellipsis;
             closure_parameter_type;
             closure_parameter_ellipsis;
+          }
+      | ( SyntaxKind.TupleOrUnionOrIntersectionElementTypeSpecifier,
+          [
+            tuple_or_union_or_intersection_element_optional;
+            tuple_or_union_or_intersection_element_pre_ellipsis;
+            tuple_or_union_or_intersection_element_type;
+            tuple_or_union_or_intersection_element_ellipsis;
+          ] ) ->
+        TupleOrUnionOrIntersectionElementTypeSpecifier
+          {
+            tuple_or_union_or_intersection_element_optional;
+            tuple_or_union_or_intersection_element_pre_ellipsis;
+            tuple_or_union_or_intersection_element_type;
+            tuple_or_union_or_intersection_element_ellipsis;
           }
       | ( SyntaxKind.TypeRefinement,
           [
@@ -8537,9 +8643,17 @@ module WithToken (Token : TokenType) = struct
         let value = ValueBuilder.value_from_syntax syntax in
         make syntax value
 
-      let make_case_type_variant case_type_variant_bar case_type_variant_type =
+      let make_case_type_variant
+          case_type_variant_bar
+          case_type_variant_type
+          case_type_variant_where_clause =
         let syntax =
-          CaseTypeVariant { case_type_variant_bar; case_type_variant_type }
+          CaseTypeVariant
+            {
+              case_type_variant_bar;
+              case_type_variant_type;
+              case_type_variant_where_clause;
+            }
         in
         let value = ValueBuilder.value_from_syntax syntax in
         make syntax value
@@ -8935,6 +9049,7 @@ module WithToken (Token : TokenType) = struct
           parameter_optional
           parameter_call_convention
           parameter_readonly
+          parameter_pre_ellipsis
           parameter_type
           parameter_ellipsis
           parameter_name
@@ -8948,6 +9063,7 @@ module WithToken (Token : TokenType) = struct
               parameter_optional;
               parameter_call_convention;
               parameter_readonly;
+              parameter_pre_ellipsis;
               parameter_type;
               parameter_ellipsis;
               parameter_name;
@@ -10425,6 +10541,7 @@ module WithToken (Token : TokenType) = struct
           closure_parameter_optional
           closure_parameter_call_convention
           closure_parameter_readonly
+          closure_parameter_pre_ellipsis
           closure_parameter_type
           closure_parameter_ellipsis =
         let syntax =
@@ -10433,8 +10550,26 @@ module WithToken (Token : TokenType) = struct
               closure_parameter_optional;
               closure_parameter_call_convention;
               closure_parameter_readonly;
+              closure_parameter_pre_ellipsis;
               closure_parameter_type;
               closure_parameter_ellipsis;
+            }
+        in
+        let value = ValueBuilder.value_from_syntax syntax in
+        make syntax value
+
+      let make_tuple_or_union_or_intersection_element_type_specifier
+          tuple_or_union_or_intersection_element_optional
+          tuple_or_union_or_intersection_element_pre_ellipsis
+          tuple_or_union_or_intersection_element_type
+          tuple_or_union_or_intersection_element_ellipsis =
+        let syntax =
+          TupleOrUnionOrIntersectionElementTypeSpecifier
+            {
+              tuple_or_union_or_intersection_element_optional;
+              tuple_or_union_or_intersection_element_pre_ellipsis;
+              tuple_or_union_or_intersection_element_type;
+              tuple_or_union_or_intersection_element_ellipsis;
             }
         in
         let value = ValueBuilder.value_from_syntax syntax in

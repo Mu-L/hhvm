@@ -28,7 +28,7 @@
 #include <fmt/core.h>
 #include <folly/Traits.h>
 #include <folly/Utility.h>
-#include <folly/experimental/coro/FutureUtil.h>
+#include <folly/coro/FutureUtil.h>
 #include <folly/futures/Future.h>
 #include <folly/io/Cursor.h>
 #include <thrift/lib/cpp/protocol/TBase64Utils.h>
@@ -51,8 +51,7 @@
 #include <thrift/lib/cpp2/util/Frozen2ViewHelpers.h>
 #include <thrift/lib/thrift/gen-cpp2/RpcMetadata_types.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 class BinaryProtocolReader;
 class CompactProtocolReader;
@@ -350,8 +349,8 @@ class Cpp2Ops<ThriftPresult<hasIsSet, Args...>> {
 };
 
 // Forward declaration
-namespace detail {
-namespace ap {
+
+namespace detail::ap {
 
 template <
     ErrorBlame Blame,
@@ -399,12 +398,11 @@ struct EmptyExMapType {
   }
 };
 
-} // namespace ap
-} // namespace detail
+} // namespace detail::ap
 
 //  AsyncClient helpers
-namespace detail {
-namespace ac {
+
+namespace detail::ac {
 
 template <bool HasReturnType, typename PResult>
 folly::exception_wrapper extract_exn(PResult& result) {
@@ -689,12 +687,30 @@ folly::exception_wrapper recv_wrapped(
 }
 
 [[noreturn]] void throw_app_exn(const char* msg);
-} // namespace ac
-} // namespace detail
+
+template <typename Func>
+decltype(auto) withProtocolWriter(
+    std::underlying_type_t<apache::thrift::protocol::PROTOCOL_TYPES>
+        protocolType,
+    Func&& func) {
+  switch (protocolType) {
+    case apache::thrift::protocol::T_BINARY_PROTOCOL: {
+      apache::thrift::BinaryProtocolWriter writer;
+      return std::forward<Func>(func)(writer);
+    }
+    case apache::thrift::protocol::T_COMPACT_PROTOCOL: {
+      apache::thrift::CompactProtocolWriter writer;
+      return std::forward<Func>(func)(writer);
+    }
+    default:
+      throw_app_exn("Could not find Protocol");
+  }
+}
+} // namespace detail::ac
 
 //  AsyncProcessor helpers
-namespace detail {
-namespace ap {
+
+namespace detail::ap {
 
 //  Everything templated on only protocol goes here. The corresponding .cpp file
 //  explicitly instantiates this struct for each supported protocol.
@@ -1570,12 +1586,11 @@ apache::thrift::detail::SinkConsumerImpl toSinkConsumerImpl(
 #endif
 }
 
-} // namespace ap
-} // namespace detail
+} // namespace detail::ap
 
 //  ServerInterface helpers
-namespace detail {
-namespace si {
+
+namespace detail::si {
 template <typename T>
 folly::Future<T> future(
     folly::SemiFuture<T>&& future, folly::Executor::KeepAlive<> keepAlive) {
@@ -1748,16 +1763,7 @@ class UnimplementedCoroMethod : public std::exception {
 template <typename... Ignore>
 void ignore(Ignore&&...) {}
 
-#if defined(THRIFT_SCHEMA_AVAILABLE)
-inline std::optional<std::vector<schema::SchemaV1>> schemaAsOptionalVector(
-    const schema::SchemaV1& schema) {
-  std::vector<schema::SchemaV1> vec = {};
-  vec.insert(vec.end(), schema);
-  return std::optional<std::vector<schema::SchemaV1>>(vec);
-}
-#endif
-} // namespace si
-} // namespace detail
+} // namespace detail::si
 
 namespace util {
 
@@ -1857,5 +1863,4 @@ bool includeInRecentRequestsCount(const std::string_view methodName);
 
 } // namespace util
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

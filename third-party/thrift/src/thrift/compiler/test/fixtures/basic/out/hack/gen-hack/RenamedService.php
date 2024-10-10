@@ -63,57 +63,40 @@ interface RenamedServiceClientIf extends \IThriftSyncIf {
  * Original thrift service:-
  * FooService
  */
-trait RenamedServiceClientBase {
+internal trait RenamedServiceClientBase {
   require extends \ThriftClientBase;
+
+  /**
+   * Original thrift definition:-
+   * void
+   *   simple_rpc();
+   */
+  public async function simple_rpc(): Awaitable<void> {
+    $hh_frame_metadata = $this->getHHFrameMetadata();
+    if ($hh_frame_metadata !== null) {
+      \HH\set_frame_metadata($hh_frame_metadata);
+    }
+    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
+    $args = \test\fixtures\basic\RenamedService_simple_rpc_args::withDefaultValues();
+    await $this->asyncHandler_->genBefore("FooService", "simple_rpc", $args);
+    $currentseqid = $this->sendImplHelper($args, "simple_rpc", false, "FooService" );
+    await $this->genAwaitResponse(\test\fixtures\basic\RenamedService_simple_rpc_result::class, "simple_rpc", true, $currentseqid, $rpc_options);
+  }
 
 }
 
 class RenamedServiceAsyncClient extends \ThriftClientBase implements RenamedServiceAsyncClientIf {
   use RenamedServiceClientBase;
 
-  /**
-   * Original thrift definition:-
-   * void
-   *   simple_rpc();
-   */
-  public async function simple_rpc(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = \test\fixtures\basic\RenamedService_simple_rpc_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("FooService", "simple_rpc", $args);
-    $currentseqid = $this->sendImplHelper($args, "simple_rpc", false);
-    await $this->genAwaitResponse(\test\fixtures\basic\RenamedService_simple_rpc_result::class, "simple_rpc", true, $currentseqid, $rpc_options);
-  }
-
 }
 
 class RenamedServiceClient extends \ThriftClientBase implements RenamedServiceClientIf {
   use RenamedServiceClientBase;
 
-  /**
-   * Original thrift definition:-
-   * void
-   *   simple_rpc();
-   */
-  public async function simple_rpc(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = \test\fixtures\basic\RenamedService_simple_rpc_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("FooService", "simple_rpc", $args);
-    $currentseqid = $this->sendImplHelper($args, "simple_rpc", false);
-    await $this->genAwaitResponse(\test\fixtures\basic\RenamedService_simple_rpc_result::class, "simple_rpc", true, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_simple_rpc(): int {
     $args = \test\fixtures\basic\RenamedService_simple_rpc_args::withDefaultValues();
-    return $this->sendImplHelper($args, "simple_rpc", false);
+    return $this->sendImplHelper($args, "simple_rpc", false, "FooService" );
   }
   public function recv_simple_rpc(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(\test\fixtures\basic\RenamedService_simple_rpc_result::class, "simple_rpc", true, $expectedsequenceid);

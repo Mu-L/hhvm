@@ -19,6 +19,15 @@ type workitem =
   | Declare of (Relative_path.t * string)
 [@@deriving show]
 
+module Workitem = struct
+  type t = workitem
+
+  let is_check (t : t) : bool =
+    match t with
+    | Check _ -> true
+    | _ -> false
+end
+
 module TypingProgress : sig
   type t
 
@@ -140,13 +149,6 @@ let accumulate_job_output
         produced_by_job.profiling_info
         accumulated_so_far.profiling_info;
   }
-
-type progress_kind = Progress
-
-type job_progress = {
-  kind: progress_kind;
-  progress: TypingProgress.t;
-}
 
 type check_info = {
   init_id: string;

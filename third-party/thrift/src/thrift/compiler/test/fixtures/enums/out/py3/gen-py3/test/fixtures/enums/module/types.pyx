@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 cimport thrift.py3.serializer as serializer
 from thrift.python.protocol cimport Protocol as __Protocol
@@ -59,392 +56,15 @@ import weakref as __weakref
 import builtins as _builtins
 import importlib
 
-
-
-
-cdef __EnumData __Metasyntactic_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMetasyntactic](), Metasyntactic)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MetasyntacticMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __Metasyntactic_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __Metasyntactic_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __Metasyntactic_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __Metasyntactic_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class Metasyntactic(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __Metasyntactic_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMetasyntactic].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.Metasyntactic"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "test.fixtures.enums.module.thrift_types"
-        )
-        return python_types.Metasyntactic(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> Metasyntactic, <PyTypeObject*> __MetasyntacticMeta)
-
-
-cdef __EnumData __MyEnum1_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyEnum1](), MyEnum1)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyEnum1Meta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyEnum1_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyEnum1_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyEnum1_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyEnum1_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyEnum1(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyEnum1_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyEnum1].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyEnum1"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "test.fixtures.enums.module.thrift_types"
-        )
-        return python_types.MyEnum1(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyEnum1, <PyTypeObject*> __MyEnum1Meta)
-
-
-cdef __EnumData __MyEnum2_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyEnum2](), MyEnum2)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyEnum2Meta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyEnum2_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyEnum2_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyEnum2_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyEnum2_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyEnum2(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyEnum2_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyEnum2].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyEnum2"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "test.fixtures.enums.module.thrift_types"
-        )
-        return python_types.MyEnum2(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyEnum2, <PyTypeObject*> __MyEnum2Meta)
-
-
-cdef __EnumData __MyEnum3_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyEnum3](), MyEnum3)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyEnum3Meta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyEnum3_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyEnum3_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyEnum3_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyEnum3_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyEnum3(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyEnum3_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyEnum3].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyEnum3"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "test.fixtures.enums.module.thrift_types"
-        )
-        return python_types.MyEnum3(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyEnum3, <PyTypeObject*> __MyEnum3Meta)
-
-
-cdef __EnumData __MyEnum4_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyEnum4](), MyEnum4)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyEnum4Meta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyEnum4_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyEnum4_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyEnum4_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyEnum4_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyEnum4(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyEnum4_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyEnum4].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyEnum4"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "test.fixtures.enums.module.thrift_types"
-        )
-        return python_types.MyEnum4(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyEnum4, <PyTypeObject*> __MyEnum4Meta)
-
-
-cdef __EnumData __MyBitmaskEnum1_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyBitmaskEnum1](), MyBitmaskEnum1)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyBitmaskEnum1Meta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyBitmaskEnum1_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyBitmaskEnum1_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyBitmaskEnum1_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyBitmaskEnum1_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyBitmaskEnum1(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyBitmaskEnum1_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyBitmaskEnum1].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyBitmaskEnum1"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "test.fixtures.enums.module.thrift_types"
-        )
-        return python_types.MyBitmaskEnum1(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyBitmaskEnum1, <PyTypeObject*> __MyBitmaskEnum1Meta)
-
-
-cdef __EnumData __MyBitmaskEnum2_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cMyBitmaskEnum2](), MyBitmaskEnum2)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __MyBitmaskEnum2Meta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __MyBitmaskEnum2_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __MyBitmaskEnum2_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __MyBitmaskEnum2_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __MyBitmaskEnum2_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class MyBitmaskEnum2(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __MyBitmaskEnum2_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cMyBitmaskEnum2].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.MyBitmaskEnum2"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "test.fixtures.enums.module.thrift_types"
-        )
-        return python_types.MyBitmaskEnum2(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> MyBitmaskEnum2, <PyTypeObject*> __MyBitmaskEnum2Meta)
+from test.fixtures.enums.module.types_impl_FBTHRIFT_ONLY_DO_NOT_USE import (
+    Metasyntactic,
+    MyEnum1,
+    MyEnum2,
+    MyEnum3,
+    MyEnum4,
+    MyBitmaskEnum1,
+    MyBitmaskEnum2,
+)
 
 
 
@@ -489,7 +109,6 @@ cdef class SomeStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline reasonable_impl(self):
-
         if self.__fbthrift_cached_reasonable is None:
             self.__fbthrift_cached_reasonable = translate_cpp_enum_to_python(Metasyntactic, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).reasonable_ref().value()))
         return self.__fbthrift_cached_reasonable
@@ -499,7 +118,6 @@ cdef class SomeStruct(thrift.py3.types.Struct):
         return self.reasonable_impl()
 
     cdef inline fine_impl(self):
-
         if self.__fbthrift_cached_fine is None:
             self.__fbthrift_cached_fine = translate_cpp_enum_to_python(Metasyntactic, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).fine_ref().value()))
         return self.__fbthrift_cached_fine
@@ -509,7 +127,6 @@ cdef class SomeStruct(thrift.py3.types.Struct):
         return self.fine_impl()
 
     cdef inline questionable_impl(self):
-
         if self.__fbthrift_cached_questionable is None:
             self.__fbthrift_cached_questionable = translate_cpp_enum_to_python(Metasyntactic, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).questionable_ref().value()))
         return self.__fbthrift_cached_questionable
@@ -519,7 +136,6 @@ cdef class SomeStruct(thrift.py3.types.Struct):
         return self.questionable_impl()
 
     cdef inline tags_impl(self):
-
         if self.__fbthrift_cached_tags is None:
             self.__fbthrift_cached_tags = Set__i32._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).tags_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_tags
@@ -641,7 +257,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline me2_3_impl(self):
-
         if self.__fbthrift_cached_me2_3 is None:
             self.__fbthrift_cached_me2_3 = translate_cpp_enum_to_python(MyEnum2, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).me2_3_ref().value()))
         return self.__fbthrift_cached_me2_3
@@ -651,7 +266,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return self.me2_3_impl()
 
     cdef inline me3_n3_impl(self):
-
         if self.__fbthrift_cached_me3_n3 is None:
             self.__fbthrift_cached_me3_n3 = translate_cpp_enum_to_python(MyEnum3, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).me3_n3_ref().value()))
         return self.__fbthrift_cached_me3_n3
@@ -661,7 +275,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return self.me3_n3_impl()
 
     cdef inline me1_t1_impl(self):
-
         if self.__fbthrift_cached_me1_t1 is None:
             self.__fbthrift_cached_me1_t1 = translate_cpp_enum_to_python(MyEnum1, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).me1_t1_ref().value()))
         return self.__fbthrift_cached_me1_t1
@@ -671,7 +284,6 @@ cdef class MyStruct(thrift.py3.types.Struct):
         return self.me1_t1_impl()
 
     cdef inline me1_t2_impl(self):
-
         if self.__fbthrift_cached_me1_t2 is None:
             self.__fbthrift_cached_me1_t2 = translate_cpp_enum_to_python(MyEnum1, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).me1_t2_ref().value()))
         return self.__fbthrift_cached_me1_t2

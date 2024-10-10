@@ -20,45 +20,54 @@ import (
 	"fmt"
 	"net"
 	"time"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 type headerProtocol struct {
-	Format
+	types.Format
 	trans *headerTransport
 
-	protoID ProtocolID
+	protoID types.ProtocolID
 }
 
-func NewHeaderProtocol(conn net.Conn) (Protocol, error) {
-	p := &headerProtocol{
-		protoID: ProtocolIDCompact,
-	}
-	p.trans = newHeaderTransport(conn)
+var _ types.Protocol = (*headerProtocol)(nil)
+var _ types.RequestHeaders = (*headerProtocol)(nil)
+var _ types.ResponseHeaderGetter = (*headerProtocol)(nil)
+
+// NewHeaderProtocol creates a new header protocol.
+func NewHeaderProtocol(conn net.Conn) (types.Protocol, error) {
+	return newHeaderProtocol(conn, types.ProtocolIDCompact, 0, nil)
+}
+
+func newHeaderProtocol(conn net.Conn, protoID types.ProtocolID, timeout time.Duration, persistentHeaders map[string]string) (types.Protocol, error) {
+	p := &headerProtocol{protoID: protoID}
+	p.trans = newHeaderTransport(conn, protoID)
+	p.trans.conn.readTimeout = timeout
+	p.trans.conn.writeTimeout = timeout
 	if err := p.resetProtocol(); err != nil {
 		return nil, err
+	}
+	for name, value := range persistentHeaders {
+		p.trans.persistentWriteInfoHeaders[name] = value
 	}
 	return p, nil
 }
 
-func (p *headerProtocol) SetTimeout(timeout time.Duration) {
-	p.trans.conn.readTimeout = timeout
-	p.trans.conn.writeTimeout = timeout
-}
-
 func (p *headerProtocol) resetProtocol() error {
-	if p.Format != nil && p.protoID == p.trans.ProtocolID() {
+	if p.Format != nil && p.protoID == p.trans.protoID {
 		return nil
 	}
 
-	p.protoID = p.trans.ProtocolID()
+	p.protoID = p.trans.protoID
 	switch p.protoID {
-	case ProtocolIDBinary:
+	case types.ProtocolIDBinary:
 		// These defaults match cpp implementation
-		p.Format = NewBinaryProtocol(p.trans, false, true)
-	case ProtocolIDCompact:
-		p.Format = NewCompactProtocol(p.trans)
+		p.Format = NewBinaryFormatOptions(p.trans, false, true)
+	case types.ProtocolIDCompact:
+		p.Format = NewCompactFormat(p.trans)
 	default:
-		return NewProtocolException(fmt.Errorf("Unknown protocol id: %#x", p.protoID))
+		return types.NewProtocolException(fmt.Errorf("Unknown protocol id: %#x", p.protoID))
 	}
 	return nil
 }
@@ -67,13 +76,13 @@ func (p *headerProtocol) resetProtocol() error {
 // Writing methods.
 //
 
-func (p *headerProtocol) WriteMessageBegin(name string, typeId MessageType, seqid int32) error {
+func (p *headerProtocol) WriteMessageBegin(name string, typeId types.MessageType, seqid int32) error {
 	if err := p.resetProtocol(); err != nil {
 		return err
 	}
 	// The conditions here only match on the Go client side.
 	// If we are a client, set header seq id same as msg id
-	if typeId == CALL || typeId == ONEWAY {
+	if typeId == types.CALL || typeId == types.ONEWAY {
 		p.trans.SetSeqID(uint32(seqid))
 	}
 	return p.Format.WriteMessageBegin(name, typeId, seqid)
@@ -83,15 +92,15 @@ func (p *headerProtocol) WriteMessageBegin(name string, typeId MessageType, seqi
 // Reading methods.
 //
 
-func (p *headerProtocol) ReadMessageBegin() (name string, typeId MessageType, seqid int32, err error) {
-	if typeId == INVALID_MESSAGE_TYPE {
+func (p *headerProtocol) ReadMessageBegin() (name string, typeId types.MessageType, seqid int32, err error) {
+	if typeId == types.INVALID_MESSAGE_TYPE {
 		if err = p.trans.ResetProtocol(); err != nil {
-			return name, EXCEPTION, seqid, err
+			return name, types.EXCEPTION, seqid, err
 		}
 	}
 	err = p.resetProtocol()
 	if err != nil {
-		return name, EXCEPTION, seqid, err
+		return name, types.EXCEPTION, seqid, err
 	}
 	// see https://github.com/apache/thrift/blob/master/doc/specs/SequenceNumbers.md
 	// TODO:  This is a bug. if we are speaking header protocol, we should be using
@@ -101,11 +110,11 @@ func (p *headerProtocol) ReadMessageBegin() (name string, typeId MessageType, se
 }
 
 func (p *headerProtocol) Flush() (err error) {
-	return NewProtocolException(p.trans.Flush())
+	return types.NewProtocolException(p.trans.Flush())
 }
 
-func (p *headerProtocol) Skip(fieldType Type) (err error) {
-	return SkipDefaultDepth(p, fieldType)
+func (p *headerProtocol) Skip(fieldType types.Type) (err error) {
+	return types.SkipDefaultDepth(p, fieldType)
 }
 
 func (p *headerProtocol) Close() error {
@@ -124,69 +133,17 @@ func (p *headerProtocol) GetSeqID() uint32 {
 
 // Control underlying header transport
 
-func (p *headerProtocol) SetPersistentHeader(key, value string) {
-	p.trans.SetPersistentHeader(key, value)
-}
-
-func (p *headerProtocol) GetPersistentHeader(key string) (string, bool) {
-	return p.trans.GetPersistentHeader(key)
-}
-
-func (p *headerProtocol) GetPersistentHeaders() map[string]string {
-	return p.trans.GetPersistentHeaders()
-}
-
-func (p *headerProtocol) ClearPersistentHeaders() {
-	p.trans.ClearPersistentHeaders()
-}
-
-// GetRequestHeader returns a request header if the key exists, otherwise false
-func (p *headerProtocol) GetRequestHeader(key string) (string, bool) {
-	return p.trans.GetRequestHeader(key)
-}
-
-// Deprecated SetHeader is deprecated, rather use SetRequestHeader
-func (p *headerProtocol) SetHeader(key, value string) {
-	p.trans.SetRequestHeader(key, value)
-}
-
-// Deprecated Header is deprecated, rather use GetRequestHeader
-func (p *headerProtocol) Header(key string) (string, bool) {
-	return p.trans.GetRequestHeader(key)
-}
-
-// Deprecated Headers is deprecated, rather use GetRequestHeaders
-func (p *headerProtocol) Headers() map[string]string {
-	return p.trans.GetRequestHeaders()
-}
-
 // Deprecated: SetRequestHeader is deprecated and will eventually be private.
 func (p *headerProtocol) SetRequestHeader(key, value string) {
 	p.trans.SetRequestHeader(key, value)
-}
-
-// Deprecated: GetRequestHeader is deprecated and will eventually be private.
-func (p *headerProtocol) GetRequestHeaders() map[string]string {
-	return p.trans.GetRequestHeaders()
-}
-
-func (p *headerProtocol) GetResponseHeader(key string) (string, bool) {
-	return p.trans.GetResponseHeader(key)
 }
 
 func (p *headerProtocol) GetResponseHeaders() map[string]string {
 	return p.trans.GetResponseHeaders()
 }
 
-func (p *headerProtocol) ProtocolID() ProtocolID {
+func (p *headerProtocol) ProtocolID() types.ProtocolID {
 	return p.protoID
-}
-
-func (p *headerProtocol) SetProtocolID(protoID ProtocolID) error {
-	if err := p.trans.SetProtocolID(protoID); err != nil {
-		return err
-	}
-	return p.resetProtocol()
 }
 
 // Deprecated: GetFlags() is a deprecated method.

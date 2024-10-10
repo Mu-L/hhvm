@@ -6,43 +6,145 @@
 package cpp
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
 var (
-    premadeThriftType_string = metadata.NewThriftType().SetTPrimitive(
-        metadata.ThriftPrimitiveType_THRIFT_STRING_TYPE.Ptr(),
-            )
     premadeThriftType_cpp_RefType = metadata.NewThriftType().SetTEnum(
         metadata.NewThriftEnumType().
             SetName("cpp.RefType"),
-            )
-    premadeThriftType_bool = metadata.NewThriftType().SetTPrimitive(
-        metadata.ThriftPrimitiveType_THRIFT_BOOL_TYPE.Ptr(),
             )
     premadeThriftType_cpp_EnumUnderlyingType = metadata.NewThriftType().SetTEnum(
         metadata.NewThriftEnumType().
             SetName("cpp.EnumUnderlyingType"),
             )
+    premadeThriftType_string = metadata.NewThriftType().SetTPrimitive(
+        metadata.ThriftPrimitiveType_THRIFT_STRING_TYPE.Ptr(),
+            )
+    premadeThriftType_cpp_Name = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.Name"),
+            )
+    premadeThriftType_cpp_Type = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.Type"),
+            )
+    premadeThriftType_cpp_Ref = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.Ref"),
+            )
+    premadeThriftType_bool = metadata.NewThriftType().SetTPrimitive(
+        metadata.ThriftPrimitiveType_THRIFT_BOOL_TYPE.Ptr(),
+            )
+    premadeThriftType_cpp_Lazy = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.Lazy"),
+            )
+    premadeThriftType_cpp_DisableLazyChecksum = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.DisableLazyChecksum"),
+            )
+    premadeThriftType_cpp_Adapter = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.Adapter"),
+            )
+    premadeThriftType_cpp_PackIsset = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.PackIsset"),
+            )
+    premadeThriftType_cpp_MinimizePadding = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.MinimizePadding"),
+            )
+    premadeThriftType_cpp_ScopedEnumAsUnionType = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.ScopedEnumAsUnionType"),
+            )
+    premadeThriftType_cpp_FieldInterceptor = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.FieldInterceptor"),
+            )
+    premadeThriftType_cpp_UseOpEncode = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.UseOpEncode"),
+            )
+    premadeThriftType_cpp_EnumType = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.EnumType"),
+            )
+    premadeThriftType_cpp_Frozen2Exclude = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.Frozen2Exclude"),
+            )
+    premadeThriftType_cpp_Frozen2RequiresCompleteContainerParams = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.Frozen2RequiresCompleteContainerParams"),
+            )
+    premadeThriftType_cpp_ProcessInEbThreadUnsafe = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.ProcessInEbThreadUnsafe"),
+            )
+    premadeThriftType_cpp_RuntimeAnnotation = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.RuntimeAnnotation"),
+            )
+    premadeThriftType_cpp_UseCursorSerialization = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.UseCursorSerialization"),
+            )
+    premadeThriftType_cpp_GenerateDeprecatedHeaderClientMethods = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("cpp.GenerateDeprecatedHeaderClientMethods"),
+            )
 )
 
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "cpp.RefType": premadeThriftType_cpp_RefType,
+    "cpp.EnumUnderlyingType": premadeThriftType_cpp_EnumUnderlyingType,
+    "string": premadeThriftType_string,
+    "cpp.Name": premadeThriftType_cpp_Name,
+    "cpp.Type": premadeThriftType_cpp_Type,
+    "cpp.Ref": premadeThriftType_cpp_Ref,
+    "bool": premadeThriftType_bool,
+    "cpp.Lazy": premadeThriftType_cpp_Lazy,
+    "cpp.DisableLazyChecksum": premadeThriftType_cpp_DisableLazyChecksum,
+    "cpp.Adapter": premadeThriftType_cpp_Adapter,
+    "cpp.PackIsset": premadeThriftType_cpp_PackIsset,
+    "cpp.MinimizePadding": premadeThriftType_cpp_MinimizePadding,
+    "cpp.ScopedEnumAsUnionType": premadeThriftType_cpp_ScopedEnumAsUnionType,
+    "cpp.FieldInterceptor": premadeThriftType_cpp_FieldInterceptor,
+    "cpp.UseOpEncode": premadeThriftType_cpp_UseOpEncode,
+    "cpp.EnumType": premadeThriftType_cpp_EnumType,
+    "cpp.Frozen2Exclude": premadeThriftType_cpp_Frozen2Exclude,
+    "cpp.Frozen2RequiresCompleteContainerParams": premadeThriftType_cpp_Frozen2RequiresCompleteContainerParams,
+    "cpp.ProcessInEbThreadUnsafe": premadeThriftType_cpp_ProcessInEbThreadUnsafe,
+    "cpp.RuntimeAnnotation": premadeThriftType_cpp_RuntimeAnnotation,
+    "cpp.UseCursorSerialization": premadeThriftType_cpp_UseCursorSerialization,
+    "cpp.GenerateDeprecatedHeaderClientMethods": premadeThriftType_cpp_GenerateDeprecatedHeaderClientMethods,
+}
+
 var structMetadatas = []*metadata.ThriftStruct{
+    metadata.NewThriftStruct().
+    SetName("cpp.Name").
+    SetIsUnion(false).
+    SetFields(
+        []*metadata.ThriftField{
+            metadata.NewThriftField().
+    SetId(1).
+    SetName("value").
+    SetIsOptional(false).
+    SetType(premadeThriftType_string),
+        },
+    ),
     metadata.NewThriftStruct().
     SetName("cpp.Type").
     SetIsUnion(false).
@@ -70,18 +172,6 @@ var structMetadatas = []*metadata.ThriftStruct{
     SetName("type").
     SetIsOptional(false).
     SetType(premadeThriftType_cpp_RefType),
-        },
-    ),
-    metadata.NewThriftStruct().
-    SetName("cpp.Name").
-    SetIsUnion(false).
-    SetFields(
-        []*metadata.ThriftField{
-            metadata.NewThriftField().
-    SetId(1).
-    SetName("value").
-    SetIsOptional(false).
-    SetType(premadeThriftType_string),
         },
     ),
     metadata.NewThriftStruct().
@@ -147,9 +237,6 @@ var structMetadatas = []*metadata.ThriftStruct{
     SetName("cpp.MinimizePadding").
     SetIsUnion(false),
     metadata.NewThriftStruct().
-    SetName("cpp.TriviallyRelocatable").
-    SetIsUnion(false),
-    metadata.NewThriftStruct().
     SetName("cpp.ScopedEnumAsUnionType").
     SetIsUnion(false),
     metadata.NewThriftStruct().
@@ -199,6 +286,9 @@ var structMetadatas = []*metadata.ThriftStruct{
     metadata.NewThriftStruct().
     SetName("cpp.UseCursorSerialization").
     SetIsUnion(false),
+    metadata.NewThriftStruct().
+    SetName("cpp.GenerateDeprecatedHeaderClientMethods").
+    SetIsUnion(false),
 }
 
 var exceptionMetadatas = []*metadata.ThriftException{
@@ -228,6 +318,12 @@ var enumMetadatas = []*metadata.ThriftEnum{
 }
 
 var serviceMetadatas = []*metadata.ThriftService{
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.

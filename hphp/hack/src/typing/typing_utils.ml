@@ -30,7 +30,7 @@ type expand_typedef =
   Reason.t ->
   string ->
   locl_ty list ->
-  (env * Typing_error.t option) * locl_ty
+  (env * Typing_error.t option * Type_expansions.cycle_reporter list) * locl_ty
 
 let (expand_typedef_ref : expand_typedef ref) =
   ref (not_implemented "expand_typedef")
@@ -131,7 +131,7 @@ type expand_typeconst =
   locl_ty ->
   pos_id ->
   allow_abstract_tconst:bool ->
-  (env * Typing_error.t option) * locl_ty
+  (env * Typing_error.t option * Type_expansions.cycle_reporter list) * locl_ty
 
 let (expand_typeconst_ref : expand_typeconst ref) =
   ref (not_implemented "expand_typeconst")
@@ -235,7 +235,12 @@ type localize =
 let (localize_ref : localize ref) =
   ref (fun ~ety_env:_ -> not_implemented "localize")
 
-let localize x = !localize_ref x
+let localize ~ety_env = !localize_ref ~ety_env
+
+let (localize_disjoint_union_ref : localize ref) =
+  ref (fun ~ety_env:_ -> not_implemented "localize_disjoint_union")
+
+let localize_disjoint_union ~ety_env = !localize_disjoint_union_ref ~ety_env
 
 (*****************************************************************************)
 (* Checking properties of types *)
@@ -586,7 +591,7 @@ let get_printable_shape_field_name = Typing_defs.TShapeField.name
 
 let shape_field_name_with_ty_err env (_, p, field) =
   match field with
-  | Aast.Int name -> Ok (Ast_defs.SFlit_int (p, name))
+  | Aast.Int name -> Ok (Ast_defs.SFregex_group (p, name))
   | Aast.String name -> Ok (Ast_defs.SFlit_str (p, name))
   | Aast.Class_const ((_, _, Aast.CI x), y) ->
     Ok (Ast_defs.SFclass_const (x, y))
@@ -642,9 +647,10 @@ let default_fun_param ~readonly ?(pos = Pos_or_decl.none) ty : 'a fun_param =
       make_fp_flags
         ~mode:FPnormal
         ~accept_disposable:false
-        ~has_default:false
+        ~is_optional:false
         ~readonly
-        ~ignore_readonly_error:false;
+        ~ignore_readonly_error:false
+        ~splat:false;
     fp_def_value = None;
   }
 
@@ -747,82 +753,6 @@ let has_ancestor_including_req = has_ancestor_including_req ~visited:SSet.empty
 let has_ancestor_including_req_refl =
   has_ancestor_including_req_refl ~visited:SSet.empty
 
-(* search through tyl, and any unions directly-recursively contained in tyl,
-   and return those that satisfy f, and those that do not, separately.*)
-let rec partition_union ~f env tyl =
-  match tyl with
-  | [] -> ([], [])
-  | t :: tyl ->
-    let (_, t) = Env.expand_type env t in
-    (match get_node t with
-    | Tunion tyl' when not (List.is_empty tyl') ->
-      partition_union ~f env (tyl' @ tyl)
-    | _ ->
-      let (dyns, nondyns) = partition_union ~f env tyl in
-      if f t then
-        (t :: dyns, nondyns)
-      else (
-        match get_node t with
-        | Tunion tyl ->
-          (match strip_union ~f env tyl with
-          | Some (sub_dyns, sub_nondyns) ->
-            ( sub_dyns @ dyns,
-              MakeType.union (get_reason t) sub_nondyns :: nondyns )
-          | None -> (dyns, t :: nondyns))
-        | _ -> (dyns, t :: nondyns)
-      ))
-
-and strip_union ~f env tyl =
-  let (dyns, nondyns) = partition_union ~f env tyl in
-  match (dyns, nondyns) with
-  | ([], _) -> None
-  | (_, _) -> Some (dyns, nondyns)
-
-let rec is_dynamic_or_intersection_with_dynamic ~accept_intersections env ty =
-  let (_, ty) = Env.expand_type env ty in
-  match get_node ty with
-  | Tintersection tyl when accept_intersections ->
-    List.exists
-      tyl
-      ~f:(is_dynamic_or_intersection_with_dynamic ~accept_intersections env)
-  | Tdynamic -> true
-  | _ -> false
-
-let rec try_strip_dynamic_from_union ?(accept_intersections = false) env tyl =
-  match
-    strip_union
-      ~f:(is_dynamic_or_intersection_with_dynamic ~accept_intersections env)
-      env
-      tyl
-  with
-  | Some (ty :: _, tyl) -> Some (ty, tyl)
-  | _ -> None
-
-(* Strip dynamic off a union, and push supportdyn through. So
- *   try_strip_dynamic(~t) = t
- *   try_strip_dynamic(supportdyn<~t>) = supportdyn<t>
- * Otherwise return None.
- *)
-and try_strip_dynamic ?(accept_intersections = false) env ty =
-  let (env, ty) = Env.expand_type env ty in
-  match get_node ty with
-  | Tnewtype (name, [tyarg], _) when String.equal name SN.Classes.cSupportDyn ->
-  begin
-    match try_strip_dynamic ~accept_intersections env tyarg with
-    | None -> None
-    | Some stripped_ty -> Some (MakeType.supportdyn (get_reason ty) stripped_ty)
-  end
-  | Tunion tyl ->
-    (match try_strip_dynamic_from_union ~accept_intersections env tyl with
-    | None -> None
-    | Some (_, tyl) -> Some (MakeType.union (get_reason ty) tyl))
-  | _ -> None
-
-and strip_dynamic env ty =
-  match try_strip_dynamic env ty with
-  | None -> ty
-  | Some ty -> ty
-
 let is_supportdyn env ty =
   is_sub_type_for_union env ty (MakeType.supportdyn_mixed Reason.none)
 
@@ -852,9 +782,11 @@ let make_supportdyn_decl_type p r ty =
   mk (r, Tapply ((p, SN.Classes.cSupportDyn), [ty]))
 
 let make_like ?reason env ty =
-  if Typing_defs.is_dynamic ty || Option.is_some (try_strip_dynamic env ty) then
-    ty
-  else
+  let (_env, _) = Env.expand_type env ty in
+  match get_node ty with
+  | Tdynamic -> ty
+  | Tunion tyl when List.exists tyl ~f:Typing_defs.is_dynamic -> ty
+  | _ ->
     let r =
       match reason with
       | None -> get_reason ty
@@ -889,53 +821,17 @@ let supports_dynamic env ty =
   let r = get_reason ty in
   sub_type env ty (MakeType.supportdyn_mixed r)
 
-let is_inter_dyn env ty =
-  let (env, ty) = Env.expand_type env ty in
-  match get_node ty with
-  | Tintersection [ty1; ty2]
-    when Typing_defs.is_dynamic ty1 || Typing_defs.is_dynamic ty2 ->
-    (env, Some (ty1, ty2))
-  | _ -> (env, None)
-
-let rec find_inter_dyn env acc tyl =
-  match tyl with
-  | [] -> (env, None)
-  | ty :: tyl ->
-    (match is_inter_dyn env ty with
-    | (env, None) -> find_inter_dyn env (ty :: acc) tyl
-    | (env, Some ty_inter) -> (env, Some (ty_inter, acc @ tyl)))
-
-(* Detect types that look like (t1 & dynamic) | t2 and convert to
-   ~t2 & (t1 | t2). Also in function returns.
-*)
-let rec recompose_like_type env orig_ty =
-  let (env, ty) = Env.expand_type env orig_ty in
-  match get_node ty with
-  | Tunion tys ->
-    (match find_inter_dyn env [] tys with
-    | (env, Some ((ty1, ty2), [ty_sub])) ->
-      let (env, ty_union1) = union env ty1 ty_sub in
-      let (env, ty_union2) = union env ty2 ty_sub in
-      (env, MakeType.intersection (get_reason ty) [ty_union1; ty_union2])
-    | (env, _) ->
-      (match try_strip_dynamic env ty with
-      | None -> (env, ty)
-      | Some ty1 ->
-        let (env, ty2) = recompose_like_type env ty1 in
-        (env, MakeType.locl_like (get_reason ty) ty2)))
-  | Tfun ft ->
-    let (env, ft_ret) = recompose_like_type env ft.ft_ret in
-    (env, mk (get_reason ty, Tfun { ft with ft_ret }))
-  | Tnewtype (n, _, ty1) when String.equal n SN.Classes.cSupportDyn ->
-    let (env, ty1) = recompose_like_type env ty1 in
-    simple_make_supportdyn (get_reason ty) env ty1
-  | _ -> (env, orig_ty)
-
-let make_simplify_typed_expr env p ty te =
-  let (env, ty) =
-    if TypecheckerOptions.enable_sound_dynamic (Env.get_tcopt env) then
-      recompose_like_type env ty
-    else
-      (env, ty)
-  in
-  (env, Tast.make_typed_expr p ty te)
+let get_case_type_variants_as_type
+    ((first_ty, _where_constraints) : typedef_case_type_variant)
+    (variants : typedef_case_type_variant list) =
+  (* TODO T201569125 audit callers to see if they need to account for where clauses *)
+  match List.last variants with
+  | None -> first_ty
+  | Some (last_ty, _where_constraints) ->
+    let pos =
+      Pos_or_decl.btw
+        (Typing_reason.to_pos @@ get_reason first_ty)
+        (Typing_reason.to_pos @@ get_reason last_ty)
+    in
+    let tyl = first_ty :: List.map variants ~f:fst in
+    Typing_make_type.union (Typing_reason.hint pos) tyl

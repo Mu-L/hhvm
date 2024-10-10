@@ -18,7 +18,6 @@ package thrift
 
 import (
 	"errors"
-	"io"
 )
 
 var errTransportInterrupted = errors.New("Transport Interrupted")
@@ -31,39 +30,22 @@ const (
 	TransportIDUnknown TransportID = 0
 	// TransportIDHeader is the header transport
 	TransportIDHeader TransportID = 1
-	// TransportIDRocket is the rocket transport
+	// Deprecated: use TransportIDUpgradeToRocket, this is only used for testing purposes.
 	TransportIDRocket TransportID = 2
 	// TransportIDUpgradeToRocket is the transport that upgrades header to rocket
 	TransportIDUpgradeToRocket TransportID = 3
 )
 
-// Flusher is the interface that wraps the basic Flush method
-type Flusher interface {
-	Flush() (err error)
+func (t TransportID) String() string {
+	switch t {
+	case TransportIDUnknown:
+		return "TransportIDUnknown"
+	case TransportIDHeader:
+		return "TransportIDHeader"
+	case TransportIDRocket:
+		return "TransportIDRocket"
+	case TransportIDUpgradeToRocket:
+		return "TransportIDUpgradeToRocket"
+	}
+	panic("unreachable")
 }
-
-// ReadSizeProvider is the interface that wraps the basic RemainingBytes method
-type ReadSizeProvider interface {
-	RemainingBytes() (numBytes uint64)
-}
-
-type stringWriter interface {
-	WriteString(s string) (n int, err error)
-}
-
-// RichTransport is an "enhanced" transport with extra capabilities.
-// You need to use one of these to construct protocol.
-// Notably, Socket does not implement this interface, and it is always a mistake to use
-// Socket directly in protocol.
-type RichTransport interface {
-	io.ReadWriteCloser
-	io.ByteReader
-	io.ByteWriter
-	stringWriter
-	Flusher
-	ReadSizeProvider
-}
-
-// UnknownRemaining is used by transports that can not return a real answer
-// for RemainingBytes()
-const UnknownRemaining = ^uint64(0)

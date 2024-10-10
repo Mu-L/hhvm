@@ -109,6 +109,15 @@ end
 
 module FinalizedErrorSet = Stdlib.Set.Make (FinalizedError)
 
+let (get_hh_fixme_pos : (Pos.t -> error_code -> Pos.t option) ref) =
+  ref (fun _ _ -> None)
+
+let (get_disallowed_fixme_pos : (Pos.t -> error_code -> Pos.t option) ref) =
+  ref (fun _ _ -> None)
+
+let (get_ignore_pos : (Pos.t -> error_code -> Pos.t option) ref) =
+  ref (fun _ _ -> None)
+
 let drop_fixmed_errors (errs : ('a, 'b) User_error.t list) :
     ('a, 'b) User_error.t list =
   List.filter errs ~f:(fun e -> not e.User_error.is_fixmed)
@@ -144,8 +153,6 @@ let accumulate_errors = ref false
    during the course of the typecheck, rather than all upfront). *)
 let in_lazy_decl = ref false
 
-let (is_hh_fixme : (Pos.t -> error_code -> bool) ref) = ref (fun _ _ -> false)
-
 let badpos_message =
   Printf.sprintf
     "Incomplete position information! Your type error is in this file, but we could only find related positions in another file. %s"
@@ -159,8 +166,8 @@ let badpos_message_2 =
 let try_with_result (f1 : unit -> 'res) (f2 : 'res -> error -> 'res) : 'res =
   let error_map_copy = !error_map in
   let accumulate_errors_copy = !accumulate_errors in
-  let is_hh_fixme_copy = !is_hh_fixme in
-  (is_hh_fixme := (fun _ _ -> false));
+  let get_hh_fixme_pos_copy = !get_hh_fixme_pos in
+  (get_hh_fixme_pos := (fun _ _ -> None));
   error_map := Relative_path.Map.empty;
   accumulate_errors := true;
   let (result, errors) =
@@ -176,7 +183,7 @@ let try_with_result (f1 : unit -> 'res) (f2 : 'res -> error -> 'res) : 'res =
           fun () ->
             error_map := error_map_copy;
             accumulate_errors := accumulate_errors_copy;
-            is_hh_fixme := is_hh_fixme_copy
+            get_hh_fixme_pos := get_hh_fixme_pos_copy
         end
   in
   match get_last errors with
@@ -218,8 +225,8 @@ let try_with_result (f1 : unit -> 'res) (f2 : 'res -> error -> 'res) : 'res =
 let try_with_result_pure ~fail f g =
   let error_map_copy = !error_map in
   let accumulate_errors_copy = !accumulate_errors in
-  let is_hh_fixme_copy = !is_hh_fixme in
-  (is_hh_fixme := (fun _ _ -> false));
+  let get_hh_fixme_pos_copy = !get_hh_fixme_pos in
+  (get_hh_fixme_pos := (fun _ _ -> None));
   error_map := Relative_path.Map.empty;
   accumulate_errors := true;
   let (result, errors) =
@@ -235,7 +242,7 @@ let try_with_result_pure ~fail f g =
           fun () ->
             error_map := error_map_copy;
             accumulate_errors := accumulate_errors_copy;
-            is_hh_fixme := is_hh_fixme_copy
+            get_hh_fixme_pos := get_hh_fixme_pos_copy
         end
   in
   match get_last errors with
@@ -249,8 +256,8 @@ let do_ ?(apply_fixmes = true) ?(drop_fixmed = true) f =
   let accumulate_errors_copy = !accumulate_errors in
   error_map := Relative_path.Map.empty;
   accumulate_errors := true;
-  let is_hh_fixme_copy = !is_hh_fixme in
-  (if not apply_fixmes then is_hh_fixme := (fun _ _ -> false));
+  let get_hh_fixme_pos_copy = !get_hh_fixme_pos in
+  (if not apply_fixmes then get_hh_fixme_pos := (fun _ _ -> None));
   let (result, out_errors) =
     Utils.try_finally
       ~f:
@@ -264,7 +271,7 @@ let do_ ?(apply_fixmes = true) ?(drop_fixmed = true) f =
           fun () ->
             error_map := error_map_copy;
             accumulate_errors := accumulate_errors_copy;
-            is_hh_fixme := is_hh_fixme_copy
+            get_hh_fixme_pos := get_hh_fixme_pos_copy
         end
   in
   let out_errors = files_t_map ~f:List.rev out_errors in
@@ -304,13 +311,8 @@ let lazy_decl_error_logging error error_map to_absolute to_string =
 (*****************************************************************************)
 (* Error code printing. *)
 (*****************************************************************************)
-let compare_internal
-    (x : ('a, 'b) User_error.t)
-    (y : ('a, 'b) User_error.t)
-    ~compare_code
-    ~compare_claim_fn
-    ~compare_claim
-    ~compare_reason : int =
+let compare_internal (x : ('a, 'b) User_error.t) (y : ('a, 'b) User_error.t) :
+    int =
   let User_error.
         {
           severity = x_severity;
@@ -337,28 +339,37 @@ let compare_internal
         } =
     y
   in
-  (* The primary sort order is by file *)
-  let comparison =
-    compare_claim_fn (fst x_claim |> Pos.filename) (fst y_claim |> Pos.filename)
-  in
-  (* Then sort by severity *)
+  (* /!\ KEEP THIS IN SYNC WITH errors_impl.rs, `fn cmp_impl` *)
+  let comparison = 0 in
+  (* order by severity *)
   let comparison =
     if comparison = 0 then
       User_error.compare_severity x_severity y_severity
     else
       comparison
   in
-  (* Then within each file, sort by category *)
+  (* order by file *)
   let comparison =
     if comparison = 0 then
-      compare_code x_code y_code
+      Relative_path.compare
+        (fst x_claim |> Pos.filename)
+        (fst y_claim |> Pos.filename)
     else
       comparison
   in
-  (* If the error codes are the same, sort by position *)
+  (* Then within each file, sort by phase *)
+  let comparison =
+    let x_phase = x_code / 1000 in
+    let y_phase = y_code / 1000 in
+    if comparison = 0 then
+      Int.compare x_phase y_phase
+    else
+      comparison
+  in
+  (* If the phases are the same, sort by position *)
   let comparison =
     if comparison = 0 then
-      compare_claim (fst x_claim) (fst y_claim)
+      Pos.compare (fst x_claim) (fst y_claim)
     else
       comparison
   in
@@ -369,63 +380,34 @@ let compare_internal
     else
       comparison
   in
-  (* Finally, if the message text is also the same, then continue comparing
+  (* If the message text is also the same, then continue comparing
      the reason messages (which indicate the reason why Hack believes
      there is an error reported in the claim message) *)
-  if comparison = 0 then
-    (List.compare (Message.compare compare_reason)) x_messages y_messages
-  else
-    comparison
-
-let compare (x : error) (y : error) : int =
-  compare_internal
-    x
-    y
-    ~compare_code:Int.compare
-    ~compare_claim_fn:Relative_path.compare
-    ~compare_claim:Pos.compare
-    ~compare_reason:Pos_or_decl.compare
-
-let compare_finalized (x : finalized_error) (y : finalized_error) : int =
-  compare_internal
-    x
-    y
-    ~compare_code:Int.compare
-    ~compare_claim_fn:String.compare
-    ~compare_claim:Pos.compare_absolute
-    ~compare_reason:Pos.compare_absolute
+  let comparison =
+    if comparison = 0 then
+      (List.compare (Message.compare Pos_or_decl.compare)) x_messages y_messages
+    else
+      comparison
+  in
+  (* If everything else is the same, compare by code *)
+  let comparison =
+    if comparison = 0 then
+      Int.compare x_code y_code
+    else
+      comparison
+  in
+  comparison
 
 let sort (err : error list) : error list =
-  let compare_exact_code = Int.compare in
-  let compare_category x_code y_code =
-    Int.compare (x_code / 1000) (y_code / 1000)
-  in
-  let compare_claim_fn = Relative_path.compare in
-  let compare_claim = Pos.compare in
-  let compare_reason = Pos_or_decl.compare in
-  (* Sort using the exact code to ensure sort stability, but use the category to deduplicate *)
-  let equal x y =
-    compare_internal
-      ~compare_code:compare_category
-      ~compare_claim_fn
-      ~compare_claim
-      ~compare_reason
-      x
-      y
-    = 0
-  in
-  List.sort
-    ~compare:(fun x y ->
-      compare_internal
-        ~compare_code:compare_exact_code
-        ~compare_claim_fn
-        ~compare_claim
-        ~compare_reason
-        x
-        y)
-    err
+  List.sort ~compare:compare_internal err
   |> List.remove_consecutive_duplicates
-       ~equal:(fun x y -> equal x y)
+       ~equal:(fun x y ->
+         (* If two errors have the exact same messages and positions but different codes,
+            consider them equal for deduplication *)
+         compare_internal
+           { x with User_error.code = x.User_error.code / 1000 * 1000 }
+           { y with User_error.code = y.User_error.code / 1000 * 1000 }
+         |> Int.equal 0)
        ~which_to_keep:`First (* Match Rust dedup_by *)
 
 let get_sorted_error_list ?(drop_fixmed = true) err =
@@ -491,37 +473,73 @@ let combining_sort (xs : 'a list) ~(f : 'a -> string) : _ list =
   let (grouped, keys) = build_map xs String.Map.empty [] in
   List.concat_map (List.rev keys) ~f:(fun fn -> Map.find_exn grouped fn)
 
-(* E.g. "10 errors found." *)
-let format_summary format ~displayed_count ~dropped_count ~max_errors :
-    string option =
+let format_or_default = function
+  | Some error_format -> error_format
+  | None -> Highlighted
+
+(* E.g. "10 errors, 11 warnings found." *)
+let format_summary
+    format
+    ~(error_count : int)
+    ~(warning_count : int)
+    ~(dropped_count : int option)
+    ~(max_errors : int option) : string option =
   match format with
   | Context
   | Highlighted
   | Extended ->
-    let found_count = displayed_count + Option.value dropped_count ~default:0 in
-    let found_message =
-      Printf.sprintf
-        "%d error%s found"
-        found_count
-        (if found_count = 1 then
-          ""
-        else
-          "s")
+    let error_count_message =
+      if Int.( = ) error_count 0 then
+        "No errors!"
+      else
+        Printf.sprintf
+          "%d error%s"
+          error_count
+          (if error_count = 1 then
+            ""
+          else
+            "s")
+    in
+    let warning_count_message =
+      if Int.( = ) warning_count 0 then
+        ""
+      else
+        Printf.sprintf
+          "%s %d warning%s"
+          (if Int.( = ) error_count 0 then
+            ""
+          else
+            ",")
+          warning_count
+          (if warning_count = 1 then
+            ""
+          else
+            "s")
+    in
+    let found_s =
+      if Int.( > ) (error_count + warning_count) 0 then
+        " found"
+      else
+        ""
     in
     let truncated_message =
       match (max_errors, dropped_count) with
       | (Some max_errors, Some dropped_count) when dropped_count > 0 ->
         Printf.sprintf
-          " (only showing first %d, dropped %d).\n"
+          " (only showing first %d, dropped %d)"
           max_errors
           dropped_count
-      | (Some max_errors, None) when displayed_count >= max_errors ->
-        Printf.sprintf
-          " (max-errors is %d; more errors may exist).\n"
-          max_errors
-      | _ -> ".\n"
+      | (Some max_errors, None) when error_count + warning_count >= max_errors
+        ->
+        Printf.sprintf " (max-errors is %d; more errors may exist)" max_errors
+      | _ -> ""
     in
-    Some (found_message ^ truncated_message)
+    Some
+      (error_count_message
+      ^ warning_count_message
+      ^ found_s
+      ^ truncated_message
+      ^ "\n")
   | Raw
   | Plain ->
     None
@@ -614,13 +632,8 @@ let allowed_fixme_codes_strict = ref ISet.empty
 
 let set_allow_errors_in_default_path x = allow_errors_in_default_path := x
 
-let is_allowed_code_strict code = ISet.mem code !allowed_fixme_codes_strict
-
-let (get_hh_fixme_pos : (Pos.t -> error_code -> Pos.t option) ref) =
-  ref (fun _ _ -> None)
-
-let (is_hh_fixme_disallowed : (Pos.t -> error_code -> bool) ref) =
-  ref (fun _ _ -> false)
+let is_allowed_code_strict (code : error_code) =
+  ISet.mem code !allowed_fixme_codes_strict
 
 let code_agnostic_fixme = ref false
 
@@ -675,12 +688,12 @@ let check_pos_msg :
       (claim_as_reason claim)
       reasons
 
-let add_error_with_fixme_error error explanation =
+let add_error_with_fixme_error error explanation ~fixme_pos =
   let User_error.
         {
           severity;
           code;
-          claim;
+          claim = _;
           reasons = _;
           quickfixes;
           custom_msgs;
@@ -689,14 +702,12 @@ let add_error_with_fixme_error error explanation =
         } =
     error
   in
-  let (pos, _) = claim in
-  let pos = Option.value (!get_hh_fixme_pos pos code) ~default:pos in
   add_error_impl error;
   add_error_impl
   @@ User_error.make
        severity
        code
-       (pos, explanation)
+       (fixme_pos, explanation)
        []
        ~quickfixes
        ~custom_msgs
@@ -706,8 +717,108 @@ let add_applied_fixme error =
   let error = { error with User_error.is_fixmed = true } in
   add_error_impl error
 
-let fixme_present (pos : Pos.t) code =
-  !is_hh_fixme pos code || !is_hh_fixme_disallowed pos code
+type suppression_kind =
+  | Fixme of { forbidden_decl_fixme: bool }
+  | Ignore
+
+let get_fixme (pos : Pos.t) code : (Pos.t * suppression_kind) option =
+  match !get_hh_fixme_pos pos code with
+  | Some pos -> Some (pos, Fixme { forbidden_decl_fixme = false })
+  | None ->
+    (match !get_ignore_pos pos code with
+    | Some pos -> Some (pos, Ignore)
+    | None ->
+      (match !get_disallowed_fixme_pos pos code with
+      | Some pos -> Some (pos, Fixme { forbidden_decl_fixme = true })
+      | None -> None))
+
+type fixme_error = {
+  explanation: string;
+  fixme_pos: Pos.t;
+}
+
+type fixme_outcome =
+  | Not_fixmed of fixme_error option
+  | Fixmed
+
+let try_apply_fixme pos code severity : fixme_outcome =
+  match get_fixme pos code with
+  | None ->
+    (* Fixmes and banned decl fixmes are separated by the parser because Errors can't recover
+     * the position information after the fact. This is the default case, where an HH_FIXME
+     * comment is not present. Therefore, the remaining cases are variations on behavior when
+     * a fixme is present *)
+    Not_fixmed None
+  | Some (fixme_pos, fixme_kind) ->
+    let severity_based_on_code =
+      (* We use severity based on code for warning-to-error migration scenarios.
+         Sometimes we want to introduce an new error as a warning first. In that case,
+         to avoid having to codemod any HH_IGNORE along with their codes when the
+         warnings become errors, we'll first make the errors have a non-warning code
+         but have warning severity at first, and we'll force suppression using HH_FIXME instead of HH_IGNORE. *)
+      match Error_codes.Warning.of_enum code with
+      | Some _ -> User_error.Warning
+      | None -> User_error.Err
+    in
+    (match (severity_based_on_code, fixme_kind) with
+    | (User_error.Err, Fixme { forbidden_decl_fixme }) ->
+      if ISet.mem code hard_banned_codes then
+        let explanation =
+          Printf.sprintf
+            "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress error %d, and this cannot be enabled by configuration"
+            code
+        in
+        Not_fixmed (Some { explanation; fixme_pos })
+      else if Relative_path.(is_hhi (prefix (Pos.filename pos))) then
+        Fixmed
+      else if !report_pos_from_reason && Pos.get_from_reason pos then
+        let explanation =
+          "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress an error whose position was derived from reason information"
+        in
+        Not_fixmed (Some { explanation; fixme_pos })
+      else if forbidden_decl_fixme then
+        let explanation =
+          Printf.sprintf
+            "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress error %d in declarations"
+            code
+        in
+        Not_fixmed (Some { explanation; fixme_pos })
+      else if is_allowed_code_strict code then
+        Fixmed
+      else
+        let explanation =
+          Printf.sprintf
+            "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress error %d"
+            code
+        in
+        Not_fixmed (Some { explanation; fixme_pos })
+    | (User_error.Warning, Fixme _) ->
+      let explanation =
+        Printf.sprintf
+          "You cannot use `HH_FIXME` comments to suppress warnings. Use `HH_IGNORE[%d]` instead."
+          code
+      in
+      Not_fixmed (Some { explanation; fixme_pos })
+    | (User_error.Warning, Ignore) -> Fixmed
+    | (User_error.Err, Ignore) ->
+      let explanation =
+        match severity with
+        | User_error.Err ->
+          Printf.sprintf
+            "You cannot use `HH_IGNORE` to suppress non-warning code %d. Hack errors should not be suppressed. You should try your best to fix the code causing the error, or incidents will happen."
+            code
+        | User_error.Warning ->
+          Printf.sprintf
+            "This warning code %d will soon be migrated to be an error. Try your best to fix it, or if not possible, suppress it with `HH_FIXME` instead of `HH_IGNORE` and report your case to us."
+            code
+      in
+      Not_fixmed (Some { explanation; fixme_pos }))
+
+let is_suppressed error =
+  let User_error.{ severity; code; claim = (pos, _); _ } = error in
+  match try_apply_fixme pos code severity with
+  | Fixmed -> true
+  | Not_fixmed _ -> false
 
 let add_error (error : error) =
   let User_error.
@@ -730,42 +841,11 @@ let add_error (error : error) =
 
   let pos = fst claim in
 
-  if not (fixme_present pos code) then
-    (* Fixmes and banned decl fixmes are separated by the parser because Errors can't recover
-     * the position information after the fact. This is the default case, where an HH_FIXME
-     * comment is not present. Therefore, the remaining cases are variations on behavior when
-     * a fixme is present *)
-    add_error_impl error
-  else if ISet.mem code hard_banned_codes then
-    let explanation =
-      Printf.sprintf
-        "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress error %d, and this cannot be enabled by configuration"
-        code
-    in
-    add_error_with_fixme_error error explanation
-  else if Relative_path.(is_hhi (prefix (Pos.filename pos))) then
-    add_applied_fixme error
-  else if !report_pos_from_reason && Pos.get_from_reason pos then
-    let explanation =
-      "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress an error whose position was derived from reason information"
-    in
-    add_error_with_fixme_error error explanation
-  else if !is_hh_fixme_disallowed pos code then
-    let explanation =
-      Printf.sprintf
-        "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress error %d in declarations"
-        code
-    in
-    add_error_with_fixme_error error explanation
-  else if is_allowed_code_strict code then
-    add_applied_fixme error
-  else
-    let explanation =
-      Printf.sprintf
-        "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress error %d"
-        code
-    in
-    add_error_with_fixme_error error explanation
+  match try_apply_fixme pos code severity with
+  | Not_fixmed None -> add_error_impl error
+  | Not_fixmed (Some { explanation; fixme_pos }) ->
+    add_error_with_fixme_error error explanation ~fixme_pos
+  | Fixmed -> add_applied_fixme error
 
 let merge err' err =
   let append _ x y =
@@ -940,7 +1020,7 @@ let as_telemetry_summary : t -> Telemetry.t =
 let as_telemetry
     ~limit
     ~with_context_limit
-    ~(error_to_context : finalized_error -> string)
+    ~(error_to_string : finalized_error -> string)
     (errors : t) : Telemetry.t =
   let module L = struct
     type error_to_process = {
@@ -950,18 +1030,15 @@ let as_telemetry
   end in
   let errors = drop_fixmed_errors_in_files errors in
   let total_count = error_count errors in
-  let ( (errors : L.error_to_process list Relative_path.Map.t),
-        _,
-        _,
-        is_truncated ) =
+  let ((errors : L.error_to_process list Relative_path.Map.t), _, is_truncated)
+      =
     Relative_path.Map.fold
       errors
-      ~init:(Relative_path.Map.empty, 0, 0, false)
+      ~init:(Relative_path.Map.empty, 0, false)
       ~f:(fun
            path
            file_errors
-           ((errors_acc, errors_acc_count, with_context_count, is_truncated) as
-           acc)
+           ((errors_acc, errors_acc_count, is_truncated) as acc)
          ->
         if is_truncated then
           acc
@@ -969,27 +1046,26 @@ let as_telemetry
           let file_errors_count = List.length file_errors in
           let remaining_capacity = limit - errors_acc_count in
           let is_truncated = remaining_capacity < file_errors_count in
-          let (file_errors, file_errors_count) =
+          let file_errors =
             if is_truncated then
-              (List.take file_errors remaining_capacity, limit)
+              List.take file_errors remaining_capacity
             else
-              (file_errors, file_errors_count)
+              file_errors
           in
           let file_errors =
             let remaining_with_context =
-              with_context_limit - with_context_count
+              with_context_limit - errors_acc_count
             in
             List.mapi file_errors ~f:(fun i error ->
-                L.{ error; include_context = remaining_with_context > i })
+                L.{ error; include_context = i < remaining_with_context })
           in
           ( Relative_path.Map.add errors_acc ~key:path ~data:file_errors,
             errors_acc_count + file_errors_count,
-            with_context_count + file_errors_count,
             is_truncated ))
   in
-  (* Convert to Scuba loggable data *)
-  let error_to_telemetry (err : L.error_to_process) : Telemetry.t =
-    let rel_err = User_error.to_relative err.L.error in
+  let error_to_telemetry ({ L.error; include_context } : L.error_to_process) :
+      Telemetry.t =
+    let rel_err = User_error.to_relative error in
     let { User_error.severity; code; _ } = rel_err in
     let telemetry =
       Telemetry.create ()
@@ -997,6 +1073,9 @@ let as_telemetry
            ~key:"error_severity"
            ~value:(User_error.Severity.to_all_caps_string severity)
       |> Telemetry.int_ ~key:"error_code" ~value:code
+      |> Telemetry.string_
+           ~key:"line_agnostic_hash"
+           ~value:(Printf.sprintf "%x" (Error.hash_for_saved_state error))
       |> Telemetry.json_
            ~key:"error_json"
            ~value:
@@ -1005,19 +1084,19 @@ let as_telemetry
                 ~filename_to_string:Relative_path.suffix
                 rel_err)
     in
-    if err.L.include_context then
+    if include_context then
       telemetry
       |> Telemetry.string_
            ~key:"error_context"
-           ~value:(error_to_context @@ User_error.to_absolute err.L.error)
+           ~value:(error_to_string @@ User_error.to_absolute error)
     else
       telemetry
   in
   let by_file =
-    List.fold
-      (Relative_path.Map.bindings errors)
+    Relative_path.Map.fold
+      errors
       ~init:(Telemetry.create ())
-      ~f:(fun t (path, errors) ->
+      ~f:(fun path errors t ->
         Telemetry.object_list
           t
           ~key:(Relative_path.suffix path)
@@ -1309,3 +1388,46 @@ let filter (errors : t) ~(f : Relative_path.t -> error -> bool) : t =
   Relative_path.Map.filter_map errors ~f:(fun path errors ->
       let errors = List.filter errors ~f:(f path) in
       Option.some_if (not (List.is_empty errors)) errors)
+
+let fold (errors : t) ~(init : 'acc) ~f =
+  Relative_path.Map.fold errors ~init ~f:(fun path errors acc ->
+      List.fold errors ~init:acc ~f:(fun acc error -> f path error acc))
+
+let count_errors_and_warnings (error_list : (_, _) User_error.t list) :
+    int * int =
+  List.fold
+    error_list
+    ~init:(0, 0)
+    ~f:(fun (err_count, warn_count) { User_error.severity; _ } ->
+      match severity with
+      | User_error.Warning -> (err_count, warn_count + 1)
+      | User_error.Err -> (err_count + 1, warn_count))
+
+let filter_out_mergebase_warnings
+    (mergebase_warning_hashes : Warnings_saved_state.t option) (errors : t) : t
+    =
+  match mergebase_warning_hashes with
+  | None -> errors
+  | Some mergebase_warning_hashes ->
+    filter errors ~f:(fun _path error ->
+        match error.User_error.severity with
+        | User_error.Err -> true
+        | User_error.Warning ->
+          not
+            (Warnings_saved_state.mem
+               (Error.hash_for_saved_state error)
+               mergebase_warning_hashes))
+
+let filter_out_warnings (errors : t) : t =
+  filter errors ~f:(fun _path error ->
+      match error.User_error.severity with
+      | User_error.Err -> true
+      | User_error.Warning -> false)
+
+let make_warning_saved_state (errors : t) : Warnings_saved_state.t =
+  fold errors ~init:Warnings_saved_state.empty ~f:(fun _path error ss ->
+      match error.User_error.severity with
+      | User_error.Err -> ss
+      | User_error.Warning ->
+        let hash = Error.hash_for_saved_state error in
+        Warnings_saved_state.add hash ss)

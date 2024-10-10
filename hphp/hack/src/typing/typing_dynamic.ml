@@ -58,7 +58,7 @@ let check_property_sound_for_dynamic_read ~on_error env classname id ty =
          (fst id)
          (snd id)
          classname
-         (pos, Typing_print.full_strip_ns env ty))
+         (pos, Typing_print.full_strip_ns ~hide_internals:true env ty))
   ) else
     None
 
@@ -149,7 +149,7 @@ let sound_dynamic_interface_check_from_fun_ty ~this_class env fun_ty =
 let make_like env changed ty =
   if
     Typing_defs.is_dynamic ty
-    || Option.is_some (Typing_utils.try_strip_dynamic env ty)
+    || Option.is_some (snd (Typing_dynamic_utils.try_strip_dynamic env ty))
   then
     (changed, ty)
   else
@@ -206,11 +206,31 @@ let push_like_tyargs env tyl tparams =
 
 let rec try_push_like env ty =
   match deref ty with
-  | (r, Ttuple tyl) ->
-    let (changed, tyl) = List.map_env false tyl ~f:(make_like env) in
+  | (r, Ttuple { t_required; t_extra = Textra { t_optional; t_variadic } }) ->
+    let (changed, t_required) =
+      List.map_env false t_required ~f:(make_like env)
+    in
+    let (changed, t_optional) =
+      List.map_env changed t_optional ~f:(make_like env)
+    in
+    let (changed, t_variadic) = make_like env changed t_variadic in
     ( env,
       if changed then
-        Some (mk (r, Ttuple tyl))
+        Some
+          (mk
+             ( r,
+               Ttuple
+                 { t_required; t_extra = Textra { t_optional; t_variadic } } ))
+      else
+        None )
+  | (r, Ttuple { t_required; t_extra = Tsplat t_splat }) ->
+    let (changed, t_required) =
+      List.map_env false t_required ~f:(make_like env)
+    in
+    let (changed, t_splat) = make_like env changed t_splat in
+    ( env,
+      if changed then
+        Some (mk (r, Ttuple { t_required; t_extra = Tsplat t_splat }))
       else
         None )
   | (r, Tfun ft) ->
@@ -287,13 +307,29 @@ let rec try_push_like env ty =
  *   e.g. tuple and shape components, covariant type arguments to generic classes.
  *)
 let rec strip_covariant_like env ty =
-  match Typing_utils.try_strip_dynamic ~accept_intersections:true env ty with
-  | Some ty -> (env, ty)
-  | None ->
+  match
+    Typing_dynamic_utils.try_strip_dynamic ~accept_intersections:true env ty
+  with
+  | (env, Some ty) -> (env, ty)
+  | (env, None) ->
     (match deref ty with
-    | (r, Ttuple tyl) ->
-      let (env, tyl) = List.map_env env ~f:strip_covariant_like tyl in
-      (env, mk (r, Ttuple tyl))
+    | (r, Ttuple { t_required; t_extra }) ->
+      let (env, t_required) =
+        List.map_env env ~f:strip_covariant_like t_required
+      in
+      let (env, t_extra) =
+        match t_extra with
+        | Textra { t_optional; t_variadic } ->
+          let (env, t_optional) =
+            List.map_env env ~f:strip_covariant_like t_optional
+          in
+          let (env, t_variadic) = strip_covariant_like env t_variadic in
+          (env, Textra { t_optional; t_variadic })
+        | Tsplat t_splat ->
+          let (env, t_splat) = strip_covariant_like env t_splat in
+          (env, Tsplat t_splat)
+      in
+      (env, mk (r, Ttuple { t_required; t_extra }))
     | (r, Tfun ft) ->
       let (env, ret_ty) = strip_covariant_like env ft.ft_ret in
       (env, mk (r, Tfun { ft with ft_ret = ret_ty }))

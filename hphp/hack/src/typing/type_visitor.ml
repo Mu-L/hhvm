@@ -46,7 +46,9 @@ class type ['a] decl_type_visitor_type =
     method on_tapply :
       'a -> decl_phase Reason.t_ -> pos_id -> decl_ty list -> 'a
 
-    method on_ttuple : 'a -> decl_phase Reason.t_ -> decl_ty list -> 'a
+    method on_tuple_extra : 'a -> decl_phase tuple_extra -> 'a
+
+    method on_ttuple : 'a -> decl_phase Reason.t_ -> decl_phase tuple_type -> 'a
 
     method on_tunion : 'a -> decl_phase Reason.t_ -> decl_ty list -> 'a
 
@@ -59,9 +61,6 @@ class type ['a] decl_type_visitor_type =
 
     method on_trefinement :
       'a -> decl_phase Reason.t_ -> decl_ty -> decl_class_refinement -> 'a
-
-    method on_tnewtype :
-      'a -> decl_phase Reason.t_ -> string -> decl_ty list -> decl_ty -> 'a
   end
 
 class virtual ['a] decl_type_visitor : ['a] decl_type_visitor_type =
@@ -144,7 +143,16 @@ class virtual ['a] decl_type_visitor : ['a] decl_type_visitor_type =
 
     method on_taccess acc _ (root, _ids) = this#on_type acc root
 
-    method on_ttuple acc _ tyl = List.fold_left tyl ~f:this#on_type ~init:acc
+    method on_ttuple acc _ { t_required; t_extra } =
+      let acc = this#on_tuple_extra acc t_extra in
+      List.fold_left t_required ~f:this#on_type ~init:acc
+
+    method on_tuple_extra acc e =
+      match e with
+      | Tsplat t_splat -> this#on_type acc t_splat
+      | Textra { t_optional; t_variadic } ->
+        let acc = this#on_type acc t_variadic in
+        List.fold_left t_optional ~f:this#on_type ~init:acc
 
     method on_tunion acc _ tyl = List.fold_left tyl ~f:this#on_type ~init:acc
 
@@ -156,11 +164,6 @@ class virtual ['a] decl_type_visitor : ['a] decl_type_visitor_type =
       let acc = this#on_type acc kind in
       let f _ { sft_ty; _ } acc = this#on_type acc sft_ty in
       TShapeMap.fold f fdm acc
-
-    method on_tnewtype acc _ _ tyl ty =
-      let acc = List.fold_left tyl ~f:this#on_type ~init:acc in
-      let acc = this#on_type acc ty in
-      acc
 
     method on_type acc ty =
       let (r, x) = deref ty in
@@ -180,11 +183,10 @@ class virtual ['a] decl_type_visitor : ['a] decl_type_visitor_type =
       | Tapply (s, tyl) -> this#on_tapply acc r s tyl
       | Trefinement (ty, rs) -> this#on_trefinement acc r ty rs
       | Taccess aty -> this#on_taccess acc r aty
-      | Ttuple tyl -> this#on_ttuple acc r tyl
+      | Ttuple t -> this#on_ttuple acc r t
       | Tunion tyl -> this#on_tunion acc r tyl
       | Tintersection tyl -> this#on_tintersection acc r tyl
       | Tshape s -> this#on_tshape acc r s
-      | Tnewtype (name, tyl, ty) -> this#on_tnewtype acc r name tyl ty
   end
 
 class type ['a] locl_type_visitor_type =
@@ -212,7 +214,9 @@ class type ['a] locl_type_visitor_type =
 
     method on_tdependent : 'a -> Reason.t -> dependent_type -> locl_ty -> 'a
 
-    method on_ttuple : 'a -> Reason.t -> locl_ty list -> 'a
+    method on_tuple_extra : 'a -> locl_phase tuple_extra -> 'a
+
+    method on_ttuple : 'a -> Reason.t -> locl_phase tuple_type -> 'a
 
     method on_tunion : 'a -> Reason.t -> locl_ty list -> 'a
 
@@ -236,7 +240,7 @@ class type ['a] locl_type_visitor_type =
 
     method on_taccess : 'a -> Reason.t -> locl_phase taccess_type -> 'a
 
-    method on_neg_type : 'a -> Reason.t -> neg_type -> 'a
+    method on_neg_type : 'a -> Reason.t -> type_predicate -> 'a
 
     method on_tlabel : 'a -> Reason.t -> string -> 'a
   end
@@ -285,7 +289,16 @@ class virtual ['a] locl_type_visitor : ['a] locl_type_visitor_type =
       let acc = this#on_type acc ty in
       acc
 
-    method on_ttuple acc _ tyl = List.fold_left tyl ~f:this#on_type ~init:acc
+    method on_ttuple acc _ { t_required; t_extra } =
+      let acc = this#on_tuple_extra acc t_extra in
+      List.fold_left t_required ~f:this#on_type ~init:acc
+
+    method on_tuple_extra acc e =
+      match e with
+      | Tsplat t_splat -> this#on_type acc t_splat
+      | Textra { t_optional; t_variadic } ->
+        let acc = this#on_type acc t_variadic in
+        List.fold_left t_optional ~f:this#on_type ~init:acc
 
     method on_tunion acc _ tyl = List.fold_left tyl ~f:this#on_type ~init:acc
 
@@ -324,9 +337,24 @@ class virtual ['a] locl_type_visitor : ['a] locl_type_visitor_type =
       this#on_type acc ty2
 
     method on_neg_type acc r neg_ty =
-      match neg_ty with
-      | Neg_class c -> this#on_tclass acc r c nonexact []
-      | Neg_predicate _p -> acc
+      let on_tag acc tag =
+        match tag with
+        | ClassTag c -> this#on_tclass acc r (Reason.to_pos r, c) nonexact []
+        | ArraykeyTag
+        | BoolTag
+        | IntTag
+        | StringTag
+        | FloatTag
+        | NumTag
+        | ResourceTag
+        | NullTag ->
+          acc
+      in
+      match snd neg_ty with
+      | IsTag tag -> on_tag acc tag
+      | IsTupleOf _
+      | IsShapeOf _ ->
+        acc
 
     method on_tunapplied_alias acc _ _ = acc
 
@@ -347,7 +375,7 @@ class virtual ['a] locl_type_visitor : ['a] locl_type_visitor_type =
       | Tgeneric (x, args) -> this#on_tgeneric acc r x args
       | Tnewtype (x, tyl, ty) -> this#on_tnewtype acc r x tyl ty
       | Tdependent (x, ty) -> this#on_tdependent acc r x ty
-      | Ttuple tyl -> this#on_ttuple acc r tyl
+      | Ttuple t -> this#on_ttuple acc r t
       | Tunion tyl -> this#on_tunion acc r tyl
       | Tintersection tyl -> this#on_tintersection acc r tyl
       | Tshape s -> this#on_tshape acc r s

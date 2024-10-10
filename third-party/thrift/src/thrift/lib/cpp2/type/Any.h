@@ -22,8 +22,7 @@
 #include <thrift/lib/cpp2/type/detail/Wrap.h>
 #include <thrift/lib/thrift/gen-cpp2/any_rep_types.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 namespace type {
 
 // TODO(afuller): Add an 'Any' class that can be any of:
@@ -72,6 +71,13 @@ class AnyData : public detail::Wrap<AnyStruct> {
   template <typename T>
   void get(T& v) const {
     get<infer_tag<T>>(v);
+  }
+
+  template <typename Tag>
+  type::native_type<Tag> get() const {
+    type::native_type<Tag> v;
+    get<Tag>(v);
+    return v;
   }
 
   bool isValid() const noexcept { return isValid(data_); }
@@ -179,5 +185,4 @@ class Cpp2Ops<type::AnyData> {
   }
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

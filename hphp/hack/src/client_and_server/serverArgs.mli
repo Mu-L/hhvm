@@ -39,8 +39,6 @@ val custom_telemetry_data : options -> (string * string) list
 
 val dump_fanout : options -> bool
 
-val enable_global_access_check : options -> bool
-
 val from : options -> string
 
 val gen_saved_ignore_type_errors : options -> bool
@@ -50,8 +48,6 @@ val ignore_hh_version : options -> bool
 val saved_state_ignore_hhconfig : options -> bool
 
 val json_mode : options -> bool
-
-val log_inference_constraints : options -> bool
 
 val max_procs : options -> int option
 

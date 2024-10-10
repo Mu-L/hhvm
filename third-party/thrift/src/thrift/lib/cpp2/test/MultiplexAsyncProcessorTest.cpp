@@ -404,6 +404,12 @@ class WildcardThrowsInternalError : public TProcessorFactory {
         inner_->destroyAllInteractions(ctx, eb);
       }
 
+      void processInteraction(ServerRequest&&) override {
+        LOG(FATAL)
+            << "This AsyncProcessor doesn't support Thrift interactions. "
+            << "Please implement processInteraction to support interactions.";
+      }
+
       explicit Processor(
           std::unique_ptr<AsyncProcessor>&& inner,
           const MessageVariant& message)
@@ -750,6 +756,19 @@ TEST_F(MultiplexAsyncProcessorServerTest, InteractionConflict) {
   EXPECT_THAT(
       [&] { thing2.semifuture_bar().get(); },
       ThrowsMessage<TApplicationException>("ConflictsInteraction1"));
+}
+
+TEST_F(MultiplexAsyncProcessorTest, ThriftGenerated) {
+  auto generated = multiplex(
+      {std::make_shared<FirstHandler>(),
+       std::make_shared<SecondHandler>(),
+       multiplex({std::make_shared<ThirdHandler>()})});
+  auto notGenerated = multiplex(
+      {std::make_shared<ThriftServerAsyncProcessorFactory<FirstHandler>>(
+           std::make_shared<FirstHandler>()),
+       std::make_shared<SecondHandler>()});
+  EXPECT_TRUE(generated->isThriftGenerated());
+  EXPECT_FALSE(notGenerated->isThriftGenerated());
 }
 
 } // namespace apache::thrift::test

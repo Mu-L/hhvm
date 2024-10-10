@@ -35,11 +35,12 @@ from python_test.containers.thrift_types import Color, Foo, Sets
 from python_test.sets.thrift_types import (
     easy,
     EasySet,
+    SetAtoIValue,
     SetI32,
     SetI32Lists,
     SetSetI32Lists,
 )
-from python_test.testing_utils import Untruthy
+from thrift.lib.python.test.testing_utils import Untruthy
 
 
 @parameterized_class(
@@ -55,6 +56,7 @@ class SetTests(unittest.TestCase):
         self.easy: Type[easy] = self.sets_types.easy
         self.EasySet: Type[EasySet] = self.sets_types.EasySet
         self.SetI32: Type[SetI32] = self.sets_types.SetI32
+        self.SetAtoIValue: Type[SetAtoIValue] = self.sets_types.SetAtoIValue
         self.SetI32Lists: Type[SetI32Lists] = self.sets_types.SetI32Lists
         self.SetSetI32Lists: Type[SetSetI32Lists] = self.sets_types.SetSetI32Lists
         # pyre-ignore[16]: has no attribute `containers_types`
@@ -218,6 +220,11 @@ class SetTests(unittest.TestCase):
             self.assertIs(structs1[0], structs2[0])
             self.assertIs(structs1[1], structs2[1])
 
+    def test_adapted_sets(self) -> None:
+        int_set = {1, 2, 3}
+
+        self.assertEqual(int_set, self.SetAtoIValue(int_set))
+
 
 class ImmutableSetTests(unittest.TestCase):
     """
@@ -292,14 +299,13 @@ class SetImmutablePythonTests(unittest.TestCase):
 
 # TODO: Collapse these two test cases into parameterized test above
 class SetMutablePythonTests(unittest.TestCase):
-    # pyre-ignore
     Color = mutable_containers_types.Color
-    # pyre-ignore
     Sets = mutable_containers_types.Sets
 
     # this test case documents behavior divergences from thrift-python
     @unittest.expectedFailure
     def test_contains_enum(self) -> None:
+        # pyre-ignore[6]: Fixme: type error to be addressed later
         cset = self.Sets(colorSet={self.Color.red, self.Color.blue})
         # TODO(T194526180): mutable thrift-python should not raise
         self.assertNotIn("str", cset.colorSet)

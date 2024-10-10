@@ -22,7 +22,11 @@ from thrift.py3.types cimport (
     StructFieldsSetter as __StructFieldsSetter
 )
 
-from thrift.py3.types cimport const_pointer_cast, BadEnum as _fbthrift_BadEnum
+from thrift.py3.types cimport const_pointer_cast
+from thrift.python.types cimport BadEnum as _fbthrift_BadEnum
+
+
+import my.namespacing.test.module.module.types as _my_namespacing_test_module_module_types
 
 
 @__cython.auto_pickle(False)

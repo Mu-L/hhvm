@@ -571,6 +571,8 @@ void Subprocess::closeInheritedFds(const Options::FdMap& fdActions) {
       // We do not use the POSIX interfaces (opendir, readdir, etc..) for
       // reading a directory since they may allocate memory / grab a lock, which
       // is unsafe in this context.
+      FOLLY_PUSH_WARNING
+      FOLLY_CLANG_DISABLE_WARNING("-Wzero-length-array")
       struct linux_dirent64 {
         uint64_t d_ino;
         int64_t d_off;
@@ -578,6 +580,7 @@ void Subprocess::closeInheritedFds(const Options::FdMap& fdActions) {
         unsigned char d_type;
         char d_name[0];
       } const* entry;
+      FOLLY_POP_WARNING
       for (int offset = 0; offset < res; offset += entry->d_reclen) {
         entry = reinterpret_cast<struct linux_dirent64*>(buffer + offset);
         if (entry->d_type != DT_LNK) {
@@ -600,7 +603,7 @@ void Subprocess::closeInheritedFds(const Options::FdMap& fdActions) {
 #endif
   // If not running on Linux or if we failed to open /proc/self/fd, try to close
   // all possible open file descriptors.
-  for (int fd = sysconf(_SC_OPEN_MAX) - 1; fd >= 3; --fd) {
+  for (auto fd = sysconf(_SC_OPEN_MAX) - 1; fd >= 3; --fd) {
     if (fdActions.count(fd) == 0) {
       ::close(fd);
     }

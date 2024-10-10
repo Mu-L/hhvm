@@ -52,8 +52,8 @@
                  fp_type = (Rhint ([7:14-16]), (Tgeneric ("T/$a", [])));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params =
@@ -104,8 +104,8 @@
                   (Toption (Rhint ([9:22-24]), (Tgeneric ("T/$a", [])))));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params =
@@ -156,8 +156,8 @@
                   (Tlike (Rhint ([11:20-22]), (Tgeneric ("T/$a", [])))));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params =
@@ -210,8 +210,8 @@
                       (Toption (Rhint ([13:28-30]), (Tgeneric ("T/$a", [])))))));
                  fp_flags =
                  { Typing_defs_flags.FunParam.accept_disposable = false;
-                   inout = false; has_default = false; readonly = false;
-                   ignore_readonly_error = false };
+                   inout = false; is_optional = false; readonly = false;
+                   ignore_readonly_error = false; splat = false };
                  fp_def_value = None }
                 ];
               ft_implicit_params =

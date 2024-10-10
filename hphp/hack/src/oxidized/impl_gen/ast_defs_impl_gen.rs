@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<d2a7bb227670da1983ed08fcf4e7aafd>>
+// @generated SignedSource<<0690a5df335f61e9f50e5a591f04e86d>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -11,18 +11,21 @@
 #![allow(clippy::all)]
 use crate::ast_defs::*;
 impl ShapeFieldName {
-    pub fn mk_sflit_int(p0: Pstring) -> Self {
-        ShapeFieldName::SFlitInt(p0)
+    pub fn mk_sfregex_group(p0: Pstring) -> Self {
+        ShapeFieldName::SFregexGroup(p0)
     }
     pub fn mk_sflit_str(p0: PositionedByteString) -> Self {
         ShapeFieldName::SFlitStr(p0)
     }
+    pub fn mk_sfclassname(p0: Id) -> Self {
+        ShapeFieldName::SFclassname(p0)
+    }
     pub fn mk_sfclass_const(p0: Id, p1: Pstring) -> Self {
         ShapeFieldName::SFclassConst(p0, p1)
     }
-    pub fn is_sflit_int(&self) -> bool {
+    pub fn is_sfregex_group(&self) -> bool {
         match self {
-            ShapeFieldName::SFlitInt(..) => true,
+            ShapeFieldName::SFregexGroup(..) => true,
             _ => false,
         }
     }
@@ -32,15 +35,21 @@ impl ShapeFieldName {
             _ => false,
         }
     }
+    pub fn is_sfclassname(&self) -> bool {
+        match self {
+            ShapeFieldName::SFclassname(..) => true,
+            _ => false,
+        }
+    }
     pub fn is_sfclass_const(&self) -> bool {
         match self {
             ShapeFieldName::SFclassConst(..) => true,
             _ => false,
         }
     }
-    pub fn as_sflit_int(&self) -> Option<&Pstring> {
+    pub fn as_sfregex_group(&self) -> Option<&Pstring> {
         match self {
-            ShapeFieldName::SFlitInt(p0) => Some(p0),
+            ShapeFieldName::SFregexGroup(p0) => Some(p0),
             _ => None,
         }
     }
@@ -50,15 +59,21 @@ impl ShapeFieldName {
             _ => None,
         }
     }
+    pub fn as_sfclassname(&self) -> Option<&Id> {
+        match self {
+            ShapeFieldName::SFclassname(p0) => Some(p0),
+            _ => None,
+        }
+    }
     pub fn as_sfclass_const(&self) -> Option<(&Id, &Pstring)> {
         match self {
             ShapeFieldName::SFclassConst(p0, p1) => Some((p0, p1)),
             _ => None,
         }
     }
-    pub fn as_sflit_int_mut(&mut self) -> Option<&mut Pstring> {
+    pub fn as_sfregex_group_mut(&mut self) -> Option<&mut Pstring> {
         match self {
-            ShapeFieldName::SFlitInt(p0) => Some(p0),
+            ShapeFieldName::SFregexGroup(p0) => Some(p0),
             _ => None,
         }
     }
@@ -68,21 +83,33 @@ impl ShapeFieldName {
             _ => None,
         }
     }
+    pub fn as_sfclassname_mut(&mut self) -> Option<&mut Id> {
+        match self {
+            ShapeFieldName::SFclassname(p0) => Some(p0),
+            _ => None,
+        }
+    }
     pub fn as_sfclass_const_mut(&mut self) -> Option<(&mut Id, &mut Pstring)> {
         match self {
             ShapeFieldName::SFclassConst(p0, p1) => Some((p0, p1)),
             _ => None,
         }
     }
-    pub fn as_sflit_int_into(self) -> Option<Pstring> {
+    pub fn as_sfregex_group_into(self) -> Option<Pstring> {
         match self {
-            ShapeFieldName::SFlitInt(p0) => Some(p0),
+            ShapeFieldName::SFregexGroup(p0) => Some(p0),
             _ => None,
         }
     }
     pub fn as_sflit_str_into(self) -> Option<PositionedByteString> {
         match self {
             ShapeFieldName::SFlitStr(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_sfclassname_into(self) -> Option<Id> {
+        match self {
+            ShapeFieldName::SFclassname(p0) => Some(p0),
             _ => None,
         }
     }
@@ -305,6 +332,14 @@ impl OptionalKind {
         OptionalKind::Optional
     }
     pub fn is_optional(&self) -> bool {
+        true
+    }
+}
+impl SplatKind {
+    pub fn mk_splat() -> Self {
+        SplatKind::Splat
+    }
+    pub fn is_splat(&self) -> bool {
         true
     }
 }
@@ -910,9 +945,6 @@ impl TypedefVisibility {
     pub fn mk_opaque_module() -> Self {
         TypedefVisibility::OpaqueModule
     }
-    pub fn mk_case_type() -> Self {
-        TypedefVisibility::CaseType
-    }
     pub fn is_transparent(&self) -> bool {
         match self {
             TypedefVisibility::Transparent => true,
@@ -928,12 +960,6 @@ impl TypedefVisibility {
     pub fn is_opaque_module(&self) -> bool {
         match self {
             TypedefVisibility::OpaqueModule => true,
-            _ => false,
-        }
-    }
-    pub fn is_case_type(&self) -> bool {
-        match self {
-            TypedefVisibility::CaseType => true,
             _ => false,
         }
     }

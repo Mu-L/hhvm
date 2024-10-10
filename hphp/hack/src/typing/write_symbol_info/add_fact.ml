@@ -33,8 +33,7 @@ let namespace_decl_opt name fa =
   | Some "" -> fa
   | Some name -> namespace_decl name fa |> snd
 
-let container_decl decl_pred name fa =
-  let qname = Util.make_qname name in
+let container_decl_qname decl_pred qname fa =
   let json =
     match decl_pred with
     | Predicate.(Hack ClassDeclaration) ->
@@ -51,9 +50,11 @@ let container_decl decl_pred name fa =
 
 let parent_decls decls pred fa =
   List.fold decls ~init:([], fa) ~f:(fun (decl_refs, fa) decl ->
-      let name = Pretty.(hint_to_string ~is_ctx:false decl |> strip_tparams) in
-      let (decl_id, fa) = container_decl pred name fa in
-      (decl_id :: decl_refs, fa))
+      match Util.class_hint_to_qname decl with
+      | Some qname ->
+        let (decl_id, fa) = container_decl_qname pred qname fa in
+        (decl_id :: decl_refs, fa)
+      | None -> (decl_refs, fa))
 
 let parent_decls_enum decls fa =
   let (fact_ids, fa) = parent_decls decls Predicate.(Hack EnumDeclaration) fa in
@@ -63,6 +64,7 @@ let parent_decls_class decls fa =
   let (fact_ids, fa) =
     parent_decls decls Predicate.(Hack ClassDeclaration) fa
   in
+
   (List.map ~f:(fun x -> ClassDeclaration.Id x) fact_ids, fa)
 
 let parent_decls_trait decls fa =
@@ -106,11 +108,141 @@ let inherited_members ~container_type ~container_id ~member_clusters fa =
   in
   Fact_acc.add_fact Predicate.(Hack InheritedMembers) json fa
 
+let property_decl con_type decl_id name fa =
+  let json =
+    PropertyDeclaration.(
+      {
+        name = Util.make_name name;
+        container = Predicate.container_decl con_type decl_id;
+      }
+      |> to_json_key)
+  in
+  Fact_acc.add_fact Predicate.(Hack PropertyDeclaration) json fa
+
+let class_const_decl con_type decl_id name fa =
+  let json =
+    ClassConstDeclaration.(
+      {
+        name = Util.make_name name;
+        container = Predicate.container_decl con_type decl_id;
+      }
+      |> to_json_key)
+  in
+  Fact_acc.add_fact Predicate.(Hack ClassConstDeclaration) json fa
+
+let type_const_decl con_type decl_id name fa =
+  let json =
+    TypeConstDeclaration.(
+      {
+        name = Util.make_name name;
+        container = Predicate.container_decl con_type decl_id;
+      }
+      |> to_json_key)
+  in
+  Fact_acc.add_fact Predicate.(Hack TypeConstDeclaration) json fa
+
+let method_decl con_type decl_id name fa =
+  let json =
+    MethodDeclaration.(
+      {
+        name = Util.make_name name;
+        container = Predicate.container_decl con_type decl_id;
+      }
+      |> to_json_key)
+  in
+  Fact_acc.add_fact Predicate.(Hack MethodDeclaration) json fa
+
+let hint_to_type_info (hint : Aast.hint) fa : Type.t * TypeInfo.t * Fact_acc.t =
+  let aggregate_pos (json_pos_list : (XRefTarget.t * Pretty.pos) list) :
+      (XRefTarget.t * Pretty.pos list) list =
+    let jmap =
+      List.fold json_pos_list ~init:Map.Poly.empty ~f:(fun acc (json, pos) ->
+          let f = function
+            | None -> [pos]
+            | Some prev -> pos :: prev
+          in
+          Map.Poly.update acc json ~f)
+    in
+    Map.Poly.to_alist jmap
+  in
+  let type_info ~ty sym_pos hint fa =
+    let json =
+      TypeInfo.(
+        {
+          display_type = Type.Key (ty |> Utils.strip_ns);
+          xrefs = Build_fact.hint_xrefs sym_pos;
+          hint = Some hint;
+        }
+        |> to_json_key)
+    in
+    Fact_acc.add_fact Predicate.(Hack TypeInfo) json fa
+  in
+  let (ty, sym_pos) = Pretty.hint_to_string_and_symbols ~is_ctx:false hint in
+  let hint = Pretty.hint_to_angle hint in
+  let pos_map =
+    match Fact_acc.get_pos_map fa with
+    | Some pos_map -> pos_map
+    | None -> failwith "Internal error: pos_map should be set in previous phase"
+  in
+  let decl_json_pos =
+    List.filter_map sym_pos ~f:(fun (source_pos, pos) ->
+        match Xrefs.PosMap.find_opt source_pos pos_map with
+        | Some (Xrefs.{ target; _ } :: _) -> Some (target, pos)
+        | _ -> None)
+  in
+  let decl_json_aggr_pos = aggregate_pos decl_json_pos in
+  let (fact_id, fa) = type_info ~ty decl_json_aggr_pos hint fa in
+  (Type.Key ty, TypeInfo.Id fact_id, fa)
+
+let hint_opt_to_type_info fa = function
+  | None -> (None, None, fa)
+  | Some type_ ->
+    let (ty, ty_info, fa) = hint_to_type_info type_ fa in
+    (Some ty, Some ty_info, fa)
+
+let type_param source_text tp fa =
+  let constraint_ (kind, hint) fa =
+    let (type_, type_info, fa) = hint_to_type_info hint fa in
+    let cst =
+      Constraint.
+        {
+          constraint_kind = Util.make_constraint_kind kind;
+          type_;
+          type_info = Some type_info;
+        }
+    in
+    (cst, fa)
+  in
+  let (_, name) = tp.tp_name in
+  let name = Util.make_name name in
+  let (constraints, fa) =
+    List.fold tp.tp_constraints ~init:([], fa) ~f:(fun (fact_ids, fa) cst ->
+        let (fact_id, fa) = constraint_ cst fa in
+        (fact_id :: fact_ids, fa))
+  in
+  let tparam =
+    TypeParameter.
+      {
+        name;
+        variance = Util.make_variance tp.tp_variance;
+        reify_kind = Util.make_reify_kind tp.tp_reified;
+        constraints = List.rev constraints;
+        attributes = Build_fact.attributes source_text tp.tp_user_attributes;
+      }
+  in
+  (tparam, fa)
+
+let type_params source_text params fa =
+  let (type_params, fa) =
+    List.fold params ~init:([], fa) ~f:(fun (fact_ids, fa) param ->
+        let (fact_id, fa) = type_param source_text param fa in
+        (fact_id :: fact_ids, fa))
+  in
+  (List.rev type_params, fa)
+
 let container_defn source_text clss decl_id members fa =
   let fa = namespace_decl_opt clss.c_namespace fa in
-  let type_params =
-    List.map clss.c_tparams ~f:(Build_fact.type_param source_text)
-  in
+  let (type_params, fa) = type_params source_text clss.c_tparams fa in
   let (module_, fa) = module_field clss.c_module clss.c_internal fa in
   let attributes = Build_fact.attributes source_text clss.c_user_attributes in
   let (req_extends_hints, req_implements_hints, req_class_hints) =
@@ -169,15 +301,14 @@ let container_defn source_text clss decl_id members fa =
       match clss.c_extends with
       | [] -> (None, fa)
       | [parent] ->
-        let (decl_id, fa) =
-          let parent_clss =
-            Pretty.(hint_to_string ~is_ctx:false parent |> strip_tparams)
+        (match Util.class_hint_to_qname parent with
+        | Some qname ->
+          let (decl_id, fa) =
+            let json = ClassDeclaration.(to_json_key { name = qname }) in
+            Fact_acc.add_fact Predicate.(Hack ClassDeclaration) json fa
           in
-          let qname = Util.make_qname parent_clss in
-          let json = ClassDeclaration.(to_json_key { name = qname }) in
-          Fact_acc.add_fact Predicate.(Hack ClassDeclaration) json fa
-        in
-        (Some (ClassDeclaration.Id decl_id), fa)
+          (Some (ClassDeclaration.Id decl_id), fa)
+        | None -> (None, fa))
       | _ ->
         Hh_logger.log
           "WARNING: skipping extends field for class with multiple parents %s"
@@ -202,119 +333,28 @@ let container_defn source_text clss decl_id members fa =
     in
     Fact_acc.add_fact Predicate.(Hack ClassDefinition) json fa
 
-let property_decl con_type decl_id name fa =
-  let json =
-    PropertyDeclaration.(
-      {
-        name = Util.make_name name;
-        container = Predicate.container_decl con_type decl_id;
-      }
-      |> to_json_key)
-  in
-  Fact_acc.add_fact Predicate.(Hack PropertyDeclaration) json fa
-
-let class_const_decl con_type decl_id name fa =
-  let json =
-    ClassConstDeclaration.(
-      {
-        name = Util.make_name name;
-        container = Predicate.container_decl con_type decl_id;
-      }
-      |> to_json_key)
-  in
-  Fact_acc.add_fact Predicate.(Hack ClassConstDeclaration) json fa
-
-let type_const_decl con_type decl_id name fa =
-  let json =
-    TypeConstDeclaration.(
-      {
-        name = Util.make_name name;
-        container = Predicate.container_decl con_type decl_id;
-      }
-      |> to_json_key)
-  in
-  Fact_acc.add_fact Predicate.(Hack TypeConstDeclaration) json fa
-
-let method_decl con_type decl_id name fa =
-  let json =
-    MethodDeclaration.(
-      {
-        name = Util.make_name name;
-        container = Predicate.container_decl con_type decl_id;
-      }
-      |> to_json_key)
-  in
-  Fact_acc.add_fact Predicate.(Hack MethodDeclaration) json fa
-
-let type_info ~ty sym_pos fa =
-  let json =
-    TypeInfo.(
-      {
-        display_type = Type.Key (ty |> Utils.strip_ns);
-        xrefs = Build_fact.hint_xrefs sym_pos;
-      }
-      |> to_json_key)
-  in
-  Fact_acc.add_fact Predicate.(Hack TypeInfo) json fa
-
-let aggregate_pos (json_pos_list : (XRefTarget.t * Pretty.pos) list) :
-    (XRefTarget.t * Pretty.pos list) list =
-  let jmap =
-    List.fold json_pos_list ~init:Map.Poly.empty ~f:(fun acc (json, pos) ->
-        let f = function
-          | None -> [pos]
-          | Some prev -> pos :: prev
-        in
-        Map.Poly.update acc json ~f)
-  in
-  Map.Poly.to_alist jmap
-
-let build_signature pos_map_opt source_text params ctxs ret fa =
-  let pos_map =
-    match pos_map_opt with
-    | Some pos_map -> pos_map
-    | None -> failwith "Internal error: pos_map should be set in previous phase"
-  in
-  let hint_to_str_opt h fa =
-    match hint_of_type_hint h with
-    | None -> (None, None, fa)
-    | Some hint ->
-      let (ty, sym_pos) =
-        Pretty.hint_to_string_and_symbols ~is_ctx:false hint
-      in
-      let decl_json_pos =
-        List.filter_map sym_pos ~f:(fun (source_pos, pos) ->
-            match Xrefs.PosMap.find_opt source_pos pos_map with
-            | Some (Xrefs.{ target; _ } :: _) -> Some (target, pos)
-            | _ -> None)
-      in
-      let decl_json_aggr_pos = aggregate_pos decl_json_pos in
-      let (fact_id, fa) = type_info ~ty decl_json_aggr_pos fa in
-      (Some ty, Some fact_id, fa)
-  in
+let build_signature source_text params ctxs ret fa =
   let (params, fa) =
     List.fold params ~init:([], fa) ~f:(fun (t_params, fa) p ->
-        let (p_ty, fact_id, fa) = hint_to_str_opt p.param_type_hint fa in
-        ((p, fact_id, p_ty) :: t_params, fa))
+        let (type_, type_info, fa) =
+          Aast.hint_of_type_hint p.param_type_hint |> hint_opt_to_type_info fa
+        in
+        ((p, type_info, type_) :: t_params, fa))
   in
   let params = List.rev params in
-  let (ret_ty, return_info, fa) = hint_to_str_opt ret fa in
+  let (returns, returns_type_info, fa) =
+    Aast.hint_of_type_hint ret |> hint_opt_to_type_info fa
+  in
   let signature =
-    Build_fact.signature source_text params ctxs ~ret_ty ~return_info
+    Build_fact.signature source_text params ctxs ~returns ~returns_type_info
   in
   (signature, fa)
 
 let method_defn source_text meth decl_id fa =
   let m_tparams = Util.remove_generated_tparams meth.m_tparams in
-  let type_params = List.map m_tparams ~f:(Build_fact.type_param source_text) in
+  let (type_params, fa) = type_params source_text m_tparams fa in
   let (signature, fa) =
-    build_signature
-      (Fact_acc.get_pos_map fa)
-      source_text
-      meth.m_params
-      meth.m_ctxs
-      meth.m_ret
-      fa
+    build_signature source_text meth.m_params meth.m_ctxs meth.m_ret fa
   in
   let readonly_ret =
     Option.map meth.m_readonly_ret ~f:(fun _ -> ReadonlyKind.Readonly)
@@ -364,10 +404,8 @@ let method_overrides
   Fact_acc.add_fact Predicate.(Hack MethodOverrides) json fa
 
 let property_defn source_text prop decl_id fa =
-  let type_ =
-    Option.map
-      ~f:(fun x -> Type.Key (Pretty.hint_to_string ~is_ctx:false x))
-      (hint_of_type_hint prop.cv_type)
+  let (type_, type_info, fa) =
+    Aast.hint_of_type_hint prop.cv_type |> hint_opt_to_type_info fa
   in
   let json =
     PropertyDefinition.(
@@ -379,6 +417,7 @@ let property_defn source_text prop decl_id fa =
         is_abstract = prop.cv_abstract;
         is_static = prop.cv_is_static;
         attributes = Build_fact.attributes source_text prop.cv_user_attributes;
+        type_info;
       }
       |> to_json_key)
   in
@@ -392,14 +431,15 @@ let class_const_defn source_text const decl_id fa =
     | CCConcrete expr ->
       Some (Pretty.expr_to_string source_text expr)
   in
-  let type_ =
-    Option.map
-      ~f:(fun x -> Type.Key (Pretty.hint_to_string ~is_ctx:false x))
-      const.cc_type
-  in
+  let (type_, type_info, fa) = hint_opt_to_type_info fa const.cc_type in
   let json =
     ClassConstDefinition.(
-      { declaration = ClassConstDeclaration.Id decl_id; type_; value }
+      {
+        declaration = ClassConstDeclaration.Id decl_id;
+        type_;
+        value;
+        type_info;
+      }
       |> to_json_key)
   in
   Fact_acc.add_fact Predicate.(Hack ClassConstDefinition) json fa
@@ -407,12 +447,13 @@ let class_const_defn source_text const decl_id fa =
 let type_const_defn source_text tc decl_id fa =
   (* TODO(T88552052) should the default of an abstract type constant be used
      * as a value here *)
-  let type_ =
+  let (type_, type_info, fa) =
     match tc.c_tconst_kind with
     | TCConcrete { c_tc_type = h }
     | TCAbstract { c_atc_default = Some h; _ } ->
-      Some (Type.Key (Pretty.hint_to_string ~is_ctx:false h))
-    | TCAbstract { c_atc_default = None; _ } -> None
+      let (x, y, fa) = hint_to_type_info h fa in
+      (Some x, Some y, fa)
+    | TCAbstract { c_atc_default = None; _ } -> (None, None, fa)
   in
   let json =
     TypeConstDefinition.(
@@ -422,6 +463,7 @@ let type_const_defn source_text tc decl_id fa =
         type_;
         attributes =
           Build_fact.attributes source_text tc.c_tconst_user_attributes;
+        type_info;
       }
       |> to_json_key)
   in
@@ -436,22 +478,25 @@ let enum_defn source_text enm enum_id enum_data enumerators fa =
   let fa = namespace_decl_opt enm.c_namespace fa in
   let (includes, fa) = parent_decls_enum enum_data.e_includes fa in
   let (module_, fa) = module_field enm.c_module enm.c_internal fa in
-  let enum_constraint =
-    Option.map enum_data.e_constraint ~f:(fun x ->
-        Type.Key (Pretty.hint_to_string ~is_ctx:false x))
+  let (enum_base, enum_base_type_info, fa) =
+    hint_to_type_info enum_data.e_base fa
+  in
+  let (enum_constraint, enum_constraint_type_info, fa) =
+    hint_opt_to_type_info fa enum_data.e_constraint
   in
   let json =
     EnumDefinition.(
       {
         declaration = EnumDeclaration.Id enum_id;
-        enum_base =
-          Type.Key (Pretty.hint_to_string ~is_ctx:false enum_data.e_base);
+        enum_base;
         enumerators;
         attributes = Build_fact.attributes source_text enm.c_user_attributes;
         includes;
         is_enum_class = Aast.is_enum_class enm;
         module_;
         enum_constraint;
+        enum_constraint_type_info;
+        enum_base_type_info = Some enum_base_type_info;
       }
       |> to_json_key)
   in
@@ -478,18 +523,10 @@ let func_defn source_text fd decl_id fa =
   let elem = fd.fd_fun in
   let fa = namespace_decl_opt fd.fd_namespace fa in
   let fd_tparams = Util.remove_generated_tparams fd.fd_tparams in
-  let type_params =
-    List.map fd_tparams ~f:(Build_fact.type_param source_text)
-  in
+  let (type_params, fa) = type_params source_text fd_tparams fa in
   let (module_, fa) = module_field fd.fd_module fd.fd_internal fa in
   let (signature, fa) =
-    build_signature
-      (Fact_acc.get_pos_map fa)
-      source_text
-      elem.f_params
-      elem.f_ctxs
-      elem.f_ret
-      fa
+    build_signature source_text elem.f_params elem.f_ctxs elem.f_ret fa
   in
   let readonly_ret =
     Option.map elem.f_readonly_ret ~f:(fun _ -> ReadonlyKind.Readonly)
@@ -529,16 +566,14 @@ let typedef_decl name fa =
 let typedef_defn source_text elem decl_id fa =
   let fa = namespace_decl_opt elem.t_namespace fa in
   let is_transparent =
-    match elem.t_vis with
-    | Transparent -> true
-    | CaseType
-    | Opaque
-    | OpaqueModule ->
+    match elem.t_assignment with
+    | SimpleTypeDef { tvh_vis = Transparent; tvh_hint = _ } -> true
+    | SimpleTypeDef { tvh_vis = Opaque; tvh_hint = _ }
+    | SimpleTypeDef { tvh_vis = OpaqueModule; tvh_hint = _ }
+    | CaseType _ ->
       false
   in
-  let type_params =
-    List.map elem.t_tparams ~f:(Build_fact.type_param source_text)
-  in
+  let (type_params, fa) = type_params source_text elem.t_tparams fa in
   let (module_, fa) = module_field elem.t_module elem.t_internal fa in
   let json =
     TypedefDefinition.(
@@ -562,13 +597,15 @@ let gconst_decl name fa =
 let gconst_defn source_text elem decl_id fa =
   let fa = namespace_decl_opt elem.cst_namespace fa in
   let value = Pretty.expr_to_string source_text elem.cst_value in
-  let type_ =
-    Option.map elem.cst_type ~f:(fun x ->
-        Type.Key (Pretty.hint_to_string ~is_ctx:false x))
-  in
+  let (type_, type_info, fa) = hint_opt_to_type_info fa elem.cst_type in
   let json =
     GlobalConstDefinition.(
-      { declaration = GlobalConstDeclaration.Id decl_id; type_; value }
+      {
+        declaration = GlobalConstDeclaration.Id decl_id;
+        type_;
+        value;
+        type_info;
+      }
       |> to_json_key)
   in
   Fact_acc.add_fact Predicate.(Hack GlobalConstDefinition) json fa
@@ -701,3 +738,7 @@ let gen_code ~path ~fully_generated ~signature ~source ~command ~class_ fa =
 let hack_to_thrift hack thrift fa =
   let json = HackToThrift.({ from = hack; to_ = thrift } |> to_json_key) in
   Fact_acc.add_fact Predicate.(Hack HackToThrift) json fa |> snd
+
+let container_decl decl_pred name fa =
+  let qname = Util.make_qname name in
+  container_decl_qname decl_pred qname fa

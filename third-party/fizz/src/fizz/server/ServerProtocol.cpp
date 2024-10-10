@@ -1512,7 +1512,7 @@ EventHandler<ServerTypes, StateEnum::ExpectingClientHello, Event::ClientHello>::
           // The exceptions in SemiFutures will be processed in
           // detail::processEvent.
           kex = state.context()->getFactory()->makeKeyExchange(
-              *group, Factory::KeyExchangeMode::Server);
+              *group, KeyExchangeRole::Server);
           kexResultFuture =
               doKexFuture(kex.get(), std::move(clientShare.value()));
         } else {
@@ -1581,9 +1581,13 @@ EventHandler<ServerTypes, StateEnum::ExpectingClientHello, Event::ClientHello>::
                     AlertDescription::illegal_parameter);
               }
 
+              Random random;
+              state.context()->getFactory()->makeRandomBytes(
+                  random.data(), random.size());
+
               auto serverHello = getServerHello(
                   version,
-                  state.context()->getFactory()->makeRandom(),
+                  random,
                   cipher,
                   resState.has_value(),
                   group,
@@ -2095,7 +2099,10 @@ static SemiFuture<Optional<WriteToSocket>> generateTicket(
   resumptionSecret = state.keyScheduler()->getResumptionSecret(
       folly::range(resumptionMasterSecret), ticketNonce->coalesce());
 
-  auto ticketAgeAdd = state.context()->getFactory()->makeTicketAgeAdd();
+  uint32_t ticketAgeAdd{};
+  state.context()->getFactory()->makeRandomBytes(
+      reinterpret_cast<unsigned char*>(&ticketAgeAdd), sizeof(ticketAgeAdd));
+
   ResumptionState resState;
   resState.version = *state.version();
   resState.cipher = *state.cipher();

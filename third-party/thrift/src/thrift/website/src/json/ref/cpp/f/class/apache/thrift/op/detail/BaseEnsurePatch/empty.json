@@ -15,13 +15,14 @@
       "definition_html": "bool apache::thrift::op::detail::BaseEnsurePatch&lt; Patch, Derived &gt;::empty",
       "argsstring_html": "() const",
       "name_html": "empty",
+      "qualifiedname_html": "apache::thrift::op::detail::BaseEnsurePatch::empty",
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/StructPatch.h",
-        "line": "178",
+        "line": "185",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/StructPatch.h",
-        "bodystart": "178",
-        "bodyend": "188"
+        "bodystart": "185",
+        "bodyend": "195"
       },
       "definition": {
         "simple_html": "bool empty() const",

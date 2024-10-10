@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<f3c4a16ef944a19ee86964cc3fdfc579>>
+// @generated SignedSource<<8591ca64fda9e39eb10b09bceb6eb2af>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -1213,6 +1213,7 @@ impl<P: Params> NodeMut<P> for FunParam<P::Ex, P::En> {
         self.name.accept(c, v)?;
         self.info.accept(c, v)?;
         self.readonly.accept(c, v)?;
+        self.splat.accept(c, v)?;
         self.callconv.accept(c, v)?;
         self.user_attributes.accept(c, v)?;
         self.visibility.accept(c, v)
@@ -1343,7 +1344,8 @@ impl<P: Params> NodeMut<P> for HfParamInfo {
     ) -> Result<(), P::Error> {
         self.kind.accept(c, v)?;
         self.readonlyness.accept(c, v)?;
-        self.optional.accept(c, v)
+        self.optional.accept(c, v)?;
+        self.splat.accept(c, v)
     }
 }
 impl<P: Params> NodeMut<P> for Hint {
@@ -1914,12 +1916,31 @@ impl<P: Params> NodeMut<P> for ShapeFieldName {
         v: &mut dyn VisitorMut<'node, Params = P>,
     ) -> Result<(), P::Error> {
         match self {
-            ShapeFieldName::SFlitInt(a0) => a0.accept(c, v),
+            ShapeFieldName::SFregexGroup(a0) => a0.accept(c, v),
             ShapeFieldName::SFlitStr(a0) => a0.accept(c, v),
+            ShapeFieldName::SFclassname(a0) => a0.accept(c, v),
             ShapeFieldName::SFclassConst(a0, a1) => {
                 a0.accept(c, v)?;
                 a1.accept(c, v)
             }
+        }
+    }
+}
+impl<P: Params> NodeMut<P> for SplatKind {
+    fn accept<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        v.visit_splat_kind(c, self)
+    }
+    fn recurse<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        match self {
+            SplatKind::Splat => Ok(()),
         }
     }
 }
@@ -2180,6 +2201,59 @@ impl<P: Params> NodeMut<P> for Tprim {
         }
     }
 }
+impl<P: Params> NodeMut<P> for TupleExtra {
+    fn accept<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        v.visit_tuple_extra(c, self)
+    }
+    fn recurse<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        match self {
+            TupleExtra::Hextra(a0) => a0.accept(c, v),
+            TupleExtra::Hsplat(a0) => a0.accept(c, v),
+        }
+    }
+}
+impl<P: Params> NodeMut<P> for TupleExtraInfo {
+    fn accept<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        v.visit_tuple_extra_info(c, self)
+    }
+    fn recurse<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        self.optional.accept(c, v)?;
+        self.variadic.accept(c, v)
+    }
+}
+impl<P: Params> NodeMut<P> for TupleInfo {
+    fn accept<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        v.visit_tuple_info(c, self)
+    }
+    fn recurse<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        self.required.accept(c, v)?;
+        self.extra.accept(c, v)
+    }
+}
 impl<P: Params> NodeMut<P> for TypeHint<P::Ex> {
     fn accept<'node>(
         &'node mut self,
@@ -2251,11 +2325,11 @@ impl<P: Params> NodeMut<P> for Typedef<P::Ex, P::En> {
         self.tparams.accept(c, v)?;
         self.as_constraint.accept(c, v)?;
         self.super_constraint.accept(c, v)?;
-        self.kind.accept(c, v)?;
+        self.assignment.accept(c, v)?;
+        self.runtime_type.accept(c, v)?;
         self.user_attributes.accept(c, v)?;
         self.file_attributes.accept(c, v)?;
         self.mode.accept(c, v)?;
-        self.vis.accept(c, v)?;
         self.namespace.accept(c, v)?;
         self.span.accept(c, v)?;
         self.emit_id.accept(c, v)?;
@@ -2264,6 +2338,45 @@ impl<P: Params> NodeMut<P> for Typedef<P::Ex, P::En> {
         self.module.accept(c, v)?;
         self.docs_url.accept(c, v)?;
         self.doc_comment.accept(c, v)
+    }
+}
+impl<P: Params> NodeMut<P> for TypedefAssignment {
+    fn accept<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        v.visit_typedef_assignment(c, self)
+    }
+    fn recurse<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        match self {
+            TypedefAssignment::SimpleTypeDef(a0) => a0.accept(c, v),
+            TypedefAssignment::CaseType(a0, a1) => {
+                a0.accept(c, v)?;
+                a1.accept(c, v)
+            }
+        }
+    }
+}
+impl<P: Params> NodeMut<P> for TypedefCaseTypeVariant {
+    fn accept<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        v.visit_typedef_case_type_variant(c, self)
+    }
+    fn recurse<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        self.hint.accept(c, v)?;
+        self.where_constraints.accept(c, v)
     }
 }
 impl<P: Params> NodeMut<P> for TypedefVisibility {
@@ -2283,8 +2396,24 @@ impl<P: Params> NodeMut<P> for TypedefVisibility {
             TypedefVisibility::Transparent => Ok(()),
             TypedefVisibility::Opaque => Ok(()),
             TypedefVisibility::OpaqueModule => Ok(()),
-            TypedefVisibility::CaseType => Ok(()),
         }
+    }
+}
+impl<P: Params> NodeMut<P> for TypedefVisibilityAndHint {
+    fn accept<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        v.visit_typedef_visibility_and_hint(c, self)
+    }
+    fn recurse<'node>(
+        &'node mut self,
+        c: &mut P::Context,
+        v: &mut dyn VisitorMut<'node, Params = P>,
+    ) -> Result<(), P::Error> {
+        self.vis.accept(c, v)?;
+        self.hint.accept(c, v)
     }
 }
 impl<P: Params> NodeMut<P> for Uop {

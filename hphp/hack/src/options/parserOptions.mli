@@ -23,8 +23,6 @@ type t = {
       (** Flag to disable the old stype xhp element mangling. `<something/>` would otherwise be resolved as `xhp_something`
          The new style `xhp class something {}` does not do this style of mangling, thus we need a way to disable it on the
          'lookup side'. *)
-  disallow_direct_superglobals_refs: bool;
-      (** block accessing superglobals via their variable names *)
   allow_unstable_features: bool;
       (** Allows enabling unstable features via the __EnableUnstableFeatures attribute *)
   (* These options are set in hh config, but use the defaults in (from parser_options_impl.rs) hhvm *)
@@ -67,9 +65,7 @@ type t = {
   use_legacy_experimental_feature_config: bool;
       (** Ignore the experimental_features and consider_unspecified_experimental_features_released config
           options and use a hard coded function instead *)
-  experimental_features:
-    (Experimental_features.feature_name * Experimental_features.feature_status)
-    list;
+  experimental_features: Experimental_features.feature_status SMap.t;
       (** A mapping of names of experimental features to their status: Unstable/Preview/OngoingRelease *)
   consider_unspecified_experimental_features_released: bool;
       (** Any experimental features not specified in the experimental_features configuration field should
@@ -102,9 +98,7 @@ type ffi_t =
   * bool
   * bool
   * bool
-  * bool
-  * (Experimental_features.feature_name * Experimental_features.feature_status)
-    list
+  * Experimental_features.feature_status SMap.t
   * bool
 
 val to_rust_ffi_t : t -> ffi_t

@@ -17,6 +17,7 @@
 #pragma once
 
 #include <stdexcept>
+#include <folly/CPortability.h>
 #include <folly/Overload.h>
 #include <folly/Traits.h>
 #include <thrift/lib/cpp/Field.h>
@@ -25,9 +26,7 @@
 #include <thrift/lib/cpp2/type/NativeType.h>
 #include <thrift/lib/cpp2/type/ThriftType.h>
 
-namespace apache {
-namespace thrift {
-namespace op {
+namespace apache::thrift::op {
 
 /// Resolves to the number of definitions contained in Thrift class
 template <typename T>
@@ -127,6 +126,9 @@ using get_field_tag = typename std::conditional_t<
 template <typename T, typename Id>
 using get_native_type = type::native_type<get_field_tag<T, Id>>;
 
+FOLLY_PUSH_WARNING
+FOLLY_CLANG_DISABLE_WARNING("-Wglobal-constructors")
+
 /// Gets the thrift field name, for example:
 ///
 /// * op::get_name_v<MyStruct, field_id<7>>
@@ -143,6 +145,8 @@ inline const folly::StringPiece get_name_v =
 template <typename T>
 inline const folly::StringPiece get_class_name_v =
     detail::pa::__fbthrift_get_class_name<T>();
+
+FOLLY_POP_WARNING
 
 /// Gets the Thrift field, for example:
 ///
@@ -341,6 +345,4 @@ class InvokeByFieldId {
 template <typename T>
 inline constexpr detail::InvokeByFieldId<T> invoke_by_field_id{};
 
-} // namespace op
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::op

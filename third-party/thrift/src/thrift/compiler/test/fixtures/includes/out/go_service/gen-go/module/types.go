@@ -7,18 +7,17 @@ package module
 
 import (
     "fmt"
-    "strings"
+    "reflect"
 
     includes "includes"
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 var _ = includes.GoUnusedProtection__
 // (needed to ensure safety because of naive import list construction)
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
-
 
 type MyStruct struct {
     MyIncludedField *includes.Included `thrift:"MyIncludedField,1" json:"MyIncludedField" db:"MyIncludedField"`
@@ -29,19 +28,13 @@ type MyStruct struct {
 var _ thrift.Struct = (*MyStruct)(nil)
 
 func NewMyStruct() *MyStruct {
-    return (&MyStruct{}).
-        SetMyIncludedFieldNonCompat(
-              *includes.ExampleIncluded,
-          ).
-        SetMyOtherIncludedFieldNonCompat(*includes.NewIncluded()).
-        SetMyIncludedIntNonCompat(42)
+    return (&MyStruct{}).setDefaults()
 }
 
 func (x *MyStruct) GetMyIncludedField() *includes.Included {
     if !x.IsSetMyIncludedField() {
         return nil
     }
-
     return x.MyIncludedField
 }
 
@@ -49,7 +42,6 @@ func (x *MyStruct) GetMyOtherIncludedField() *includes.Included {
     if !x.IsSetMyOtherIncludedField() {
         return nil
     }
-
     return x.MyOtherIncludedField
 }
 
@@ -57,8 +49,8 @@ func (x *MyStruct) GetMyIncludedInt() includes.IncludedInt64 {
     return x.MyIncludedInt
 }
 
-func (x *MyStruct) SetMyIncludedFieldNonCompat(value includes.Included) *MyStruct {
-    x.MyIncludedField = &value
+func (x *MyStruct) SetMyIncludedFieldNonCompat(value *includes.Included) *MyStruct {
+    x.MyIncludedField = value
     return x
 }
 
@@ -67,8 +59,8 @@ func (x *MyStruct) SetMyIncludedField(value *includes.Included) *MyStruct {
     return x
 }
 
-func (x *MyStruct) SetMyOtherIncludedFieldNonCompat(value includes.Included) *MyStruct {
-    x.MyOtherIncludedField = &value
+func (x *MyStruct) SetMyOtherIncludedFieldNonCompat(value *includes.Included) *MyStruct {
+    x.MyOtherIncludedField = value
     return x
 }
 
@@ -95,7 +87,7 @@ func (x *MyStruct) IsSetMyOtherIncludedField() bool {
     return x != nil && x.MyOtherIncludedField != nil
 }
 
-func (x *MyStruct) writeField1(p thrift.Format) error {  // MyIncludedField
+func (x *MyStruct) writeField1(p thrift.Encoder) error {  // MyIncludedField
     if !x.IsSetMyIncludedField() {
         return nil
     }
@@ -115,7 +107,7 @@ func (x *MyStruct) writeField1(p thrift.Format) error {  // MyIncludedField
     return nil
 }
 
-func (x *MyStruct) writeField2(p thrift.Format) error {  // MyOtherIncludedField
+func (x *MyStruct) writeField2(p thrift.Encoder) error {  // MyOtherIncludedField
     if !x.IsSetMyOtherIncludedField() {
         return nil
     }
@@ -135,7 +127,7 @@ func (x *MyStruct) writeField2(p thrift.Format) error {  // MyOtherIncludedField
     return nil
 }
 
-func (x *MyStruct) writeField3(p thrift.Format) error {  // MyIncludedInt
+func (x *MyStruct) writeField3(p thrift.Encoder) error {  // MyIncludedInt
     if err := p.WriteFieldBegin("MyIncludedInt", thrift.I64, 3); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
     }
@@ -152,29 +144,29 @@ if err != nil {
     return nil
 }
 
-func (x *MyStruct) readField1(p thrift.Format) error {  // MyIncludedField
-    result := *includes.NewIncluded()
+func (x *MyStruct) readField1(p thrift.Decoder) error {  // MyIncludedField
+    result := includes.NewIncluded()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.MyIncludedField = &result
+    x.MyIncludedField = result
     return nil
 }
 
-func (x *MyStruct) readField2(p thrift.Format) error {  // MyOtherIncludedField
-    result := *includes.NewIncluded()
+func (x *MyStruct) readField2(p thrift.Decoder) error {  // MyOtherIncludedField
+    result := includes.NewIncluded()
 err := result.Read(p)
 if err != nil {
     return err
 }
 
-    x.MyOtherIncludedField = &result
+    x.MyOtherIncludedField = result
     return nil
 }
 
-func (x *MyStruct) readField3(p thrift.Format) error {  // MyIncludedInt
+func (x *MyStruct) readField3(p thrift.Decoder) error {  // MyIncludedInt
     result, err := includes.ReadIncludedInt64(p)
 if err != nil {
     return err
@@ -182,18 +174,6 @@ if err != nil {
 
     x.MyIncludedInt = result
     return nil
-}
-
-func (x *MyStruct) toString1() string {  // MyIncludedField
-    return fmt.Sprintf("%v", x.MyIncludedField)
-}
-
-func (x *MyStruct) toString2() string {  // MyOtherIncludedField
-    return fmt.Sprintf("%v", x.MyOtherIncludedField)
-}
-
-func (x *MyStruct) toString3() string {  // MyIncludedInt
-    return fmt.Sprintf("%v", x.MyIncludedInt)
 }
 
 // Deprecated: Use NewMyStruct().GetMyIncludedField() instead.
@@ -214,7 +194,7 @@ func (x *MyStruct) DefaultGetMyOtherIncludedField() *includes.Included {
 
 
 
-func (x *MyStruct) Write(p thrift.Format) error {
+func (x *MyStruct) Write(p thrift.Encoder) error {
     if err := p.WriteStructBegin("MyStruct"); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
     }
@@ -222,11 +202,9 @@ func (x *MyStruct) Write(p thrift.Format) error {
     if err := x.writeField1(p); err != nil {
         return err
     }
-
     if err := x.writeField2(p); err != nil {
         return err
     }
-
     if err := x.writeField3(p); err != nil {
         return err
     }
@@ -241,7 +219,7 @@ func (x *MyStruct) Write(p thrift.Format) error {
     return nil
 }
 
-func (x *MyStruct) Read(p thrift.Format) error {
+func (x *MyStruct) Read(p thrift.Decoder) error {
     if _, err := p.ReadStructBegin(); err != nil {
         return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
     }
@@ -256,23 +234,20 @@ func (x *MyStruct) Read(p thrift.Format) error {
             break;
         }
 
+        var fieldReadErr error
         switch {
         case (id == 1 && wireType == thrift.Type(thrift.STRUCT)):  // MyIncludedField
-            if err := x.readField1(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField1(p)
         case (id == 2 && wireType == thrift.Type(thrift.STRUCT)):  // MyOtherIncludedField
-            if err := x.readField2(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField2(p)
         case (id == 3 && wireType == thrift.Type(thrift.I64)):  // MyIncludedInt
-            if err := x.readField3(p); err != nil {
-                return err
-            }
+            fieldReadErr = x.readField3(p)
         default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
+            fieldReadErr = p.Skip(wireType)
+        }
+
+        if fieldReadErr != nil {
+            return fieldReadErr
         }
 
         if err := p.ReadFieldEnd(); err != nil {
@@ -288,20 +263,19 @@ func (x *MyStruct) Read(p thrift.Format) error {
 }
 
 func (x *MyStruct) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("MyStruct({")
-    sb.WriteString(fmt.Sprintf("MyIncludedField:%s ", x.toString1()))
-    sb.WriteString(fmt.Sprintf("MyOtherIncludedField:%s ", x.toString2()))
-    sb.WriteString(fmt.Sprintf("MyIncludedInt:%s", x.toString3()))
-    sb.WriteString("})")
-
-    return sb.String()
+    return thrift.StructToString(reflect.ValueOf(x))
 }
+
+func (x *MyStruct) setDefaults() *MyStruct {
+    return x.
+        SetMyIncludedFieldNonCompat(
+              includes.ExampleIncluded,
+          ).
+        SetMyOtherIncludedFieldNonCompat(includes.NewIncluded()).
+        SetMyIncludedIntNonCompat(42)
+}
+
+
 
 // RegisterTypes registers types found in this file that have a thrift_uri with the passed in registry.
 func RegisterTypes(registry interface {

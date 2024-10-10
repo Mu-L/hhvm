@@ -48,8 +48,7 @@
 #include <thrift/lib/cpp2/transport/core/ThriftChannelIf.h>
 #include <thrift/lib/thrift/gen-cpp2/RpcMetadata_types.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 namespace detail {
 THRIFT_PLUGGABLE_FUNC_DECLARE(
@@ -157,7 +156,8 @@ class ThriftRequestCore : public ResponseChannelRequest {
       cancelTimeout();
       auto metadata = makeResponseRpcMetadata(
           header_.extractAllWriteHeaders(),
-          header_.extractProxiedPayloadMetadata());
+          header_.extractProxiedPayloadMetadata(),
+          header_.getChecksum());
       if (crc32c) {
         metadata.crc32c() = *crc32c;
       }
@@ -180,7 +180,8 @@ class ThriftRequestCore : public ResponseChannelRequest {
       cancelTimeout();
       auto metadata = makeResponseRpcMetadata(
           header_.extractAllWriteHeaders(),
-          header_.extractProxiedPayloadMetadata());
+          header_.extractProxiedPayloadMetadata(),
+          header_.getChecksum());
       if (crc32c) {
         metadata.crc32c() = *crc32c;
       }
@@ -202,7 +203,8 @@ class ThriftRequestCore : public ResponseChannelRequest {
       cancelTimeout();
       auto metadata = makeResponseRpcMetadata(
           header_.extractAllWriteHeaders(),
-          header_.extractProxiedPayloadMetadata());
+          header_.extractProxiedPayloadMetadata(),
+          header_.getChecksum());
       if (crc32c) {
         metadata.crc32c() = *crc32c;
       }
@@ -225,7 +227,8 @@ class ThriftRequestCore : public ResponseChannelRequest {
       cancelTimeout();
       auto metadata = makeResponseRpcMetadata(
           header_.extractAllWriteHeaders(),
-          header_.extractProxiedPayloadMetadata());
+          header_.extractProxiedPayloadMetadata(),
+          header_.getChecksum());
       if (crc32c) {
         metadata.crc32c() = *crc32c;
       }
@@ -397,7 +400,8 @@ class ThriftRequestCore : public ResponseChannelRequest {
 
   ResponseRpcMetadata makeResponseRpcMetadata(
       transport::THeader::StringToStringMap&& writeHeaders,
-      std::optional<ProxiedPayloadMetadata> proxiedPayloadMetadata);
+      std::optional<ProxiedPayloadMetadata> proxiedPayloadMetadata,
+      std::optional<Checksum> checksum);
 
   MessageChannel::SendCallbackPtr createRequestLoggingCallback(
       MessageChannel::SendCallbackPtr&& sendCallback,
@@ -507,7 +511,9 @@ class ThriftRequestCore : public ResponseChannelRequest {
 
       sendSerializedError(
           makeResponseRpcMetadata(
-              std::move(writeHeaders), proxiedPayloadMetadata),
+              std::move(writeHeaders),
+              proxiedPayloadMetadata,
+              std::nullopt /*checksum*/),
           std::move(exbuf));
     });
   }
@@ -712,5 +718,4 @@ class ThriftRequest final
   std::unique_ptr<Cpp2ConnContext> connContext_;
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

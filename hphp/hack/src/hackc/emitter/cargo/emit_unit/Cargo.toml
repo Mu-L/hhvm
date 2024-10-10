@@ -14,8 +14,8 @@ path = "../../emit_unit.rs"
 ast_scope = { version = "0.0.0", path = "../ast_scope" }
 bit-set = "0.5"
 bit-vec = "0.6"
-bitflags = { version = "2.4", features = ["serde"] }
-bstr = { version = "1.4.0", features = ["serde", "std", "unicode"] }
+bitflags = { version = "2.6", features = ["serde"] }
+bstr = { version = "1.10.0", features = ["serde", "std", "unicode"] }
 constant_folder = { version = "0.0.0", path = "../constant_folder" }
 core_utils_rust = { version = "0.0.0", path = "../../../../utils/core" }
 decl_provider = { version = "0.0.0", path = "../../../decl_provider" }
@@ -43,7 +43,7 @@ print_expr = { version = "0.0.0", path = "../../../print_expr" }
 priority-queue = "1.2.2"
 regex = "1.9.2"
 scope = { version = "0.0.0", path = "../scope" }
-serde_json = { version = "1.0.100", features = ["float_roundtrip", "unbounded_depth"] }
+serde_json = { version = "1.0.125", features = ["float_roundtrip", "unbounded_depth"] }
 smallvec = { version = "1.6.1", features = ["serde", "specialization", "union"] }
 stack_depth = { version = "0.0.0", path = "../../../utils/cargo/stack_depth" }
 stack_limit = { version = "0.0.0", path = "../../../../utils/stack_limit" }

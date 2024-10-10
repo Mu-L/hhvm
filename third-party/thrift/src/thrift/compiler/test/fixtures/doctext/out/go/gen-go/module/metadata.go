@@ -6,31 +6,50 @@
 package module
 
 import (
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    "maps"
+
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
-
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
 var (
+    premadeThriftType_module_B = metadata.NewThriftType().SetTEnum(
+        metadata.NewThriftEnumType().
+            SetName("module.B"),
+            )
     premadeThriftType_i32 = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_I32_TYPE.Ptr(),
             )
+    premadeThriftType_module_A = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("module.A"),
+            )
     premadeThriftType_string = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_STRING_TYPE.Ptr(),
+            )
+    premadeThriftType_module_U = metadata.NewThriftType().SetTUnion(
+        metadata.NewThriftUnionType().
+            SetName("module.U"),
+            )
+    premadeThriftType_module_Bang = metadata.NewThriftType().SetTStruct(
+        metadata.NewThriftStructType().
+            SetName("module.Bang"),
+            )
+    premadeThriftType_module_lanyard = metadata.NewThriftType().SetTTypedef(
+        metadata.NewThriftTypedefType().
+            SetName("module.lanyard").
+            SetUnderlyingType(premadeThriftType_string),
+            )
+    premadeThriftType_module_number = metadata.NewThriftType().SetTTypedef(
+        metadata.NewThriftTypedefType().
+            SetName("module.number").
+            SetUnderlyingType(premadeThriftType_i32),
             )
     premadeThriftType_void = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_VOID_TYPE.Ptr(),
@@ -39,11 +58,19 @@ var (
         metadata.NewThriftSetType().
             SetValueType(premadeThriftType_i32),
             )
-    premadeThriftType_module_Bang = metadata.NewThriftType().SetTStruct(
-        metadata.NewThriftStructType().
-            SetName("module.Bang"),
-            )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "module.B": premadeThriftType_module_B,
+    "i32": premadeThriftType_i32,
+    "module.A": premadeThriftType_module_A,
+    "string": premadeThriftType_string,
+    "module.U": premadeThriftType_module_U,
+    "module.Bang": premadeThriftType_module_Bang,
+    "module.lanyard": premadeThriftType_module_lanyard,
+    "module.number": premadeThriftType_module_number,
+    "void": premadeThriftType_void,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
     metadata.NewThriftStruct().
@@ -144,6 +171,12 @@ var serviceMetadatas = []*metadata.ThriftService{
     ),
         },
     ),
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.

@@ -546,6 +546,9 @@ class HTTPTransaction
 
     virtual size_t sendChunkTerminator(HTTPTransaction* txn) noexcept = 0;
 
+    virtual size_t sendPadding(HTTPTransaction* txn,
+                               uint16_t bytes) noexcept = 0;
+
     virtual size_t sendEOM(HTTPTransaction* txn,
                            const HTTPHeaders* trailers) noexcept = 0;
 
@@ -677,6 +680,13 @@ class HTTPTransaction
     virtual folly::Expected<folly::Unit, WebTransport::ErrorCode>
     resetWebTransportEgress(HTTPCodec::StreamID /*id*/,
                             uint32_t /*errorCode*/) {
+      LOG(FATAL) << __func__ << " not supported";
+      folly::assume_unreachable();
+    }
+
+    virtual folly::Expected<folly::Unit, WebTransport::ErrorCode>
+    setWebTransportStreamPriority(HTTPCodec::StreamID /*id*/,
+                                  HTTPPriority /*pri*/) {
       LOG(FATAL) << __func__ << " not supported";
       folly::assume_unreachable();
     }
@@ -1205,6 +1215,20 @@ class HTTPTransaction
   virtual void sendBody(std::unique_ptr<folly::IOBuf> body);
 
   /**
+   * Send padding bytes that the receiving application layer will ignore. This
+   * is currently implemented only for HTTP/2 and HTTP/3 and will do nothing on
+   * HTTP/1 connections.
+   *
+   * sendPadding() may be called only when sendBody() is also valid to call.
+   *
+   * @param bytes The number of bytes of padding to send on this transaction.
+   * The actual serialized size of the padding will be greater than this number
+   * by some O(1) amount, depending on the exact framing and later transport
+   *              encryption.
+   */
+  virtual void sendPadding(uint16_t bytes);
+
+  /**
    * Returns the cumulative size of body passed to sendBody so far
    */
   size_t bodyBytesSent() const {
@@ -1285,7 +1309,19 @@ class HTTPTransaction
    * This function may also cause additional callbacks such as
    * detachTransaction() to the handler either immediately or after it returns.
    */
-  virtual void sendAbort();
+  void sendAbort();
+
+  /**
+   * Identical to above, but user may supply an error code.
+   *
+   * Note:
+   * Downstream sessions invoking ::sendAbort(NO_ERROR) after egressing eom will
+   * queue the RST_STREAM/STOP_SENDING NO_ERROR (if the protocol supports such
+   * sematics). This is different from the typical behaviour of *immediately*
+   * terminating both ingress and egress (and therefore dropping any buffered
+   * data) with other ErrorCodes.
+   */
+  virtual void sendAbort(ErrorCode statusCode);
 
   /**
    * Pause ingress processing.  Upon pause, the HTTPTransaction
@@ -1744,11 +1780,8 @@ class HTTPTransaction
    * to it.
    */
   void checkCreateDeferredIngress();
-
-  /**
-   * Implementation of sending an abort for this transaction.
-   */
-  void sendAbort(ErrorCode statusCode);
+  // Implementation of sending an abort for this transaction.
+  size_t sendAbortImpl(ErrorCode statusCode);
 
   // Internal implementations of the ingress-related callbacks
   // that work whether the ingress events are immediate or deferred.
@@ -1831,6 +1864,10 @@ class HTTPTransaction
   bool updateContentLengthRemaining(size_t len);
 
   void rateLimitTimeoutExpired();
+
+  // If deferredNoError_ is set to true, it invokes ::sendAbort() w/ NO_ERROR
+  // and returns the number of bytes written to the transport
+  size_t maybeSendDeferredNoError();
 
   class RateLimitCallback : public folly::HHWheelTimer::Callback {
    public:
@@ -2027,6 +2064,14 @@ class HTTPTransaction
   bool isDelegated_ : 1;
 
   /**
+   * If set, the transaction will flush a RST_STREAM/NO_ERROR (h2) or
+   * STOP_SENDING/NO_ERROR (h3) after eom. This is only set if ::abort() is
+   * invoked with ErrorCode::NO_ERROR on a downstream transaction after eom has
+   * been queued.
+   */
+  bool deferredNoError_ : 1;
+
+  /**
    * If this transaction represents a request (ie, it is backed by an
    * HTTPUpstreamSession) , this field indicates the last response status
    * received from the server. If this transaction represents a response,
@@ -2128,6 +2173,15 @@ class HTTPTransaction
       }
       return it->second.resetStream(error);
     }
+    folly::Expected<folly::Unit, WebTransport::ErrorCode> setPriority(
+        uint64_t id, uint8_t level, uint64_t order, bool incremental) override {
+      auto it = txn_.wtEgressStreams_.find(id);
+      if (it == txn_.wtEgressStreams_.end()) {
+        return folly::makeUnexpected(
+            WebTransport::ErrorCode::INVALID_STREAM_ID);
+      }
+      return it->second.setPriority(level, order, incremental);
+    }
     folly::Expected<folly::Unit, WebTransport::ErrorCode> sendDatagram(
         std::unique_ptr<folly::IOBuf> datagram) override {
       if (!txn_.sendDatagram(std::move(datagram))) {
@@ -2173,6 +2227,12 @@ class HTTPTransaction
     folly::Expected<folly::Unit, WebTransport::ErrorCode> resetStream(
         uint32_t errorCode) override {
       return txn_.resetWebTransportEgress(id_, errorCode);
+    }
+
+    folly::Expected<folly::Unit, WebTransport::ErrorCode> setPriority(
+        uint8_t level, uint64_t order, bool incremental) override {
+      return txn_.transport_.setWebTransportStreamPriority(
+          getID(), {level, incremental, order});
     }
 
     void onStopSending(uint32_t errorCode);

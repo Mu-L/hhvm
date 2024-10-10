@@ -28,30 +28,46 @@
 #include <folly/container/Reserve.h>
 #include <thrift/lib/cpp2/FieldRefTraits.h>
 #include <thrift/lib/cpp2/op/Encode.h>
-#include <thrift/lib/cpp2/protocol/FieldMask.h>
 #include <thrift/lib/cpp2/protocol/GetStandardProtocol.h>
 #include <thrift/lib/cpp2/protocol/detail/protocol_methods.h>
 #include <thrift/lib/cpp2/type/Any.h>
 #include <thrift/lib/cpp2/type/BaseType.h>
 #include <thrift/lib/cpp2/type/ThriftType.h>
 #include <thrift/lib/cpp2/type/Type.h>
+#include <thrift/lib/thrift/gen-cpp2/field_mask_constants.h>
+#include <thrift/lib/thrift/gen-cpp2/field_mask_types.h>
 #include <thrift/lib/thrift/gen-cpp2/id_types.h>
 #include <thrift/lib/thrift/gen-cpp2/protocol_types.h>
 
-namespace apache::thrift::protocol {
+namespace apache::thrift::protocol::detail {
 
-// This is the return value of parseObject with mask.
-// Masked fields are deserialized to included Object, and the other fields are
-// are stored in excluded MaskedProtocolData.
-struct MaskedDecodeResult {
-  Object included;
-  MaskedProtocolData excluded;
+template <typename Tag>
+struct HasStructuredTag : std::false_type {};
+template <typename Tag>
+struct HasStructuredTag<type::list<Tag>> : HasStructuredTag<Tag> {};
+template <typename Tag>
+struct HasStructuredTag<type::set<Tag>> : HasStructuredTag<Tag> {};
+template <typename KTag, typename VTag>
+struct HasStructuredTag<type::map<KTag, VTag>> {
+  static constexpr bool value =
+      HasStructuredTag<KTag>::value || HasStructuredTag<VTag>::value;
 };
+template <typename T, typename Tag>
+struct HasStructuredTag<type::cpp_type<T, Tag>> : HasStructuredTag<Tag> {};
+template <typename Adapter, typename Tag>
+struct HasStructuredTag<type::adapted<Adapter, Tag>> : HasStructuredTag<Tag> {};
+template <typename Tag, typename FieldContext>
+struct HasStructuredTag<type::field<Tag, FieldContext>>
+    : HasStructuredTag<Tag> {};
+template <typename T>
+struct HasStructuredTag<type::struct_t<T>> : std::true_type {};
+template <typename T>
+struct HasStructuredTag<type::union_t<T>> : std::true_type {};
+template <typename T>
+struct HasStructuredTag<type::exception_t<T>> : std::true_type {};
 
-template <class Protocol>
-std::unique_ptr<folly::IOBuf> serializeValue(const Value& val);
-
-namespace detail {
+template <typename Tag>
+inline constexpr bool has_structured_tag_v = HasStructuredTag<Tag>::value;
 
 template <typename C, typename T>
 decltype(auto) forward_elem(T& elem) {
@@ -145,6 +161,18 @@ struct ValueHelper<type::map<K, V>> {
 
 template <typename T, typename Tag>
 struct ValueHelper<type::cpp_type<T, Tag>> : ValueHelper<Tag> {};
+
+template <typename TT, typename T = type::native_type<TT>>
+Value asValueStruct(T&& value) {
+  Value result;
+  ValueHelper<TT>::set(result, std::forward<T>(value));
+  return result;
+}
+
+// Clears whatever value-variant is set (instead of clearing the union itself)
+// Eg. if value is a string, this will clear the string instead of setting value
+// to empty-union
+void clearValueInner(Value& value);
 
 class BaseObjectAdapter {
  public:
@@ -508,176 +536,10 @@ Value parseValue(Protocol& prot, TType arg_type, bool string_to_binary) {
   return result;
 }
 
-struct MaskedDecodeResultValue {
-  Value included;
-  MaskedData excluded;
-};
-
 // Returns an element in the list by ValueId.
 template <typename T>
 const T& getByValueId(const std::vector<T>& values, type::ValueId id) {
   return values[apache::thrift::util::zigzagToI64(static_cast<int64_t>(id))];
-}
-
-// Stores the serialized data of the given type in maskedData and protocolData.
-template <typename Protocol>
-void setMaskedDataFull(
-    Protocol& prot,
-    TType arg_type,
-    MaskedData& maskedData,
-    MaskedProtocolData& protocolData) {
-  auto& values = protocolData.values().ensure();
-  auto& encodedValue = values.emplace_back();
-  encodedValue.wireType() = type::toBaseType(arg_type);
-  // get the serialized data from cursor
-  auto cursor = prot.getCursor();
-  apache::thrift::skip(prot, arg_type);
-  cursor.clone(encodedValue.data().emplace(), prot.getCursor() - cursor);
-  const auto pos = folly::to<int32_t>(values.size() - 1);
-  maskedData.full_ref() = type::ValueId{apache::thrift::util::i32ToZigzag(pos)};
-}
-
-// parseValue with readMaskRef and writeMaskRef
-template <bool KeepExcludedData, typename Protocol>
-MaskedDecodeResultValue parseValueWithMask(
-    Protocol& prot,
-    TType arg_type,
-    MaskRef readMaskRef,
-    MaskRef writeMaskRef,
-    MaskedProtocolData& protocolData,
-    bool string_to_binary = true) {
-  MaskedDecodeResultValue result;
-  if (readMaskRef.isAllMask()) { // serialize all
-    parseValueInplace(prot, arg_type, result.included, string_to_binary);
-    return result;
-  }
-  if (readMaskRef.isNoneMask()) { // do not deserialize
-    if constexpr (!KeepExcludedData) { // no need to store
-      apache::thrift::skip(prot, arg_type);
-      return result;
-    }
-    if (writeMaskRef.isNoneMask()) { // store the serialized data
-      setMaskedDataFull(prot, arg_type, result.excluded, protocolData);
-      return result;
-    }
-    if (writeMaskRef.isAllMask()) { // no need to store
-      apache::thrift::skip(prot, arg_type);
-      return result;
-    }
-    // Need to recursively store the result not in writeMaskRef.
-  }
-  switch (arg_type) {
-    case protocol::T_STRUCT: {
-      auto& object = result.included.ensure_object();
-      std::string name;
-      int16_t fid;
-      TType ftype;
-      prot.readStructBegin(name);
-      while (true) {
-        prot.readFieldBegin(name, ftype, fid);
-        if (ftype == protocol::T_STOP) {
-          break;
-        }
-        MaskRef nextRead = readMaskRef.get(FieldId{fid});
-        MaskRef nextWrite = writeMaskRef.get(FieldId{fid});
-        MaskedDecodeResultValue nestedResult =
-            parseValueWithMask<KeepExcludedData>(
-                prot,
-                ftype,
-                nextRead,
-                nextWrite,
-                protocolData,
-                string_to_binary);
-        // Set nested MaskedDecodeResult if not empty.
-        if (!apache::thrift::empty(nestedResult.included)) {
-          object[FieldId{fid}] = std::move(nestedResult.included);
-        }
-        if constexpr (KeepExcludedData) {
-          if (!apache::thrift::empty(nestedResult.excluded)) {
-            result.excluded.fields_ref().ensure()[FieldId{fid}] =
-                std::move(nestedResult.excluded);
-          }
-        }
-        prot.readFieldEnd();
-      }
-      prot.readStructEnd();
-      return result;
-    }
-    case protocol::T_MAP: {
-      auto& map = result.included.ensure_map();
-      TType keyType;
-      TType valType;
-      uint32_t size;
-      prot.readMapBegin(keyType, valType, size);
-      if (!size) {
-        prot.readMapEnd();
-        return result;
-      }
-      auto readValueIndex = buildValueIndex(readMaskRef.mask);
-      auto writeValueIndex = buildValueIndex(writeMaskRef.mask);
-      for (uint32_t i = 0; i < size; i++) {
-        auto keyValue = parseValue(prot, keyType, string_to_binary);
-        MaskRef nextRead = readMaskRef.get(
-            getMapIdValueAddressFromIndex(readValueIndex, keyValue));
-        MaskRef nextWrite = writeMaskRef.get(
-            getMapIdValueAddressFromIndex(writeValueIndex, keyValue));
-        MaskedDecodeResultValue nestedResult =
-            parseValueWithMask<KeepExcludedData>(
-                prot,
-                valType,
-                nextRead,
-                nextWrite,
-                protocolData,
-                string_to_binary);
-        // Set nested MaskedDecodeResult if not empty.
-        if (!apache::thrift::empty(nestedResult.included)) {
-          map[keyValue] = std::move(nestedResult.included);
-        }
-        if constexpr (KeepExcludedData) {
-          if (!apache::thrift::empty(nestedResult.excluded)) {
-            auto& keys = protocolData.keys().ensure();
-            keys.push_back(keyValue);
-            const auto pos = folly::to<int32_t>(keys.size() - 1);
-            type::ValueId id =
-                type::ValueId{apache::thrift::util::i32ToZigzag(pos)};
-            result.excluded.values_ref().ensure()[id] =
-                std::move(nestedResult.excluded);
-          }
-        }
-      }
-      prot.readMapEnd();
-      return result;
-    }
-    default: {
-      parseValueInplace(prot, arg_type, result.included, string_to_binary);
-      return result;
-    }
-  }
-}
-
-template <typename Protocol, bool KeepExcludedData>
-MaskedDecodeResult parseObject(
-    const folly::IOBuf& buf,
-    const Mask& readMask,
-    const Mask& writeMask,
-    bool string_to_binary = true) {
-  Protocol prot;
-  prot.setInput(&buf);
-  MaskedDecodeResult result;
-  MaskedProtocolData& protocolData = result.excluded;
-  protocolData.protocol() = get_standard_protocol<Protocol>;
-  MaskedDecodeResultValue parseValueResult =
-      parseValueWithMask<KeepExcludedData>(
-          prot,
-          T_STRUCT,
-          MaskRef{readMask, false},
-          MaskRef{writeMask, false},
-          protocolData,
-          string_to_binary);
-  protocolData.data() = std::move(parseValueResult.excluded);
-  // Calling ensure as it is possible that the value is not set.
-  result.included = std::move(parseValueResult.included.ensure_object());
-  return result;
 }
 
 inline TType getTType(const Value& val) {
@@ -955,19 +817,33 @@ void serializeValue(
   }
 }
 
+template <class Protocol>
+void serializeValue(const Value& val, folly::IOBufQueue& queue) {
+  Protocol prot;
+  prot.setOutput(&queue);
+  serializeValue(prot, val);
+}
+
+template <class Protocol>
+std::unique_ptr<folly::IOBuf> serializeValue(const Value& val) {
+  folly::IOBufQueue queue(folly::IOBufQueue::cacheChainLength());
+  serializeValue<Protocol>(val, queue);
+  return queue.move();
+}
+
 type::Type toType(const protocol::Value& value);
 
-template <class ProtocolWriter>
 type::AnyData toAny(
-    const Value& value,
-    type::Protocol protocol = get_standard_protocol<ProtocolWriter>) {
-  type::SemiAny data;
-  data.type() = toType(value);
-  data.protocol() = protocol;
-  data.data() = std::move(
-      *::apache::thrift::protocol::serializeValue<ProtocolWriter>(value));
-  return type::AnyData{data};
-}
+    const Value& value, type::Type type, type::Protocol protocol);
+
+/**
+ * Schemaless conversion from any -> value contained within
+ * Currently supports only compact/binary protocols
+ */
+Value parseValueFromAny(const type::AnyStruct& any);
+Value parseValueFromAny(const type::AnyData& any);
+// anyObject's schema much match that of AnyStruct
+Value parseValueFromAnyObject(const Object& anyObject);
 
 template <typename Tag>
 struct ProtocolValueToThriftValue;
@@ -1132,15 +1008,19 @@ struct ProtocolValueToThriftValue<type::list<Tag>> {
     if (!p) {
       return false;
     }
+    bool ret = true;
     list.clear();
     folly::reserve_if_available(list, p->size());
     for (auto&& v : *p) {
       if (!ProtocolValueToThriftValue<Tag>{}(v, list.emplace_back())) {
-        return false;
+        if constexpr (!has_structured_tag_v<Tag>) {
+          return false;
+        }
+        ret = false;
       }
     }
 
-    return true;
+    return ret;
   }
 };
 
@@ -1157,15 +1037,19 @@ struct ProtocolValueToThriftValue<type::set<Tag>> {
 
     set.clear();
     folly::reserve_if_available(set, p->size());
+    bool ret = true;
     for (auto&& v : *p) {
       apache::thrift::op::clear<Tag>(elem);
       if (!ProtocolValueToThriftValue<Tag>{}(v, elem)) {
-        return false;
+        if constexpr (!has_structured_tag_v<Tag>) {
+          return false;
+        }
+        ret = false;
       }
       set.emplace_hint(set.end(), std::move(elem));
     }
 
-    return true;
+    return ret;
   }
 };
 
@@ -1181,18 +1065,25 @@ struct ProtocolValueToThriftValue<type::map<KeyTag, ValueTag>> {
     }
     map.clear();
     folly::reserve_if_available(map, p->size());
+    bool ret = true;
     for (auto&& [k, v] : *p) {
       apache::thrift::op::clear<KeyTag>(key);
       apache::thrift::op::clear<ValueTag>(val);
       if (!ProtocolValueToThriftValue<KeyTag>{}(k, key)) {
-        return false;
+        if constexpr (!has_structured_tag_v<KeyTag>) {
+          return false;
+        }
+        ret = false;
       }
       if (!ProtocolValueToThriftValue<ValueTag>{}(v, val)) {
-        return false;
+        if constexpr (!has_structured_tag_v<ValueTag>) {
+          return false;
+        }
+        ret = false;
       }
       map.emplace_hint(map.end(), std::move(key), std::move(val));
     }
-    return true;
+    return ret;
   }
 };
 
@@ -1249,33 +1140,43 @@ struct ProtocolValueToThriftValue<
 
 template <class T>
 struct ProtocolValueToThriftValueStructure {
+  // Returns true if all fields are successfully converted.
   bool operator()(const Object& obj, T& s) const {
+    bool ret = true;
     for (auto&& kv : obj) {
       op::invoke_by_field_id<T>(
           static_cast<FieldId>(kv.first),
           [&](auto id) {
             using Id = decltype(id);
-            op::get_native_type<T, Id> t;
-            if (ProtocolValueToThriftValue<op::get_field_tag<T, Id>>{}(
-                    kv.second, t, s)) {
-              using Ref = op::get_field_ref<T, Id>;
-              if constexpr (apache::thrift::detail::is_shared_or_unique_ptr_v<
-                                Ref>) {
-                op::get<Id>(s) =
-                    std::make_unique<op::get_native_type<T, Id>>(std::move(t));
-              } else {
-                op::get<Id>(s) = std::move(t);
+            using FieldTag = op::get_field_tag<T, Id>;
+            using FieldType = op::get_native_type<T, Id>;
+            FieldType t;
+            if (!ProtocolValueToThriftValue<FieldTag>{}(kv.second, t, s)) {
+              ret = false;
+              if constexpr (!has_structured_tag_v<FieldTag>) {
+                return;
               }
             }
+
+            using Ref = op::get_field_ref<T, Id>;
+            if constexpr (apache::thrift::detail::is_shared_or_unique_ptr_v<
+                              Ref>) {
+              op::get<Id>(s) =
+                  std::make_unique<op::get_native_type<T, Id>>(std::move(t));
+            } else {
+              op::get<Id>(s) = std::move(t);
+            }
           },
-          [] {});
+          [&] {
+            // Missing field in T.
+            ret = false;
+          });
     }
-    return true;
+    return ret;
   }
   bool operator()(const Value& value, T& s) const {
     if (auto p = value.if_object()) {
-      operator()(*p, s);
-      return true;
+      return operator()(*p, s);
     }
     return false;
   }
@@ -1291,5 +1192,4 @@ template <typename T>
 struct ProtocolValueToThriftValue<type::exception_t<T>>
     : ProtocolValueToThriftValueStructure<T> {};
 
-} // namespace detail
-} // namespace apache::thrift::protocol
+} // namespace apache::thrift::protocol::detail

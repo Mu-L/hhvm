@@ -33,6 +33,7 @@ type logged_type =
   | SupportdynOfMixed
   | Dynamic
   | Tany
+  | CapturedLike
 [@@deriving ord, yojson_of]
 
 type category =
@@ -106,7 +107,14 @@ end = struct
     empty
     |> begin
          if is_like_type env ty then
-           inc Like
+           if
+             Typing_reason.Predicates.is_captured_like
+               (Typing_defs.get_reason ty)
+           then
+             fun x ->
+           inc CapturedLike (inc Like x)
+           else
+             inc Like
          else
            inc NonLike
        end
@@ -295,10 +303,14 @@ let count ctx program =
 
 type summary = {
   num_like_types: int;
+  num_captured_like_types: int;
   num_non_like_types: int;
   num_mixed: int;
   num_supportdyn_of_mixed: int;
   num_dynamic: int;
+  num_dynamic_obj: int;
+  num_like_obj: int;
+  num_non_like_obj: int;
   num_tany: int;
 }
 [@@deriving yojson_of]
@@ -308,41 +320,73 @@ type t = summary Relative_path.Map.t [@@deriving yojson_of]
 let empty_summary =
   {
     num_like_types = 0;
+    num_captured_like_types = 0;
     num_non_like_types = 0;
     num_mixed = 0;
     num_supportdyn_of_mixed = 0;
     num_dynamic = 0;
+    num_dynamic_obj = 0;
+    num_like_obj = 0;
+    num_non_like_obj = 0;
     num_tany = 0;
   }
 
 let summary_of_count (cnt : count) =
-  let { counted_type; value; entity_pos = _; category = _ } = cnt in
+  let { counted_type; value; entity_pos = _; category } = cnt in
   match counted_type with
-  | Like -> { empty_summary with num_like_types = value }
-  | NonLike -> { empty_summary with num_non_like_types = value }
+  | Like ->
+    let res = { empty_summary with num_like_types = value } in
+    begin
+      match category with
+      | Obj_get_receiver -> { res with num_like_obj = value }
+      | _ -> res
+    end
+  | NonLike ->
+    let res = { empty_summary with num_non_like_types = value } in
+    begin
+      match category with
+      | Obj_get_receiver -> { res with num_non_like_obj = value }
+      | _ -> res
+    end
   | Mixed -> { empty_summary with num_mixed = value }
   | SupportdynOfMixed -> { empty_summary with num_supportdyn_of_mixed = value }
-  | Dynamic -> { empty_summary with num_dynamic = value }
+  | Dynamic ->
+    let res = { empty_summary with num_dynamic = value } in
+    begin
+      match category with
+      | Obj_get_receiver -> { res with num_dynamic_obj = value }
+      | _ -> res
+    end
   | Tany -> { empty_summary with num_tany = value }
+  | CapturedLike -> { empty_summary with num_captured_like_types = value }
 
 let plus_summary s t =
   let {
     num_like_types;
+    num_captured_like_types;
     num_non_like_types;
     num_mixed;
     num_supportdyn_of_mixed;
     num_dynamic;
+    num_dynamic_obj;
+    num_like_obj;
+    num_non_like_obj;
     num_tany;
   } =
     s
   in
   {
     num_like_types = num_like_types + t.num_like_types;
+    num_captured_like_types =
+      num_captured_like_types + t.num_captured_like_types;
     num_non_like_types = num_non_like_types + t.num_non_like_types;
     num_mixed = num_mixed + t.num_mixed;
     num_supportdyn_of_mixed =
       num_supportdyn_of_mixed + t.num_supportdyn_of_mixed;
     num_dynamic = num_dynamic + t.num_dynamic;
+    num_dynamic_obj = num_dynamic_obj + t.num_dynamic_obj;
+    num_like_obj = num_like_obj + t.num_like_obj;
+    num_non_like_obj = num_non_like_obj + t.num_non_like_obj;
     num_tany = num_tany + t.num_tany;
   }
 

@@ -326,29 +326,44 @@ cdef api unique_ptr[cIOBuf] getSerializedPythonMetadata(object server):
     iobuf = serialize_iobuf(metadata, protocol=Protocol.BINARY)
     return cmove((<IOBuf>iobuf)._ours)
 
-# Cython is dumb
-ctypedef PyObject* PyObjPtr
-
 cdef class PythonAsyncProcessorFactory(AsyncProcessorFactory):
+    cdef cbool requireResourcePools(PythonAsyncProcessorFactory self):
+        return self.useResourcePools
+
     @staticmethod
-    cdef PythonAsyncProcessorFactory create(dict funcMap, list lifecycleFuncs, bytes serviceName, object server):
+    cdef PythonAsyncProcessorFactory create(cServiceInterface server):
         cdef cmap[string, pair[RpcKind, PyObjPtr]] funcs
         cdef cvector[PyObject*] lifecycle
+
+        cdef dict funcMap = server.getFunctionTable()
+        cdef list lifecycleFuncs = [server.onStartServing, server.onStopRequested]
 
         for name, (rpc_kind, func) in funcMap.items():
             funcs[<string>name] = pair[RpcKind, PyObjPtr](<RpcKind>rpc_kind, <PyObject*>func)
 
-        for func in lifecycleFuncs:
-            lifecycle.push_back(<PyObject*>func)
+        for lifecycle_func in lifecycleFuncs:
+            lifecycle.push_back(<PyObject*>lifecycle_func)
 
         cdef PythonAsyncProcessorFactory inst = PythonAsyncProcessorFactory.__new__(PythonAsyncProcessorFactory)
+        inst.funcMap = funcMap
+        inst.lifecycleFuncs = lifecycleFuncs
+        # To ensure that the decision to use resource pools stays
+        # consistent for the lifetime of the server and decoupled
+        # from changes to the Thrift Flag that drives that decision
+        # at construction, capture the value and use the captured value
+        # from this point forward.
+        inst.useResourcePools = cAreResourcePoolsEnabledForPython()
         inst._cpp_obj = static_pointer_cast[cAsyncProcessorFactory, cPythonAsyncProcessorFactory](
-            make_shared[cPythonAsyncProcessorFactory](<PyObject*>server, cmove(funcs), cmove(lifecycle), get_executor(), serviceName))
+            cCreatePythonAsyncProcessorFactory(
+                <PyObject*>server,
+                cmove(funcs),
+                cmove(lifecycle),
+                get_executor(),
+                <bytes>server.service_name(),
+                inst.useResourcePools))
         return inst
 
 cdef class ThriftServer(ThriftServer_py3):
     def __init__(self, cServiceInterface server, int port=0, ip=None, path=None, socket_fd=None):
-        self.funcMap = server.getFunctionTable()
         self.handler = server
-        self.lifecycle = [self.handler.onStartServing, self.handler.onStopRequested]
-        super().__init__(PythonAsyncProcessorFactory.create(self.funcMap, self.lifecycle, self.handler.service_name(), self.handler), port, ip, path, socket_fd)
+        super().__init__(PythonAsyncProcessorFactory.create(self.handler), port, ip, path, socket_fd)

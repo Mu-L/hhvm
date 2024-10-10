@@ -162,6 +162,7 @@ type istate = {
       have changed since sqlite. When a file is changed on disk, we need this to
       know which shallow decls to invalidate. Note: while the forward-naming-table
       is stored here, the reverse-naming-table is instead stored in ctx. *)
+  error_filter: Tast_provider.ErrorFilter.t; [@opaque]
   sienv: SearchUtils.si_env; [@opaque]
       (** sienv provides autocomplete and find-symbols. It is constructed during
       initialize and updated during process_changed_files. It stores a few
@@ -320,36 +321,46 @@ let make_singleton_ctx (common : common_state) (entry : Provider_context.entry)
   let ctx = Provider_context.add_or_overwrite_entry ~ctx entry in
   ctx
 
-(** initialize1 is called by handle_request upon receipt of an "init"
-message from the client. It is synchronous. It sets up global variables and
-glean. The remainder of init work will happen after we return... our caller
-handle_request will kick off async work to load saved-state, and once done
-it will stick a GotNamingTable message into the queue, and handle_one_message
-will subsequently pick up that message and call [initialize2]. *)
-let initialize1 (param : ClientIdeMessage.Initialize_from_saved_state.t) :
-    dstate =
+(** Initializes:
+  - HackEventLogger and Hh_logger
+  - Root, hhi and tmp paths
+  - Load configs
+  - Local memory for the provider backend *)
+let initialize1
+    ({
+       ClientIdeMessage.Initialize_from_saved_state.root;
+       config;
+       open_files;
+       naming_table_load_info = _;
+       warnings_saved_state_path = _;
+       ignore_hh_version = _;
+     } :
+      ClientIdeMessage.Initialize_from_saved_state.t) : dstate =
   log_debug "initialize1";
-  let open ClientIdeMessage.Initialize_from_saved_state in
   let start_time = Unix.gettimeofday () in
-  HackEventLogger.serverless_ide_set_root param.root;
-  set_up_hh_logger_for_client_ide_service param.root;
+  HackEventLogger.serverless_ide_set_root root;
+  set_up_hh_logger_for_client_ide_service root;
 
-  Relative_path.set_path_prefix Relative_path.Root param.root;
+  Relative_path.set_path_prefix Relative_path.Root root;
   let hhi_root = Hhi.get_hhi_root () in
   log "Extracted hhi files to directory %s" (Path.to_string hhi_root);
   Relative_path.set_path_prefix Relative_path.Hhi hhi_root;
   Relative_path.set_path_prefix Relative_path.Tmp (Path.make "/tmp");
 
-  let server_args =
-    ServerArgs.default_options_with_check_mode ~root:(Path.to_string param.root)
+  let (config, local_config) =
+    ServerConfig.load
+      ~silent:true
+      ~cli_config_overrides:config
+      ~from:""
+      ~ai_options:None
   in
-  let server_args = ServerArgs.set_config server_args param.config in
-  let (config, local_config) = ServerConfig.load ~silent:true server_args in
   (* Ignore package loading errors for now TODO(jjwu) *)
   let open GlobalOptions in
   log "Loading package configuration";
-  let (_, package_info) = PackageConfig.load_and_parse () in
   let tco = ServerConfig.typechecker_options config in
+  let (_, package_info) =
+    PackageConfig.load_and_parse ~package_v2:tco.tco_package_v2 ()
+  in
   let config =
     ServerConfig.set_tc_options
       config
@@ -358,7 +369,7 @@ let initialize1 (param : ClientIdeMessage.Initialize_from_saved_state.t) :
   HackEventLogger.set_hhconfig_version
     (ServerConfig.version config |> Config_file.version_to_string_opt);
   HackEventLogger.set_rollout_flags
-    (ServerLocalConfig.to_rollout_flags local_config);
+    (ServerLocalConfigLoad.to_rollout_flags local_config);
   HackEventLogger.set_rollout_group local_config.ServerLocalConfig.rollout_group;
 
   Provider_backend.set_local_memory_backend
@@ -377,8 +388,8 @@ let initialize1 (param : ClientIdeMessage.Initialize_from_saved_state.t) :
      at this stage, since updated contents will be delivered upon each request.
      (and indeed it's pointless to waste time reading existing contents off disk).
      All we care is that every open file is listed in 'open_files'. *)
-  let open_files =
-    param.open_files
+  let dopen_files =
+    open_files
     |> List.map ~f:(fun path ->
            path |> Path.to_string |> Relative_path.create_detect_prefix)
     |> List.map ~f:(fun path ->
@@ -390,16 +401,13 @@ let initialize1 (param : ClientIdeMessage.Initialize_from_saved_state.t) :
     |> Relative_path.Map.of_list
   in
   let start_time =
-    log_startup_time
-      "initialize1"
-      ~count:(List.length param.open_files)
-      start_time
+    log_startup_time "initialize1" ~count:(List.length open_files) start_time
   in
   log_debug "initialize1.done";
   {
     start_time;
     dcommon = { hhi_root; config; local_config; local_memory };
-    dopen_files = open_files;
+    dopen_files;
     changed_files_to_process = Relative_path.Set.empty;
   }
 
@@ -410,13 +418,16 @@ state. *)
 let initialize2
     (out_fd : Lwt_unix.file_descr)
     (dstate : dstate)
+    ~error_filter
     (init_result :
       (ClientIdeInit.init_result, ClientIdeMessage.rich_error) result) :
     state Lwt.t =
   let start_time = log_startup_time "load_naming_table" dstate.start_time in
   log_debug "initialize2";
   match init_result with
-  | Ok { ClientIdeInit.naming_table; sienv; changed_files } ->
+  | Ok
+      { ClientIdeInit.naming_table; warnings_saved_state; sienv; changed_files }
+    ->
     let changed_files_to_process =
       Relative_path.Set.union
         dstate.changed_files_to_process
@@ -435,6 +446,8 @@ let initialize2
     let istate =
       {
         naming_table;
+        error_filter =
+          { Tast_provider.ErrorFilter.warnings_saved_state; error_filter };
         sienv;
         icommon = dstate.dcommon;
         iopen_files = dstate.dopen_files;
@@ -560,7 +573,8 @@ let update_file_ctx (istate : istate) (document : ClientIdeMessage.document) :
 
 (** We avoid showing typing errors if there are parsing errors. *)
 let get_user_facing_errors
-    ~(ctx : Provider_context.t) ~(entry : Provider_context.entry) : Errors.t =
+    ~(ctx : Provider_context.t) ~error_filter ~(entry : Provider_context.entry)
+    : Errors.t =
   let (_, ast_errors) =
     Ast_provider.compute_parser_return_and_ast_errors
       ~popt:(Provider_context.get_popt ctx)
@@ -568,7 +582,10 @@ let get_user_facing_errors
   in
   if Errors.is_empty ast_errors then
     let { Tast_provider.Compute_tast_and_errors.errors = all_errors; _ } =
-      Tast_provider.compute_tast_and_errors_quarantined ~ctx ~entry
+      Tast_provider.compute_tast_and_errors_quarantined
+        ~ctx
+        ~entry
+        ~error_filter
     in
     all_errors
   else
@@ -617,7 +634,7 @@ let get_errors_for_path (istate : istate) (path : Relative_path.t) : Errors.t =
     (* Here we'll get either cached errors from the cached entry, or will recompute errors
        from the partially cached entry, or will compute errors from the file on disk. *)
     let ctx = make_singleton_ctx istate.icommon entry in
-    get_user_facing_errors ~ctx ~entry
+    get_user_facing_errors ~ctx ~error_filter:istate.error_filter ~entry
 
 (** handle_request invariants: Messages are only ever handled serially; we never
 handle one message while another is being handled. It is a bug if the client sends
@@ -701,14 +718,17 @@ let handle_request
       Relative_path.Set.union dstate.changed_files_to_process changes
     in
     (During_init { dstate with changed_files_to_process }, Ok ())
-  | (Initialized istate, Did_change_watched_files changes) ->
+  | ( Initialized
+        ({ icommon; naming_table; sienv; iopen_files; error_filter = _ } as
+        istate),
+      Did_change_watched_files changes ) ->
     let (naming_table, sienv) =
       batch_update_naming_table_and_invalidate_caches
-        ~ctx:(make_empty_ctx istate.icommon)
-        ~naming_table:istate.naming_table
-        ~sienv:istate.sienv
-        ~local_memory:istate.icommon.local_memory
-        ~open_files:istate.iopen_files
+        ~ctx:(make_empty_ctx icommon)
+        ~naming_table
+        ~sienv
+        ~local_memory:icommon.local_memory
+        ~open_files:iopen_files
         changes
     in
     let istate = { istate with naming_table; sienv } in
@@ -751,7 +771,9 @@ let handle_request
     let (istate, ctx, entry, published_errors_ref) =
       update_file_ctx istate document
     in
-    let errors = get_user_facing_errors ~ctx ~entry in
+    let errors =
+      get_user_facing_errors ~ctx ~error_filter:istate.error_filter ~entry
+    in
     published_errors_ref := Some errors;
     let errors = Errors.sort_and_finalize errors in
     let diagnostics = Ide_diagnostics.convert ~ctx ~entry errors in
@@ -1156,7 +1178,11 @@ let handle_request
 
     let results =
       Provider_utils.respect_but_quarantine_unsaved_changes ~ctx ~f:(fun () ->
-          Code_actions_services.go ~ctx ~entry ~range)
+          Code_actions_services.go
+            ~ctx
+            ~error_filter:istate.error_filter
+            ~entry
+            ~range)
     in
 
     (* We'll take this opportunity to make sure we've returned the latest errors.
@@ -1165,7 +1191,9 @@ let handle_request
        mainly -- it's simpler to perform+handle this logic in just a few places rather than
        everywhere, and also because codeAction is called so frequently (e.g. upon changing
        tabs) that it's the best opportunity we have. *)
-    let errors = get_user_facing_errors ~ctx ~entry in
+    let errors =
+      get_user_facing_errors ~ctx ~error_filter:istate.error_filter ~entry
+    in
     let errors_opt =
       match !published_errors_ref with
       | Some published_errors when phys_equal published_errors errors ->
@@ -1201,6 +1229,7 @@ let handle_request
       Provider_utils.respect_but_quarantine_unsaved_changes ~ctx ~f:(fun () ->
           Code_actions_services.resolve
             ~ctx
+            ~error_filter:istate.error_filter
             ~entry
             ~range
             ~resolve_title
@@ -1240,7 +1269,8 @@ let handle_request
 let handle_one_message_exn
     ~(out_fd : Lwt_unix.file_descr)
     ~(message_queue : message_queue)
-    ~(state : state) : state option Lwt.t =
+    ~(state : state)
+    ~error_filter : state option Lwt.t =
   dbg_set_activity ~key:"handle" "popping";
   let%lwt message = Lwt_message_queue.pop message_queue in
   dbg_set_activity
@@ -1255,7 +1285,9 @@ let handle_one_message_exn
   | (_, None) ->
     Lwt.return_none (* exit loop if message_queue has been closed *)
   | (During_init dstate, Some (GotNamingTable naming_table_result)) ->
-    let%lwt state = initialize2 out_fd dstate naming_table_result in
+    let%lwt state =
+      initialize2 out_fd dstate naming_table_result ~error_filter
+    in
     Lwt.return_some state
   | (_, Some (GotNamingTable _)) ->
     failwith ("Unexpected GotNamingTable in " ^ state_to_log_string state)
@@ -1298,8 +1330,9 @@ let handle_one_message_exn
     dbg_set_activity ~key:"handle" "written_response";
     Lwt.return_some state
 
-let serve ~(in_fd : Lwt_unix.file_descr) ~(out_fd : Lwt_unix.file_descr) :
-    unit Lwt.t =
+let serve
+    ~(in_fd : Lwt_unix.file_descr) ~(out_fd : Lwt_unix.file_descr) ~error_filter
+    : unit Lwt.t =
   let rec flush_event_logger () : unit Lwt.t =
     dbg_set_activity ~key:"flush" "sleep";
     let%lwt () = Lwt_unix.sleep 0.5 in
@@ -1352,7 +1385,9 @@ let serve ~(in_fd : Lwt_unix.file_descr) ~(out_fd : Lwt_unix.file_descr) :
     dbg_set_activity ~key:"handle" "loop";
     let%lwt next_state_opt =
       try%lwt
-        let%lwt state = handle_one_message_exn ~out_fd ~message_queue ~state in
+        let%lwt state =
+          handle_one_message_exn ~out_fd ~message_queue ~state ~error_filter
+        in
         dbg_set_activity ~key:"handle" "done";
         Lwt.return state
       with
@@ -1395,7 +1430,15 @@ let serve ~(in_fd : Lwt_unix.file_descr) ~(out_fd : Lwt_unix.file_descr) :
     Lwt.return_unit
 
 let daemon_main
-    (args : ClientIdeMessage.daemon_args)
+    ({
+       ClientIdeMessage.init_id;
+       verbose_to_file;
+       verbose_to_stderr;
+       shm_handle;
+       error_filter;
+       client_lsp_log_fn = _;
+     } :
+      ClientIdeMessage.daemon_args)
     (channels : ('a, 'b) Daemon.channel_pair) : unit =
   Folly.ensure_folly_init ();
   Printexc.record_backtrace true;
@@ -1404,26 +1447,23 @@ let daemon_main
   let in_fd = Lwt_unix.of_unix_file_descr (Daemon.descr_of_in_channel ic) in
   let out_fd = Lwt_unix.of_unix_file_descr (Daemon.descr_of_out_channel oc) in
   let daemon_init_id =
-    Printf.sprintf
-      "%s.%s"
-      args.ClientIdeMessage.init_id
-      (Random_id.short_string ())
+    Printf.sprintf "%s.%s" init_id (Random_id.short_string ())
   in
   HackEventLogger.serverless_ide_init ~init_id:daemon_init_id;
 
   Typing_log.out_channel := stderr;
   (* where 'hh_show' goes *)
-  if args.ClientIdeMessage.verbose_to_stderr then
+  if verbose_to_stderr then
     Hh_logger.Level.set_min_level_stderr Hh_logger.Level.Debug
   else
     Hh_logger.Level.set_min_level_stderr Hh_logger.Level.Error;
-  if args.ClientIdeMessage.verbose_to_file then
+  if verbose_to_file then
     Hh_logger.Level.set_min_level_file Hh_logger.Level.Debug
   else
     Hh_logger.Level.set_min_level_file Hh_logger.Level.Info;
 
   (* in hh_shared.c, worker_id=0 is used for main process, and _id=1 for the first worker. *)
-  SharedMem.connect args.ClientIdeMessage.shm_handle ~worker_id:1;
+  SharedMem.connect shm_handle ~worker_id:1;
 
   Stdlib.at_exit (fun () ->
       try
@@ -1434,7 +1474,9 @@ let daemon_main
       | _ -> ());
   try
     dbg_set_activity ~key:"main" "run_main";
-    Lwt_utils.run_main (fun () -> serve ~in_fd ~out_fd);
+    ( Lwt_utils.run_main @@ fun () ->
+      (* MAIN ACTION HERE *)
+      serve ~in_fd ~out_fd ~error_filter );
     dbg_set_activity ~key:"main" "done";
     Hh_logger.log "SERVERLESS_IDE_DONE(ok)";
     HackEventLogger.serverless_ide_done None
@@ -1454,11 +1496,11 @@ let daemon_entry_point : (ClientIdeMessage.daemon_args, unit, unit) Daemon.entry
 module Test = struct
   type env = istate
 
-  let init ~custom_config ~naming_sqlite =
+  let init ~custom_config ~naming_sqlite : env =
     let config =
       Option.value custom_config ~default:ServerConfig.default_config
     in
-    let local_config = ServerLocalConfig.default in
+    let local_config = ServerLocalConfigLoad.default in
     let tcopt = ServerConfig.typechecker_options config in
     let popt = ServerConfig.parser_options config in
     Provider_backend.set_local_memory_backend_with_defaults_for_test ();
@@ -1487,6 +1529,7 @@ module Test = struct
     in
     {
       naming_table;
+      error_filter = Tast_provider.ErrorFilter.default;
       sienv;
       icommon = { hhi_root = Path.make "/"; config; local_config; local_memory };
       iopen_files = Relative_path.Map.empty;

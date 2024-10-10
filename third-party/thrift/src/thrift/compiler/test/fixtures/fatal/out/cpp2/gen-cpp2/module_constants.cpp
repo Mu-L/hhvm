@@ -9,9 +9,14 @@
 
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
+#include "thrift/compiler/test/fixtures/fatal/gen-cpp2/reflection_dep_B_constants.h"
+#include "thrift/compiler/test/fixtures/fatal/gen-cpp2/reflection_dep_C_constants.h"
+
 
 namespace test_cpp2::cpp_reflection {
 namespace module_constants {
+
+
 
 
 

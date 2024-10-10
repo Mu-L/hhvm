@@ -339,6 +339,52 @@ void cgLookupFuncCached(IRLS& env, const IRInstruction* inst) {
   );
 }
 
+void cgEqClassId(IRLS& env, const IRInstruction* inst) {
+  auto const extra = inst->extra<EqClassId>();
+  auto const classPtr = extra->cls;
+  auto const classId = classPtr->classId().id();
+  auto const handle = classPtr->classIdHandle();
+  auto const dst = dstLoc(env, inst, 0).reg();
+
+  auto& v = vmain(env);
+  auto const sf = v.makeReg();
+  v << cmplim{safe_cast<int32_t>(classId), rvmtl()[handle], sf};
+  v << setcc{CC_E, sf, dst};
+}
+
+static void logClsSpeculation(
+  const StringData* clsName,
+  const StringData* ctxName,
+  const StringData* methName,
+  const char* op,
+  ClassId::Id clsId,
+  bool success) {
+  StructuredLogEntry entry;
+  entry.setStr("cls", clsName ? clsName->data(): "no cls");
+  entry.setStr("method", methName ? methName->data() : "no method");
+  entry.setStr("ctx", ctxName ? ctxName->data() : "no context");
+  entry.setStr("op", op);
+  entry.setInt("expected clsId", clsId);
+  entry.setInt("success", success);
+  StructuredLog::log("hhvm_speculate", entry);
+}
+
+void cgLogClsSpeculation(IRLS& env, const IRInstruction* inst) {
+  auto& v = vmain(env);
+  auto const extra = inst->extra<LoggingSpeculateData>();
+  auto const target = CallSpec::direct(logClsSpeculation);
+  cgCallHelper(v, env, target, callDest(env, inst), SyncOptions::None,
+               argGroup(env, inst)
+               .immPtr(extra->clsName)
+               .immPtr(extra->ctxName)
+               .immPtr(extra->methName)
+               .immPtr(opcodeToName(extra->opcode))
+               .imm(extra->expectedId)
+               .imm(extra->success)
+  );
+}
+
+
 ///////////////////////////////////////////////////////////////////////////////
 
 IMPL_OPCODE_CALL(OODeclExists)

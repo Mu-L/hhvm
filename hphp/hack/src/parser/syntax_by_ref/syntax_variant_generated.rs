@@ -180,6 +180,7 @@ pub enum SyntaxVariant<'a, T, V> {
     DictionaryTypeSpecifier(&'a DictionaryTypeSpecifierChildren<'a, T, V>),
     ClosureTypeSpecifier(&'a ClosureTypeSpecifierChildren<'a, T, V>),
     ClosureParameterTypeSpecifier(&'a ClosureParameterTypeSpecifierChildren<'a, T, V>),
+    TupleOrUnionOrIntersectionElementTypeSpecifier(&'a TupleOrUnionOrIntersectionElementTypeSpecifierChildren<'a, T, V>),
     TypeRefinement(&'a TypeRefinementChildren<'a, T, V>),
     TypeInRefinement(&'a TypeInRefinementChildren<'a, T, V>),
     CtxInRefinement(&'a CtxInRefinementChildren<'a, T, V>),
@@ -374,6 +375,7 @@ pub struct CaseTypeDeclarationChildren<'a, T, V> {
 pub struct CaseTypeVariantChildren<'a, T, V> {
     pub bar: Syntax<'a, T, V>,
     pub type_: Syntax<'a, T, V>,
+    pub where_clause: Syntax<'a, T, V>,
 }
 
 #[derive(Debug, Clone)]
@@ -595,6 +597,7 @@ pub struct ParameterDeclarationChildren<'a, T, V> {
     pub optional: Syntax<'a, T, V>,
     pub call_convention: Syntax<'a, T, V>,
     pub readonly: Syntax<'a, T, V>,
+    pub pre_ellipsis: Syntax<'a, T, V>,
     pub type_: Syntax<'a, T, V>,
     pub ellipsis: Syntax<'a, T, V>,
     pub name: Syntax<'a, T, V>,
@@ -1442,6 +1445,15 @@ pub struct ClosureParameterTypeSpecifierChildren<'a, T, V> {
     pub optional: Syntax<'a, T, V>,
     pub call_convention: Syntax<'a, T, V>,
     pub readonly: Syntax<'a, T, V>,
+    pub pre_ellipsis: Syntax<'a, T, V>,
+    pub type_: Syntax<'a, T, V>,
+    pub ellipsis: Syntax<'a, T, V>,
+}
+
+#[derive(Debug, Clone)]
+pub struct TupleOrUnionOrIntersectionElementTypeSpecifierChildren<'a, T, V> {
+    pub optional: Syntax<'a, T, V>,
+    pub pre_ellipsis: Syntax<'a, T, V>,
     pub type_: Syntax<'a, T, V>,
     pub ellipsis: Syntax<'a, T, V>,
 }

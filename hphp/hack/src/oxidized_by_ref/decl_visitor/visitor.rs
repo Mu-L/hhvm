@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<3c5efb44684725c7ef2efc5b759da775>>
+// @generated SignedSource<<420f3decd9895beeb94d4eb1dec7b354>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -93,10 +93,22 @@ pub trait Visitor<'a> {
     fn visit_fun_type(&mut self, p: &'a FunType<'a>) {
         p.recurse(self.object())
     }
-    fn visit_type_predicate(&mut self, p: &'a TypePredicate<'a>) {
+    fn visit_type_tag(&mut self, p: &'a TypeTag<'a>) {
         p.recurse(self.object())
     }
-    fn visit_neg_type(&mut self, p: &'a NegType<'a>) {
+    fn visit_shape_field_predicate(&mut self, p: &'a ShapeFieldPredicate<'a>) {
+        p.recurse(self.object())
+    }
+    fn visit_shape_predicate(&mut self, p: &'a ShapePredicate<'a>) {
+        p.recurse(self.object())
+    }
+    fn visit_tuple_predicate(&mut self, p: &'a TuplePredicate<'a>) {
+        p.recurse(self.object())
+    }
+    fn visit_type_predicate_(&mut self, p: &'a TypePredicate_<'a>) {
+        p.recurse(self.object())
+    }
+    fn visit_type_predicate(&mut self, p: &'a TypePredicate<'a>) {
         p.recurse(self.object())
     }
     fn visit_ty(&mut self, p: &'a Ty<'a>) {
@@ -129,6 +141,12 @@ pub trait Visitor<'a> {
     fn visit_shape_type(&mut self, p: &'a ShapeType<'a>) {
         p.recurse(self.object())
     }
+    fn visit_tuple_type(&mut self, p: &'a TupleType<'a>) {
+        p.recurse(self.object())
+    }
+    fn visit_tuple_extra(&mut self, p: &'a TupleExtra<'a>) {
+        p.recurse(self.object())
+    }
     fn visit_class_const_from(&mut self, p: &'a ClassConstFrom<'a>) {
         p.recurse(self.object())
     }
@@ -159,6 +177,12 @@ pub trait Visitor<'a> {
     fn visit_enum_type(&mut self, p: &'a EnumType<'a>) {
         p.recurse(self.object())
     }
+    fn visit_typedef_case_type_variant(&mut self, p: &'a TypedefCaseTypeVariant<'a>) {
+        p.recurse(self.object())
+    }
+    fn visit_typedef_type_assignment(&mut self, p: &'a TypedefTypeAssignment<'a>) {
+        p.recurse(self.object())
+    }
     fn visit_typedef_type(&mut self, p: &'a TypedefType<'a>) {
         p.recurse(self.object())
     }
@@ -174,7 +198,7 @@ pub trait Visitor<'a> {
     fn visit_prj_symm(&mut self, p: &'a PrjSymm<'a>) {
         p.recurse(self.object())
     }
-    fn visit_prj(&mut self, p: &'a Prj<'a>) {
+    fn visit_flow_kind(&mut self, p: &'a FlowKind<'a>) {
         p.recurse(self.object())
     }
     fn visit_witness_locl(&mut self, p: &'a WitnessLocl<'a>) {
@@ -240,10 +264,7 @@ pub trait Visitor<'a> {
     fn visit_prj_asymm(&mut self, p: &'a PrjAsymm) {
         p.recurse(self.object())
     }
-    fn visit_side(&mut self, p: &'a Side) {
-        p.recurse(self.object())
-    }
-    fn visit_flow_kind(&mut self, p: &'a FlowKind) {
+    fn visit_axiom(&mut self, p: &'a Axiom) {
         p.recurse(self.object())
     }
     fn visit_tag(&mut self, p: &'a Tag) {

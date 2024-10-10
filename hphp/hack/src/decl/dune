@@ -259,23 +259,9 @@
   (pps ppx_deriving.std)))
 
 (library
- (name decl_typedef_expand)
- (modules decl_typedef_expand)
- (libraries decl_subst decl_provider provider_context typing_defs)
- (preprocess
-  (pps ppx_deriving.std)))
-
-(library
  (name decl_pos_utils)
  (modules decl_pos_utils)
  (libraries decl_defs shallow_decl_defs typing_defs)
- (preprocess
-  (pps ppx_deriving.std)))
-
-(library
- (name decl_service)
- (modules decl_service)
- (libraries decl procs_procs utils_core)
  (preprocess
   (pps ppx_deriving.std)))
 
@@ -338,7 +324,7 @@
   temp_file
   typing_defs
   remote_old_decls_ffi
-  utils_config_file
+  config_file
   utils_core
   utils_www_root)
  (preprocess

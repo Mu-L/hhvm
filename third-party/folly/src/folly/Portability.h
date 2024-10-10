@@ -35,7 +35,11 @@
 static_assert(FOLLY_CPLUSPLUS >= 201703L, "__cplusplus >= 201703L");
 
 #if defined(__GNUC__) && !defined(__clang__)
+#if defined(FOLLY_CONFIG_TEMPORARY_DOWNGRADE_GCC)
+static_assert(__GNUC__ >= 9, "__GNUC__ >= 9");
+#else
 static_assert(__GNUC__ >= 10, "__GNUC__ >= 10");
+#endif
 #endif
 
 #if defined(_MSC_VER)
@@ -370,6 +374,38 @@ constexpr auto kHasWeakSymbols = false;
 #define FOLLY_ARM_FEATURE_CRC32 1
 #else
 #define FOLLY_ARM_FEATURE_CRC32 0
+#endif
+#endif
+
+#ifndef FOLLY_ARM_FEATURE_CRYPTO
+#ifdef __ARM_FEATURE_CRYPTO
+#define FOLLY_ARM_FEATURE_CRYPTO 1
+#else
+#define FOLLY_ARM_FEATURE_CRYPTO 0
+#endif
+#endif
+
+#ifndef FOLLY_ARM_FEATURE_AES
+#ifdef __ARM_FEATURE_AES
+#define FOLLY_ARM_FEATURE_AES 1
+#else
+#define FOLLY_ARM_FEATURE_AES 0
+#endif
+#endif
+
+#ifndef FOLLY_ARM_FEATURE_SHA2
+#ifdef __ARM_FEATURE_SHA2
+#define FOLLY_ARM_FEATURE_SHA2 1
+#else
+#define FOLLY_ARM_FEATURE_SHA2 0
+#endif
+#endif
+
+#ifndef FOLLY_ARM_FEATURE_SHA3
+#ifdef __ARM_FEATURE_SHA3
+#define FOLLY_ARM_FEATURE_SHA3 1
+#else
+#define FOLLY_ARM_FEATURE_SHA3 0
 #endif
 #endif
 

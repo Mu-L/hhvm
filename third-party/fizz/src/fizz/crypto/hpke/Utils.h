@@ -10,9 +10,7 @@
 
 #include <fizz/crypto/hpke/Types.h>
 
-#include <fizz/crypto/aead/Aead.h>
-#include <fizz/crypto/exchange/KeyExchange.h>
-#include <fizz/crypto/hpke/Hkdf.h>
+#include <fizz/crypto/Crypto.h>
 #include <fizz/protocol/Types.h>
 
 #include <folly/Optional.h>
@@ -102,21 +100,6 @@ NamedGroup getKexGroup(KEMId kemId);
 HashFunction getHashFunctionForKEM(KEMId kemId);
 
 /**
- * fizz::hpke::makeKeyExchange returns a `fizz::KeyExchange` instance given an
- * HPKE code point.
- *
- * The constructed `KeyExchange` object does *not* have a keypair associated
- * with it yet.
- *
- * @param  kemId    An HPKE KEM code point.
- *
- * @return An instance of a `fizz::KeyExchange` object without an associated
- *         keypair
- * @throws std::runtime_error   On invalid code points.
- */
-std::unique_ptr<KeyExchange> makeKeyExchange(KEMId kemId);
-
-/**
  * fizz::hpke::nenc returns the size of the serialized public component (`enc`)
  * for a given keypair.
  *
@@ -153,24 +136,6 @@ HashFunction getHashFunction(KDFId kdfId);
  * @throws std::runtime_error On invalid code points
  */
 KDFId getKDFId(HashFunction hash);
-
-/**
- * fizz::hpke::makeHpkeHkdf constructs an `fizz::Hkdf` instance from an HPKE
- * code point.
- *
- * @param prefix  A prefix string that contextualizes the HKDF instance.
- *
- *                This prefix string is passed through *as-is*. This function
- *                does *not* add any HPKE specific prefixes.
- *
- * @param kdfId   An HPKE HKDF code point.
- *
- * @return  An instantiated `fizz::Hkdf` instance.
- * @throws std::runtime_error  On invalid code points.
- */
-std::unique_ptr<Hkdf> makeHpkeHkdf(
-    std::unique_ptr<folly::IOBuf> prefix,
-    KDFId kdfId);
 
 /*****************************
  *                           *
@@ -211,16 +176,20 @@ AeadId getAeadId(CipherSuite suite);
 CipherSuite getCipherSuite(AeadId aeadId);
 
 /**
- * fizz::hpke::makeCipher constructs a `fizz::Aead` instance given an HPKE
- * aead code point.
- *
- * The cipher instance does *not* have the keys set.
- *
- * @param aeadId   An HPKE aead code point.
- *
- * @return An instance of a `fizz::Aead` without keying parameters.
- * @throws std::runtime_error     On invalid aead code point.
+ * fizz::hpke::getCipherOverhead returns the number of additional bytes
+ * is required to express the ciphertext of a plaintext of a given
+ * AeadId
  */
-std::unique_ptr<Aead> makeCipher(AeadId aeadId);
+inline size_t getCipherOverhead(AeadId aeadId) {
+  switch (aeadId) {
+    case AeadId::TLS_AES_128_GCM_SHA256:
+      return AESGCM128::kTagLength;
+    case AeadId::TLS_AES_256_GCM_SHA384:
+      return AESGCM256::kTagLength;
+    case AeadId::TLS_CHACHA20_POLY1305_SHA256:
+      return ChaCha20Poly1305::kTagLength;
+  }
+  throw std::runtime_error("invalid aead");
+}
 } // namespace hpke
 } // namespace fizz

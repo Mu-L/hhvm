@@ -10,6 +10,8 @@
 #include <fmt/chrono.h>
 #include <folly/ScopeGuard.h>
 
+#include "eden/common/utils/ProcessInfoCache.h"
+#include "watchman/ClientContext.h"
 #include "watchman/CommandRegistry.h"
 #include "watchman/Errors.h"
 #include "watchman/PerfSample.h"
@@ -163,7 +165,8 @@ static void execute_common(
     QueryExecute* queryExecute,
     PerfSample* sample,
     QueryResult* res,
-    QueryGenerator generator) {
+    QueryGenerator generator,
+    const ClientContext& clientInfo) {
   ctx->stopWatch.reset();
 
   if (ctx->query->dedup_results) {
@@ -259,10 +262,21 @@ static void execute_common(
       queryExecute->deduped = ctx->num_deduped;
       queryExecute->results = ctx->resultsArray.size();
       queryExecute->walked = ctx->getNumWalked();
+      queryExecute->eden_glob_files_duration_us =
+          ctx->edenGlobFilesDurationUs.load(std::memory_order_relaxed);
+      queryExecute->eden_changed_files_duration_us =
+          ctx->edenChangedFilesDurationUs.load(std::memory_order_relaxed);
+      queryExecute->eden_file_properties_duration_us =
+          ctx->edenFilePropertiesDurationUs.load(std::memory_order_relaxed);
 
       if (ctx->query->query_spec) {
         queryExecute->query = ctx->query->query_spec->toString();
       }
+      queryExecute->meta.client_pid = clientInfo.clientPid;
+      queryExecute->meta.client_name = clientInfo.clientInfo.has_value()
+          ? facebook::eden::ProcessInfoCache::cleanProcessCommandline(
+                std::move(clientInfo.clientInfo.value().get().name))
+          : "";
 
       getLogger()->logEvent(*queryExecute);
     }
@@ -334,7 +348,8 @@ QueryResult w_query_execute(
             root->config,
             [root](RootMetadata& root_metadata) {
               root->collectRootMetadata(root_metadata);
-            });
+            },
+            query->clientInfo);
         auto savedStateResult = savedStateInterface->getMostRecentSavedState(
             resultClock.scmMergeBase ? resultClock.scmMergeBase->piece()
                                      : w_string_piece{});
@@ -437,7 +452,7 @@ QueryResult w_query_execute(
     ctx.state = QueryContextState::WaitingForCookieSync;
     ctx.stopWatch.reset();
     try {
-      auto result = root->syncToNow(query->sync_timeout);
+      auto result = root->syncToNow(query->sync_timeout, query->clientInfo);
       res.debugInfo.cookieFileNames = std::move(result.cookieFileNames);
     } catch (const std::exception& exc) {
       QueryExecError::throwf("synchronization failed: {}", exc.what());
@@ -480,11 +495,12 @@ QueryResult w_query_execute(
       QueryResult r;
       c.clockAtStartOfQuery = ctx.clockAtStartOfQuery;
       c.since = ctx.since;
-      execute_common(&c, nullptr, nullptr, &r, generator);
+      execute_common(&c, nullptr, nullptr, &r, generator, query->clientInfo);
     }
   }
 
-  execute_common(&ctx, &queryExecute, &sample, &res, generator);
+  execute_common(
+      &ctx, &queryExecute, &sample, &res, generator, query->clientInfo);
   return res;
 }
 

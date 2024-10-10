@@ -244,10 +244,11 @@ where
         Self::make(syntax, value)
     }
 
-    fn make_case_type_variant(_: &C, case_type_variant_bar: Self, case_type_variant_type: Self) -> Self {
+    fn make_case_type_variant(_: &C, case_type_variant_bar: Self, case_type_variant_type: Self, case_type_variant_where_clause: Self) -> Self {
         let syntax = SyntaxVariant::CaseTypeVariant(Box::new(CaseTypeVariantChildren {
             case_type_variant_bar,
             case_type_variant_type,
+            case_type_variant_where_clause,
         }));
         let value = V::from_values(syntax.iter_children().map(|child| &child.value));
         Self::make(syntax, value)
@@ -540,13 +541,14 @@ where
         Self::make(syntax, value)
     }
 
-    fn make_parameter_declaration(_: &C, parameter_attribute: Self, parameter_visibility: Self, parameter_optional: Self, parameter_call_convention: Self, parameter_readonly: Self, parameter_type: Self, parameter_ellipsis: Self, parameter_name: Self, parameter_default_value: Self, parameter_parameter_end: Self) -> Self {
+    fn make_parameter_declaration(_: &C, parameter_attribute: Self, parameter_visibility: Self, parameter_optional: Self, parameter_call_convention: Self, parameter_readonly: Self, parameter_pre_ellipsis: Self, parameter_type: Self, parameter_ellipsis: Self, parameter_name: Self, parameter_default_value: Self, parameter_parameter_end: Self) -> Self {
         let syntax = SyntaxVariant::ParameterDeclaration(Box::new(ParameterDeclarationChildren {
             parameter_attribute,
             parameter_visibility,
             parameter_optional,
             parameter_call_convention,
             parameter_readonly,
+            parameter_pre_ellipsis,
             parameter_type,
             parameter_ellipsis,
             parameter_name,
@@ -1713,13 +1715,25 @@ where
         Self::make(syntax, value)
     }
 
-    fn make_closure_parameter_type_specifier(_: &C, closure_parameter_optional: Self, closure_parameter_call_convention: Self, closure_parameter_readonly: Self, closure_parameter_type: Self, closure_parameter_ellipsis: Self) -> Self {
+    fn make_closure_parameter_type_specifier(_: &C, closure_parameter_optional: Self, closure_parameter_call_convention: Self, closure_parameter_readonly: Self, closure_parameter_pre_ellipsis: Self, closure_parameter_type: Self, closure_parameter_ellipsis: Self) -> Self {
         let syntax = SyntaxVariant::ClosureParameterTypeSpecifier(Box::new(ClosureParameterTypeSpecifierChildren {
             closure_parameter_optional,
             closure_parameter_call_convention,
             closure_parameter_readonly,
+            closure_parameter_pre_ellipsis,
             closure_parameter_type,
             closure_parameter_ellipsis,
+        }));
+        let value = V::from_values(syntax.iter_children().map(|child| &child.value));
+        Self::make(syntax, value)
+    }
+
+    fn make_tuple_or_union_or_intersection_element_type_specifier(_: &C, tuple_or_union_or_intersection_element_optional: Self, tuple_or_union_or_intersection_element_pre_ellipsis: Self, tuple_or_union_or_intersection_element_type: Self, tuple_or_union_or_intersection_element_ellipsis: Self) -> Self {
+        let syntax = SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier(Box::new(TupleOrUnionOrIntersectionElementTypeSpecifierChildren {
+            tuple_or_union_or_intersection_element_optional,
+            tuple_or_union_or_intersection_element_pre_ellipsis,
+            tuple_or_union_or_intersection_element_type,
+            tuple_or_union_or_intersection_element_ellipsis,
         }));
         let value = V::from_values(syntax.iter_children().map(|child| &child.value));
         Self::make(syntax, value)
@@ -2213,9 +2227,10 @@ where
                 acc
             },
             SyntaxVariant::CaseTypeVariant(x) => {
-                let CaseTypeVariantChildren { case_type_variant_bar, case_type_variant_type } = *x;
+                let CaseTypeVariantChildren { case_type_variant_bar, case_type_variant_type, case_type_variant_where_clause } = *x;
                 let acc = f(case_type_variant_bar, acc);
                 let acc = f(case_type_variant_type, acc);
+                let acc = f(case_type_variant_where_clause, acc);
                 acc
             },
             SyntaxVariant::PropertyDeclaration(x) => {
@@ -2431,12 +2446,13 @@ where
                 acc
             },
             SyntaxVariant::ParameterDeclaration(x) => {
-                let ParameterDeclarationChildren { parameter_attribute, parameter_visibility, parameter_optional, parameter_call_convention, parameter_readonly, parameter_type, parameter_ellipsis, parameter_name, parameter_default_value, parameter_parameter_end } = *x;
+                let ParameterDeclarationChildren { parameter_attribute, parameter_visibility, parameter_optional, parameter_call_convention, parameter_readonly, parameter_pre_ellipsis, parameter_type, parameter_ellipsis, parameter_name, parameter_default_value, parameter_parameter_end } = *x;
                 let acc = f(parameter_attribute, acc);
                 let acc = f(parameter_visibility, acc);
                 let acc = f(parameter_optional, acc);
                 let acc = f(parameter_call_convention, acc);
                 let acc = f(parameter_readonly, acc);
+                let acc = f(parameter_pre_ellipsis, acc);
                 let acc = f(parameter_type, acc);
                 let acc = f(parameter_ellipsis, acc);
                 let acc = f(parameter_name, acc);
@@ -3280,12 +3296,21 @@ where
                 acc
             },
             SyntaxVariant::ClosureParameterTypeSpecifier(x) => {
-                let ClosureParameterTypeSpecifierChildren { closure_parameter_optional, closure_parameter_call_convention, closure_parameter_readonly, closure_parameter_type, closure_parameter_ellipsis } = *x;
+                let ClosureParameterTypeSpecifierChildren { closure_parameter_optional, closure_parameter_call_convention, closure_parameter_readonly, closure_parameter_pre_ellipsis, closure_parameter_type, closure_parameter_ellipsis } = *x;
                 let acc = f(closure_parameter_optional, acc);
                 let acc = f(closure_parameter_call_convention, acc);
                 let acc = f(closure_parameter_readonly, acc);
+                let acc = f(closure_parameter_pre_ellipsis, acc);
                 let acc = f(closure_parameter_type, acc);
                 let acc = f(closure_parameter_ellipsis, acc);
+                acc
+            },
+            SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier(x) => {
+                let TupleOrUnionOrIntersectionElementTypeSpecifierChildren { tuple_or_union_or_intersection_element_optional, tuple_or_union_or_intersection_element_pre_ellipsis, tuple_or_union_or_intersection_element_type, tuple_or_union_or_intersection_element_ellipsis } = *x;
+                let acc = f(tuple_or_union_or_intersection_element_optional, acc);
+                let acc = f(tuple_or_union_or_intersection_element_pre_ellipsis, acc);
+                let acc = f(tuple_or_union_or_intersection_element_type, acc);
+                let acc = f(tuple_or_union_or_intersection_element_ellipsis, acc);
                 acc
             },
             SyntaxVariant::TypeRefinement(x) => {
@@ -3668,6 +3693,7 @@ where
             SyntaxVariant::DictionaryTypeSpecifier {..} => SyntaxKind::DictionaryTypeSpecifier,
             SyntaxVariant::ClosureTypeSpecifier {..} => SyntaxKind::ClosureTypeSpecifier,
             SyntaxVariant::ClosureParameterTypeSpecifier {..} => SyntaxKind::ClosureParameterTypeSpecifier,
+            SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier {..} => SyntaxKind::TupleOrUnionOrIntersectionElementTypeSpecifier,
             SyntaxVariant::TypeRefinement {..} => SyntaxKind::TypeRefinement,
             SyntaxVariant::TypeInRefinement {..} => SyntaxKind::TypeInRefinement,
             SyntaxVariant::CtxInRefinement {..} => SyntaxKind::CtxInRefinement,
@@ -3844,7 +3870,8 @@ where
                  case_type_attribute_spec: ts.pop().unwrap(),
                  
              })),
-             (SyntaxKind::CaseTypeVariant, 2) => SyntaxVariant::CaseTypeVariant(Box::new(CaseTypeVariantChildren {
+             (SyntaxKind::CaseTypeVariant, 3) => SyntaxVariant::CaseTypeVariant(Box::new(CaseTypeVariantChildren {
+                 case_type_variant_where_clause: ts.pop().unwrap(),
                  case_type_variant_type: ts.pop().unwrap(),
                  case_type_variant_bar: ts.pop().unwrap(),
                  
@@ -4036,12 +4063,13 @@ where
                  decorated_expression_decorator: ts.pop().unwrap(),
                  
              })),
-             (SyntaxKind::ParameterDeclaration, 10) => SyntaxVariant::ParameterDeclaration(Box::new(ParameterDeclarationChildren {
+             (SyntaxKind::ParameterDeclaration, 11) => SyntaxVariant::ParameterDeclaration(Box::new(ParameterDeclarationChildren {
                  parameter_parameter_end: ts.pop().unwrap(),
                  parameter_default_value: ts.pop().unwrap(),
                  parameter_name: ts.pop().unwrap(),
                  parameter_ellipsis: ts.pop().unwrap(),
                  parameter_type: ts.pop().unwrap(),
+                 parameter_pre_ellipsis: ts.pop().unwrap(),
                  parameter_readonly: ts.pop().unwrap(),
                  parameter_call_convention: ts.pop().unwrap(),
                  parameter_optional: ts.pop().unwrap(),
@@ -4777,12 +4805,20 @@ where
                  closure_outer_left_paren: ts.pop().unwrap(),
                  
              })),
-             (SyntaxKind::ClosureParameterTypeSpecifier, 5) => SyntaxVariant::ClosureParameterTypeSpecifier(Box::new(ClosureParameterTypeSpecifierChildren {
+             (SyntaxKind::ClosureParameterTypeSpecifier, 6) => SyntaxVariant::ClosureParameterTypeSpecifier(Box::new(ClosureParameterTypeSpecifierChildren {
                  closure_parameter_ellipsis: ts.pop().unwrap(),
                  closure_parameter_type: ts.pop().unwrap(),
+                 closure_parameter_pre_ellipsis: ts.pop().unwrap(),
                  closure_parameter_readonly: ts.pop().unwrap(),
                  closure_parameter_call_convention: ts.pop().unwrap(),
                  closure_parameter_optional: ts.pop().unwrap(),
+                 
+             })),
+             (SyntaxKind::TupleOrUnionOrIntersectionElementTypeSpecifier, 4) => SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier(Box::new(TupleOrUnionOrIntersectionElementTypeSpecifierChildren {
+                 tuple_or_union_or_intersection_element_ellipsis: ts.pop().unwrap(),
+                 tuple_or_union_or_intersection_element_type: ts.pop().unwrap(),
+                 tuple_or_union_or_intersection_element_pre_ellipsis: ts.pop().unwrap(),
+                 tuple_or_union_or_intersection_element_optional: ts.pop().unwrap(),
                  
              })),
              (SyntaxKind::TypeRefinement, 5) => SyntaxVariant::TypeRefinement(Box::new(TypeRefinementChildren {
@@ -5001,7 +5037,7 @@ where
             SyntaxVariant::AliasDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.alias_attribute_spec, 10) },
             SyntaxVariant::ContextAliasDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.ctx_alias_attribute_spec, 8) },
             SyntaxVariant::CaseTypeDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.case_type_attribute_spec, 11) },
-            SyntaxVariant::CaseTypeVariant(x) => unsafe { std::slice::from_raw_parts(&x.case_type_variant_bar, 2) },
+            SyntaxVariant::CaseTypeVariant(x) => unsafe { std::slice::from_raw_parts(&x.case_type_variant_bar, 3) },
             SyntaxVariant::PropertyDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.property_attribute_spec, 5) },
             SyntaxVariant::PropertyDeclarator(x) => unsafe { std::slice::from_raw_parts(&x.property_name, 2) },
             SyntaxVariant::NamespaceDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.namespace_header, 2) },
@@ -5027,7 +5063,7 @@ where
             SyntaxVariant::TypeConstDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.type_const_attribute_spec, 10) },
             SyntaxVariant::ContextConstDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.context_const_modifiers, 9) },
             SyntaxVariant::DecoratedExpression(x) => unsafe { std::slice::from_raw_parts(&x.decorated_expression_decorator, 2) },
-            SyntaxVariant::ParameterDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.parameter_attribute, 10) },
+            SyntaxVariant::ParameterDeclaration(x) => unsafe { std::slice::from_raw_parts(&x.parameter_attribute, 11) },
             SyntaxVariant::OldAttributeSpecification(x) => unsafe { std::slice::from_raw_parts(&x.old_attribute_specification_left_double_angle, 3) },
             SyntaxVariant::AttributeSpecification(x) => unsafe { std::slice::from_raw_parts(&x.attribute_specification_attributes, 1) },
             SyntaxVariant::Attribute(x) => unsafe { std::slice::from_raw_parts(&x.attribute_at, 2) },
@@ -5135,7 +5171,8 @@ where
             SyntaxVariant::DarrayTypeSpecifier(x) => unsafe { std::slice::from_raw_parts(&x.darray_keyword, 7) },
             SyntaxVariant::DictionaryTypeSpecifier(x) => unsafe { std::slice::from_raw_parts(&x.dictionary_type_keyword, 4) },
             SyntaxVariant::ClosureTypeSpecifier(x) => unsafe { std::slice::from_raw_parts(&x.closure_outer_left_paren, 11) },
-            SyntaxVariant::ClosureParameterTypeSpecifier(x) => unsafe { std::slice::from_raw_parts(&x.closure_parameter_optional, 5) },
+            SyntaxVariant::ClosureParameterTypeSpecifier(x) => unsafe { std::slice::from_raw_parts(&x.closure_parameter_optional, 6) },
+            SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier(x) => unsafe { std::slice::from_raw_parts(&x.tuple_or_union_or_intersection_element_optional, 4) },
             SyntaxVariant::TypeRefinement(x) => unsafe { std::slice::from_raw_parts(&x.type_refinement_type, 5) },
             SyntaxVariant::TypeInRefinement(x) => unsafe { std::slice::from_raw_parts(&x.type_in_refinement_keyword, 6) },
             SyntaxVariant::CtxInRefinement(x) => unsafe { std::slice::from_raw_parts(&x.ctx_in_refinement_keyword, 6) },
@@ -5192,7 +5229,7 @@ where
             SyntaxVariant::AliasDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.alias_attribute_spec, 10) },
             SyntaxVariant::ContextAliasDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.ctx_alias_attribute_spec, 8) },
             SyntaxVariant::CaseTypeDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.case_type_attribute_spec, 11) },
-            SyntaxVariant::CaseTypeVariant(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.case_type_variant_bar, 2) },
+            SyntaxVariant::CaseTypeVariant(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.case_type_variant_bar, 3) },
             SyntaxVariant::PropertyDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.property_attribute_spec, 5) },
             SyntaxVariant::PropertyDeclarator(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.property_name, 2) },
             SyntaxVariant::NamespaceDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.namespace_header, 2) },
@@ -5218,7 +5255,7 @@ where
             SyntaxVariant::TypeConstDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.type_const_attribute_spec, 10) },
             SyntaxVariant::ContextConstDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.context_const_modifiers, 9) },
             SyntaxVariant::DecoratedExpression(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.decorated_expression_decorator, 2) },
-            SyntaxVariant::ParameterDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.parameter_attribute, 10) },
+            SyntaxVariant::ParameterDeclaration(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.parameter_attribute, 11) },
             SyntaxVariant::OldAttributeSpecification(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.old_attribute_specification_left_double_angle, 3) },
             SyntaxVariant::AttributeSpecification(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.attribute_specification_attributes, 1) },
             SyntaxVariant::Attribute(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.attribute_at, 2) },
@@ -5326,7 +5363,8 @@ where
             SyntaxVariant::DarrayTypeSpecifier(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.darray_keyword, 7) },
             SyntaxVariant::DictionaryTypeSpecifier(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.dictionary_type_keyword, 4) },
             SyntaxVariant::ClosureTypeSpecifier(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.closure_outer_left_paren, 11) },
-            SyntaxVariant::ClosureParameterTypeSpecifier(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.closure_parameter_optional, 5) },
+            SyntaxVariant::ClosureParameterTypeSpecifier(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.closure_parameter_optional, 6) },
+            SyntaxVariant::TupleOrUnionOrIntersectionElementTypeSpecifier(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.tuple_or_union_or_intersection_element_optional, 4) },
             SyntaxVariant::TypeRefinement(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.type_refinement_type, 5) },
             SyntaxVariant::TypeInRefinement(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.type_in_refinement_keyword, 6) },
             SyntaxVariant::CtxInRefinement(x) => unsafe { std::slice::from_raw_parts_mut(&mut x.ctx_in_refinement_keyword, 6) },
@@ -5543,6 +5581,7 @@ pub struct CaseTypeDeclarationChildren<T, V> {
 pub struct CaseTypeVariantChildren<T, V> {
     pub case_type_variant_bar: Syntax<T, V>,
     pub case_type_variant_type: Syntax<T, V>,
+    pub case_type_variant_where_clause: Syntax<T, V>,
 }
 
 #[derive(Debug, Clone)]
@@ -5790,6 +5829,7 @@ pub struct ParameterDeclarationChildren<T, V> {
     pub parameter_optional: Syntax<T, V>,
     pub parameter_call_convention: Syntax<T, V>,
     pub parameter_readonly: Syntax<T, V>,
+    pub parameter_pre_ellipsis: Syntax<T, V>,
     pub parameter_type: Syntax<T, V>,
     pub parameter_ellipsis: Syntax<T, V>,
     pub parameter_name: Syntax<T, V>,
@@ -6745,8 +6785,18 @@ pub struct ClosureParameterTypeSpecifierChildren<T, V> {
     pub closure_parameter_optional: Syntax<T, V>,
     pub closure_parameter_call_convention: Syntax<T, V>,
     pub closure_parameter_readonly: Syntax<T, V>,
+    pub closure_parameter_pre_ellipsis: Syntax<T, V>,
     pub closure_parameter_type: Syntax<T, V>,
     pub closure_parameter_ellipsis: Syntax<T, V>,
+}
+
+#[derive(Debug, Clone)]
+#[repr(C)]
+pub struct TupleOrUnionOrIntersectionElementTypeSpecifierChildren<T, V> {
+    pub tuple_or_union_or_intersection_element_optional: Syntax<T, V>,
+    pub tuple_or_union_or_intersection_element_pre_ellipsis: Syntax<T, V>,
+    pub tuple_or_union_or_intersection_element_type: Syntax<T, V>,
+    pub tuple_or_union_or_intersection_element_ellipsis: Syntax<T, V>,
 }
 
 #[derive(Debug, Clone)]
@@ -7155,6 +7205,7 @@ pub enum SyntaxVariant<T, V> {
     DictionaryTypeSpecifier(Box<DictionaryTypeSpecifierChildren<T, V>>),
     ClosureTypeSpecifier(Box<ClosureTypeSpecifierChildren<T, V>>),
     ClosureParameterTypeSpecifier(Box<ClosureParameterTypeSpecifierChildren<T, V>>),
+    TupleOrUnionOrIntersectionElementTypeSpecifier(Box<TupleOrUnionOrIntersectionElementTypeSpecifierChildren<T, V>>),
     TypeRefinement(Box<TypeRefinementChildren<T, V>>),
     TypeInRefinement(Box<TypeInRefinementChildren<T, V>>),
     CtxInRefinement(Box<CtxInRefinementChildren<T, V>>),
@@ -7407,9 +7458,10 @@ impl<'a, T, V> SyntaxChildrenIterator<'a, T, V> {
                 })
             },
             CaseTypeVariant(x) => {
-                get_index(2).and_then(|index| { match index {
+                get_index(3).and_then(|index| { match index {
                         0 => Some(&x.case_type_variant_bar),
                     1 => Some(&x.case_type_variant_type),
+                    2 => Some(&x.case_type_variant_where_clause),
                         _ => None,
                     }
                 })
@@ -7677,17 +7729,18 @@ impl<'a, T, V> SyntaxChildrenIterator<'a, T, V> {
                 })
             },
             ParameterDeclaration(x) => {
-                get_index(10).and_then(|index| { match index {
+                get_index(11).and_then(|index| { match index {
                         0 => Some(&x.parameter_attribute),
                     1 => Some(&x.parameter_visibility),
                     2 => Some(&x.parameter_optional),
                     3 => Some(&x.parameter_call_convention),
                     4 => Some(&x.parameter_readonly),
-                    5 => Some(&x.parameter_type),
-                    6 => Some(&x.parameter_ellipsis),
-                    7 => Some(&x.parameter_name),
-                    8 => Some(&x.parameter_default_value),
-                    9 => Some(&x.parameter_parameter_end),
+                    5 => Some(&x.parameter_pre_ellipsis),
+                    6 => Some(&x.parameter_type),
+                    7 => Some(&x.parameter_ellipsis),
+                    8 => Some(&x.parameter_name),
+                    9 => Some(&x.parameter_default_value),
+                    10 => Some(&x.parameter_parameter_end),
                         _ => None,
                     }
                 })
@@ -8742,12 +8795,23 @@ impl<'a, T, V> SyntaxChildrenIterator<'a, T, V> {
                 })
             },
             ClosureParameterTypeSpecifier(x) => {
-                get_index(5).and_then(|index| { match index {
+                get_index(6).and_then(|index| { match index {
                         0 => Some(&x.closure_parameter_optional),
                     1 => Some(&x.closure_parameter_call_convention),
                     2 => Some(&x.closure_parameter_readonly),
-                    3 => Some(&x.closure_parameter_type),
-                    4 => Some(&x.closure_parameter_ellipsis),
+                    3 => Some(&x.closure_parameter_pre_ellipsis),
+                    4 => Some(&x.closure_parameter_type),
+                    5 => Some(&x.closure_parameter_ellipsis),
+                        _ => None,
+                    }
+                })
+            },
+            TupleOrUnionOrIntersectionElementTypeSpecifier(x) => {
+                get_index(4).and_then(|index| { match index {
+                        0 => Some(&x.tuple_or_union_or_intersection_element_optional),
+                    1 => Some(&x.tuple_or_union_or_intersection_element_pre_ellipsis),
+                    2 => Some(&x.tuple_or_union_or_intersection_element_type),
+                    3 => Some(&x.tuple_or_union_or_intersection_element_ellipsis),
                         _ => None,
                     }
                 })

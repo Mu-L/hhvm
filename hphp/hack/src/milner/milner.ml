@@ -34,36 +34,40 @@ let init_table contents placeholder =
 (* Generate types and conforming expressions for all placeholders in the
    template *)
 let generate_tables template =
+  let mk_type () = Gen.Type.mk Gen.Environment.default ~depth:None in
   (* Farm the type placeholders from the template and randomly generate types *)
   let ty_table = init_table template type_regexp in
-  let ty_table = Hashtbl.map ty_table ~f:(fun _ -> Gen.Type.mk ()) in
+  let ty_table = Hashtbl.map ty_table ~f:mk_type in
 
   (* Generate expressions that conform to the types in the type table.
      If there are expression placeholders without a corresponding type, generate
      a random type and use that to generate an expression. *)
   let expr_table = init_table template expr_regexp in
   let gen_expr_from_ty_table ~key ~data:_ =
-    let (ty, _) =
-      Hashtbl.find ty_table key |> Option.value_or_thunk ~default:Gen.Type.mk
+    let (env, ty) =
+      Hashtbl.find ty_table key |> Option.value_or_thunk ~default:mk_type
     in
-    Gen.Type.inhabitant_of ty
+    Gen.Type.inhabitant_of env ty
   in
   let expr_table = Hashtbl.mapi expr_table ~f:gen_expr_from_ty_table in
 
   let defs =
-    let get_defs (_, (_, defs)) = defs in
+    let get_defs (_, (env, _)) = Gen.Environment.definitions env in
     let ty_defs = Hashtbl.to_alist ty_table |> List.map ~f:get_defs in
     List.concat ty_defs
   in
-  let ty_table = Hashtbl.map ty_table ~f:(fun (ty, _) -> ty) in
+  let ty_table = Hashtbl.map ty_table ~f:(fun (_, ty) -> ty) in
 
-  (ty_table, expr_table, defs)
+  (defs, ty_table, expr_table)
 
 (* Add generated types and expressions back in the template *)
 let fill_in_template ty_table expr_table template =
   let fill_table table ~prefix contents =
     let replace ~key ~data contents =
-      Pcre.replace ~pat:(placeholder prefix key) ~templ:data contents
+      String.substr_replace_all
+        ~pattern:(placeholder prefix key)
+        ~with_:data
+        contents
     in
     Hashtbl.fold table ~init:contents ~f:replace
   in
@@ -91,7 +95,7 @@ let milner verbose seed template_path destination_path =
   end;
   let () = Random.init seed in
   let template = In_channel.read_all template_path in
-  let (ty_table, expr_table, defs) = generate_tables template in
+  let (defs, ty_table, expr_table) = generate_tables template in
   let output =
     fill_in_template ty_table expr_table template
     |> add_missing_definitions defs

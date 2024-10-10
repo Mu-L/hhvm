@@ -11,8 +11,8 @@
          m_params =
          [{ param_annotation = (Traversable<int>); param_type_hint = ((Traversable<int>), (Some ([4:21-37], (Happly (([4:21-32], "\\HH\\Traversable"), [([4:33-36], (Hprim Tint))])))));
             param_pos = [4:38-40]; param_name = "$i"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          m_ctxs = None; m_unsafe_ctxs = None; m_body = { fb_ast = [([Pos.none], Noop)] }; 
          m_fun_kind = FSync; m_user_attributes = []; m_readonly_ret = None; 
@@ -39,8 +39,8 @@
          f_params =
          [{ param_annotation = (Traversable<int>); param_type_hint = ((Traversable<int>), (Some ([7:12-28], (Happly (([7:12-23], "\\HH\\Traversable"), [([7:24-27], (Hprim Tint))])))));
             param_pos = [7:29-31]; param_name = "$i"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None; f_body = { fb_ast = [([Pos.none], Noop)] }; 
          f_fun_kind = FSync; f_user_attributes = [{ ua_name = ([7:10-11], "__SupportDynamicType"); ua_params = [] }]; 
@@ -58,8 +58,8 @@
          f_params =
          [{ param_annotation = (Traversable<float>); param_type_hint = ((Traversable<float>), (Some ([10:3-21], (Happly (([10:3-14], "\\HH\\Traversable"), [([10:15-20], (Hprim Tfloat))])))));
             param_pos = [10:22-24]; param_name = "$i"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -74,17 +74,17 @@
                       unpacked_arg = None }))));
              ([15:3-32],
               (Expr
-                 ((TestTraversable), [15:3-31],
+                 ((exact TestTraversable), [15:3-31],
                   (Binop
-                     { bop = (Eq None); lhs = ((TestTraversable), [15:3-7], (Lvar ([15:3-7], $foo)));
-                       rhs = ((TestTraversable), [15:10-31], (New (((TestTraversable), [15:14-29], (CI ([15:14-29], "\\TestTraversable"))), [], [], None, ((function(): void))))) }))));
+                     { bop = (Eq None); lhs = ((exact TestTraversable), [15:3-7], (Lvar ([15:3-7], $foo)));
+                       rhs = ((exact TestTraversable), [15:10-31], (New (((exact TestTraversable), [15:14-29], (CI ([15:14-29], "\\TestTraversable"))), [], [], None, ((function(): void))))) }))));
              ([18:3-15],
               (Expr
                  ((void), [18:3-14],
                   (Call
                      { func =
                        (((function(Traversable<int> $i): void)), [18:3-10],
-                        (Obj_get (((TestTraversable), [18:3-7], (Lvar ([18:3-7], $foo))), (((function(Traversable<int> $i): void)), [18:9-10], (Id ([18:9-10], "i"))), OG_nullthrows, Is_method)));
+                        (Obj_get (((exact TestTraversable), [18:3-7], (Lvar ([18:3-7], $foo))), (((function(Traversable<int> $i): void)), [18:9-10], (Id ([18:9-10], "i"))), OG_nullthrows, Is_method)));
                        targs = [];
                        args = [(Pnormal, ((Traversable<float>), [18:11-13], (Hole (((Traversable<float>), [18:11-13], (Lvar ([18:11-13], $i))), (Traversable<float>), (Traversable<int>), Typing))))];
                        unpacked_arg = None }))))
@@ -105,8 +105,8 @@
          f_params =
          [{ param_annotation = (Traversable<float>); param_type_hint = ((Traversable<float>), (Some ([22:3-21], (Happly (([22:3-14], "\\HH\\Traversable"), [([22:15-20], (Hprim Tfloat))])))));
             param_pos = [22:22-24]; param_name = "$i"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -129,17 +129,17 @@
                       unpacked_arg = None }))));
              ([27:3-32],
               (Expr
-                 ((TestTraversable), [27:3-31],
+                 ((exact TestTraversable), [27:3-31],
                   (Binop
-                     { bop = (Eq None); lhs = ((TestTraversable), [27:3-7], (Lvar ([27:3-7], $foo)));
-                       rhs = ((TestTraversable), [27:10-31], (New (((TestTraversable), [27:14-29], (CI ([27:14-29], "\\TestTraversable"))), [], [], None, ((function(): void))))) }))));
+                     { bop = (Eq None); lhs = ((exact TestTraversable), [27:3-7], (Lvar ([27:3-7], $foo)));
+                       rhs = ((exact TestTraversable), [27:10-31], (New (((exact TestTraversable), [27:14-29], (CI ([27:14-29], "\\TestTraversable"))), [], [], None, ((function(): void))))) }))));
              ([30:3-75],
               (Expr
                  ((~void), [30:3-74],
                   (Call
                      { func =
                        (((function(Traversable<int> $i): void)), [30:3-10],
-                        (Obj_get (((TestTraversable), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(Traversable<int> $i): void)), [30:9-10], (Id ([30:9-10], "i"))), OG_nullthrows, Is_method)));
+                        (Obj_get (((exact TestTraversable), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(Traversable<int> $i): void)), [30:9-10], (Id ([30:9-10], "i"))), OG_nullthrows, Is_method)));
                        targs = [];
                        args =
                        [(Pnormal,
@@ -169,8 +169,8 @@
           m_params =
           [{ param_annotation = (dynamic); param_type_hint = ((dynamic), (Some ([4:21-37], (Happly (([4:21-32], "\\HH\\Traversable"), [([4:33-36], (Hprim Tint))]))))); 
              param_pos = [4:38-40]; param_name = "$i"; param_info = Param_required; 
-             param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-             param_visibility = None }
+             param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+             param_user_attributes = []; param_visibility = None }
             ];
           m_ctxs = None; m_unsafe_ctxs = None; m_body = { fb_ast = [([Pos.none], Noop)] }; 
           m_fun_kind = FSync; m_user_attributes = []; m_readonly_ret = None; 
@@ -197,8 +197,8 @@
          f_params =
          [{ param_annotation = (dynamic); param_type_hint = ((dynamic), (Some ([7:12-28], (Happly (([7:12-23], "\\HH\\Traversable"), [([7:24-27], (Hprim Tint))]))))); 
             param_pos = [7:29-31]; param_name = "$i"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None; f_body = { fb_ast = [([Pos.none], Noop)] }; 
          f_fun_kind = FSync; f_user_attributes = [{ ua_name = ([7:10-11], "__SupportDynamicType"); ua_params = [] }]; 
@@ -216,8 +216,8 @@
          f_params =
          [{ param_annotation = (dynamic); param_type_hint = ((dynamic), (Some ([22:3-21], (Happly (([22:3-14], "\\HH\\Traversable"), [([22:15-20], (Hprim Tfloat))]))))); 
             param_pos = [22:22-24]; param_name = "$i"; param_info = Param_required; 
-            param_readonly = None; param_callconv = Pnormal; param_user_attributes = []; 
-            param_visibility = None }
+            param_readonly = None; param_splat = None; param_callconv = Pnormal; 
+            param_user_attributes = []; param_visibility = None }
            ];
          f_ctxs = None; f_unsafe_ctxs = None;
          f_body =
@@ -240,17 +240,17 @@
                       unpacked_arg = None }))));
              ([27:3-32],
               (Expr
-                 ((TestTraversable), [27:3-31],
+                 ((exact TestTraversable), [27:3-31],
                   (Binop
-                     { bop = (Eq None); lhs = ((TestTraversable), [27:3-7], (Lvar ([27:3-7], $foo)));
-                       rhs = ((TestTraversable), [27:10-31], (New (((TestTraversable), [27:14-29], (CI ([27:14-29], "\\TestTraversable"))), [], [], None, ((function(): void))))) }))));
+                     { bop = (Eq None); lhs = ((exact TestTraversable), [27:3-7], (Lvar ([27:3-7], $foo)));
+                       rhs = ((exact TestTraversable), [27:10-31], (New (((exact TestTraversable), [27:14-29], (CI ([27:14-29], "\\TestTraversable"))), [], [], None, ((function(): void))))) }))));
              ([30:3-75],
               (Expr
                  ((~void), [30:3-74],
                   (Call
                      { func =
                        (((function(Traversable<int> $i): void)), [30:3-10],
-                        (Obj_get (((TestTraversable), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(Traversable<int> $i): void)), [30:9-10], (Id ([30:9-10], "i"))), OG_nullthrows, Is_method)));
+                        (Obj_get (((exact TestTraversable), [30:3-7], (Lvar ([30:3-7], $foo))), (((function(Traversable<int> $i): void)), [30:9-10], (Id ([30:9-10], "i"))), OG_nullthrows, Is_method)));
                        targs = [];
                        args =
                        [(Pnormal,

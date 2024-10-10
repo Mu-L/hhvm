@@ -36,8 +36,7 @@ class EventBase;
 class IOBuf;
 } // namespace folly
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 class ContextStack;
 class RequestCallback;
@@ -181,22 +180,21 @@ class RocketClientChannel final : public ClientChannel,
       std::unique_ptr<folly::IOBuf> buf,
       RequestClientCallback::Ptr cb);
 
+  std::optional<std::chrono::milliseconds> getClientTimeout(
+      const RpcOptions& rpcOptions) const;
+
+  std::variant<InteractionCreate, int64_t, std::monostate> getInteractionHandle(
+      const RpcOptions& rpcOptions);
+
   template <typename CallbackPtr>
-  bool preSendValidation(
-      RequestRpcMetadata& metadata,
-      const RpcOptions& rpcOptions,
-      CallbackPtr& cb,
-      std::chrono::milliseconds& firstResponseTimeout);
+  bool canHandleRequest(CallbackPtr& cb);
 
   rocket::SetupFrame makeSetupFrame(RequestSetupMetadata meta);
 
   int32_t getServerVersion() const;
 
-  void setCompression(RequestRpcMetadata& metadata, ssize_t payloadSize);
-
   class SingleRequestSingleResponseCallback;
   class SingleRequestNoResponseCallback;
 };
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

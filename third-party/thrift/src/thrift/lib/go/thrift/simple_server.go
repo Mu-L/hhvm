@@ -17,115 +17,24 @@
 package thrift
 
 import (
-	"context"
 	"fmt"
-	"log"
 	"net"
-	"os"
-	"runtime/debug"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
-// simpleServer is a functional but unoptimized server that is easy to
-// understand.  In its accept loop, it performs an accept on an
-// underlying socket, wraps the socket in the net.Listener, and
-// then spins up a gofunc to process requests.
-//
-// There is one gofunc per active connection that handles all requests
-// on the connection.  multiple simultaneous requests over a single
-// connection are not supported, as the per-connection gofunc reads
-// the request, processes it, and writes the response serially
-type simpleServer struct {
-	processor   ProcessorContext
-	listener    net.Listener
-	newProtocol func(net.Conn) (Protocol, error)
-	log         *log.Logger
-	*ServerOptions
-}
-
 // NewSimpleServer creates a new server that only supports Header Transport.
-func NewSimpleServer(processor ProcessorContext, listener net.Listener, transportType TransportID, options ...func(*ServerOptions)) Server {
-	if transportType != TransportIDHeader {
-		panic(fmt.Sprintf("SimpleServer only supports Header Transport and not %d", transportType))
+func NewSimpleServer(processor types.Processor, listener net.Listener, transportType TransportID, options ...func(*ServerOptions)) Server {
+	serverOptions := simpleServerOptions(options...)
+	processor = WrapInterceptor(serverOptions.interceptor, processor)
+	switch transportType {
+	case TransportIDHeader:
+		return newHeaderServer(processor, listener, serverOptions)
+	case TransportIDRocket:
+		return newRocketServer(processor, listener, serverOptions)
+	case TransportIDUpgradeToRocket:
+		return newUpgradeToRocketServer(processor, listener, serverOptions)
+	default:
+		panic(fmt.Sprintf("SimpleServer does not support: %v", transportType))
 	}
-	return &simpleServer{
-		processor:     processor,
-		listener:      listener,
-		newProtocol:   NewHeaderProtocol,
-		log:           log.New(os.Stderr, "", log.LstdFlags),
-		ServerOptions: simpleServerOptions(options...),
-	}
-}
-
-func simpleServerOptions(options ...func(*ServerOptions)) *ServerOptions {
-	opts := defaultServerOptions()
-	for _, option := range options {
-		option(opts)
-	}
-	return opts
-}
-
-// ServeContext starts listening on the transport and accepting new connections
-// and blocks until cancel is called via context or an error occurs.
-func (p *simpleServer) ServeContext(ctx context.Context) error {
-	go func() {
-		<-ctx.Done()
-		p.listener.Close()
-	}()
-	err := p.acceptLoop(ctx)
-	if ctx.Err() != nil {
-		return ctx.Err()
-	}
-	return err
-}
-
-// acceptLoop takes a context that will be decorated with ConnInfo and passed down to new clients.
-func (p *simpleServer) acceptLoop(ctx context.Context) error {
-	for {
-		conn, err := p.listener.Accept()
-		if err != nil {
-			select {
-			case <-ctx.Done():
-				return nil
-			default:
-				return err
-			}
-		}
-		if conn == nil {
-			continue
-		}
-		go func(ctx context.Context, conn net.Conn) {
-			ctx = WithConnInfo(ctx, conn)
-			if err := p.processRequests(ctx, conn); err != nil {
-				p.log.Println("thrift: error processing request:", err)
-			}
-		}(ctx, conn)
-	}
-}
-
-func (p *simpleServer) processRequests(ctx context.Context, conn net.Conn) error {
-	protocol, err := p.newProtocol(conn)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if err := recover(); err != nil {
-			p.log.Printf("panic in processor: %v: %s", err, debug.Stack())
-		}
-	}()
-	defer protocol.Close()
-	intProcessor := WrapInterceptorContext(p.interceptor, p.processor)
-	for {
-		keepOpen, exc := processContext(ctx, intProcessor, protocol)
-		if exc != nil {
-			protocol.Flush()
-			return exc
-		}
-		if !keepOpen {
-			break
-		}
-	}
-
-	// graceful exit.  client closed connection
-	return nil
 }

@@ -11,8 +11,10 @@ type args = {
   from: string;
       (** The source where the client was spawned from, i.e. nuclide, vim, emacs, etc. *)
   config: (string * string) list;  (** --config overrides at the command-line *)
+  disable_format_on_save: bool;
   ignore_hh_version: bool;
   naming_table: string option;
+  warnings_saved_state_path: Path.t option;
   notebook_mode: bool;
       (** Notebook mode. The *only* thing this does is filter out error messages that are not relevant for notebooks.
       * Important:
@@ -37,6 +39,7 @@ type args = {
 val main :
   args ->
   init_id:string ->
+  config:ServerConfig.t ->
   local_config:ServerLocalConfig.t ->
   init_proc_stack:string list option ->
   Exit_status.t Lwt.t

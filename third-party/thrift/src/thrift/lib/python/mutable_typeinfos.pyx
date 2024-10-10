@@ -54,7 +54,7 @@ cdef class MutableStructTypeInfo(TypeInfoBase):
         else:
             c_struct_info = (<MutableStructInfo>py_mutable_struct_info).cpp_obj.get()
 
-        self.cpp_obj = createImmutableStructTypeInfo(deref(c_struct_info))
+        self.cpp_obj = createMutableStructTypeInfo(deref(c_struct_info))
 
     cdef const cTypeInfo* get_cTypeInfo(self):
         return &self.cpp_obj
@@ -67,7 +67,7 @@ cdef class MutableStructTypeInfo(TypeInfoBase):
         Args:
             value: should be an instance of `self._mutable_struct_class`, Otherwise, raises `TypeError`.
 
-        Returns: The "mutable struct tuple" of the given value (see `createMutableStructTupleWithDefaultValues()`).
+        Returns: The "mutable struct list" of the given value (see `createMutableStructListWithDefaultValues()`).
 
         Raises:
             TypeError if `value` is not an instance of `self._mutable_struct_class`
@@ -85,8 +85,8 @@ cdef class MutableStructTypeInfo(TypeInfoBase):
         raise TypeError(f"MutableStructInfo cannot convert {self._mutable_struct_class} to internal data")
 
     # convert deserialized data to user format
-    cdef to_python_value(self, object struct_tuple):
-        return self._mutable_struct_class._fbthrift_create(struct_tuple)
+    cdef to_python_value(self, object struct_list):
+        return self._mutable_struct_class._fbthrift_create(struct_list)
 
     def to_container_value(self, object value not None):
         """
@@ -182,6 +182,9 @@ cdef class MutableListTypeInfo(TypeInfoBase):
 
         return self.val_info.same_as((<MutableListTypeInfo>other).val_info)
 
+    def __reduce__(self):
+        return (MutableListTypeInfo, (self.val_info,))
+
 
 @cython.final
 cdef class MutableSetTypeInfo(TypeInfoBase):
@@ -254,6 +257,9 @@ cdef class MutableSetTypeInfo(TypeInfoBase):
 
         return self.val_info.same_as((<MutableSetTypeInfo>other).val_info)
 
+    def __reduce__(self):
+        return (MutableSetTypeInfo, (self.val_info,))
+
 
 @cython.final
 cdef class MutableMapTypeInfo(TypeInfoBase):
@@ -273,9 +279,9 @@ cdef class MutableMapTypeInfo(TypeInfoBase):
         Validates the `values` and converts them into an internal data representation.
 
         Args:
-            values (iterable): An iterable object. Each key, value pair in the iteration
-            should be of a valid key and valid value type as verified by in `self.key_info`
-            and `self.val_info`.
+            values (Mapping): A mapping object, which must provide the `items()`
+            method. Each key, value pair in the mapping should be of a valid key
+            and valid value type as verified by `self.key_info` and `self.val_info`.
 
         Returns a Python dict with converted values, representing the internal data
         """
@@ -327,3 +333,6 @@ cdef class MutableMapTypeInfo(TypeInfoBase):
 
         return (self.key_info.same_as((<MutableMapTypeInfo>other).key_info) and
             self.val_info.same_as((<MutableMapTypeInfo>other).val_info))
+
+    def __reduce__(self):
+        return (MutableMapTypeInfo, (self.key_info, self.val_info))

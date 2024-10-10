@@ -65,7 +65,7 @@ struct ExpectedHelper;
  * Expected objects in the error state.
  */
 template <class Error>
-class Unexpected final {
+class FOLLY_NODISCARD Unexpected final {
   template <class E>
   friend class Unexpected;
   template <class V, class E>
@@ -139,8 +139,8 @@ inline bool operator!=(
  * }
  */
 template <class Error>
-FOLLY_NODISCARD constexpr Unexpected<typename std::decay<Error>::type>
-makeUnexpected(Error&& err) {
+constexpr Unexpected<typename std::decay<Error>::type> makeUnexpected(
+    Error&& err) {
   return Unexpected<typename std::decay<Error>::type>{
       static_cast<Error&&>(err)};
 }
@@ -213,7 +213,7 @@ using ExpectedErrorType =
 // Details...
 namespace expected_detail {
 
-template <typename Value, typename Error, typename = void>
+template <typename Value, typename Error>
 struct Promise;
 template <typename Value, typename Error>
 struct PromiseReturn;
@@ -1584,7 +1584,7 @@ bool operator>(const Value& other, const Expected<Value, Error>&) = delete;
 // Enable the use of folly::Expected with `co_await`
 // Inspired by https://github.com/toby-allsopp/coroutine_monad
 #if FOLLY_HAS_COROUTINES
-#include <folly/experimental/coro/Coroutine.h>
+#include <folly/coro/Coroutine.h>
 
 namespace folly {
 namespace expected_detail {
@@ -1645,8 +1645,7 @@ inline constexpr bool ReturnsVoid =
     std::is_trivial_v<Value> && std::is_empty_v<Value>;
 
 template <typename Value, typename Error>
-struct Promise<Value, Error, typename std::enable_if<!ReturnsVoid<Value>>::type>
-    : public PromiseBase<Value, Error> {
+struct PromiseReturnsValue : public PromiseBase<Value, Error> {
   template <typename U = Value>
   void return_value(U&& u) {
     auto& v = *this->value_;
@@ -1656,11 +1655,17 @@ struct Promise<Value, Error, typename std::enable_if<!ReturnsVoid<Value>>::type>
 };
 
 template <typename Value, typename Error>
-struct Promise<Value, Error, typename std::enable_if<ReturnsVoid<Value>>::type>
-    : public PromiseBase<Value, Error> {
+struct PromiseReturnsVoid : public PromiseBase<Value, Error> {
   // When the coroutine uses `return;` you can fail via `co_await err`.
   void return_void() { this->value_->emplace(Value{}); }
 };
+
+template <typename Value, typename Error>
+struct Promise //
+    : conditional_t<
+          ReturnsVoid<Value>,
+          PromiseReturnsVoid<Value, Error>,
+          PromiseReturnsValue<Value, Error>> {};
 
 template <typename Error>
 struct UnexpectedAwaitable {

@@ -1339,6 +1339,8 @@ class HQSession
 
     size_t sendChunkTerminator(HTTPTransaction* txn) noexcept override;
 
+    size_t sendPadding(HTTPTransaction* txn, uint16_t bytes) noexcept override;
+
     size_t sendEOM(HTTPTransaction* txn,
                    const HTTPHeaders* trailers) noexcept override;
 
@@ -1838,6 +1840,10 @@ class HQSession
     folly::Expected<folly::Unit, WebTransport::ErrorCode>
         resetWebTransportEgress(HTTPCodec::StreamID /*id*/,
                                 uint32_t /*errorCode*/) override;
+
+    folly::Expected<folly::Unit, WebTransport::ErrorCode>
+    setWebTransportStreamPriority(HTTPCodec::StreamID /*id*/,
+                                  HTTPPriority pri) override;
 
     folly::Expected<folly::Unit, WebTransport::ErrorCode>
         pauseWebTransportIngress(HTTPCodec::StreamID /*id*/) override;

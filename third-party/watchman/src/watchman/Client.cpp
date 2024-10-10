@@ -11,6 +11,7 @@
 #include <folly/stop_watch.h>
 
 #include "eden/common/utils/ProcessInfoCache.h"
+#include "watchman/ClientContext.h"
 #include "watchman/Command.h"
 #include "watchman/Errors.h"
 #include "watchman/Logging.h"
@@ -52,7 +53,9 @@ Client::Client(std::unique_ptr<watchman_stream> stm)
 #else
           w_event_make_sockets()
 #endif
-      ) {
+              ),
+      peerPid_{this->stm->getPeerProcessID()},
+      peerInfo_{lookupProcessInfo(peerPid_)} {
   logf(DBG, "accepted client:stm={}\n", fmt::ptr(this->stm.get()));
 }
 
@@ -169,8 +172,7 @@ bool Client::dispatchCommand(const Command& command, CommandFlags mode) {
       if (sample.finish()) {
         sample.add_meta("args", std::move(rendered));
         sample.add_meta(
-            "client",
-            json_object({{"pid", json_integer(stm->getPeerProcessID())}}));
+            "client", json_object({{"pid", json_integer(peerPid_)}}));
         sample.log();
       }
 
@@ -181,7 +183,11 @@ bool Client::dispatchCommand(const Command& command, CommandFlags mode) {
         dispatchCommand.meta.base.event_count =
             eventCount != samplingRate ? 0 : eventCount;
         dispatchCommand.args = renderedString;
-        dispatchCommand.client_pid = stm->getPeerProcessID();
+        dispatchCommand.meta.client_pid = peerPid_;
+        dispatchCommand.meta.client_name =
+            facebook::eden::ProcessInfoCache::cleanProcessCommandline(
+                std::move(peerInfo_.get().name));
+
         getLogger()->logEvent(dispatchCommand);
       }
 
@@ -193,6 +199,10 @@ bool Client::dispatchCommand(const Command& command, CommandFlags mode) {
     sendErrorResponse(folly::exceptionStr(e));
     return false;
   }
+}
+
+ClientContext Client::getClientInfo() const {
+  return ClientContext{peerPid_, peerInfo_};
 }
 
 std::string ClientStatus::getName() const {
@@ -238,10 +248,7 @@ void UserClient::create(std::unique_ptr<watchman_stream> stm) {
 }
 
 UserClient::UserClient(PrivateBadge, std::unique_ptr<watchman_stream> stm)
-    : Client{std::move(stm)},
-      since_{std::chrono::system_clock::now()},
-      peerPid_{this->stm->getPeerProcessID()},
-      peerInfo_{lookupProcessInfo(peerPid_)} {
+    : Client{std::move(stm)}, since_{std::chrono::system_clock::now()} {
   clients.wlock()->insert(this);
 }
 
@@ -282,7 +289,7 @@ ClientDebugStatus UserClient::getDebugStatus() const {
     rv.peer.emplace();
     rv.peer->pid = peerPid_;
     // May briefly, once, block on the ProcessInfoCache thread.
-    rv.peer->name = peerInfo_.get().name;
+    rv.peer->name = std::move(peerInfo_.get().name);
   }
   rv.since = std::chrono::system_clock::to_time_t(since_);
   return rv;
@@ -321,12 +328,7 @@ void UserClient::clientThread() noexcept {
 
   stm->setNonBlock(true);
   w_set_thread_name(
-      "client=",
-      unique_id,
-      ":stm=",
-      uintptr_t(stm.get()),
-      ":pid=",
-      stm->getPeerProcessID());
+      "client=", unique_id, ":stm=", uintptr_t(stm.get()), ":pid=", peerPid_);
 
   client_is_owner = stm->peerIsOwner();
 
@@ -504,7 +506,7 @@ disconnected:
       ":stm=",
       uintptr_t(stm.get()),
       ":pid=",
-      stm->getPeerProcessID());
+      peerPid_);
 }
 
 } // namespace watchman

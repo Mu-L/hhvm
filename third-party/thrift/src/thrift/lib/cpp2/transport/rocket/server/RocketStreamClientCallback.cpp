@@ -30,9 +30,7 @@
 
 #include <thrift/lib/cpp/TApplicationException.h>
 #include <thrift/lib/cpp2/async/StreamCallbacks.h>
-#include <thrift/lib/cpp2/protocol/CompactProtocol.h>
 #include <thrift/lib/cpp2/protocol/Serializer.h>
-#include <thrift/lib/cpp2/transport/rocket/PayloadUtils.h>
 #include <thrift/lib/cpp2/transport/rocket/RocketException.h>
 #include <thrift/lib/cpp2/transport/rocket/Types.h>
 #include <thrift/lib/cpp2/transport/rocket/framing/ErrorCode.h>
@@ -40,9 +38,7 @@
 #include <thrift/lib/cpp2/transport/rocket/server/RocketServerConnection.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketServerFrameContext.h>
 
-namespace apache {
-namespace thrift {
-namespace rocket {
+namespace apache::thrift::rocket {
 
 class TimeoutCallback : public folly::HHWheelTimer::Callback {
  public:
@@ -57,19 +53,27 @@ class TimeoutCallback : public folly::HHWheelTimer::Callback {
 RocketStreamClientCallback::RocketStreamClientCallback(
     StreamId streamId,
     RocketServerConnection& connection,
-    uint32_t initialRequestN)
-    : streamId_(streamId), connection_(connection), tokens_(initialRequestN) {}
+    uint32_t initialRequestN,
+    StreamMetricCallback& streamMetricCallback)
+    : streamId_(streamId),
+      connection_(connection),
+      tokens_(initialRequestN),
+      streamMetricCallback_(streamMetricCallback),
+      payloadSerializer_(PayloadSerializer::getInstance()) {}
 
 bool RocketStreamClientCallback::onFirstResponse(
     FirstResponsePayload&& firstResponse,
     folly::EventBase* /* unused */,
     StreamServerCallback* serverCallback) {
   if (UNLIKELY(serverCallbackOrCancelled_ == kCancelledFlag)) {
+    streamMetricCallback_.onStreamCancel(rpcMethodName_);
     serverCallback->onStreamCancel();
     firstResponse.payload.reset();
     connection_.freeStream(streamId_, true);
     return false;
   }
+
+  streamMetricCallback_.onFirstResponse(rpcMethodName_);
 
   serverCallbackOrCancelled_ = reinterpret_cast<intptr_t>(serverCallback);
   if (UNLIKELY(connection_.areStreamsPaused())) {
@@ -88,7 +92,8 @@ bool RocketStreamClientCallback::onFirstResponse(
 
   connection_.sendPayload(
       streamId_,
-      pack(std::move(firstResponse), connection_.getRawSocket()),
+      payloadSerializer_.pack(
+          std::move(firstResponse), connection_.getRawSocket()),
       Flags().next(true));
 
   if (tokens) {
@@ -99,6 +104,7 @@ bool RocketStreamClientCallback::onFirstResponse(
 
 void RocketStreamClientCallback::onFirstResponseError(
     folly::exception_wrapper ew) {
+  streamMetricCallback_.onFirstResponseError(rpcMethodName_);
   bool isEncodedError = ew.with_exception<RocketException>([&](auto& ex) {
     connection_.sendError(streamId_, std::move(ex));
   }) ||
@@ -107,7 +113,7 @@ void RocketStreamClientCallback::onFirstResponseError(
             DCHECK(encodedError.encoded.payload);
             connection_.sendPayload(
                 streamId_,
-                pack(
+                payloadSerializer_.pack(
                     std::move(encodedError.encoded),
                     connection_.getRawSocket()),
                 Flags().next(true).complete(true));
@@ -133,15 +139,17 @@ bool RocketStreamClientCallback::onStreamNext(StreamPayload&& payload) {
         payload.payload ? payload.payload->computeChainDataLength() : 0);
   }
 
+  streamMetricCallback_.onStreamNext(rpcMethodName_);
   connection_.sendPayload(
       streamId_,
-      pack(std::move(payload), connection_.getRawSocket()),
+      payloadSerializer_.pack(std::move(payload), connection_.getRawSocket()),
       Flags().next(true));
 
   return true;
 }
 
 void RocketStreamClientCallback::onStreamComplete() {
+  streamMetricCallback_.onStreamComplete(rpcMethodName_);
   connection_.sendPayload(
       streamId_,
       Payload::makeFromData(std::unique_ptr<folly::IOBuf>{}),
@@ -150,6 +158,7 @@ void RocketStreamClientCallback::onStreamComplete() {
 }
 
 void RocketStreamClientCallback::onStreamError(folly::exception_wrapper ew) {
+  streamMetricCallback_.onStreamError(rpcMethodName_);
   ew.handle(
       [this](RocketException& rex) {
         connection_.sendError(
@@ -172,7 +181,8 @@ void RocketStreamClientCallback::onStreamError(folly::exception_wrapper ew) {
         }
         connection_.sendPayload(
             streamId_,
-            pack(std::move(err.encoded), connection_.getRawSocket()),
+            payloadSerializer_.pack(
+                std::move(err.encoded), connection_.getRawSocket()),
             Flags().next(true).complete(true));
       },
       [this, &ew](...) {
@@ -189,7 +199,8 @@ bool RocketStreamClientCallback::onStreamHeaders(HeadersPayload&& payload) {
       static_cast<uint32_t>(streamId_);
   serverMeta.streamHeadersPush_ref()->headersPayloadContent_ref() =
       std::move(payload.payload);
-  connection_.sendMetadataPush(packCompact(std::move(serverMeta)));
+  connection_.sendMetadataPush(
+      payloadSerializer_.packCompact(std::move(serverMeta)));
   return true;
 }
 
@@ -208,6 +219,7 @@ bool RocketStreamClientCallback::request(uint32_t tokens) {
 
   cancelTimeout();
   tokens_ += tokens;
+  streamMetricCallback_.onStreamRequestN(rpcMethodName_, tokens);
   return serverCallback()->onStreamRequestN(tokens);
 }
 
@@ -232,6 +244,8 @@ void RocketStreamClientCallback::resumeStream() {
 }
 
 void RocketStreamClientCallback::onStreamCancel() {
+  CHECK(serverCallbackReady()) << serverCallbackOrCancelled_;
+  streamMetricCallback_.onStreamCancel(rpcMethodName_);
   serverCallback()->onStreamCancel();
 }
 
@@ -247,7 +261,8 @@ void RocketStreamClientCallback::timeoutExpired() noexcept {
   streamRpcError.what_utf8_ref() =
       "Stream expire timeout(no credit from client)";
   onStreamError(folly::make_exception_wrapper<rocket::RocketException>(
-      rocket::ErrorCode::CANCELED, packCompact(streamRpcError)));
+      rocket::ErrorCode::CANCELED,
+      payloadSerializer_.packCompact(streamRpcError)));
 }
 
 void RocketStreamClientCallback::setProtoId(protocol::PROTOCOL_TYPES protoId) {
@@ -274,6 +289,4 @@ void RocketStreamClientCallback::scheduleTimeout() {
 void RocketStreamClientCallback::cancelTimeout() {
   timeoutCallback_.reset();
 }
-} // namespace rocket
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::rocket

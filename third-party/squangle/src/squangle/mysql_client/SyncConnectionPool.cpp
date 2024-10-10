@@ -59,13 +59,12 @@ void SyncConnectionPool::openNewConnectionFinish(
 }
 
 template <>
-std::string SyncConnectPoolOperation::createTimeoutErrorMessage(
+std::string SyncConnectPoolOperationImpl::createTimeoutErrorMessage(
     const PoolKeyStats& pool_key_stats,
     size_t per_key_limit) {
-  auto delta = std::chrono::duration_cast<std::chrono::milliseconds>(
-      std::chrono::steady_clock::now() - start_time_);
+  auto delta = opElapsedMs();
 
-  const auto& key = getConnectionKey();
+  const auto& key = getConnectPoolOp().getKeyRef();
   return fmt::format(
       "[{}]({})Connection to {}:{} timed out in pool "
       "(open {}, opening {}, key limit {}) {}",
@@ -80,10 +79,20 @@ std::string SyncConnectPoolOperation::createTimeoutErrorMessage(
 }
 
 template <>
-SyncConnectPoolOperation* SyncConnectPoolOperation::specializedRun() {
+void SyncConnectPoolOperationImpl::specializedRun() {
   // No special thread manipulation needed for sync client
-  ConnectPoolOperation::specializedRunImpl();
-  return this;
+  MysqlConnectPoolOperationImpl::specializedRunImpl();
+}
+
+template <>
+std::unique_ptr<ConnectPoolOperationImpl<SyncMysqlClient>>
+createConnectPoolOperationImpl(
+    std::weak_ptr<ConnectionPool<SyncMysqlClient>> pool,
+    std::shared_ptr<SyncMysqlClient> client,
+    std::shared_ptr<const ConnectionKey> conn_key) {
+  return std::make_unique<
+      mysql_protocol::MysqlConnectPoolOperationImpl<SyncMysqlClient>>(
+      std::move(pool), client, std::move(conn_key));
 }
 
 } // namespace facebook::common::mysql_client

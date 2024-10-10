@@ -54,9 +54,9 @@ AX_PYTHON_DEVEL()
 AX_CXX_COMPILE_STDCXX_14([],[mandatory])
 LT_INIT
 
-CXXFLAGS="-fno-strict-aliasing -std=c++17 $CXXFLAGS"
+CXXFLAGS="-fno-strict-aliasing -std=c++20 $CXXFLAGS"
 CXXFLAGS="-W -Wall -Wextra -Wno-unused-parameter $CXXFLAGS"
-CXXFLAGS=" -Wno-missing-field-initializers -Wno-deprecated $CXXFLAGS"
+CXXFLAGS=" -Wno-missing-field-initializers -Wno-deprecated-declarations $CXXFLAGS"
 CXXFLAGS="-DLIBMC_FBTRACE_DISABLE -DDISABLE_COMPRESSION $CXXFLAGS"
 
 CFLAGS="-DLIBMC_FBTRACE_DISABLE -DDISABLE_COMPRESSION $CFLAGS"

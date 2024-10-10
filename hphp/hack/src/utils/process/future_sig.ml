@@ -65,7 +65,7 @@ module type S = sig
 
   exception Future_failure of error
 
-  type 'value t [@@deriving eq]
+  type 'value t [@@deriving eq, yojson]
 
   (** Blocking. Returns the value from the underlying process. *)
   val get : ?timeout:int -> 'value t -> ('value, error) result
@@ -132,6 +132,9 @@ module type S = sig
   (** Adds a computation that will be applied to the result of the future when
     t is finished. *)
   val continue_with : 'value t -> ('value -> 'next_value) -> 'next_value t
+
+  (** Same as `continue_with`, but with the usual signature for `map` *)
+  val map : ('value -> 'next_value) -> 'value t -> 'next_value t
 
   (** Adds another future to be generated after the given future finishes. *)
   val continue_with_future :

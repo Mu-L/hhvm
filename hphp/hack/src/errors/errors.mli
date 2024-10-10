@@ -38,7 +38,7 @@ module ErrorSet : Stdlib.Set.S with type elt := error
 
 module FinalizedErrorSet : Stdlib.Set.S with type elt := finalized_error
 
-(** [t] is an efficient for use inside hh_server or other places that compute errors,
+(** [t] is efficient for use inside hh_server or other places that compute errors,
 which also supports incremental updates based on file.
 But it should not be transferred to other processes such as [hh_client] since they
 for instance won't know the Hhi path that was used, and hence can't print errors.
@@ -68,15 +68,15 @@ val is_strict_code : int -> bool
 
 val set_allow_errors_in_default_path : bool -> unit
 
-val is_hh_fixme : (Pos.t -> int -> bool) ref
+val get_disallowed_fixme_pos : (Pos.t -> int -> Pos.t option) ref
 
-val is_hh_fixme_disallowed : (Pos.t -> int -> bool) ref
+val get_ignore_pos : (Pos.t -> int -> Pos.t option) ref
 
 val get_hh_fixme_pos : (Pos.t -> int -> Pos.t option) ref
 
 val get_current_span : unit -> Pos.t
 
-val fixme_present : Pos.t -> int -> bool
+val is_suppressed : (Pos.t, 'a) User_error.t -> bool
 
 val code_agnostic_fixme : bool ref
 
@@ -87,11 +87,18 @@ val combining_sort : 'a list -> f:('a -> string) -> 'a list
 
 val to_string : finalized_error -> string
 
-(** Prints a summary indicating things like how many errors were
-  found, how many are displayed and how many were dropped. *)
+(** Takes an error format option and gives back the error format that was passed
+or the default formatter. *)
+val format_or_default : format option -> format
+
+(** Returns a summary string indicating things like how many errors were
+  found, how many are displayed and how many were dropped.
+
+  None is returned for [Raw] and [Plain] error formats. *)
 val format_summary :
   format ->
-  displayed_count:int ->
+  error_count:int ->
+  warning_count:int ->
   dropped_count:int option ->
   max_errors:int option ->
   string option
@@ -208,15 +215,11 @@ Does not include fixme'd errors.
 val as_telemetry :
   limit:int ->
   with_context_limit:int ->
-  error_to_context:(finalized_error -> string) ->
+  error_to_string:(finalized_error -> string) ->
   t ->
   Telemetry.t
 
 val choose_code_opt : t -> int option
-
-val compare : error -> error -> int
-
-val compare_finalized : finalized_error -> finalized_error -> int
 
 val sort : error list -> error list
 
@@ -259,3 +262,11 @@ val global_access_error :
   Error_codes.GlobalAccessCheck.t -> Pos.t -> string -> unit
 
 val filter : t -> f:(Relative_path.t -> error -> bool) -> t
+
+val count_errors_and_warnings : ('a, 'b) User_error.t list -> int * int
+
+val filter_out_mergebase_warnings : Warnings_saved_state.t option -> t -> t
+
+val filter_out_warnings : t -> t
+
+val make_warning_saved_state : t -> Warnings_saved_state.t

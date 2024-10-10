@@ -11,15 +11,18 @@
 
 namespace fizz {
 
+constexpr uint8_t HMAC_OPAD = 0x5c;
+constexpr uint8_t HMAC_IPAD = 0x36;
+
 // Reference: RFC 2104
 // H(K XOR opad, H(K XOR ipad, text))
 void hmac(
-    HasherFactory makeHasher,
+    const HasherFactoryWithMetadata* makeHasher,
     folly::ByteRange key,
     const folly::IOBuf& in,
     folly::MutableByteRange out) {
-  auto inner = makeHasher();
-  auto outer = makeHasher();
+  auto inner = makeHasher->make();
+  auto outer = makeHasher->make();
 
   size_t L = outer->getHashLen();
   CHECK_GE(out.size(), L);
@@ -36,16 +39,12 @@ void hmac(
 
   // first hash the key if it's length is greater than B
   if (key.size() > B) {
-    auto keyHasher = makeHasher();
-    keyHasher->hash_init();
+    auto keyHasher = makeHasher->make();
     keyHasher->hash_update(folly::ByteRange(key.data(), key.size()));
     keyHasher->hash_final(folly::MutableByteRange(finalKey.data(), L));
   } else {
     memcpy(finalKey.data(), key.data(), key.size());
   }
-
-  inner->hash_init();
-  outer->hash_init();
 
   std::array<uint8_t, fizz::kHashMaxBlockSize> buf;
 

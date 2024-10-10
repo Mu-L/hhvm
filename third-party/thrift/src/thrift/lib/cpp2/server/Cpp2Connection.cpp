@@ -16,6 +16,8 @@
 
 #include <thrift/lib/cpp2/server/Cpp2Connection.h>
 
+#include <algorithm>
+
 #include <folly/Overload.h>
 
 #include <thrift/lib/cpp/transport/THeader.h>
@@ -32,16 +34,15 @@
 #include <thrift/lib/cpp2/transport/core/SendCallbacks.h>
 #include <thrift/lib/cpp2/transport/rocket/server/RocketRoutingHandler.h>
 
-THRIFT_FLAG_DEFINE_bool(server_rocket_upgrade_enabled, true);
-THRIFT_FLAG_DEFINE_bool(server_header_reject_http, true);
 THRIFT_FLAG_DEFINE_bool(server_header_reject_framed, true);
 THRIFT_FLAG_DEFINE_bool(server_header_reject_unframed, true);
 THRIFT_FLAG_DEFINE_bool(server_header_reject_all, true);
 
 THRIFT_FLAG_DEFINE_int64(monitoring_over_header_logging_sample_rate, 1'000'000);
 
-namespace apache {
-namespace thrift {
+THRIFT_FLAG_DECLARE_bool(enforce_header_transport_valid_protocol);
+
+namespace apache::thrift {
 
 using namespace std;
 
@@ -50,12 +51,14 @@ namespace {
 class TransportUpgradeSendCallback : public MessageChannel::SendCallback {
  public:
   TransportUpgradeSendCallback(
+      RocketRoutingHandler* rocketHandler,
       const std::shared_ptr<folly::AsyncTransport>& transport,
       const folly::SocketAddress* peerAddress,
       Cpp2Worker* cpp2Worker,
       Cpp2Connection* cpp2Conn,
       HeaderServerChannel* headerChannel)
-      : transport_(transport),
+      : rocketHandler_(rocketHandler),
+        transport_(transport),
         peerAddress_(peerAddress),
         cpp2Worker_(cpp2Worker),
         cpp2Conn_(cpp2Conn),
@@ -64,50 +67,43 @@ class TransportUpgradeSendCallback : public MessageChannel::SendCallback {
   void sendQueued() override {}
 
   void messageSent() override {
-    SCOPE_EXIT {
-      delete this;
-    };
-    // do the transport upgrade
-    for (auto& routingHandler :
-         *cpp2Worker_->getServer()->getRoutingHandlers()) {
-      if (auto handler =
-              dynamic_cast<RocketRoutingHandler*>(routingHandler.get())) {
-        // Close the channel, since the transport is transferring to rocket
-        DCHECK(headerChannel_);
-        headerChannel_->setCallback(nullptr);
-        headerChannel_->setTransport(nullptr);
-        headerChannel_->closeNow();
-        DCHECK(transport_.use_count() == 1);
+    // Close the channel, since the transport is transferring to rocket
+    DCHECK(headerChannel_);
+    // This should clear all but one shared references to the transport, so that
+    // it can be stolen below and wrapped in a unique_ptr.
+    headerChannel_->setCallback(nullptr);
+    headerChannel_->setTransport(nullptr);
+    headerChannel_->closeNow();
+    DCHECK(transport_.use_count() == 1);
 
-        // Only do upgrade if transport_ is the only one managing the socket.
-        // Otherwise close the connection.
-        if (transport_.use_count() == 1) {
-          // Steal the transport from header channel
-          auto uPtr =
-              std::get_deleter<
-                  apache::thrift::transport::detail::ReleaseDeleter<
-                      folly::AsyncTransport,
-                      folly::DelayedDestruction::Destructor>>(transport_)
-                  ->stealPtr();
+    // Only do upgrade if transport_ is the only one managing the socket.
+    // Otherwise close the connection.
+    if (transport_.use_count() == 1) {
+      // Steal the transport from header channel
+      auto uPtr =
+          std::get_deleter<apache::thrift::transport::detail::ReleaseDeleter<
+              folly::AsyncTransport,
+              folly::DelayedDestruction::Destructor>>(transport_)
+              ->stealPtr();
 
-          // Let RocketRoutingHandler handle the connection from here
-          handler->handleConnection(
-              cpp2Worker_->getConnectionManager(),
-              std::move(uPtr),
-              peerAddress_,
-              wangle::TransportInfo(),
-              cpp2Worker_->getWorkerShared());
-        }
-        DCHECK(cpp2Conn_);
-        cpp2Conn_->stop();
-        break;
-      }
+      // Let RocketRoutingHandler handle the connection from here
+      rocketHandler_->handleConnection(
+          cpp2Worker_->getConnectionManager(),
+          std::move(uPtr),
+          peerAddress_,
+          wangle::TransportInfo(),
+          cpp2Worker_->getWorkerShared());
     }
+    DCHECK(cpp2Conn_);
+    cpp2Conn_->stop();
   }
 
-  void messageSendError(folly::exception_wrapper&&) override { delete this; }
+  void messageSendError(folly::exception_wrapper&& ew) override {
+    VLOG(4) << "Failed to send rocket upgrade response: " << ew.what();
+  }
 
  private:
+  RocketRoutingHandler* rocketHandler_;
   const std::shared_ptr<folly::AsyncTransport>& transport_;
   const folly::SocketAddress* peerAddress_;
   Cpp2Worker* cpp2Worker_;
@@ -147,9 +143,7 @@ Cpp2Connection::Cpp2Connection(
           nullptr,
           worker_->getServer()->getClientIdentityHook(),
           worker_.get(),
-          apache::thrift::detail::getServiceInterceptorsIfServerIsSetUp(
-              *worker_->getServer())
-              .size()),
+          worker_->getServer()->getServiceInterceptors().size()),
       transport_(transport),
       executor_(worker_->getServer()->getHandlerExecutor_deprecated().get()) {
   processor_->coalesceWithServerScopedLegacyEventHandlers(
@@ -169,8 +163,7 @@ Cpp2Connection::Cpp2Connection(
 
 #if FOLLY_HAS_COROUTINES
   const auto& serviceInterceptorsInfo =
-      apache::thrift::detail::getServiceInterceptorsIfServerIsSetUp(
-          *worker_->getServer());
+      worker_->getServer()->getServiceInterceptors();
   for (std::size_t i = 0; i < serviceInterceptorsInfo.size(); ++i) {
     ServiceInterceptorBase::ConnectionInfo connectionInfo{
         &context_,
@@ -184,8 +177,7 @@ Cpp2Connection::Cpp2Connection(
 Cpp2Connection::~Cpp2Connection() {
 #if FOLLY_HAS_COROUTINES
   const auto& serviceInterceptorsInfo =
-      apache::thrift::detail::getServiceInterceptorsIfServerIsSetUp(
-          *worker_->getServer());
+      worker_->getServer()->getServiceInterceptors();
   for (std::size_t i = 0; i < serviceInterceptorsInfo.size(); ++i) {
     ServiceInterceptorBase::ConnectionInfo connectionInfo{
         &context_,
@@ -416,10 +408,9 @@ void Cpp2Connection::requestReceived(
     return;
   }
 
-  if (THRIFT_FLAG(server_header_reject_http) &&
-      (hreq->getHeader()->getClientType() == THRIFT_HTTP_SERVER_TYPE ||
-       hreq->getHeader()->getClientType() == THRIFT_HTTP_CLIENT_TYPE ||
-       hreq->getHeader()->getClientType() == THRIFT_HTTP_GET_CLIENT_TYPE)) {
+  if (hreq->getHeader()->getClientType() == THRIFT_HTTP_SERVER_TYPE ||
+      hreq->getHeader()->getClientType() == THRIFT_HTTP_CLIENT_TYPE ||
+      hreq->getHeader()->getClientType() == THRIFT_HTTP_GET_CLIENT_TYPE) {
     disconnect("Rejecting HTTP connection over Header");
     return;
   }
@@ -441,55 +432,75 @@ void Cpp2Connection::requestReceived(
       hreq->getHeader()->getProtocolId());
   auto msgBegin = apache::thrift::detail::ap::deserializeMessageBegin(
       *hreq->getBuf(), protoId);
+
+  if (THRIFT_FLAG(enforce_header_transport_valid_protocol) &&
+      !msgBegin.metadata.isValid) {
+    disconnect("Rejecting unparseable message begin");
+    return;
+  }
+
   std::string& methodName = msgBegin.methodName;
   const auto& meta = msgBegin.metadata;
 
+  // If the transport upgrade has begun, we should reject any requests made
+  // before it's completed.
+  if (upgradeToRocketCallback_ != nullptr) {
+    // In essence, we've already swapped to Rocket even if the current message
+    // was still in the buffer. Handle this as a protocol error, as a
+    // misbehaving client.
+    disconnect("Unexpected Header message after Rocket upgrade");
+    return;
+  }
   // Transport upgrade: check if client requested transport upgrade from header
-  // to rocket. If yes, reply immediately and upgrade the transport after
-  // sending the reply.
+  // to rocket. If yes, check if we support Rocket, then reply immediately and
+  // upgrade the transport after sending the reply.
   if (methodName == "upgradeToRocket") {
-    if (THRIFT_FLAG(server_rocket_upgrade_enabled)) {
-      ResponsePayload response;
-      switch (protoId) {
-        case apache::thrift::protocol::T_BINARY_PROTOCOL:
-          response = upgradeToRocketReply<apache::thrift::BinaryProtocolWriter>(
-              meta.seqId);
-          break;
-        case apache::thrift::protocol::T_COMPACT_PROTOCOL:
-          response =
-              upgradeToRocketReply<apache::thrift::CompactProtocolWriter>(
-                  meta.seqId);
-          break;
-        default:
-          LOG(DFATAL) << "Unsupported protocol found";
-          // if protocol is neither binary or compact, we want to kill the
-          // request and abort upgrade
-          killRequest(
-              std::move(hreq),
-              TApplicationException::TApplicationExceptionType::
-                  INVALID_PROTOCOL,
-              kUnknownErrorCode,
-              "invalid protocol used");
-          return;
-      }
-
-      hreq->sendReply(
-          std::move(response),
-          new TransportUpgradeSendCallback(
-              transport_,
-              context_.getPeerAddress(),
-              getWorker(),
-              this,
-              channel_.get()));
-      return;
-    } else {
+    auto handlers = worker_->getServer()->getRoutingHandlers();
+    auto rocketHandlerIterator =
+        std::find_if(handlers->begin(), handlers->end(), [](auto& handler) {
+          return dynamic_cast<RocketRoutingHandler*>(handler.get()) != nullptr;
+        });
+    if (rocketHandlerIterator == handlers->end()) {
       killRequest(
           std::move(hreq),
           TApplicationException::TApplicationExceptionType::UNKNOWN_METHOD,
           kMethodUnknownErrorCode,
-          "Rocket upgrade disabled");
+          "Rocket upgrade attempted but RocketRoutingHandler not found");
       return;
     }
+    // We assume the referenced RocketRoutingHandler object will remain alive
+    // while we need it, but there's nothing guaranteeing that.
+    apache::thrift::RocketRoutingHandler* rocketHandler =
+        dynamic_cast<RocketRoutingHandler*>(rocketHandlerIterator->get());
+    ResponsePayload response;
+    switch (protoId) {
+      case apache::thrift::protocol::T_BINARY_PROTOCOL:
+        response = upgradeToRocketReply<apache::thrift::BinaryProtocolWriter>(
+            meta.seqId);
+        break;
+      case apache::thrift::protocol::T_COMPACT_PROTOCOL:
+        response = upgradeToRocketReply<apache::thrift::CompactProtocolWriter>(
+            meta.seqId);
+        break;
+      default:
+        LOG(DFATAL) << "Unsupported protocol found";
+        // This should never occur. Unsupported protocols should be caught and
+        // handled higher up in the stack. If we somehow still reach this, and
+        // the protocol is neither binary nor compact, disconnect the client and
+        // abort the upgrade.
+        disconnect("Unsupported protocol found during Rocket upgrade");
+        return;
+    }
+
+    upgradeToRocketCallback_ = std::make_unique<TransportUpgradeSendCallback>(
+        rocketHandler,
+        transport_,
+        context_.getPeerAddress(),
+        getWorker(),
+        this,
+        channel_.get());
+    hreq->sendReply(std::move(response), upgradeToRocketCallback_.get());
+    return;
   }
 
   if ((worker_->getServer()->getLegacyTransport() ==
@@ -578,6 +589,13 @@ void Cpp2Connection::requestReceived(
               kTenantQuotaExceededErrorCode,
               aqe.getMessage().c_str());
         },
+        [&](AppTenantBlocklistedException& atb) {
+          killRequest(
+              std::move(hreq),
+              TApplicationException::TENANT_BLOCKLISTED,
+              kTenantBlocklistedErrorCode,
+              atb.getMessage().c_str());
+        },
         [&](AppServerException& ase) {
           handleAppError(std::move(hreq), ase.name(), ase.getMessage(), false);
         },
@@ -609,6 +627,12 @@ void Cpp2Connection::requestReceived(
     folly::IOBufQueue bufQueue;
     bufQueue.append(hreq->extractBuf());
     bufQueue.trimStart(meta.size);
+    if (bufQueue.empty()) {
+      // If the request only contained metadata, trimStart could clear the
+      // entire queue. Return an empty IOBuf if that happens (move() otherwise
+      // returns nullptr).
+      return SerializedRequest(folly::IOBuf::create(0));
+    }
     return SerializedRequest(bufQueue.move());
   }();
 
@@ -966,5 +990,4 @@ Cpp2Connection::Cpp2Sample::~Cpp2Sample() {
   }
 }
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

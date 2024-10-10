@@ -40,54 +40,63 @@ let is_stale_msg liveness =
       ^ " watchman being unresponsive)\n")
   | Live_status -> None
 
-let go status output_json from error_format max_errors =
+let go status error_format ~is_interactive ~output_json ~max_errors =
   let { Server_status.liveness; error_list; dropped_count; last_recheck_stats }
       =
     status
   in
   let stale_msg = is_stale_msg liveness in
-  if
-    output_json
-    || (not (String.equal from "" || String.equal from "[sh]"))
-    || List.is_empty error_list
-  then
-    ServerError.print_error_list
-      stdout
-      ~stale_msg
-      ~output_json
-      ~error_format
-      ~error_list
-      ~save_state_result:None
-      ~recheck_stats:last_recheck_stats
-  else begin
-    List.iter error_list ~f:(print_error ~error_format);
-    Option.iter
-      (Errors.format_summary
-         error_format
-         ~displayed_count:(List.length error_list)
-         ~dropped_count:(Some dropped_count)
-         ~max_errors)
-      ~f:(fun msg -> Printf.printf "%s" msg);
-    (* [stale_msg] ultimately comes from [ServerMain.query_notifier], and says whether the check
-       reflects data from a watchman sync, or just whatever has arrived so far over the watchman
-       subscription. *)
-    Option.iter stale_msg ~f:(fun msg -> Printf.printf "%s" msg)
-  end;
-  if List.is_empty error_list then
+  let error_count =
+    if
+      output_json
+      || (Option.is_none error_format && not is_interactive)
+      || List.is_empty error_list
+    then (
+      ServerError.print_error_list
+        stdout
+        ~stale_msg
+        ~output_json
+        ~error_format
+        ~error_list
+        ~save_state_result:None
+        ~recheck_stats:last_recheck_stats;
+      0
+    ) else
+      let error_format = Errors.format_or_default error_format in
+      List.iter error_list ~f:(print_error ~error_format);
+      let (error_count, warning_count) =
+        Errors.count_errors_and_warnings error_list
+      in
+      Option.iter
+        (Errors.format_summary
+           error_format
+           ~error_count
+           ~warning_count
+           ~dropped_count:(Some dropped_count)
+           ~max_errors)
+        ~f:(fun msg -> Printf.printf "%s" msg);
+      (* [stale_msg] ultimately comes from [ServerMain.query_notifier], and says whether the check
+         reflects data from a watchman sync, or just whatever has arrived so far over the watchman
+         subscription. *)
+      Option.iter stale_msg ~f:(fun msg -> Printf.printf "%s" msg);
+      error_count
+  in
+  if Int.( = ) error_count 0 then
     Exit_status.No_error
   else
     Exit_status.Type_error
 
 (** This function produces streaming errors: it reads the errors.bin opened
-as [fd], displays errors as they come using the [args.error_format] over stdout, and
-displays a progress-spinner over stderr if [args.show_spinner]. It keeps "tailing"
-[fd] until eventually the producing process writes an end-sentinel in it (signalling
-that the typecheck has been completed or restarted or aborted), or until the producing
-process terminates. *)
+  as [fd], displays errors as they come using the [args.error_format] over stdout, and
+  displays a progress-spinner over stderr if [args.show_spinner]. It keeps "tailing"
+  [fd] until eventually the producing process writes an end-sentinel in it (signalling
+  that the typecheck has been completed or restarted or aborted), or until the producing
+  process terminates. *)
 let go_streaming_on_fd
     ~(pid : int)
     (fd : Unix.file_descr)
     (args : ClientEnv.client_check_env)
+    (error_filter : Filter_errors.Filter.t)
     ~(partial_telemetry_ref : Telemetry.t option ref)
     ~(progress_callback : string option -> unit) :
     (Exit_status.t * Telemetry.t) Lwt.t =
@@ -136,8 +145,10 @@ let go_streaming_on_fd
   (* this lwt process consumes errors from the errors.bin file by polling
      every 0.2s, and displays them. It terminates once the errors.bin file has an "end"
      sentinel written to it, or the process that was writing errors.bin terminates. *)
-  let rec consume (displayed_count : int) :
-      (int * Server_progress.errors_file_error * string) Lwt.t =
+  let rec consume (error_counts : int * int) :
+      ((int * int) * Server_progress.errors_file_error * string) Lwt.t =
+    let add_tuples (i, j) (k, l) = (i + k, j + l) in
+    let total_errors (i, j) = i + j in
     let%lwt errors = Lwt_stream.get errors_stream in
     match errors with
     | None ->
@@ -147,18 +158,29 @@ let go_streaming_on_fd
          If we're here, it means that contract has been violated. *)
       failwith "Expected end_sentinel before end of stream"
     | Some (Error (end_sentinel, log_message)) ->
-      Lwt.return (displayed_count, end_sentinel, log_message)
+      Lwt.return (error_counts, end_sentinel, log_message)
     | Some (Ok (Server_progress.Telemetry telemetry_item)) ->
       errors_file_telemetry :=
         Telemetry.merge !errors_file_telemetry telemetry_item;
-      update_partial_telemetry displayed_count;
-      consume displayed_count
+      update_partial_telemetry (total_errors error_counts);
+      consume error_counts
     | Some (Ok (Server_progress.Errors { errors; timestamp = _ })) ->
       first_error_time :=
         Option.first_some !first_error_time (Some (Unix.gettimeofday ()));
       (* We'll clear the spinner, print errs to stdout, flush stdout, and restore the spinner *)
       progress_callback None;
       let found_new = ref 0 in
+      let error_format = Errors.format_or_default error_format in
+      let errors =
+        Relative_path.Map.map errors ~f:(Filter_errors.filter error_filter)
+      in
+      let error_counts =
+        Relative_path.Map.fold
+          errors
+          ~init:error_counts
+          ~f:(fun _ errors error_counts ->
+            Errors.count_errors_and_warnings errors |> add_tuples error_counts)
+      in
       begin
         try
           Relative_path.Map.iter errors ~f:(fun _path errors_in_file ->
@@ -177,21 +199,23 @@ let go_streaming_on_fd
             backtrace
       end;
       progress_callback !latest_progress;
-      let displayed_count = displayed_count + !found_new in
-      update_partial_telemetry displayed_count;
-      if displayed_count >= Option.value max_errors ~default:Int.max_value then
+      update_partial_telemetry (total_errors error_counts);
+      if
+        total_errors error_counts
+        >= Option.value max_errors ~default:Int.max_value
+      then
         Lwt.return
-          ( displayed_count,
+          ( error_counts,
             Server_progress.Complete (Telemetry.create ()),
             "max-errors" )
       else
-        consume displayed_count
+        consume error_counts
   in
 
   (* We will show progress indefinitely until "consume" finishes,
      at which Lwt.pick will cancel show_progress. *)
-  let%lwt (displayed_count, end_sentinel, _log_message) =
-    Lwt.pick [consume 0; show_progress ()]
+  let%lwt ((error_count, warning_count), end_sentinel, _log_message) =
+    Lwt.pick [consume (0, 0); show_progress ()]
   in
   (* Clear the spinner *)
   progress_callback None;
@@ -200,17 +224,21 @@ let go_streaming_on_fd
     match end_sentinel with
     | Server_progress.Complete telemetry ->
       (* complete either because the server completed, or we truncated early *)
+      let error_format = Errors.format_or_default error_format in
       Option.iter
         (Errors.format_summary
            error_format
-           ~displayed_count
+           ~error_count
+           ~warning_count
            ~dropped_count:None
            ~max_errors)
         ~f:(fun msg -> Printf.printf "%s" msg);
       let telemetry =
-        Telemetry.merge (telemetry_so_far displayed_count) telemetry
+        Telemetry.merge
+          (telemetry_so_far (error_count + warning_count))
+          telemetry
       in
-      if displayed_count = 0 then
+      if Int.( = ) error_count 0 then
         (Exit_status.No_error, telemetry)
       else
         (Exit_status.Type_error, telemetry)
@@ -242,18 +270,18 @@ let go_streaming_on_fd
   Lwt.return (exit_status, telemetry)
 
 (** Gets all files-changed since [clock] which match the standard hack
-predicate [FilesToIgnore.watchman_server_expression_terms].
-The returns are relative to the watchman root.
-CARE! This is not the same as a Relative_path.t. For instance if root
-contains a symlink root/a.php ~> /tmp/b.php and the symlink itself
-changed, then watchman would report a change on "a.php" but Relative_path.t
-by definition only refers to paths after symlinks have been resolved
-which in this case would be (Relative_path.Tmp,"b.php").
+  predicate [FilesToIgnore.watchman_server_expression_terms].
+  The returns are relative to the watchman root.
+  CARE! This is not the same as a Relative_path.t. For instance if root
+  contains a symlink root/a.php ~> /tmp/b.php and the symlink itself
+  changed, then watchman would report a change on "a.php" but Relative_path.t
+  by definition only refers to paths after symlinks have been resolved
+  which in this case would be (Relative_path.Tmp,"b.php").
 
-The caller must explicitly pass in [~fail_on_new_instance:false]
-and [~fail_during_state:false] so that the callsite is self-documenting
-about what it will do during these two scenarios. (no other options
-are currently supported.) *)
+  The caller must explicitly pass in [~fail_on_new_instance:false]
+  and [~fail_during_state:false] so that the callsite is self-documenting
+  about what it will do during these two scenarios. (no other options
+  are currently supported.) *)
 let watchman_get_raw_updates_since
     ~(root : Path.t)
     ~(clock : Watchman.clock)
@@ -319,70 +347,70 @@ let watchman_get_raw_updates_since
   end
 
 (** This helper will trying to open the errors.bin file.
-There is a whole load of ceremony to do with what happens when you want to open errors.bin,
-e.g. start the server if necessary, check for version mismatch, report failures to the user.
-Concrete examples:
-* There is no server running. "hh check" must start up a server, before it can stream errors from it.
-* There is no server running, but our attempt to start the server failed, either
-   synchronously (e.g. we had `--autostart-server false`)
-   or asynchronously (e.g. saved-state failed to load).
-   "hh check" must detect that no streaming errors are forthcoming.
-* There is a server running, and it has already written errors.bin, but it is the wrong binary version.
-   "hh check" must cause it to shut down, and a new server start up, before it can stream errors.
-* There is an errors.bin from an existing server, and its typecheck started 20s ago, but moments
-   before "hh check" a file was changed on disk. "hh check" must detect this,
-   learn that it cannot use the existing errors.bin, and instead use the new errors.bin that will be forthcoming.
+  There is a whole load of ceremony to do with what happens when you want to open errors.bin,
+  e.g. start the server if necessary, check for version mismatch, report failures to the user.
+  Concrete examples:
+  * There is no server running. "hh check" must start up a server, before it can stream errors from it.
+  * There is no server running, but our attempt to start the server failed, either
+    synchronously (e.g. we had `--autostart-server false`)
+    or asynchronously (e.g. saved-state failed to load).
+    "hh check" must detect that no streaming errors are forthcoming.
+  * There is a server running, and it has already written errors.bin, but it is the wrong binary version.
+    "hh check" must cause it to shut down, and a new server start up, before it can stream errors.
+  * There is an errors.bin from an existing server, and its typecheck started 20s ago, but moments
+    before "hh check" a file was changed on disk. "hh check" must detect this,
+    learn that it cannot use the existing errors.bin, and instead use the new errors.bin that will be forthcoming.
 
-How this function fulfills those cases:
-* It of course has to check whether files on disk have changed since this errors.bin was started.
-  It does this with a synchronous watchman query,
-  and displays "hh_server is busy [watchman sync]".
-* If there is a fault like "errors.bin was started too long ago and files have changed
-  in the meantime" which can be rectified by waiting and trying again on the assumption
-  that a server is running and will pick up the changes, then this will wait and try
-  again indefinitely. It will display "hh_server is busy [hh_server sync]".
-  The parameter [already_checked_clock] indicates that we have already done a
-  (costly) watchman query for this clock, and will not do another watchman query until
-  we see a new errors.bin which started at a different (newer) clock.
-* If there is a fault like "missing errors.bin" or "binary mismatch" which can
-  be rectified by connecting to the monitor+server, this will do so at most once
-  with the [connect_then_close] callback parameter, then resume looking for a
-  suitable errors.bin again with "hh_server is busy [hh_server sync]".
-  If it already tried once with no effect, then it will raise Exit_status.Exit_with.
+  How this function fulfills those cases:
+  * It of course has to check whether files on disk have changed since this errors.bin was started.
+    It does this with a synchronous watchman query,
+    and displays "hh_server is busy [watchman sync]".
+  * If there is a fault like "errors.bin was started too long ago and files have changed
+    in the meantime" which can be rectified by waiting and trying again on the assumption
+    that a server is running and will pick up the changes, then this will wait and try
+    again indefinitely. It will display "hh_server is busy [hh_server sync]".
+    The parameter [already_checked_clock] indicates that we have already done a
+    (costly) watchman query for this clock, and will not do another watchman query until
+    we see a new errors.bin which started at a different (newer) clock.
+  * If there is a fault like "missing errors.bin" or "binary mismatch" which can
+    be rectified by connecting to the monitor+server, this will do so at most once
+    with the [connect_then_close] callback parameter, then resume looking for a
+    suitable errors.bin again with "hh_server is busy [hh_server sync]".
+    If it already tried once with no effect, then it will raise Exit_status.Exit_with.
 
-Here's a really subtle example involving precise details of the errors.bin clock:
-1. server starts a check at clock0, hence starts errors.bin as of clock0
-2. modify file A
-3. modify file B
-4. user does "hh", sees that files have changed since clock0, so repeats [keep_trying_to_open]
-5. server picks up change to file A and restarts errors.bin as of clockA
-6. repeat of [keep_trying_to_open] must NOT use errors.bin since that would miss "B"
+  Here's a really subtle example involving precise details of the errors.bin clock:
+  1. server starts a check at clock0, hence starts errors.bin as of clock0
+  2. modify file A
+  3. modify file B
+  4. user does "hh", sees that files have changed since clock0, so repeats [keep_trying_to_open]
+  5. server picks up change to file A and restarts errors.bin as of clockA
+  6. repeat of [keep_trying_to_open] must NOT use errors.bin since that would miss "B"
 
-There are two implementations we could imagine for the repeat of [keep_trying_to_open]:
-(A) on subsequent repeats, it could either keep waiting until an errors.bin comes about
-which has a clock that's more recent than the start time of "hh"; or (B) it could keep
-waiting until an errors.bin comes about where there are no changed files between
-errors.bin's start time and "now". Both are correct; the former is more principled,
-would result in more "files changed under your feet", but alas there doesn't exist
-the ability in watchman to compare two clocks so we can't use it. Therefore we use (B).
-How do we know that (B) will eventually terminate? Well if the user keeps modifying
-files then it never will! But if the user stops, then hh_server is guaranteed to
-do a final recheck, hence guaranteed to write an errors.bin with no files changed
-after it, and hence [keep_trying_to_open] is guaranteed to eventually terminate.
+  There are two implementations we could imagine for the repeat of [keep_trying_to_open]:
+  (A) on subsequent repeats, it could either keep waiting until an errors.bin comes about
+  which has a clock that's more recent than the start time of "hh"; or (B) it could keep
+  waiting until an errors.bin comes about where there are no changed files between
+  errors.bin's start time and "now". Both are correct; the former is more principled,
+  would result in more "files changed under your feet", but alas there doesn't exist
+  the ability in watchman to compare two clocks so we can't use it. Therefore we use (B).
+  How do we know that (B) will eventually terminate? Well if the user keeps modifying
+  files then it never will! But if the user stops, then hh_server is guaranteed to
+  do a final recheck, hence guaranteed to write an errors.bin with no files changed
+  after it, and hence [keep_trying_to_open] is guaranteed to eventually terminate.
 
-The semantics of the [deadline] parameter are that this is how long we'll wait
-until we open an errors.bin file (i.e. until the typecheck has started). We don't
-expose a parameter to control how long the typecheck must last.
+  The semantics of the [deadline] parameter are that this is how long we'll wait
+  until we open an errors.bin file (i.e. until the typecheck has started). We don't
+  expose a parameter to control how long the typecheck must last.
 
-SPINNER! This is surprisingly delicate. If we leave our spinner up and then
-the process exits, the user sees a dead spinner in the line above their bash prompt.
-If we leave our spinner up and then print an error message to stderr, the user
-sees a dead spinner above the error message (and perhaps even another spinner down
-below if we continued work). In summary it's crucial to clear out the spinner at the right time:
-* [connect_then_close] is assumed to clear the spinner in case it writes to stderr
-* This function clears the spinner in case of exceptions
-* But it leaves the spinner at "watchman sync" in case of success, in the expectation
-that subsequent code will update the spinner. *)
+  SPINNER! This is surprisingly delicate. If we leave our spinner up and then
+  the process exits, the user sees a dead spinner in the line above their bash prompt.
+  If we leave our spinner up and then print an error message to stderr, the user
+  sees a dead spinner above the error message (and perhaps even another spinner down
+  below if we continued work). In summary it's crucial to clear out the spinner at the right time:
+  * [connect_then_close] is assumed to clear the spinner in case it writes to stderr
+  * This function clears the spinner in case of exceptions
+  * But it leaves the spinner at "watchman sync" in case of success, in the expectation
+  that subsequent code will update the spinner. *)
 let rec keep_trying_to_open
     ~(has_already_attempted_connect : bool)
     ~(connect_then_close : unit -> unit Lwt.t)
@@ -571,6 +599,7 @@ let rec keep_trying_to_open
     Errors are printed soon after they are known instead of all at once at the end. *)
 let go_streaming
     (args : ClientEnv.client_check_env)
+    (error_filter : Filter_errors.Filter.t)
     ~(partial_telemetry_ref : Telemetry.t option ref)
     ~(connect_then_close : unit -> unit Lwt.t) :
     (Exit_status.t * Telemetry.t) Lwt.t =
@@ -593,6 +622,12 @@ let go_streaming
       ~root
   in
   let%lwt (exit_status, telemetry) =
-    go_streaming_on_fd ~pid fd args ~partial_telemetry_ref ~progress_callback
+    go_streaming_on_fd
+      ~pid
+      fd
+      args
+      error_filter
+      ~partial_telemetry_ref
+      ~progress_callback
   in
   Lwt.return (exit_status, telemetry)

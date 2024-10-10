@@ -8,7 +8,7 @@
 
 #include <tuple>
 
-#include <fizz/crypto/KeyDerivation.h>
+#include <fizz/crypto/Hasher.h>
 #include <fizz/protocol/Certificate.h>
 #include <fizz/record/Types.h>
 
@@ -19,7 +19,7 @@ std::tuple<Buf, std::vector<fizz::Extension>> decodeAuthRequest(
     const Buf& authRequest);
 
 Buf computeTranscriptHash(
-    std::unique_ptr<KeyDerivation>& deriver,
+    const HasherFactoryWithMetadata* makeHasher,
     const Buf& toBeHashed);
 
 void writeBuf(const Buf& buf, folly::io::Appender& out);
@@ -32,7 +32,7 @@ Buf computeTranscript(
 Buf computeFinishedTranscript(const Buf& crTranscript, const Buf& certVerify);
 
 Buf getFinishedData(
-    std::unique_ptr<KeyDerivation>& deriver,
+    const HasherFactoryWithMetadata* makeHasher,
     Buf& finishedMacKey,
     const Buf& finishedTranscript);
 
@@ -45,7 +45,7 @@ folly::Optional<SignatureScheme> getSignatureScheme(
     const std::vector<fizz::Extension>& authRequestExtensions);
 
 Buf getEmptyAuthenticator(
-    std::unique_ptr<KeyDerivation>& kderiver,
+    const HasherFactoryWithMetadata* makeHasher,
     Buf authRequest,
     Buf handshakeContext,
     Buf finishedMacKey);

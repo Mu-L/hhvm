@@ -15,12 +15,15 @@
 # pyre-strict
 
 import collections.abc
+import pickle
+import string
 import unittest
 
 from thrift.python.mutable_containers import (
     MapItemsView,
     MapKeysView,
     MapValuesView,
+    MutableList,
     MutableMap,
 )
 
@@ -105,6 +108,25 @@ class MutableMapTest(unittest.TestCase):
         mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
         with self.assertRaises(OverflowError):
             mutable_map["max"] = 2**31
+
+    def test_delitem(self) -> None:
+        mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
+        mutable_map["A"] = 65
+        mutable_map["a"] = 97
+        self.assertEqual({"A": 65, "a": 97}, mutable_map)
+
+        with self.assertRaisesRegex(KeyError, "c"):
+            del mutable_map["c"]
+
+        # Key is not expected type but MutableMap raises key error
+        with self.assertRaisesRegex(KeyError, "1"):
+            del mutable_map[1]
+
+        self.assertEqual({"A": 65, "a": 97}, mutable_map)
+        del mutable_map["a"]
+        self.assertEqual({"A": 65}, mutable_map)
+        del mutable_map["A"]
+        self.assertEqual({}, mutable_map)
 
     def test_getitem(self) -> None:
         mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
@@ -417,3 +439,149 @@ class MutableMapTest(unittest.TestCase):
         self.assertEqual([1, 2, 3, 999], mutable_map[1])
         self.assertEqual([4, 5, 999], mutable_map[2])
         self.assertEqual([6, 999], mutable_map[3])
+
+    def test_pickle_round_trip(self) -> None:
+        internal_map = {1: [1, 2, 3], 2: [4, 5], 3: [6]}
+        mutable_map = MutableMap(
+            typeinfo_i32,
+            # pyre-ignore[19]
+            MutableListTypeInfo(typeinfo_i32),
+            # pyre-ignore[6]
+            internal_map,
+        )
+
+        pickled = pickle.dumps(mutable_map, protocol=pickle.HIGHEST_PROTOCOL)
+        mutable_map_unpickled = pickle.loads(pickled)
+        self.assertIsInstance(mutable_map_unpickled, MutableMap)
+        self.assertEqual(mutable_map, mutable_map_unpickled)
+
+    def test_pop(self) -> None:
+        mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
+
+        mutable_map["A"] = 65
+        mutable_map["a"] = 97
+
+        with self.assertRaisesRegex(KeyError, "not exists"):
+            mutable_map.pop("not exists")
+
+        self.assertEqual(
+            "default-value", mutable_map.pop("not exists", "default-value")
+        )
+
+        self.assertEqual(65, mutable_map.pop("A"))
+        self.assertEqual({"a": 97}, mutable_map)
+        self.assertEqual(97, mutable_map.pop("a"))
+        self.assertEqual({}, mutable_map)
+
+        with self.assertRaisesRegex(KeyError, "A"):
+            mutable_map.pop("A")
+
+        # Wrong key type raises a KeyError not a TypeError
+        with self.assertRaisesRegex(KeyError, "123"):
+            mutable_map.pop(123)
+
+    def test_popitem(self) -> None:
+        mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
+
+        for char in string.ascii_letters:
+            mutable_map[char] = ord(char)
+
+        # Python 3.7+ LIFO order is now guaranteed.
+        for char in string.ascii_letters[::-1]:
+            self.assertEqual(mutable_map.popitem(), (char, ord(char)))
+
+        self.assertEqual(0, len(mutable_map))
+
+    def test_setdefault(self) -> None:
+        mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
+
+        self.assertEqual(65, mutable_map.setdefault("A", 65))
+        self.assertEqual(65, mutable_map["A"])
+        self.assertEqual(65, mutable_map.setdefault("A", 999))
+        self.assertEqual(65, mutable_map["A"])
+
+        # Wrong key type raises a TypeError
+        with self.assertRaisesRegex(
+            TypeError, "Expected type <class 'str'>, got: <class 'int'>"
+        ):
+            mutable_map.setdefault(123, 999)
+
+        # Default value for `setdefault()` is `None`, however, `None` is not a
+        # valid thrift value, therefore, it is a TypeError
+        with self.assertRaisesRegex(
+            TypeError, "not a <class 'int'>, is actually of type <class 'NoneType'>"
+        ):
+            mutable_map.setdefault("new-key")
+
+    def test_setdefault_container_value(self) -> None:
+        mutable_map = MutableMap(
+            typeinfo_string,
+            # pyre-ignore[19]:
+            MutableListTypeInfo(typeinfo_i32),
+            {},
+        )
+
+        value_A = mutable_map.setdefault("A", [1, 2, 3])
+        self.assertIsInstance(value_A, MutableList)
+        self.assertEqual([1, 2, 3], value_A)
+
+        # key "A" already exists, we should get [1, 2, 3]
+        value_A = mutable_map.setdefault("A", [4, 5, 6])
+        self.assertIsInstance(value_A, MutableList)
+        self.assertEqual([1, 2, 3], value_A)
+
+        # Wrong value type raises a TypeError
+        with self.assertRaisesRegex(
+            TypeError, "not a <class 'int'>, is actually of type <class 'str'>"
+        ):
+            mutable_map.setdefault("B", ["1", "2", "3"])
+
+        # set the key "A" and try to read it back with `setdefault()`
+        mutable_map["A"] = [11, 12, 13]
+        value_A = mutable_map.setdefault("A", [4, 5, 6])
+        self.assertIsInstance(value_A, MutableList)
+        self.assertEqual([11, 12, 13], value_A)
+
+    def test_update(self) -> None:
+        mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
+
+        mutable_map["A"] = 65
+        mutable_map["a"] = 97
+
+        mutable_map.update({"B": 66})
+        self.assertEqual({"A": 65, "a": 97, "B": 66}, mutable_map)
+
+        mutable_map.update({"B": 166, "A": 165})
+        self.assertEqual({"A": 165, "a": 97, "B": 166}, mutable_map)
+
+        mutable_map.update({"B": 66}, A=65, b=98)
+        self.assertEqual({"A": 65, "a": 97, "B": 66, "b": 98}, mutable_map)
+
+        mutable_map.update({}, B=166, b=198)
+        self.assertEqual({"A": 65, "a": 97, "B": 166, "b": 198}, mutable_map)
+
+        mutable_map.update(B=66, b=98)
+        self.assertEqual({"A": 65, "a": 97, "B": 66, "b": 98}, mutable_map)
+
+    def test_update_exception(self) -> None:
+        mutable_map = MutableMap(typeinfo_string, typeinfo_i32, {})
+
+        mutable_map["A"] = 65
+        mutable_map["a"] = 97
+
+        # basic exception safety
+        with self.assertRaisesRegex(
+            TypeError, "Expected type <class 'str'>, got: <class 'int'>"
+        ):
+            # `{"B": 66}` raises before keyword argument
+            mutable_map.update({1: 999}, A=65)
+
+        self.assertEqual({"A": 65, "a": 97}, mutable_map)
+
+        with self.assertRaisesRegex(
+            TypeError, "not a <class 'int'>, is actually of type <class 'str'>"
+        ):
+            # `{"B": 66}` updates the mutable map before keyword argument raises
+            mutable_map.update({"B": 66}, x="Not an Integer")
+
+        self.assertEqual({"A": 65, "a": 97, "B": 66}, mutable_map)

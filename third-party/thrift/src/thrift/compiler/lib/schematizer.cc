@@ -14,10 +14,12 @@
  * limitations under the License.
  */
 
+#include <filesystem>
 #include <string>
 #include <string_view>
 #include <utility>
 #include <fmt/core.h>
+#include <openssl/evp.h>
 #include <openssl/md5.h>
 #include <openssl/sha.h>
 #include <thrift/compiler/ast/t_const.h>
@@ -64,7 +66,7 @@ t_type_ref schematizer::stdType(std::string_view uri) {
 std::unique_ptr<t_const_value> schematizer::typeUri(const t_type& type) {
   auto ret = t_const_value::make_map();
   if (opts_.use_hash) {
-    ret->add_map(val("typeHashPrefixSha2_256"), val(identify_definition(type)));
+    ret->add_map(val("definitionKey"), val(identify_definition(type)));
   } else if (!type.uri().empty()) {
     ret->add_map(val("uri"), val(type.uri()));
   } else {
@@ -761,7 +763,7 @@ std::string_view schematizer::program_checksum(const t_program& program) {
   // @lint-ignore CLANGTIDY facebook-hte-CArray
   unsigned char hash[MD5_DIGEST_LENGTH];
   auto val = sm_.get_file(program.path())->text;
-  MD5(reinterpret_cast<const unsigned char*>(val.data()), val.size(), hash);
+  EVP_Digest(val.data(), val.size(), hash, nullptr, EVP_md5(), nullptr);
   return (
       program_checksums_[&program] =
           std::string(reinterpret_cast<const char*>(hash), sizeof(hash)));
@@ -781,9 +783,12 @@ std::string schematizer::identify_definition(const t_named& node) {
 }
 
 int64_t schematizer::identify_program(const t_program& node) {
+  auto checksum = program_checksum(node);
+  auto path =
+      std::filesystem::path(node.path()).lexically_normal().generic_string();
   // @lint-ignore CLANGTIDY facebook-hte-CArray
   unsigned char hash[SHA256_DIGEST_LENGTH];
-  auto val = fmt::format("{}{}", program_checksum(node), node.path());
+  auto val = fmt::format("{}{}", checksum, path);
   SHA256(reinterpret_cast<const unsigned char*>(val.c_str()), val.size(), hash);
   int64_t ret;
   memcpy(&ret, hash, sizeof(ret));

@@ -13,6 +13,7 @@ use instruction_sequence::instr;
 use instruction_sequence::InstrSeq;
 use naming_special_names_rust as sn;
 use oxidized::aast;
+use oxidized::aast_defs::TupleInfo;
 use oxidized::ast_defs::Id;
 use oxidized::pos::Pos;
 
@@ -175,6 +176,8 @@ pub(crate) fn remove_erased_generics<'a>(env: &Env<'a>, h: aast::Hint) -> aast::
     use aast::Hint_;
     use aast::NastShapeInfo;
     use aast::ShapeFieldInfo;
+    use aast::TupleExtra;
+    use aast::TupleExtraInfo;
     fn rec<'a>(env: &Env<'a>, Hint(pos, h_): Hint) -> Hint {
         let h_ = match *h_ {
             Hint_::Happly(Id(pos, id), hs) => {
@@ -188,7 +191,21 @@ pub(crate) fn remove_erased_generics<'a>(env: &Env<'a>, h: aast::Hint) -> aast::
             Hint_::Hlike(h) => Hint_::Hlike(rec(env, h)),
             Hint_::HclassArgs(h) => Hint_::HclassArgs(rec(env, h)),
             Hint_::Hoption(h) => Hint_::Hoption(rec(env, h)),
-            Hint_::Htuple(hs) => Hint_::Htuple(hs.into_iter().map(|h| rec(env, h)).collect()),
+            Hint_::Htuple(TupleInfo { required, extra }) => {
+                let extra = match extra {
+                    TupleExtra::Hextra(TupleExtraInfo { optional, variadic }) => {
+                        TupleExtra::Hextra(TupleExtraInfo {
+                            optional: optional.into_iter().map(|h| rec(env, h)).collect(),
+                            variadic: variadic.map(|h| rec(env, h)),
+                        })
+                    }
+                    TupleExtra::Hsplat(h) => TupleExtra::Hsplat(rec(env, h)),
+                };
+                Hint_::Htuple(TupleInfo {
+                    required: required.into_iter().map(|h| rec(env, h)).collect(),
+                    extra,
+                })
+            }
             Hint_::Hunion(hs) => Hint_::Hunion(hs.into_iter().map(|h| rec(env, h)).collect()),
             Hint_::Hintersection(hs) => {
                 Hint_::Hintersection(hs.into_iter().map(|h| rec(env, h)).collect())

@@ -387,8 +387,19 @@ let rec t (env : Env.t) (node : Syntax.t) : Doc.t =
           Newline;
         ]
     | Syntax.CaseTypeVariant
-        { case_type_variant_bar = bar; case_type_variant_type = ty } ->
-      Span [t env bar; when_present bar space; t env ty]
+        {
+          case_type_variant_bar = bar;
+          case_type_variant_type = ty;
+          case_type_variant_where_clause = where;
+        } ->
+      Span
+        [
+          t env bar;
+          when_present bar space;
+          t env ty;
+          when_present where space;
+          t env where;
+        ]
     | Syntax.PropertyDeclaration
         {
           property_attribute_spec = attr;
@@ -939,6 +950,7 @@ let rec t (env : Env.t) (node : Syntax.t) : Doc.t =
           parameter_optional = optional;
           parameter_call_convention = callconv;
           parameter_readonly = readonly;
+          parameter_pre_ellipsis = pre_ellipsis;
           parameter_type = param_type;
           parameter_ellipsis = ellipsis;
           parameter_name = name;
@@ -957,6 +969,8 @@ let rec t (env : Env.t) (node : Syntax.t) : Doc.t =
           when_present callconv space;
           t env readonly;
           when_present readonly space;
+          t env pre_ellipsis;
+          when_present pre_ellipsis space;
           t env param_type;
           (if
            Syntax.is_missing visibility
@@ -2326,6 +2340,7 @@ let rec t (env : Env.t) (node : Syntax.t) : Doc.t =
           closure_parameter_optional = optional;
           closure_parameter_call_convention = callconv;
           closure_parameter_readonly = readonly;
+          closure_parameter_pre_ellipsis = pre_ellipsis;
           closure_parameter_type = cp_type;
           closure_parameter_ellipsis = ellipsis;
         } ->
@@ -2337,6 +2352,22 @@ let rec t (env : Env.t) (node : Syntax.t) : Doc.t =
           when_present callconv space;
           t env readonly;
           when_present readonly space;
+          t env pre_ellipsis;
+          t env cp_type;
+          t env ellipsis;
+        ]
+    | Syntax.TupleOrUnionOrIntersectionElementTypeSpecifier
+        {
+          tuple_or_union_or_intersection_element_optional = optional;
+          tuple_or_union_or_intersection_element_pre_ellipsis = pre_ellipsis;
+          tuple_or_union_or_intersection_element_type = cp_type;
+          tuple_or_union_or_intersection_element_ellipsis = ellipsis;
+        } ->
+      Concat
+        [
+          t env optional;
+          when_present optional space;
+          t env pre_ellipsis;
           t env cp_type;
           t env ellipsis;
         ]
@@ -3439,7 +3470,13 @@ and transform_container_literal
     left_p
     members
     right_p =
-  let force_newlines = node_has_trailing_newline left_p in
+  let force_newlines =
+    node_has_trailing_newline left_p
+    &&
+    match members.Syntax.syntax with
+    | Syntax.Missing -> false
+    | _ -> true
+  in
   let ty =
     match explicit_type with
     | Some ex_ty -> t env ex_ty
@@ -3719,7 +3756,7 @@ and transform_node_if_ignored node =
     let (node, trailing_trivia) = remove_trailing_trivia node in
     let is_fixme =
       match Trivia.kind (List.hd_exn leading_including_and_after) with
-      | TriviaKind.(FixMe | IgnoreError) -> true
+      | TriviaKind.(FixMe | Ignore | IgnoreError) -> true
       | _ -> false
     in
     Some
@@ -3828,6 +3865,7 @@ and transform_trivia ~is_leading trivia =
       match Trivia.kind triv with
       | TriviaKind.ExtraTokenError
       | TriviaKind.FixMe
+      | TriviaKind.Ignore
       | TriviaKind.IgnoreError
       | TriviaKind.DelimitedComment ->
         let preceded_by_whitespace =
@@ -3878,6 +3916,7 @@ and transform_trivia ~is_leading trivia =
         let should_break =
           match Trivia.kind triv with
           | TriviaKind.FixMe
+          | TriviaKind.Ignore
           | TriviaKind.IgnoreError ->
             false
           | _ -> !currently_leading

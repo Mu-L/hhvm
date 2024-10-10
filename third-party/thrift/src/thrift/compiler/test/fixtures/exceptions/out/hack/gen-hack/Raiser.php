@@ -140,11 +140,6 @@ interface RaiserClientIf extends \IThriftSyncIf {
 trait RaiserClientBase {
   require extends \ThriftClientBase;
 
-}
-
-class RaiserAsyncClient extends \ThriftClientBase implements RaiserAsyncClientIf {
-  use RaiserClientBase;
-
   /**
    * Original thrift definition:-
    * void
@@ -158,7 +153,7 @@ class RaiserAsyncClient extends \ThriftClientBase implements RaiserAsyncClientIf
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = Raiser_doBland_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("Raiser", "doBland", $args);
-    $currentseqid = $this->sendImplHelper($args, "doBland", false);
+    $currentseqid = $this->sendImplHelper($args, "doBland", false, "Raiser" );
     await $this->genAwaitResponse(Raiser_doBland_result::class, "doBland", true, $currentseqid, $rpc_options);
   }
 
@@ -178,7 +173,7 @@ class RaiserAsyncClient extends \ThriftClientBase implements RaiserAsyncClientIf
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = Raiser_doRaise_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("Raiser", "doRaise", $args);
-    $currentseqid = $this->sendImplHelper($args, "doRaise", false);
+    $currentseqid = $this->sendImplHelper($args, "doRaise", false, "Raiser" );
     await $this->genAwaitResponse(Raiser_doRaise_result::class, "doRaise", true, $currentseqid, $rpc_options);
   }
 
@@ -195,7 +190,7 @@ class RaiserAsyncClient extends \ThriftClientBase implements RaiserAsyncClientIf
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = Raiser_get200_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("Raiser", "get200", $args);
-    $currentseqid = $this->sendImplHelper($args, "get200", false);
+    $currentseqid = $this->sendImplHelper($args, "get200", false, "Raiser" );
     return await $this->genAwaitResponse(Raiser_get200_result::class, "get200", false, $currentseqid, $rpc_options);
   }
 
@@ -215,114 +210,45 @@ class RaiserAsyncClient extends \ThriftClientBase implements RaiserAsyncClientIf
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = Raiser_get500_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("Raiser", "get500", $args);
-    $currentseqid = $this->sendImplHelper($args, "get500", false);
+    $currentseqid = $this->sendImplHelper($args, "get500", false, "Raiser" );
     return await $this->genAwaitResponse(Raiser_get500_result::class, "get500", false, $currentseqid, $rpc_options);
   }
+
+}
+
+class RaiserAsyncClient extends \ThriftClientBase implements RaiserAsyncClientIf {
+  use RaiserClientBase;
 
 }
 
 class RaiserClient extends \ThriftClientBase implements RaiserClientIf {
   use RaiserClientBase;
 
-  /**
-   * Original thrift definition:-
-   * void
-   *   doBland();
-   */
-  public async function doBland(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Raiser_doBland_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("Raiser", "doBland", $args);
-    $currentseqid = $this->sendImplHelper($args, "doBland", false);
-    await $this->genAwaitResponse(Raiser_doBland_result::class, "doBland", true, $currentseqid, $rpc_options);
-  }
-
-  /**
-   * Original thrift definition:-
-   * void
-   *   doRaise()
-   *   throws (1: Banal b,
-   *           2: Fiery f,
-   *           3: Serious s);
-   */
-  public async function doRaise(): Awaitable<void> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Raiser_doRaise_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("Raiser", "doRaise", $args);
-    $currentseqid = $this->sendImplHelper($args, "doRaise", false);
-    await $this->genAwaitResponse(Raiser_doRaise_result::class, "doRaise", true, $currentseqid, $rpc_options);
-  }
-
-  /**
-   * Original thrift definition:-
-   * string
-   *   get200();
-   */
-  public async function get200(): Awaitable<string> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Raiser_get200_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("Raiser", "get200", $args);
-    $currentseqid = $this->sendImplHelper($args, "get200", false);
-    return await $this->genAwaitResponse(Raiser_get200_result::class, "get200", false, $currentseqid, $rpc_options);
-  }
-
-  /**
-   * Original thrift definition:-
-   * string
-   *   get500()
-   *   throws (1: Fiery f,
-   *           2: Banal b,
-   *           3: Serious s);
-   */
-  public async function get500(): Awaitable<string> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = Raiser_get500_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("Raiser", "get500", $args);
-    $currentseqid = $this->sendImplHelper($args, "get500", false);
-    return await $this->genAwaitResponse(Raiser_get500_result::class, "get500", false, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_doBland(): int {
     $args = Raiser_doBland_args::withDefaultValues();
-    return $this->sendImplHelper($args, "doBland", false);
+    return $this->sendImplHelper($args, "doBland", false, "Raiser" );
   }
   public function recv_doBland(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(Raiser_doBland_result::class, "doBland", true, $expectedsequenceid);
   }
   public function send_doRaise(): int {
     $args = Raiser_doRaise_args::withDefaultValues();
-    return $this->sendImplHelper($args, "doRaise", false);
+    return $this->sendImplHelper($args, "doRaise", false, "Raiser" );
   }
   public function recv_doRaise(?int $expectedsequenceid = null): void {
     $this->recvImplHelper(Raiser_doRaise_result::class, "doRaise", true, $expectedsequenceid);
   }
   public function send_get200(): int {
     $args = Raiser_get200_args::withDefaultValues();
-    return $this->sendImplHelper($args, "get200", false);
+    return $this->sendImplHelper($args, "get200", false, "Raiser" );
   }
   public function recv_get200(?int $expectedsequenceid = null): string {
     return $this->recvImplHelper(Raiser_get200_result::class, "get200", false, $expectedsequenceid);
   }
   public function send_get500(): int {
     $args = Raiser_get500_args::withDefaultValues();
-    return $this->sendImplHelper($args, "get500", false);
+    return $this->sendImplHelper($args, "get500", false, "Raiser" );
   }
   public function recv_get500(?int $expectedsequenceid = null): string {
     return $this->recvImplHelper(Raiser_get500_result::class, "get500", false, $expectedsequenceid);

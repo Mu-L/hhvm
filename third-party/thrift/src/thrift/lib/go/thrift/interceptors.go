@@ -18,6 +18,8 @@ package thrift
 
 import (
 	"context"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // ChainInterceptors returns a thrift interceptor that chains the execution of
@@ -27,8 +29,8 @@ func ChainInterceptors(interceptors ...Interceptor) Interceptor {
 	n := len(interceptors)
 	switch n {
 	case 0:
-		return func(ctx context.Context, name string, pf ProcessorFunctionContext,
-			args Struct) (WritableStruct, ApplicationException) {
+		return func(ctx context.Context, name string, pf types.ProcessorFunction,
+			args types.Struct) (types.WritableStruct, types.ApplicationException) {
 
 			return pf.RunContext(ctx, args)
 		}
@@ -36,8 +38,8 @@ func ChainInterceptors(interceptors ...Interceptor) Interceptor {
 		return interceptors[0]
 	}
 
-	return func(ctx context.Context, name string, pf ProcessorFunctionContext,
-		args Struct) (WritableStruct, ApplicationException) {
+	return func(ctx context.Context, name string, pf types.ProcessorFunction,
+		args types.Struct) (types.WritableStruct, types.ApplicationException) {
 
 		handler := &chainHandler{
 			last:         n - 1,
@@ -49,27 +51,27 @@ func ChainInterceptors(interceptors ...Interceptor) Interceptor {
 	}
 }
 
-// chainHandler is a utility struct that implements the ProcessorFunctionContext
+// chainHandler is a utility struct that implements the ProcessorFunction
 // interface and executes the interceptors in the list in order.
 type chainHandler struct {
 	curI         int
 	last         int
 	name         string
-	origHandler  ProcessorFunctionContext
+	origHandler  types.ProcessorFunction
 	interceptors []Interceptor
 }
 
 // Read does nothing here, it is not used and shouldn't be called
-func (ch *chainHandler) Read(_ Format) (Struct, Exception) {
+func (ch *chainHandler) Read(_ types.Decoder) (types.Struct, types.Exception) {
 	return nil, nil
 }
 
 // Write does nothing here, it is not used and shouldn't be called
-func (ch *chainHandler) Write(_ int32, _ WritableStruct, _ Format) Exception {
+func (ch *chainHandler) Write(_ int32, _ types.WritableStruct, _ types.Encoder) types.Exception {
 	return nil
 }
 
-func (ch *chainHandler) RunContext(ctx context.Context, args Struct) (WritableStruct, ApplicationException) {
+func (ch *chainHandler) RunContext(ctx context.Context, args types.Struct) (types.WritableStruct, types.ApplicationException) {
 	if ch.curI == ch.last {
 		return ch.origHandler.RunContext(ctx, args)
 	}

@@ -5,23 +5,20 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
 
 
-__property__ = property
-
-
 class Empty(thrift.py3.types.Struct, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
+
 
     def __init__(
         self, 
@@ -50,6 +47,7 @@ class Nada(thrift.py3.types.Union, _typing.Hashable):
     class __fbthrift_IsSet:
         pass
 
+
     def __init__(
         self, 
     ) -> None: ...
@@ -62,15 +60,14 @@ class Nada(thrift.py3.types.Union, _typing.Hashable):
     def __le__(self, other: 'Nada') -> bool: ...
     def __ge__(self, other: 'Nada') -> bool: ...
 
-    class Type(thrift.py3.types.Enum):
+    class Type(_python_std_enum.Enum):
         EMPTY: Nada.Type = ...
 
     @staticmethod
     def fromValue(value: _NadaValueType) -> Nada: ...
-    @__property__
-    def value(self) -> _NadaValueType: ...
-    @__property__
-    def type(self) -> "Nada.Type": ...
+    type: _typing.Final[Nada.Type]
+    value: _typing.Final[_NadaValueType]
+    def get_type(self) -> Nada.Type: ...
 
     def _to_python(self) -> "module.thrift_types.Nada": ...   # type: ignore
     def _to_py3(self) -> Nada: ...

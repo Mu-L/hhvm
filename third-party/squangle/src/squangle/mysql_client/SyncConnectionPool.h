@@ -10,12 +10,16 @@
 
 #include <folly/executors/FunctionScheduler.h>
 
+#include "squangle/mysql_client/ConnectPoolOperation.h"
 #include "squangle/mysql_client/ConnectionPool.h"
 #include "squangle/mysql_client/SyncMysqlClient.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlConnectPoolOperationImpl.h"
 
 namespace facebook::common::mysql_client {
 
 using SyncConnectPoolOperation = ConnectPoolOperation<SyncMysqlClient>;
+using SyncConnectPoolOperationImpl =
+    mysql_protocol::MysqlConnectPoolOperationImpl<SyncMysqlClient>;
 
 class SyncConnectionPool : public ConnectionPool<SyncMysqlClient> {
  public:
@@ -83,10 +87,10 @@ class SyncConnectionPool : public ConnectionPool<SyncMysqlClient> {
   }
 
   std::unique_ptr<Connection> makeNewConnection(
-      const ConnectionKey& conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       std::unique_ptr<MysqlPooledHolder<SyncMysqlClient>> mysqlConn) override {
     return std::make_unique<SyncConnection>(
-        mysql_client_.get(), conn_key, std::move(mysqlConn));
+        *mysql_client_, std::move(conn_key), std::move(mysqlConn));
   }
 
   void openNewConnectionPrep(SyncConnectPoolOperation& pool_op) override;

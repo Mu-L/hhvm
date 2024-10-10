@@ -65,6 +65,15 @@ public final class Baz implements com.facebook.thrift.payload.ThriftSerializable
     private java.lang.Object value;
     private short id;
 
+    public enum TypeEnum {
+      __FBTHRIFT_EMPTY_UNION__,
+      INT_FIELD,
+      SET_FIELD,
+      MAP_FIELD,
+      BINARY_FIELD,
+      LONG_FIELD,
+    }
+
     public static Baz from(int _id, java.lang.Object _field) {
         return from((short) _id, _field);
     }
@@ -263,6 +272,25 @@ public final class Baz implements com.facebook.thrift.payload.ThriftSerializable
     @ThriftUnionId
     public short getThriftId() {
         return this.id;
+    }
+
+    public TypeEnum getThriftUnionType() {
+      switch(this.id) {
+        case 0:
+          return TypeEnum.__FBTHRIFT_EMPTY_UNION__;
+        case 1:
+          return TypeEnum.INT_FIELD;
+        case 4:
+          return TypeEnum.SET_FIELD;
+        case 6:
+          return TypeEnum.MAP_FIELD;
+        case 8:
+          return TypeEnum.BINARY_FIELD;
+        case 9:
+          return TypeEnum.LONG_FIELD;
+        default:
+          throw new IllegalStateException("unreachable");
+      }
     }
 
     public String getThriftName() {

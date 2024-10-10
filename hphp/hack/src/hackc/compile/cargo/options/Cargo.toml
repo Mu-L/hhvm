@@ -11,13 +11,12 @@ license = "MIT"
 path = "../../options.rs"
 
 [dependencies]
-anyhow = "1.0.75"
-bstr = { version = "1.4.0", features = ["serde", "std", "unicode"] }
+anyhow = "1.0.86"
+bstr = { version = "1.10.0", features = ["serde", "std", "unicode"] }
 cxx = "1.0.119"
 hhvm_options = { version = "0.0.0", path = "../../../../utils/hhvm_options" }
 oxidized = { version = "0.0.0", path = "../../../../oxidized" }
 serde = { version = "1.0.185", features = ["derive", "rc"] }
 
 [build-dependencies]
-generate_configs_lib = { version = "0.0.0", path = "../../../../../../tools/configs" }
 nom = "7.1"

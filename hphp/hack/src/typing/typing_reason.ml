@@ -140,14 +140,6 @@ let variance_dir_to_json = function
   | Co -> Hh_json.(JSON_Object [("Co", JSON_Array [])])
   | Contra -> Hh_json.(JSON_Object [("Contr", JSON_Array [])])
 
-let variance_dir_is_contra = function
-  | Contra -> true
-  | Co -> false
-
-let explain_variance_dir = function
-  | Contra -> "contravariant"
-  | Co -> "covariant"
-
 (** When recording the decomposition of a type during inference we want to keep
     track of variance so we can give intuition about the direction of 'flow'.
     In the case of invariant type paramters, we record both the fact that it was
@@ -156,11 +148,6 @@ type cstr_variance =
   | Dir of variance_dir
   | Inv of variance_dir
 [@@deriving hash]
-
-let cstr_variance_is_contra = function
-  | Dir dir
-  | Inv dir ->
-    variance_dir_is_contra dir
 
 let cstr_variance_to_json = function
   | Dir dir ->
@@ -173,17 +160,12 @@ type field_kind =
   | Absent
   | Optional
   | Required
-[@@deriving hash]
+[@@deriving eq, hash]
 
 let field_kind_to_json = function
   | Absent -> Hh_json.(JSON_Object [("Absent", JSON_Array [])])
   | Optional -> Hh_json.(JSON_Object [("Optional", JSON_Array [])])
   | Required -> Hh_json.(JSON_Object [("Required", JSON_Array [])])
-
-let explain_field_kind = function
-  | Required -> "required"
-  | Optional -> "optional"
-  | Absent -> "non-existent"
 
 type ctor_kind =
   | Ctor_class
@@ -193,10 +175,6 @@ type ctor_kind =
 let ctor_kind_to_json = function
   | Ctor_class -> Hh_json.string_ "Ctor_class"
   | Ctor_newtype -> Hh_json.string_ "Ctor_newtype"
-
-let explain_ctor_kind = function
-  | Ctor_class -> "this class"
-  | Ctor_newtype -> "this newtype"
 
 (** Symmetric projections are those in which the same decomposition is applied
     to both sub- and supertype during inference *)
@@ -209,32 +187,13 @@ type prj_symm =
   | Prj_symm_fn_param of int * int
   | Prj_symm_fn_param_inout of int * int * variance_dir
   | Prj_symm_fn_ret
+  | Prj_symm_supportdyn
 [@@deriving hash]
-
-let reverse_prj_symm = function
-  | Prj_symm_shape (nm, kind_sub, kind_sup) ->
-    Prj_symm_shape (nm, kind_sup, kind_sub)
-  | Prj_symm_fn_param (idx_sub, idx_sup) -> Prj_symm_fn_param (idx_sup, idx_sub)
-  | Prj_symm_fn_param_inout (idx_sub, idx_sup, var) ->
-    Prj_symm_fn_param_inout (idx_sup, idx_sub, var)
-  | t -> t
-
-let prj_symm_is_contra = function
-  | Prj_symm_ctor (_, _, _, var) -> cstr_variance_is_contra var
-  | Prj_symm_fn_param _
-  | Prj_symm_fn_param_inout (_, _, Contra) ->
-    true
-  | Prj_symm_fn_param_inout (_, _, Co)
-  | Prj_symm_fn_ret
-  | Prj_symm_neg
-  | Prj_symm_nullable
-  | Prj_symm_tuple _
-  | Prj_symm_shape _ ->
-    false
 
 let prj_symm_to_json = function
   | Prj_symm_neg -> Hh_json.JSON_String "Prj_symm_neg"
   | Prj_symm_nullable -> Hh_json.JSON_String "Prj_symm_nullable"
+  | Prj_symm_supportdyn -> Hh_json.JSON_String "Prj_symm_supportdyn"
   | Prj_symm_ctor (ctor_kind, nm, idx, variance) ->
     Hh_json.(
       JSON_Object
@@ -287,70 +246,6 @@ let prj_symm_to_json = function
         ])
   | Prj_symm_fn_ret -> Hh_json.JSON_String "Prj_symm_fn_ret"
 
-let int_to_ordinal =
-  let sfxs = [| "th"; "st"; "nd"; "rd"; "th" |] in
-  fun n ->
-    let sfx =
-      if n >= 10 && n <= 20 then
-        "th"
-      else
-        sfxs.(min 4 (n mod 10))
-    in
-    Format.sprintf "%d%s" n sfx
-
-let explain_symm_prj prj ~side =
-  match prj with
-  | Prj_symm_neg -> "as the inner type of a negation"
-  | Prj_symm_nullable -> "as the non-null part of a nullable type"
-  | Prj_symm_ctor (ctor_kind, nm, idx, Inv dir) ->
-    Format.sprintf
-      "as the invariant, %s type parameter of the %s `%s`, when typing as %s"
-      (int_to_ordinal (idx + 1))
-      (explain_ctor_kind ctor_kind)
-      nm
-      (explain_variance_dir dir)
-  | Prj_symm_ctor (ctor_kind, nm, idx, Dir dir) ->
-    Format.sprintf
-      "as the %s, %s type parameter of the %s `%s`"
-      (explain_variance_dir dir)
-      (int_to_ordinal (idx + 1))
-      (explain_ctor_kind ctor_kind)
-      nm
-  | Prj_symm_tuple idx ->
-    Format.sprintf "as the %s element of the tuple" (int_to_ordinal idx)
-  | Prj_symm_shape (fld_nm, fld_kind_lhs, fld_kind_rhs) ->
-    let fld_kind =
-      match side with
-      | `Lhs -> fld_kind_lhs
-      | `Rhs -> fld_kind_rhs
-    in
-    (match fld_kind with
-    | Absent ->
-      Format.sprintf "since the shape field `'%s'` is not defined" fld_nm
-    | _ ->
-      Format.sprintf
-        "as the %s shape field `'%s'`"
-        (explain_field_kind fld_kind)
-        fld_nm)
-  | Prj_symm_fn_param (idx_lhs, idx_rhs) ->
-    let idx =
-      match side with
-      | `Lhs -> idx_lhs
-      | `Rhs -> idx_rhs
-    in
-    Format.sprintf "as the %s function parameter" (int_to_ordinal (idx + 1))
-  | Prj_symm_fn_param_inout (idx_lhs, idx_rhs, dir) ->
-    let idx =
-      match side with
-      | `Lhs -> idx_lhs
-      | `Rhs -> idx_rhs
-    in
-    Format.sprintf
-      "as the invariant, %s `inout` function parameter, when typing as %s"
-      (int_to_ordinal (idx + 1))
-      (explain_variance_dir dir)
-  | Prj_symm_fn_ret -> "as the function return type"
-
 (** Asymmetric projections are those in which the same decomposition is applied
     to only one of the sub- or supertype during inference *)
 type prj_asymm =
@@ -358,6 +253,8 @@ type prj_asymm =
   | Prj_asymm_inter
   | Prj_asymm_neg
   | Prj_asymm_nullable
+  | Prj_asymm_arraykey
+  | Prj_asymm_num
 [@@deriving hash]
 
 let prj_asymm_to_json = function
@@ -365,122 +262,36 @@ let prj_asymm_to_json = function
   | Prj_asymm_inter -> Hh_json.JSON_String "Prj_asymm_inter"
   | Prj_asymm_neg -> Hh_json.JSON_String "Prj_asymm_neg"
   | Prj_asymm_nullable -> Hh_json.JSON_String "Prj_asymm_nullable"
-
-let explain_asymm_prj prj =
-  match prj with
-  | Prj_asymm_union -> "as an element of the union type"
-  | Prj_asymm_inter -> "as an element of the intersection type"
-  | Prj_asymm_neg -> "as the inner type of a negation"
-  | Prj_asymm_nullable -> "as the non-null part of a nullable type"
-
-(** For asymmetric projections we need to track which of the sub- or supertype
-    was decomposed  *)
-type side =
-  | Sub
-  | Super
-[@@deriving hash]
-
-let side_to_json = function
-  | Sub -> Hh_json.JSON_String "Sub"
-  | Super -> Hh_json.JSON_String "Super"
-
-(** Top-level projections  *)
-type prj =
-  | Symm of prj_symm
-  | Asymm of side * prj_asymm
-[@@deriving hash]
-
-let reverse_prj = function
-  | Symm prj_symm -> Symm (reverse_prj_symm prj_symm)
-  | t -> t
-
-let prj_to_json = function
-  | Symm prj_symm ->
-    Hh_json.(JSON_Object [("Symm", JSON_Array [prj_symm_to_json prj_symm])])
-  | Asymm (side, prj_asymm) ->
-    Hh_json.(
-      JSON_Object
-        [("Asymm", JSON_Array [side_to_json side; prj_asymm_to_json prj_asymm])])
-
-let prj_is_contra = function
-  | Asymm _ -> false
-  | Symm prj_symm -> prj_symm_is_contra prj_symm
-
-let explain_prj_left = function
-  | Symm prj -> explain_symm_prj prj ~side:`Lhs
-  | Asymm (_, prj) -> explain_asymm_prj prj
-
-let explain_prj_right = function
-  | Symm prj -> explain_symm_prj prj ~side:`Rhs
-  | Asymm (_, prj) -> explain_asymm_prj prj
+  | Prj_asymm_arraykey -> Hh_json.JSON_String "Prj_asymm_arraykey"
+  | Prj_asymm_num -> Hh_json.JSON_String "Prj_asymm_num"
 
 (* ~~ Flow kinds ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
 
 type flow_kind =
   | Flow_assign
+  | Flow_call
+  | Flow_prop_access
   | Flow_local
-  | Flow_solved
-  | Flow_subtype
-  | Flow_subtype_toplevel
-  | Flow_prj
-  | Flow_extends
-  | Flow_transitive
   | Flow_fun_return
   | Flow_param_hint
   | Flow_return_expr
-  | Flow_upper_bound
-  | Flow_lower_bound
-[@@deriving hash, show]
+  | Flow_instantiate of string
+[@@deriving hash]
 
 let flow_kind_to_json = function
   | Flow_assign -> Hh_json.string_ "Flow_assign"
+  | Flow_call -> Hh_json.string_ "Flow_call"
+  | Flow_prop_access -> Hh_json.string_ "Flow_prop_access"
   | Flow_local -> Hh_json.string_ "Flow_local"
-  | Flow_solved -> Hh_json.string_ "Flow_solved"
-  | Flow_subtype -> Hh_json.string_ "Flow_subtype"
-  | Flow_subtype_toplevel -> Hh_json.string_ "Flow_subtype_toplevel"
-  | Flow_prj -> Hh_json.string_ "Flow_prj"
-  | Flow_extends -> Hh_json.string_ "Flow_extends"
-  | Flow_transitive -> Hh_json.string_ "Flow_transitive"
   | Flow_fun_return -> Hh_json.string_ "Flow_fun_return"
   | Flow_param_hint -> Hh_json.string_ "Flow_param_hint"
   | Flow_return_expr -> Hh_json.string_ "Flow_return_expr"
-  | Flow_upper_bound -> Hh_json.string_ "Flow_upper_bound"
-  | Flow_lower_bound -> Hh_json.string_ "Flow_lower_bound"
-
-let explain_flow_kind_fwd = function
-  | Flow_assign -> "because of an assignment"
-  | Flow_local -> "because the local variable has this type"
-  | Flow_solved -> "because of inference"
-  | Flow_subtype
-  | Flow_subtype_toplevel ->
-    "because they are required to be subtypes"
-  | Flow_prj -> "because the type was decomposed"
-  | Flow_extends -> "because they are subclass and superclass"
-  | Flow_transitive -> "because of transitivity"
-  | Flow_fun_return -> "because of the functions return type"
-  | Flow_param_hint -> "because it is a parameter hint"
-  | Flow_return_expr -> "because the expression is in return position"
-  | Flow_upper_bound -> "becuase it is the upper bound"
-  | Flow_lower_bound -> "because it is the lower bound"
-
-let explain_flow_kind_bwd = function
-  | Flow_assign -> "because of an assignment"
-  | Flow_local -> "because the local variable has this type"
-  | Flow_solved -> "because of inference"
-  | Flow_subtype
-  | Flow_subtype_toplevel ->
-    "because they are required to be subtypes"
-  | Flow_prj -> "because the type was decomposed"
-  | Flow_extends -> "because they are subclass and superclass"
-  | Flow_transitive -> "because of transitivity"
-  | Flow_fun_return -> "because of the functions return type"
-  | Flow_param_hint -> "because it is a parameter hint"
-  | Flow_return_expr -> "because the expression is in return position"
-  | Flow_upper_bound -> "becuase it is the upper bound"
-  | Flow_lower_bound -> "because it is the lower bound"
-
+  | Flow_instantiate str ->
+    Hh_json.(JSON_Object [("Flow_instantiate", string_ str)])
 (* ~~ Witnesses ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
 
+(** Witness the reason for a type during typing using the position of a hint or
+    expression  *)
 type witness_locl =
   | Witness of Pos.t
   | Idx_vector of Pos.t
@@ -523,9 +334,9 @@ type witness_locl =
   | Idx_set_element of Pos.t
   | Unset_field of Pos.t * string
   | Regex of Pos.t
-  | Type_variable of Pos.t
-  | Type_variable_generics of Pos.t * string * string
-  | Type_variable_error of Pos.t
+  | Type_variable of Pos.t * Tvid.t
+  | Type_variable_generics of Pos.t * string * string * Tvid.t
+  | Type_variable_error of Pos.t * Tvid.t
   | Shape of Pos.t * string
   | Shape_literal of Pos.t
   | Destructure of Pos.t
@@ -538,6 +349,7 @@ type witness_locl =
   | Captured_like of Pos.t
   | Unsafe_cast of Pos.t
   | Pattern of Pos.t
+  | Join_point of Pos.t
 [@@deriving hash]
 
 let witness_locl_to_raw_pos = function
@@ -582,9 +394,9 @@ let witness_locl_to_raw_pos = function
   | Idx_set_element pos
   | Unset_field (pos, _)
   | Regex pos
-  | Type_variable pos
-  | Type_variable_generics (pos, _, _)
-  | Type_variable_error pos
+  | Type_variable (pos, _)
+  | Type_variable_generics (pos, _, _, _)
+  | Type_variable_error (pos, _)
   | Shape (pos, _)
   | Shape_literal pos
   | Destructure pos
@@ -596,7 +408,8 @@ let witness_locl_to_raw_pos = function
   | Missing_class pos
   | Captured_like pos
   | Unsafe_cast pos
-  | Pattern pos ->
+  | Pattern pos
+  | Join_point pos ->
     Pos_or_decl.of_raw_pos pos
 
 let get_pri_witness_locl = function
@@ -647,9 +460,10 @@ let map_pos_witness_locl pos pos_or_decl w =
   | Idx_set_element p -> Idx_set_element (pos p)
   | Unset_field (p, n) -> Unset_field (pos p, n)
   | Regex p -> Regex (pos p)
-  | Type_variable p -> Type_variable (pos p)
-  | Type_variable_generics (p, t, s) -> Type_variable_generics (pos p, t, s)
-  | Type_variable_error p -> Type_variable_error (pos p)
+  | Type_variable (p, tvid) -> Type_variable (pos p, tvid)
+  | Type_variable_generics (p, t, s, tvid) ->
+    Type_variable_generics (pos p, t, s, tvid)
+  | Type_variable_error (p, tvid) -> Type_variable_error (pos p, tvid)
   | Shape (p, fun_name) -> Shape (pos p, fun_name)
   | Shape_literal p -> Shape_literal (pos p)
   | Destructure p -> Destructure (pos p)
@@ -662,6 +476,7 @@ let map_pos_witness_locl pos pos_or_decl w =
   | Captured_like p -> Captured_like (pos p)
   | Unsafe_cast p -> Unsafe_cast (pos p)
   | Pattern p -> Pattern (pos p)
+  | Join_point p -> Join_point (pos p)
 
 let constructor_string_of_witness_locl = function
   | Witness _ -> "Rwitness"
@@ -720,6 +535,7 @@ let constructor_string_of_witness_locl = function
   | Captured_like _ -> "Rcaptured_like"
   | Unsafe_cast _ -> "Runsafe_cast"
   | Pattern _ -> "Rpattern"
+  | Join_point _ -> "Rjoin_point"
 
 let pp_witness_locl fmt witness =
   let comma_ fmt () = Format.fprintf fmt ",@ " in
@@ -733,7 +549,7 @@ let pp_witness_locl fmt witness =
       comma ();
       Ast_defs.pp_fun_kind fmt fk;
       ()
-    | Type_variable_generics (p, s1, s2) ->
+    | Type_variable_generics (p, s1, s2, _) ->
       Pos.pp fmt p;
       comma ();
       Format.pp_print_string fmt s1;
@@ -776,8 +592,8 @@ let pp_witness_locl fmt witness =
     | Arith_ret_int p
     | Bitwise_dynamic p
     | Incdec_dynamic p
-    | Type_variable p
-    | Type_variable_error p
+    | Type_variable (p, _)
+    | Type_variable_error (p, _)
     | Shape_literal p
     | Destructure p
     | Key_value_collection_key p
@@ -788,7 +604,8 @@ let pp_witness_locl fmt witness =
     | Missing_class p
     | Witness p
     | Captured_like p
-    | Pattern p ->
+    | Pattern p
+    | Join_point p ->
       Pos.pp fmt p
     | Unset_field (p, s)
     | Shape (p, s)
@@ -909,18 +726,33 @@ let witness_locl_to_json witness =
       JSON_Object
         [("Unset_field", JSON_Array [pos_to_json pos; JSON_String str])])
   | Regex pos -> Hh_json.(JSON_Object [("Regex", JSON_Array [pos_to_json pos])])
-  | Type_variable pos ->
-    Hh_json.(JSON_Object [("Type_variable", JSON_Array [pos_to_json pos])])
-  | Type_variable_generics (pos, str1, str2) ->
+  | Type_variable (pos, tvid) ->
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Type_variable",
+            JSON_Array [pos_to_json pos; string_ (Tvid.show tvid)] );
+        ])
+  | Type_variable_generics (pos, str1, str2, tvid) ->
     Hh_json.(
       JSON_Object
         [
           ( "Type_variable_generics",
-            JSON_Array [pos_to_json pos; JSON_String str1; JSON_String str2] );
+            JSON_Array
+              [
+                pos_to_json pos;
+                JSON_String str1;
+                JSON_String str2;
+                string_ (Tvid.show tvid);
+              ] );
         ])
-  | Type_variable_error pos ->
+  | Type_variable_error (pos, tvid) ->
     Hh_json.(
-      JSON_Object [("Type_variable_error", JSON_Array [pos_to_json pos])])
+      JSON_Object
+        [
+          ( "Type_variable_error",
+            JSON_Array [pos_to_json pos; string_ (Tvid.show tvid)] );
+        ])
   | Shape (pos, str) ->
     Hh_json.(
       JSON_Object [("Shape", JSON_Array [pos_to_json pos; JSON_String str])])
@@ -947,6 +779,8 @@ let witness_locl_to_json witness =
     Hh_json.(JSON_Object [("Unsafe_cast", JSON_Array [pos_to_json pos])])
   | Pattern pos ->
     Hh_json.(JSON_Object [("Pattern", JSON_Array [pos_to_json pos])])
+  | Join_point pos ->
+    Hh_json.(JSON_Object [("Join_point", JSON_Array [pos_to_json pos])])
 
 let witness_locl_to_string prefix witness =
   match witness with
@@ -1087,10 +921,10 @@ let witness_locl_to_string prefix witness =
       ^ " was unset here" )
   | Regex pos ->
     (Pos_or_decl.of_raw_pos pos, prefix ^ " resulting from this regex pattern")
-  | Type_variable pos ->
+  | Type_variable (pos, _) ->
     ( Pos_or_decl.of_raw_pos pos,
       prefix ^ " because a type could not be determined here" )
-  | Type_variable_generics (pos, tp_name, s) ->
+  | Type_variable_generics (pos, tp_name, s, _) ->
     ( Pos_or_decl.of_raw_pos pos,
       prefix
       ^ " because type parameter "
@@ -1099,7 +933,7 @@ let witness_locl_to_string prefix witness =
       ^ Markdown_lite.md_codify s
       ^ " could not be determined. Please add explicit type parameters to the invocation of "
       ^ Markdown_lite.md_codify s )
-  | Type_variable_error pos ->
+  | Type_variable_error (pos, _) ->
     (Pos_or_decl.of_raw_pos pos, prefix ^ " because there was another error")
   | Shape (pos, fun_name) ->
     ( Pos_or_decl.of_raw_pos pos,
@@ -1142,13 +976,17 @@ let witness_locl_to_string prefix witness =
       ^ ". The type might be a lie!" )
   | Pattern pos ->
     (Pos_or_decl.of_raw_pos pos, prefix ^ " because of this pattern")
+  | Join_point pos ->
+    (Pos_or_decl.of_raw_pos pos, prefix ^ " because of this statement")
 
+(** Witness the reason for a type during decling using the position of a hint *)
 type witness_decl =
   | Witness_from_decl of (Pos_or_decl.t[@hash.ignore])
   | Idx_vector_from_decl of (Pos_or_decl.t[@hash.ignore])
   | Hint of (Pos_or_decl.t[@hash.ignore])
   | Class_class of (Pos_or_decl.t[@hash.ignore]) * string
   | Var_param_from_decl of (Pos_or_decl.t[@hash.ignore])
+  | Tuple_from_splat of (Pos_or_decl.t[@hash.ignore])
   | Vec_or_dict_key of (Pos_or_decl.t[@hash.ignore])
   | Ret_fun_kind_from_decl of (Pos_or_decl.t[@hash.ignore]) * Ast_defs.fun_kind
   | Inout_param of (Pos_or_decl.t[@hash.ignore])
@@ -1179,6 +1017,7 @@ let witness_decl_to_raw_pos = function
   | Hint pos_or_decl
   | Class_class (pos_or_decl, _)
   | Var_param_from_decl pos_or_decl
+  | Tuple_from_splat pos_or_decl
   | Inout_param pos_or_decl
   | Tconst_no_cstr (pos_or_decl, _)
   | Varray_or_darray_key pos_or_decl
@@ -1208,6 +1047,7 @@ let map_pos_witness_decl pos_or_decl witness =
   | Hint p -> Hint (pos_or_decl p)
   | Class_class (p, s) -> Class_class (pos_or_decl p, s)
   | Var_param_from_decl p -> Var_param_from_decl (pos_or_decl p)
+  | Tuple_from_splat p -> Tuple_from_splat (pos_or_decl p)
   | Inout_param p -> Inout_param (pos_or_decl p)
   | Tconst_no_cstr id -> Tconst_no_cstr (positioned_id pos_or_decl id)
   | Varray_or_darray_key p -> Varray_or_darray_key (pos_or_decl p)
@@ -1237,6 +1077,7 @@ let constructor_string_of_witness_decl = function
   | Hint _ -> "Rhint"
   | Class_class _ -> "Rclass_class"
   | Var_param_from_decl _ -> "Rvar_param_from_decl"
+  | Tuple_from_splat _ -> "Rtuple_from_splat"
   | Inout_param _ -> "Rinout_param"
   | Tconst_no_cstr _ -> "Rtconst_no_cstr"
   | Varray_or_darray_key _ -> "Rvarray_or_darray_key"
@@ -1283,6 +1124,7 @@ let pp_witness_decl fmt witness =
     | Pessimised_prop p
     | Pessimised_this p
     | Var_param_from_decl p
+    | Tuple_from_splat p
     | Global_fun_param p
     | Global_fun_ret p
     | Enforceable p
@@ -1346,6 +1188,10 @@ let witness_decl_to_json = function
     Hh_json.(
       JSON_Object
         [("Var_param_from_decl", JSON_Array [Pos_or_decl.json pos_or_decl])])
+  | Tuple_from_splat pos_or_decl ->
+    Hh_json.(
+      JSON_Object
+        [("Tuple_from_splat", JSON_Array [Pos_or_decl.json pos_or_decl])])
   | Inout_param pos_or_decl ->
     Hh_json.(
       JSON_Object [("Inout_param", JSON_Array [Pos_or_decl.json pos_or_decl])])
@@ -1457,6 +1303,8 @@ let witness_decl_to_string prefix witness =
       ^ (strip_ns s |> Markdown_lite.md_codify) )
   | Var_param_from_decl pos_or_decl ->
     (pos_or_decl, prefix ^ " (variadic argument)")
+  | Tuple_from_splat pos_or_decl ->
+    (pos_or_decl, prefix ^ " (tuple from parameters)")
   | Inout_param pos_or_decl -> (pos_or_decl, prefix ^ " (`inout` parameter)")
   | Tconst_no_cstr (pos_or_decl, n) ->
     ( pos_or_decl,
@@ -1519,6 +1367,22 @@ let witness_decl_to_string prefix witness =
       ^ " from \"as this\" or \"is this\" in a class whose generic parameters (or those of a subclass) are erased at runtime"
     )
 
+(* ~~ Axiom ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
+
+(** Axioms are information about types provided by the user in class or type
+    parameter declarations. We make use of this information during subtype
+    constraint simplification  *)
+type axiom =
+  | Extends
+  | Upper_bound
+  | Lower_bound
+[@@deriving hash]
+
+let axiom_to_json = function
+  | Extends -> Hh_json.string_ "Extends"
+  | Upper_bound -> Hh_json.string_ "Upper_bound"
+  | Lower_bound -> Hh_json.string_ "Lower_bound"
+
 (* ~~ Reasons ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
 
 (* The phase below helps enforce that only Pos_or_decl.t positions end up in the heap.
@@ -1531,15 +1395,67 @@ let witness_decl_to_string prefix witness =
 type _ t_ =
   (* -- Superset of reasons used by decl provider -- *)
   | From_witness_decl : witness_decl -> 'phase t_
+      (** Lift a decl-time witness into a reason   *)
   | Instantiate : 'phase t_ * string * 'phase t_ -> 'phase t_
   (* -- Used when generating substitutions in silent mode only -- *)
   | No_reason : 'phase t_
   (* -- Core flow constructors -- *)
   | From_witness_locl : witness_locl -> locl_phase t_
-  | Flow : locl_phase t_ * flow_kind * locl_phase t_ -> locl_phase t_
-  | Prj : prj * locl_phase t_ -> locl_phase t_
-  | Rev : locl_phase t_ -> locl_phase t_
+      (** Lift a typing-time witness into a reason   *)
+  | Lower_bound : {
+      bound: locl_phase t_;
+      of_: locl_phase t_;
+    }
+      -> locl_phase t_
+      (** Records that a type with reason [bound] acted as a lower bound
+          for the type with reason [of_] *)
+  | Flow : {
+      from: locl_phase t_;
+      kind: flow_kind;
+      into: locl_phase t_;
+    }
+      -> locl_phase t_
+      (** Records the flow of a type from an expression or hint into an
+          expression during typing  *)
+  | Prj_both : {
+      sub_prj: locl_phase t_;
+      prj: prj_symm;
+      sub: locl_phase t_;
+      super: locl_phase t_;
+    }
+      -> locl_phase t_
+      (** Represents the projection of the sub- and supertype during subtype
+          constraints simplifiction. [sub_prj] is the subtype resulting from the
+          projection whilst [sub] and [super] and the reasons for the parent
+          types *)
+  | Prj_one : {
+      part: locl_phase t_;
+      whole: locl_phase t_;
+      prj: prj_asymm;
+    }
+      -> locl_phase t_
+      (** Represents the projection of the sub- or supertype during subtype
+          constraints simplifiction. [part] is the sub/supertype resulting from
+          the projection whilst [whole] is the reason for the parent type. *)
+  | Axiom : {
+      next: locl_phase t_;
+      prev: locl_phase t_;
+      axiom: axiom;
+    }
+      -> locl_phase t_
+      (** Represents the use of a user-defined axiom about either the
+          subtype or supertype during subtype constraints simplifiction.
+          [next] is the sub/supertype resulting from the application of the
+          axiom whilst [prev] is reason for original type. *)
   | Def : (Pos_or_decl.t[@hash.ignore]) * locl_phase t_ -> locl_phase t_
+      (** Records the definition site of type alongside the reason recording its
+          use. *)
+  | Solved : {
+      solution: locl_phase t_;
+      of_: Tvid.t;
+      in_: locl_phase t_;
+    }
+      -> locl_phase t_
   (* -- Invalid markers -- *)
   | Invalid : 'phase t_
   | Missing_field : locl_phase t_
@@ -1579,82 +1495,6 @@ type _ t_ =
       -> locl_phase t_
 [@@deriving hash]
 
-(** Perform actual reversal of reason flows *)
-let rec normalize : locl_phase t_ -> locl_phase t_ =
- fun t ->
-  match t with
-  | Flow (t1, kind, t2) -> Flow (normalize t1, kind, normalize t2)
-  | Rev t -> reverse t
-  | Prj (prj, t) -> Prj (prj, normalize t)
-  | Def (def, t) -> Def (def, normalize t)
-  | Idx (pos, t) -> Idx (pos, normalize t)
-  | Arith_ret_float (pos, t, arg_pos) ->
-    Arith_ret_float (pos, normalize t, arg_pos)
-  | Arith_ret_num (pos, t, arg_pos) -> Arith_ret_num (pos, normalize t, arg_pos)
-  | Lost_info (str, t, blame) -> Lost_info (str, normalize t, blame)
-  | Format (pos, str, t) -> Format (pos, str, normalize t)
-  | Instantiate (t1, str, t2) -> Instantiate (normalize t1, str, normalize t2)
-  | Typeconst (t1, cls, lzy_str, t2) ->
-    Typeconst (normalize t1, cls, lzy_str, normalize t2)
-  | Type_access (t, ts) ->
-    Type_access
-      (normalize t, List.map ts ~f:(fun (t, str) -> (normalize t, str)))
-  | Expr_dep_type (t, pos_or_decl, expr_dep_ty_reason) ->
-    Expr_dep_type (normalize t, pos_or_decl, expr_dep_ty_reason)
-  | Contravariant_generic (t, str) -> Contravariant_generic (normalize t, str)
-  | Invariant_generic (t, str) -> Invariant_generic (normalize t, str)
-  | Lambda_param (pos, t) -> Lambda_param (pos, normalize t)
-  | Dynamic_coercion t -> Dynamic_coercion (normalize t)
-  | Dynamic_partial_enforcement (pos_or_decl, str, t) ->
-    Dynamic_partial_enforcement (pos_or_decl, str, normalize t)
-  | Rigid_tvar_escape (pos, str1, str2, t) ->
-    Rigid_tvar_escape (pos, str1, str2, normalize t)
-  | Opaque_type_from_module (pos_or_decl, str, t) ->
-    Opaque_type_from_module (pos_or_decl, str, normalize t)
-  | No_reason
-  | Invalid
-  | Missing_field
-  | From_witness_locl _
-  | From_witness_decl _ ->
-    t
-
-and reverse : locl_phase t_ -> locl_phase t_ =
- fun t ->
-  match t with
-  | Flow (t1, kind, t2) -> Flow (reverse t2, kind, reverse t1)
-  | Rev t -> normalize t
-  | Prj (prj, t) -> Prj (reverse_prj prj, reverse t)
-  | Def (def, t) -> Def (def, reverse t)
-  | Idx (pos, t) -> Idx (pos, reverse t)
-  | Arith_ret_float (pos, t, arg_pos) ->
-    Arith_ret_float (pos, reverse t, arg_pos)
-  | Arith_ret_num (pos, t, arg_pos) -> Arith_ret_num (pos, reverse t, arg_pos)
-  | Lost_info (str, t, blame) -> Lost_info (str, reverse t, blame)
-  | Format (pos, str, t) -> Format (pos, str, reverse t)
-  | Instantiate (t1, str, t2) -> Instantiate (reverse t1, str, reverse t2)
-  | Typeconst (t1, cls, lzy_str, t2) ->
-    Typeconst (reverse t1, cls, lzy_str, reverse t2)
-  | Type_access (t, ts) ->
-    Type_access (reverse t, List.map ts ~f:(fun (t, str) -> (reverse t, str)))
-  | Expr_dep_type (t, pos_or_decl, expr_dep_ty_reason) ->
-    Expr_dep_type (reverse t, pos_or_decl, expr_dep_ty_reason)
-  | Contravariant_generic (t, str) -> Contravariant_generic (reverse t, str)
-  | Invariant_generic (t, str) -> Invariant_generic (reverse t, str)
-  | Lambda_param (pos, t) -> Lambda_param (pos, reverse t)
-  | Dynamic_coercion t -> Dynamic_coercion (reverse t)
-  | Dynamic_partial_enforcement (pos_or_decl, str, t) ->
-    Dynamic_partial_enforcement (pos_or_decl, str, reverse t)
-  | Rigid_tvar_escape (pos, str1, str2, t) ->
-    Rigid_tvar_escape (pos, str1, str2, reverse t)
-  | Opaque_type_from_module (pos_or_decl, str, t) ->
-    Opaque_type_from_module (pos_or_decl, str, reverse t)
-  | No_reason
-  | Invalid
-  | Missing_field
-  | From_witness_locl _
-  | From_witness_decl _ ->
-    t
-
 let rec to_raw_pos : type ph. ph t_ -> Pos_or_decl.t =
  fun r ->
   match r with
@@ -1678,8 +1518,12 @@ let rec to_raw_pos : type ph. ph t_ -> Pos_or_decl.t =
   | Opaque_type_from_module (pos_or_decl, _, _) ->
     pos_or_decl
   (* Recurse into flow-like reasons to find the position of the leftmost witness *)
-  | Flow (t, _, _)
-  | Prj (_, t)
+  | Flow { from = t; _ }
+  | Lower_bound { bound = t; _ }
+  | Axiom { next = t; _ }
+  | Prj_both { sub_prj = t; _ }
+  | Prj_one { part = t; _ }
+  | Solved { solution = t; _ }
   | Def (_, t)
   | Lost_info (_, t, _)
   | Type_access (t, _)
@@ -1690,45 +1534,6 @@ let rec to_raw_pos : type ph. ph t_ -> Pos_or_decl.t =
   | Expr_dep_type (t, _, _) -> to_raw_pos t
   | Typeconst (t, _, _, _) -> to_raw_pos t
   | Instantiate (_, _, t) -> to_raw_pos t
-  (* Reversal means we want the rightmost witness *)
-  | Rev t -> to_raw_pos_rev t
-
-and to_raw_pos_rev : type ph. ph t_ -> Pos_or_decl.t =
- fun r ->
-  match r with
-  | No_reason
-  | Invalid
-  | Missing_field ->
-    Pos_or_decl.none
-  | From_witness_locl witness -> witness_locl_to_raw_pos witness
-  | From_witness_decl witness -> witness_decl_to_raw_pos witness
-  (* Deal with legacy reasons which are witness-like but contain other reasons *)
-  | Idx (pos, _)
-  | Arith_ret_float (pos, _, _)
-  | Arith_ret_num (pos, _, _)
-  | Format (pos, _, _)
-  | Rigid_tvar_escape (pos, _, _, _)
-  | Lambda_param (pos, _) ->
-    Pos_or_decl.of_raw_pos pos
-  | Dynamic_partial_enforcement (pos_or_decl, _, _)
-  | Opaque_type_from_module (pos_or_decl, _, _) ->
-    pos_or_decl
-  (* Carry the reversal through these constructors to find the rightmost witness *)
-  | Prj (_, t)
-  | Def (_, t)
-  | Flow (_, _, t)
-  | Lost_info (_, t, _)
-  | Type_access (t, _)
-  | Invariant_generic (t, _)
-  | Contravariant_generic (t, _)
-  | Dynamic_coercion t ->
-    to_raw_pos_rev t
-  | Instantiate (_, _, t)
-  | Typeconst (t, _, _, _)
-  | Expr_dep_type (t, _, _) ->
-    to_raw_pos_rev t
-  (* Reversal means we want the leftmost witness *)
-  | Rev t -> to_raw_pos t
 
 let get_pri : type ph. ph t_ -> int = function
   | No_reason -> 0
@@ -1790,11 +1595,49 @@ let rec map_pos :
   | Opaque_type_from_module (p, m, r) ->
     Opaque_type_from_module (pos_or_decl p, m, map_pos pos pos_or_decl r)
   | Invalid -> Invalid
-  | Flow (from, kind, into) ->
-    Flow (map_pos pos pos_or_decl from, kind, map_pos pos pos_or_decl into)
-  | Rev t -> Rev (map_pos pos pos_or_decl t)
-  | Prj (prj, t) -> Prj (prj, map_pos pos pos_or_decl t)
+  | Lower_bound { bound; of_ } ->
+    Lower_bound
+      {
+        bound = map_pos pos pos_or_decl bound;
+        of_ = map_pos pos pos_or_decl of_;
+      }
+  | Axiom { prev; axiom; next } ->
+    Axiom
+      {
+        prev = map_pos pos pos_or_decl prev;
+        next = map_pos pos pos_or_decl next;
+        axiom;
+      }
+  | Flow { from; kind; into } ->
+    Flow
+      {
+        from = map_pos pos pos_or_decl from;
+        kind;
+        into = map_pos pos pos_or_decl into;
+      }
+  | Prj_both { sub_prj; prj; sub; super } ->
+    Prj_both
+      {
+        sub_prj = map_pos pos pos_or_decl sub_prj;
+        prj;
+        sub = map_pos pos pos_or_decl sub;
+        super = map_pos pos pos_or_decl super;
+      }
+  | Prj_one { whole; prj; part } ->
+    Prj_one
+      {
+        whole = map_pos pos pos_or_decl whole;
+        prj;
+        part = map_pos pos pos_or_decl part;
+      }
   | Def (def, of_) -> Def (pos_or_decl def, map_pos pos pos_or_decl of_)
+  | Solved { solution; of_; in_ } ->
+    Solved
+      {
+        solution = map_pos pos pos_or_decl solution;
+        of_;
+        in_ = map_pos pos pos_or_decl in_;
+      }
 
 let to_constructor_string : type ph. ph t_ -> string = function
   | No_reason -> "Rnone"
@@ -1802,10 +1645,13 @@ let to_constructor_string : type ph. ph t_ -> string = function
   | Missing_field -> "Rmissing_field"
   | From_witness_locl witness -> constructor_string_of_witness_locl witness
   | From_witness_decl witness -> constructor_string_of_witness_decl witness
+  | Axiom _ -> "Raxiom"
+  | Lower_bound _ -> "Rlower_bound"
   | Flow _ -> "Rflow"
-  | Prj _ -> "Rprj"
-  | Rev _ -> "Rrev"
+  | Prj_both _ -> "Rprj_both"
+  | Prj_one _ -> "Rprj_one"
   | Def _ -> "Rdef"
+  | Solved _ -> "Rsolved"
   | Idx _ -> "Ridx"
   | Arith_ret_float _ -> "Rarith_ret_float"
   | Arith_ret_num _ -> "Rarith_ret_num"
@@ -1932,13 +1778,47 @@ let rec pp_t_ : type ph. _ -> ph t_ -> unit =
       comma ();
       pp_blame fmt b
     | Dynamic_coercion r -> pp_t_ fmt r
-    | Flow (from, _kind, _into) -> pp_t_ fmt from
-    | Rev t -> pp_t_ fmt @@ normalize t
-    | Prj (_, t) -> pp_t_ fmt t
-    | Def (_, t) -> pp_t_ fmt t);
+    | Flow { from; _ } -> pp_t_ fmt from
+    | Axiom { next; _ } -> pp_t_ fmt next
+    | Lower_bound { bound; _ } -> pp_t_ fmt bound
+    | Prj_both { sub_prj; _ } -> pp_t_ fmt sub_prj
+    | Prj_one { part; _ } -> pp_t_ fmt part
+    | Def (_, t) -> pp_t_ fmt t
+    | Solved { solution; _ } -> pp_t_ fmt solution);
     Format.fprintf fmt "@])"
 
 and show_t_ : type ph. ph t_ -> string = (fun r -> Format.asprintf "%a" pp_t_ r)
+
+let pos_or_decl_to_json pos_or_decl =
+  if Pos_or_decl.is_hhi pos_or_decl then
+    let pos = Pos_or_decl.unsafe_to_raw_pos pos_or_decl in
+
+    let (line_start, char_start, line_end, char_end) = Pos.destruct_range pos in
+    let fn =
+      let raw = Pos.filename @@ Pos.to_relative_string pos in
+      match String.split raw ~on:'/' with
+      | _ :: "tmp" :: _ :: rest -> String.concat ~sep:"/" rest
+      | _ -> raw
+    in
+    if line_end = line_start then
+      Hh_json.JSON_Object
+        [
+          ("filename", Hh_json.JSON_String fn);
+          ("line", Hh_json.int_ line_start);
+          ("char_start", Hh_json.int_ char_start);
+          ("char_end", Hh_json.int_ (char_end - 1));
+        ]
+    else
+      Hh_json.JSON_Object
+        [
+          ("filename", Hh_json.JSON_String fn);
+          ("line_start", Hh_json.int_ line_start);
+          ("char_start", Hh_json.int_ char_start);
+          ("line_end", Hh_json.int_ line_end);
+          ("char_end", Hh_json.int_ (char_end - 1));
+        ]
+  else
+    Pos_or_decl.json pos_or_decl
 
 let rec to_json_help : type a. a t_ -> Hh_json.json list -> Hh_json.json list =
  fun t acc ->
@@ -2083,21 +1963,87 @@ let rec to_json_help : type a. a t_ -> Hh_json.json list -> Hh_json.json list =
               [Pos_or_decl.json pos_or_decl; JSON_String str; to_json r] );
         ])
     :: acc
-  | Flow (r_from, kind, r_into) ->
-    to_json_help r_into (flow_kind_to_json kind :: to_json_help r_from acc)
-  | Rev r -> Hh_json.(JSON_Object [("Rev", JSON_Array [to_json r])]) :: acc
+  | Flow { from; kind; into } ->
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Flow",
+            JSON_Object
+              [
+                ("from", to_json from);
+                ("kind", flow_kind_to_json kind);
+                ("into", to_json into);
+              ] );
+        ])
+    :: acc
+  | Lower_bound { bound; of_ } ->
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Lower_bound",
+            JSON_Object [("bound", to_json bound); ("of", to_json of_)] );
+        ])
+    :: acc
+  | Solved { solution; of_; in_ } ->
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Solved",
+            JSON_Object
+              [
+                ("solution", to_json solution);
+                ("of_", string_ (Tvid.show of_));
+                ("in_", to_json in_);
+              ] );
+        ])
+    :: acc
+  | Axiom { prev; axiom; next } ->
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Axiom",
+            JSON_Object
+              [
+                ("prev", to_json prev);
+                ("axiom", axiom_to_json axiom);
+                ("next", to_json next);
+              ] );
+        ])
+    :: acc
   | Def (def, r) ->
     Hh_json.(
-      JSON_Object [("Def", JSON_Array [Pos_or_decl.json def; to_json r])])
+      JSON_Object [("Def", JSON_Array [pos_or_decl_to_json def; to_json r])])
     :: acc
-  | Prj (prj, r) ->
-    Hh_json.(JSON_Object [("Prj", JSON_Array [prj_to_json prj; to_json r])])
+  | Prj_both { sub_prj; prj; sub; super } ->
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Prj_both",
+            JSON_Object
+              [
+                ("sub_prj", to_json sub_prj);
+                ("prj", prj_symm_to_json prj);
+                ("sub", to_json sub);
+                ("super", to_json super);
+              ] );
+        ])
+    :: acc
+  | Prj_one { part; prj; whole } ->
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Prj_one",
+            JSON_Object
+              [
+                ("part", to_json part);
+                ("prj", prj_asymm_to_json prj);
+                ("whole", to_json whole);
+              ] );
+        ])
     :: acc
 
 and to_json : type a. a t_ -> Hh_json.json =
- fun t ->
-  let acc = to_json_help t [] in
-  Hh_json.JSON_Array (List.rev acc)
+ (fun t -> Hh_json.JSON_Array (List.rev @@ to_json_help t []))
 
 let to_pos : type ph. ph t_ -> Pos_or_decl.t =
  fun r ->
@@ -2106,23 +2052,116 @@ let to_pos : type ph. ph t_ -> Pos_or_decl.t =
   else
     to_raw_pos r
 
+let rec flow_contains_tyvar = function
+  | Flow
+      {
+        from = From_witness_locl (Type_variable_generics _ | Type_variable _);
+        _;
+      }
+  | From_witness_locl (Type_variable_generics _ | Type_variable _) ->
+    true
+  | Flow { into; _ } -> flow_contains_tyvar into
+  | _ -> false
+
+let reverse_flow t =
+  let rec aux ~k = function
+    | Flow { from; into; kind } ->
+      aux into ~k:(fun into -> k @@ Flow { from = into; into = from; kind })
+    | t -> k t
+  in
+  aux ~k:(fun r -> r) t
+
 (* Translate a reason to a (pos, string) list, suitable for error_l. This
  * previously returned a string, however the need to return multiple lines with
  * multiple locations meant that it needed to more than convert to a string *)
-let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
- fun prefix r ->
+let rec to_string_help :
+    type a.
+    string -> locl_phase t_ Tvid.Map.t -> a t_ -> (Pos_or_decl.t * string) list
+    =
+ fun prefix solutions r ->
   let p = to_pos r in
   match r with
   | No_reason -> [(p, prefix)]
   | Missing_field -> [(p, prefix)]
   | Invalid -> [(p, prefix)]
+  | From_witness_locl
+      (Type_variable_generics (_, _, _, tvid) | Type_variable (_, tvid))
+    when Tvid.Map.mem tvid solutions ->
+    let r = Tvid.Map.find tvid solutions in
+    let solutions = Tvid.Map.remove tvid solutions in
+    to_string_help prefix solutions r
   | From_witness_locl witness -> [witness_locl_to_string prefix witness]
   | From_witness_decl witness -> [witness_decl_to_string prefix witness]
-  | Flow (r, _, _)
+  | Axiom { next = r; _ }
   | Def (_, r)
-  | Prj (_, r) ->
-    to_string prefix r
-  | Rev r -> to_rev_string prefix r
+  | Prj_one { part = r; _ } ->
+    to_string_help prefix solutions r
+  (* If we don't have a solution for a type variable use the origin of the flow *)
+  | Flow { from; _ }
+    when Tvid.Map.is_empty solutions || not (flow_contains_tyvar r) ->
+    to_string_help prefix solutions from
+  (* otherwise, follow the flow until we reach the type variable *)
+  | Flow { from; into; _ } ->
+    (match from with
+    | From_witness_locl
+        (Type_variable_generics (_, _, _, tvid) | Type_variable (_, tvid))
+      when Tvid.Map.mem tvid solutions ->
+      let r = Tvid.Map.find tvid solutions in
+      let solutions = Tvid.Map.remove tvid solutions in
+      to_string_help prefix solutions r
+    | _ -> to_string_help prefix solutions into)
+  | Solved { solution; of_; in_ = r } ->
+    let solutions = Tvid.Map.add of_ solution solutions in
+
+    to_string_help prefix solutions r
+  | Lower_bound
+      {
+        bound = r;
+        of_ = Prj_both { prj = Prj_symm_ctor (_, class_name, _, Dir Contra); _ };
+      } ->
+    to_string_help prefix solutions r
+    @ [
+        ( p,
+          "This type argument to "
+          ^ (strip_ns class_name |> Markdown_lite.md_codify)
+          ^ " only allows supertypes (it is contravariant)" );
+      ]
+  | Lower_bound
+      {
+        bound = r;
+        of_ = Prj_both { prj = Prj_symm_ctor (_, class_name, _, Inv _); _ };
+      } ->
+    to_string_help prefix solutions r
+    @ [
+        ( p,
+          "This type argument to "
+          ^ (strip_ns class_name |> Markdown_lite.md_codify)
+          ^ " must match exactly (it is invariant)" );
+      ]
+  | Lower_bound { bound = r; _ } -> to_string_help prefix solutions r
+  | Prj_both
+      {
+        sub_prj = r_orig;
+        prj = Prj_symm_ctor (_, class_name, _, Dir Contra);
+        _;
+      } ->
+    to_string_help prefix solutions r_orig
+    @ [
+        ( p,
+          "This type argument to "
+          ^ (strip_ns class_name |> Markdown_lite.md_codify)
+          ^ " only allows supertypes (it is contravariant)" );
+      ]
+  | Prj_both
+      { sub_prj = r_orig; prj = Prj_symm_ctor (_, class_name, _, Inv _); _ } ->
+    to_string_help prefix solutions r_orig
+    @ [
+        ( p,
+          "This type argument to "
+          ^ (strip_ns class_name |> Markdown_lite.md_codify)
+          ^ " must match exactly (it is invariant)" );
+      ]
+  | Prj_both { sub_prj = r; _ } -> to_string_help prefix solutions r
   | Idx (_, r2) ->
     [(p, prefix)]
     @ [
@@ -2134,7 +2173,9 @@ let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
   | Arith_ret_float (_, r, s) ->
     let rec find_last reason =
       match reason with
-      | Arith_ret_float (_, r, _) -> find_last r
+      | Flow { from = r; _ }
+      | Arith_ret_float (_, r, _) ->
+        find_last r
       | r -> r
     in
     let r_last = find_last r in
@@ -2145,13 +2186,16 @@ let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
         ^ arg_pos_str s
         ^ " argument." );
     ]
-    @ to_string
+    @ to_string_help
         "Here is why I think the argument is a `float`: this is a `float`"
+        solutions
         r_last
   | Arith_ret_num (_, r, s) ->
     let rec find_last reason =
       match reason with
-      | Arith_ret_num (_, r, _) -> find_last r
+      | Flow { from = r; _ }
+      | Arith_ret_num (_, r, _) ->
+        find_last r
       | r -> r
     in
     let r_last = find_last r in
@@ -2162,8 +2206,9 @@ let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
         ^ arg_pos_str s
         ^ " argument, and no `float`s." );
     ]
-    @ to_string
+    @ to_string_help
         "Here is why I think the argument is a `num`: this is a `num`"
+        solutions
         r_last
   | Lost_info (s, r1, Blame (p2, source_of_loss)) ->
     let s = strip_ns s in
@@ -2174,7 +2219,7 @@ let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
       | BSassignment -> "by this assignment"
       | BSout_of_scope -> "because of scope change"
     in
-    to_string prefix r1
+    to_string_help prefix solutions r1
     @ [
         ( p2 |> Pos_or_decl.of_raw_pos,
           "All the local information about "
@@ -2191,13 +2236,14 @@ let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
       ^ Markdown_lite.md_codify s
       ^ " format specifier"
     in
-    (match to_string "" t with
+    (match to_string_help "" solutions t with
     | [(_, "")] -> [(p, s)]
     | el -> [(p, s)] @ el)
   | Instantiate (r_orig, generic_name, r_inst) ->
-    to_string prefix r_orig
-    @ to_string
+    to_string_help prefix solutions r_orig
+    @ to_string_help
         ("  via this generic " ^ Markdown_lite.md_codify generic_name)
+        solutions
         r_inst
   | Typeconst (No_reason, (pos, tconst), (lazy ty_str), r_root) ->
     let prefix =
@@ -2213,34 +2259,37 @@ let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
           prefix
           (Markdown_lite.md_codify tconst) );
     ]
-    @ to_string ("on " ^ ty_str) r_root
+    @ to_string_help ("on " ^ ty_str) solutions r_root
   | Typeconst (r_orig, (pos, tconst), (lazy ty_str), r_root) ->
-    to_string prefix r_orig
+    to_string_help prefix solutions r_orig
     @ [
         (pos, sprintf "  resulting from accessing the type constant '%s'" tconst);
       ]
-    @ to_string ("  on " ^ ty_str) r_root
+    @ to_string_help ("  on " ^ ty_str) solutions r_root
   | Type_access (Typeconst (No_reason, _, _, _), (r, _) :: l) ->
-    to_string prefix (Type_access (r, l))
+    to_string_help prefix solutions (Type_access (r, l))
   | Type_access (Typeconst (r, _, _, _), x) ->
-    to_string prefix (Type_access (r, x))
+    to_string_help prefix solutions (Type_access (r, x))
   | Type_access (Type_access (r, expand2), expand1) ->
-    to_string prefix (Type_access (r, expand1 @ expand2))
-  | Type_access (r, []) -> to_string prefix r
+    to_string_help prefix solutions (Type_access (r, expand1 @ expand2))
+  | Type_access (r, []) -> to_string_help prefix solutions r
   | Type_access (r, (r_hd, (lazy tconst)) :: tail) ->
-    to_string prefix r
-    @ to_string
+    to_string_help prefix solutions r
+    @ to_string_help
         ("  resulting from expanding the type constant "
         ^ Markdown_lite.md_codify tconst)
+        solutions
         r_hd
     @ List.concat_map tail ~f:(fun (r, (lazy s)) ->
-          to_string
+          to_string_help
             ("  then expanding the type constant " ^ Markdown_lite.md_codify s)
+            solutions
             r)
   | Expr_dep_type (r, p, e) ->
-    to_string prefix r @ [(p, "  " ^ expr_dep_type_reason_string e)]
+    to_string_help prefix solutions r
+    @ [(p, "  " ^ expr_dep_type_reason_string e)]
   | Contravariant_generic (r_orig, class_name) ->
-    to_string prefix r_orig
+    to_string_help prefix solutions r_orig
     @ [
         ( p,
           "This type argument to "
@@ -2248,550 +2297,413 @@ let rec to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
           ^ " only allows supertypes (it is contravariant)" );
       ]
   | Invariant_generic (r_orig, class_name) ->
-    to_string prefix r_orig
+    to_string_help prefix solutions r_orig
     @ [
         ( p,
           "This type argument to "
           ^ (strip_ns class_name |> Markdown_lite.md_codify)
           ^ " must match exactly (it is invariant)" );
       ]
-  (* If type originated with an unannotated lambda parameter with type variable type,
-   * suggested annotating the lambda parameter. Otherwise defer to original reason. *)
+    (* If type originated with an unannotated lambda parameter with type variable type,
+     * suggested annotating the lambda parameter. Otherwise defer to original reason. *)
+  | Lambda_param
+      ( _,
+        From_witness_locl
+          (Type_variable_generics (_, _, _, tvid) | Type_variable (_, tvid)) )
+    when Tvid.Map.mem tvid solutions ->
+    let r = Tvid.Map.find tvid solutions in
+    let solutions = Tvid.Map.remove tvid solutions in
+    to_string_help prefix solutions r
   | Lambda_param
       ( _,
         ( From_witness_decl (Solve_fail _)
-        | From_witness_locl (Type_variable_generics _ | Type_variable _)
-        | Instantiate _ ) ) ->
+        | From_witness_locl (Type_variable_generics _ | Type_variable _) ) ) ->
     [
       ( p,
         prefix
         ^ " because the type of the lambda parameter could not be determined. "
         ^ "Please add a type hint to the parameter" );
     ]
-  | Lambda_param (_, r_orig) -> to_string prefix r_orig
-  | Dynamic_coercion r -> to_string prefix r
+  | Lambda_param (_, r_orig) -> to_string_help prefix solutions r_orig
+  | Dynamic_coercion r -> to_string_help prefix solutions r
   | Dynamic_partial_enforcement (p, cn, r_orig) ->
-    to_string prefix r_orig
+    to_string_help prefix solutions r_orig
     @ [(p, "while allowing dynamic to flow into " ^ Utils.strip_all_ns cn)]
   | Rigid_tvar_escape (p, what, tvar, r_orig) ->
     let tvar = Markdown_lite.md_codify tvar in
     ( Pos_or_decl.of_raw_pos p,
       prefix ^ " because " ^ tvar ^ " escaped from " ^ what )
-    :: to_string ("  where " ^ tvar ^ " originates from") r_orig
+    :: to_string_help ("  where " ^ tvar ^ " originates from") solutions r_orig
   | Opaque_type_from_module (p, module_, r_orig) ->
     ( p,
       prefix
       ^ " because this is an internal symbol from module "
       ^ module_
       ^ ", which is opaque outside of the module." )
-    :: to_string "The type originated from here" r_orig
+    :: to_string_help "The type originated from here" solutions r_orig
 
-and to_rev_string : type ph. string -> ph t_ -> (Pos_or_decl.t * string) list =
- fun prefix r ->
-  let p = to_pos r in
-  match r with
-  | No_reason -> [(p, prefix)]
-  | Missing_field -> [(p, prefix)]
-  | Invalid -> [(p, prefix)]
-  | From_witness_locl witness -> [witness_locl_to_string prefix witness]
-  | From_witness_decl witness -> [witness_decl_to_string prefix witness]
-  | Flow (_, _, r)
-  | Def (_, r)
-  | Prj (_, r) ->
-    to_rev_string prefix r
-  | Rev r -> to_rev_string prefix r
-  | Idx (_, r2) ->
-    [(p, prefix)]
-    @ [
-        ( (match r2 with
-          | No_reason -> p
-          | _ -> to_pos r2),
-          "This can only be indexed with integers" );
-      ]
-  | Arith_ret_float (_, r, s) ->
-    let rec find_last reason =
-      match reason with
-      | Arith_ret_float (_, r, _) -> find_last r
-      | r -> r
-    in
-    let r_last = find_last r in
-    [
-      ( p,
-        prefix
-        ^ " because this is the result of an arithmetic operation with a `float` as the "
-        ^ arg_pos_str s
-        ^ " argument." );
-    ]
-    @ to_rev_string
-        "Here is why I think the argument is a `float`: this is a `float`"
-        r_last
-  | Arith_ret_num (_, r, s) ->
-    let rec find_last reason =
-      match reason with
-      | Arith_ret_num (_, r, _) -> find_last r
-      | r -> r
-    in
-    let r_last = find_last r in
-    [
-      ( p,
-        prefix
-        ^ " because this is the result of an arithmetic operation with a `num` as the "
-        ^ arg_pos_str s
-        ^ " argument, and no `float`s." );
-    ]
-    @ to_rev_string
-        "Here is why I think the argument is a `num`: this is a `num`"
-        r_last
-  | Lost_info (s, r1, Blame (p2, source_of_loss)) ->
-    let s = strip_ns s in
-    let cause =
-      match source_of_loss with
-      | BSlambda -> "by this lambda function"
-      | BScall -> "during this call"
-      | BSassignment -> "by this assignment"
-      | BSout_of_scope -> "because of scope change"
-    in
-    to_rev_string prefix r1
-    @ [
-        ( p2 |> Pos_or_decl.of_raw_pos,
-          "All the local information about "
-          ^ Markdown_lite.md_codify s
-          ^ " has been invalidated "
-          ^ cause
-          ^ ".\nThis is a limitation of the type-checker; use a local if that's the problem."
-        );
-      ]
-  | Format (_, s, t) ->
-    let s =
-      prefix
-      ^ " because of the "
-      ^ Markdown_lite.md_codify s
-      ^ " format specifier"
-    in
-    (match to_rev_string "" t with
-    | [(_, "")] -> [(p, s)]
-    | el -> [(p, s)] @ el)
-  | Instantiate (r_orig, generic_name, r_inst) ->
-    to_rev_string prefix r_orig
-    @ to_rev_string
-        ("  via this generic " ^ Markdown_lite.md_codify generic_name)
-        r_inst
-  | Typeconst (No_reason, (pos, tconst), (lazy ty_str), r_root) ->
-    let prefix =
-      if String.equal prefix "" then
-        ""
-      else
-        prefix ^ "\n  "
-    in
-    [
-      ( pos,
-        sprintf
-          "%sby accessing the type constant %s"
-          prefix
-          (Markdown_lite.md_codify tconst) );
-    ]
-    @ to_rev_string ("on " ^ ty_str) r_root
-  | Typeconst (r_orig, (pos, tconst), (lazy ty_str), r_root) ->
-    to_rev_string prefix r_orig
-    @ [
-        (pos, sprintf "  resulting from accessing the type constant '%s'" tconst);
-      ]
-    @ to_rev_string ("  on " ^ ty_str) r_root
-  | Type_access (Typeconst (No_reason, _, _, _), (r, _) :: l) ->
-    to_rev_string prefix (Type_access (r, l))
-  | Type_access (Typeconst (r, _, _, _), x) ->
-    to_rev_string prefix (Type_access (r, x))
-  | Type_access (Type_access (r, expand2), expand1) ->
-    to_rev_string prefix (Type_access (r, expand1 @ expand2))
-  | Type_access (r, []) -> to_rev_string prefix r
-  | Type_access (r, (r_hd, (lazy tconst)) :: tail) ->
-    to_rev_string prefix r
-    @ to_rev_string
-        ("  resulting from expanding the type constant "
-        ^ Markdown_lite.md_codify tconst)
-        r_hd
-    @ List.concat_map tail ~f:(fun (r, (lazy s)) ->
-          to_rev_string
-            ("  then expanding the type constant " ^ Markdown_lite.md_codify s)
-            r)
-  | Expr_dep_type (r, p, e) ->
-    to_rev_string prefix r @ [(p, "  " ^ expr_dep_type_reason_string e)]
-  | Contravariant_generic (r_orig, class_name) ->
-    to_rev_string prefix r_orig
-    @ [
-        ( p,
-          "This type argument to "
-          ^ (strip_ns class_name |> Markdown_lite.md_codify)
-          ^ " only allows supertypes (it is contravariant)" );
-      ]
-  | Invariant_generic (r_orig, class_name) ->
-    to_rev_string prefix r_orig
-    @ [
-        ( p,
-          "This type argument to "
-          ^ (strip_ns class_name |> Markdown_lite.md_codify)
-          ^ " must match exactly (it is invariant)" );
-      ]
-  (* If type originated with an unannotated lambda parameter with type variable type,
-   * suggested annotating the lambda parameter. Otherwise defer to original reason. *)
-  | Lambda_param
-      ( _,
-        ( From_witness_locl (Type_variable_generics _ | Type_variable _)
-        | From_witness_decl (Solve_fail _)
-        | Instantiate _ ) ) ->
-    [
-      ( p,
-        prefix
-        ^ " because the type of the lambda parameter could not be determined. "
-        ^ "Please add a type hint to the parameter" );
-    ]
-  | Lambda_param (_, r_orig) -> to_rev_string prefix r_orig
-  | Dynamic_coercion r -> to_rev_string prefix r
-  | Dynamic_partial_enforcement (p, cn, r_orig) ->
-    to_rev_string prefix r_orig
-    @ [(p, "while allowing dynamic to flow into " ^ Utils.strip_all_ns cn)]
-  | Rigid_tvar_escape (p, what, tvar, r_orig) ->
-    let tvar = Markdown_lite.md_codify tvar in
-    ( Pos_or_decl.of_raw_pos p,
-      prefix ^ " because " ^ tvar ^ " escaped from " ^ what )
-    :: to_rev_string ("  where " ^ tvar ^ " originates from") r_orig
-  | Opaque_type_from_module (p, module_, r_orig) ->
-    ( p,
-      prefix
-      ^ " because this is an internal symbol from module "
-      ^ module_
-      ^ ", which is opaque outside of the module." )
-    :: to_rev_string "The type originated from here" r_orig
-
+let to_string : type a. string -> a t_ -> (Pos_or_decl.t * string) list =
+ (fun prefix r -> to_string_help prefix Tvid.Map.empty r)
 (* -- Constructors ---------------------------------------------------------- *)
 
-let none = No_reason
+module Constructors = struct
+  let none = No_reason
 
-let from_witness_locl witness = From_witness_locl witness
+  let from_witness_locl witness = From_witness_locl witness
 
-let from_witness_decl witness = From_witness_decl witness
+  let from_witness_decl witness = From_witness_decl witness
 
-let witness p = from_witness_locl @@ Witness p
+  let witness p = from_witness_locl @@ Witness p
 
-let witness_from_decl p = from_witness_decl @@ Witness_from_decl p
+  let witness_from_decl p = from_witness_decl @@ Witness_from_decl p
 
-let idx (p, r) = Idx (p, r)
+  let idx (p, r) = Idx (p, r)
 
-let idx_vector p = from_witness_locl @@ Idx_vector p
+  let idx_vector p = from_witness_locl @@ Idx_vector p
 
-let idx_vector_from_decl p = from_witness_decl @@ Idx_vector_from_decl p
+  let idx_vector_from_decl p = from_witness_decl @@ Idx_vector_from_decl p
 
-let foreach p = from_witness_locl @@ Foreach p
+  let foreach p = from_witness_locl @@ Foreach p
 
-let asyncforeach p = from_witness_locl @@ Asyncforeach p
+  let asyncforeach p = from_witness_locl @@ Asyncforeach p
 
-let arith p = from_witness_locl @@ Arith p
+  let arith p = from_witness_locl @@ Arith p
 
-let arith_ret p = from_witness_locl @@ Arith_ret p
+  let arith_ret p = from_witness_locl @@ Arith_ret p
 
-let arith_ret_float (p, r, a) = Arith_ret_float (p, r, a)
+  let arith_ret_float (p, r, a) = Arith_ret_float (p, r, a)
 
-let arith_ret_num (p, r, a) = Arith_ret_num (p, r, a)
+  let arith_ret_num (p, r, a) = Arith_ret_num (p, r, a)
 
-let arith_ret_int p = from_witness_locl @@ Arith_ret_int p
+  let arith_ret_int p = from_witness_locl @@ Arith_ret_int p
 
-let arith_dynamic p = from_witness_locl @@ Arith_dynamic p
+  let arith_dynamic p = from_witness_locl @@ Arith_dynamic p
 
-let bitwise_dynamic p = from_witness_locl @@ Bitwise_dynamic p
+  let bitwise_dynamic p = from_witness_locl @@ Bitwise_dynamic p
 
-let incdec_dynamic p = from_witness_locl @@ Incdec_dynamic p
+  let incdec_dynamic p = from_witness_locl @@ Incdec_dynamic p
 
-let comp p = from_witness_locl @@ Comp p
+  let comp p = from_witness_locl @@ Comp p
 
-let concat_ret p = from_witness_locl @@ Concat_ret p
+  let concat_ret p = from_witness_locl @@ Concat_ret p
 
-let logic_ret p = from_witness_locl @@ Logic_ret p
+  let logic_ret p = from_witness_locl @@ Logic_ret p
 
-let bitwise p = from_witness_locl @@ Bitwise p
+  let bitwise p = from_witness_locl @@ Bitwise p
 
-let bitwise_ret p = from_witness_locl @@ Bitwise_ret p
+  let bitwise_ret p = from_witness_locl @@ Bitwise_ret p
 
-let no_return p = from_witness_locl @@ No_return p
+  let no_return p = from_witness_locl @@ No_return p
 
-let no_return_async p = from_witness_locl @@ No_return_async p
+  let no_return_async p = from_witness_locl @@ No_return_async p
 
-let ret_fun_kind (p, k) = from_witness_locl @@ Ret_fun_kind (p, k)
+  let ret_fun_kind (p, k) = from_witness_locl @@ Ret_fun_kind (p, k)
 
-let ret_fun_kind_from_decl (p, k) =
-  from_witness_decl @@ Ret_fun_kind_from_decl (p, k)
+  let ret_fun_kind_from_decl (p, k) =
+    from_witness_decl @@ Ret_fun_kind_from_decl (p, k)
 
-let hint p = from_witness_decl @@ Hint p
+  let hint p = from_witness_decl @@ Hint p
 
-let throw p = from_witness_locl @@ Throw p
+  let throw p = from_witness_locl @@ Throw p
 
-let placeholder p = from_witness_locl @@ Placeholder p
+  let placeholder p = from_witness_locl @@ Placeholder p
 
-let ret_div p = from_witness_locl @@ Ret_div p
+  let ret_div p = from_witness_locl @@ Ret_div p
 
-let yield_gen p = from_witness_locl @@ Yield_gen p
+  let yield_gen p = from_witness_locl @@ Yield_gen p
 
-let yield_asyncgen p = from_witness_locl @@ Yield_asyncgen p
+  let yield_asyncgen p = from_witness_locl @@ Yield_asyncgen p
 
-let yield_asyncnull p = from_witness_locl @@ Yield_asyncnull p
+  let yield_asyncnull p = from_witness_locl @@ Yield_asyncnull p
 
-let yield_send p = from_witness_locl @@ Yield_send p
+  let yield_send p = from_witness_locl @@ Yield_send p
 
-let lost_info (s, r, b) = Lost_info (s, r, b)
+  let lost_info (s, r, b) = Lost_info (s, r, b)
 
-let format (p, s, r) = Format (p, s, r)
+  let format (p, s, r) = Format (p, s, r)
 
-let class_class (p, s) = from_witness_decl @@ Class_class (p, s)
+  let class_class (p, s) = from_witness_decl @@ Class_class (p, s)
 
-let unknown_class p = from_witness_locl @@ Unknown_class p
+  let unknown_class p = from_witness_locl @@ Unknown_class p
 
-let var_param p = from_witness_locl @@ Var_param p
+  let var_param p = from_witness_locl @@ Var_param p
 
-let var_param_from_decl p = from_witness_decl @@ Var_param_from_decl p
+  let var_param_from_decl p = from_witness_decl @@ Var_param_from_decl p
 
-let unpack_param (p1, p2, n) = from_witness_locl @@ Unpack_param (p1, p2, n)
+  let tuple_from_splat p = from_witness_decl @@ Tuple_from_splat p
 
-let inout_param p = from_witness_decl @@ Inout_param p
+  let unpack_param (p1, p2, n) = from_witness_locl @@ Unpack_param (p1, p2, n)
 
-let instantiate (r1, s, r2) = Instantiate (r1, s, r2)
+  let inout_param p = from_witness_decl @@ Inout_param p
 
-let typeconst (r, p, s, r2) = Typeconst (r, p, s, r2)
+  let instantiate (r1, s, r2) = Instantiate (r1, s, r2)
 
-let type_access (r, l) = Type_access (r, l)
+  let typeconst (r, p, s, r2) = Typeconst (r, p, s, r2)
 
-let expr_dep_type (r, p, d) = Expr_dep_type (r, p, d)
+  let type_access (r, l) = Type_access (r, l)
 
-let nullsafe_op p = from_witness_locl @@ Nullsafe_op p
+  let expr_dep_type (r, p, d) = Expr_dep_type (r, p, d)
 
-let tconst_no_cstr id = from_witness_decl @@ Tconst_no_cstr id
+  let nullsafe_op p = from_witness_locl @@ Nullsafe_op p
 
-let predicated (p, s) = from_witness_locl @@ Predicated (p, s)
+  let tconst_no_cstr id = from_witness_decl @@ Tconst_no_cstr id
 
-let is_refinement p = from_witness_locl @@ Is_refinement p
+  let predicated (p, s) = from_witness_locl @@ Predicated (p, s)
 
-let as_refinement p = from_witness_locl @@ As_refinement p
+  let is_refinement p = from_witness_locl @@ Is_refinement p
 
-let equal p = from_witness_locl @@ Equal p
+  let as_refinement p = from_witness_locl @@ As_refinement p
 
-let varray_or_darray_key p = from_witness_decl @@ Varray_or_darray_key p
+  let equal p = from_witness_locl @@ Equal p
 
-let vec_or_dict_key p = from_witness_decl @@ Vec_or_dict_key p
+  let varray_or_darray_key p = from_witness_decl @@ Varray_or_darray_key p
 
-let using p = from_witness_locl @@ Using p
+  let vec_or_dict_key p = from_witness_decl @@ Vec_or_dict_key p
 
-let dynamic_prop p = from_witness_locl @@ Dynamic_prop p
+  let using p = from_witness_locl @@ Using p
 
-let dynamic_call p = from_witness_locl @@ Dynamic_call p
+  let dynamic_prop p = from_witness_locl @@ Dynamic_prop p
 
-let dynamic_construct p = from_witness_locl @@ Dynamic_construct p
+  let dynamic_call p = from_witness_locl @@ Dynamic_call p
 
-let idx_dict p = from_witness_locl @@ Idx_dict p
+  let dynamic_construct p = from_witness_locl @@ Dynamic_construct p
 
-let idx_set_element p = from_witness_locl @@ Idx_set_element p
+  let idx_dict p = from_witness_locl @@ Idx_dict p
 
-let missing_optional_field (p, s) =
-  from_witness_decl @@ Missing_optional_field (p, s)
+  let idx_set_element p = from_witness_locl @@ Idx_set_element p
 
-let unset_field (p, s) = from_witness_locl @@ Unset_field (p, s)
+  let missing_optional_field (p, s) =
+    from_witness_decl @@ Missing_optional_field (p, s)
 
-let contravariant_generic (r, s) = Contravariant_generic (r, s)
+  let unset_field (p, s) = from_witness_locl @@ Unset_field (p, s)
 
-let invariant_generic (r, s) = Invariant_generic (r, s)
+  let contravariant_generic (r, s) = Contravariant_generic (r, s)
 
-let regex p = from_witness_locl @@ Regex p
+  let invariant_generic (r, s) = Invariant_generic (r, s)
 
-let implicit_upper_bound (p, s) =
-  from_witness_decl @@ Implicit_upper_bound (p, s)
+  let regex p = from_witness_locl @@ Regex p
 
-let type_variable p = from_witness_locl @@ Type_variable p
+  let implicit_upper_bound (p, s) =
+    from_witness_decl @@ Implicit_upper_bound (p, s)
 
-let type_variable_generics (p, n1, n2) =
-  from_witness_locl @@ Type_variable_generics (p, n1, n2)
+  let type_variable p tvid = from_witness_locl @@ Type_variable (p, tvid)
 
-let type_variable_error p = from_witness_locl @@ Type_variable_error p
+  let type_variable_generics (p, n1, n2) tvid =
+    from_witness_locl @@ Type_variable_generics (p, n1, n2, tvid)
 
-let global_type_variable_generics (p, n1, n2) =
-  from_witness_decl @@ Global_type_variable_generics (p, n1, n2)
+  let type_variable_error p tvid =
+    from_witness_locl @@ Type_variable_error (p, tvid)
 
-let solve_fail p = from_witness_decl @@ Solve_fail p
+  let global_type_variable_generics (p, n1, n2) =
+    from_witness_decl @@ Global_type_variable_generics (p, n1, n2)
 
-let cstr_on_generics (p, id) = from_witness_decl @@ Cstr_on_generics (p, id)
+  let solve_fail p = from_witness_decl @@ Solve_fail p
 
-let lambda_param (p, r) = Lambda_param (p, r)
+  let cstr_on_generics (p, id) = from_witness_decl @@ Cstr_on_generics (p, id)
 
-let shape (p, s) = from_witness_locl @@ Shape (p, s)
+  let lambda_param (p, r) = Lambda_param (p, r)
 
-let shape_literal p = from_witness_locl @@ Shape_literal p
+  let shape (p, s) = from_witness_locl @@ Shape (p, s)
 
-let enforceable p = from_witness_decl @@ Enforceable p
+  let shape_literal p = from_witness_locl @@ Shape_literal p
 
-let destructure p = from_witness_locl @@ Destructure p
+  let enforceable p = from_witness_decl @@ Enforceable p
 
-let key_value_collection_key p = from_witness_locl @@ Key_value_collection_key p
+  let destructure p = from_witness_locl @@ Destructure p
 
-let global_class_prop p = from_witness_decl @@ Global_class_prop p
+  let key_value_collection_key p =
+    from_witness_locl @@ Key_value_collection_key p
 
-let global_fun_param p = from_witness_decl @@ Global_fun_param p
+  let global_class_prop p = from_witness_decl @@ Global_class_prop p
 
-let global_fun_ret p = from_witness_decl @@ Global_fun_ret p
+  let global_fun_param p = from_witness_decl @@ Global_fun_param p
 
-let splice p = from_witness_locl @@ Splice p
+  let global_fun_ret p = from_witness_decl @@ Global_fun_ret p
 
-let et_boolean p = from_witness_locl @@ Et_boolean p
+  let splice p = from_witness_locl @@ Splice p
 
-let default_capability p = from_witness_decl @@ Default_capability p
+  let et_boolean p = from_witness_locl @@ Et_boolean p
 
-let concat_operand p = from_witness_locl @@ Concat_operand p
+  let default_capability p = from_witness_decl @@ Default_capability p
 
-let interp_operand p = from_witness_locl @@ Interp_operand p
+  let concat_operand p = from_witness_locl @@ Concat_operand p
 
-let dynamic_coercion r = Dynamic_coercion r
+  let interp_operand p = from_witness_locl @@ Interp_operand p
 
-let support_dynamic_type p = from_witness_decl @@ Support_dynamic_type p
+  let dynamic_coercion r = Dynamic_coercion r
 
-let dynamic_partial_enforcement (p, s, r) = Dynamic_partial_enforcement (p, s, r)
+  let support_dynamic_type p = from_witness_decl @@ Support_dynamic_type p
 
-let rigid_tvar_escape (p, n1, n2, r) = Rigid_tvar_escape (p, n1, n2, r)
+  let dynamic_partial_enforcement (p, s, r) =
+    Dynamic_partial_enforcement (p, s, r)
 
-let opaque_type_from_module (p, s, r) = Opaque_type_from_module (p, s, r)
+  let rigid_tvar_escape (p, n1, n2, r) = Rigid_tvar_escape (p, n1, n2, r)
 
-let missing_class p = from_witness_locl @@ Missing_class p
+  let opaque_type_from_module (p, s, r) = Opaque_type_from_module (p, s, r)
 
-let invalid = Invalid
+  let missing_class p = from_witness_locl @@ Missing_class p
 
-let captured_like p = from_witness_locl @@ Captured_like p
+  let invalid = Invalid
 
-let pessimised_inout p = from_witness_decl @@ Pessimised_inout p
+  let captured_like p = from_witness_locl @@ Captured_like p
 
-let pessimised_return p = from_witness_decl @@ Pessimised_return p
+  let pessimised_inout p = from_witness_decl @@ Pessimised_inout p
 
-let pessimised_prop p = from_witness_decl @@ Pessimised_prop p
+  let pessimised_return p = from_witness_decl @@ Pessimised_return p
 
-let unsafe_cast p = from_witness_locl @@ Unsafe_cast p
+  let pessimised_prop p = from_witness_decl @@ Pessimised_prop p
 
-let pattern p = from_witness_locl @@ Pattern p
+  let unsafe_cast p = from_witness_locl @@ Unsafe_cast p
 
-let flow ~from ~into ~kind = Flow (from, kind, into)
+  let pattern p = from_witness_locl @@ Pattern p
 
-let definition def of_ = Def (def, of_)
+  let join_point p = from_witness_locl @@ Join_point p
 
-let reverse r = Rev r
+  let rec flow ~from ~into ~kind =
+    match (from, into) with
+    | (Flow { from; into = into_l; kind = kind_l }, _) ->
+      Flow { from; into = flow ~from:into_l ~into ~kind; kind = kind_l }
+    | _ -> Flow { from; kind; into }
 
-(* -- Symmetric projections -- *)
-let prj_symm t ~prj = Prj (Symm prj, t)
+  let flow_assign ~rhs ~lval = flow ~from:rhs ~into:lval ~kind:Flow_assign
 
-let prj_ctor_co
-    ~sub:(r_sub, r_sub_prj) ~super:r_super ctor_kind nm idx is_invariant =
-  let parent_flow = flow ~from:r_sub ~into:r_super ~kind:Flow_subtype in
-  let var =
-    if is_invariant then
-      Inv Co
-    else
-      Dir Co
-  in
-  let prj = Prj_symm_ctor (ctor_kind, nm, idx, var) in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let flow_local ~def ~use = flow ~from:def ~into:use ~kind:Flow_local
 
-let prj_ctor_contra
-    ~sub:r_sub ~super:(r_super, r_super_prj) ctor_kind nm idx is_invariant =
-  let parent_flow =
-    flow ~from:r_super ~into:(reverse r_sub) ~kind:Flow_subtype
-  in
-  let var =
-    if is_invariant then
-      Inv Co
-    else
-      Dir Co
-  in
-  let prj = Prj_symm_ctor (ctor_kind, nm, idx, var) in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_super_prj ~into ~kind:Flow_prj
+  let flow_call ~def ~use = flow ~from:def ~into:use ~kind:Flow_call
 
-let prj_neg ~sub:(r_sub, r_sub_prj) ~super =
-  let parent_flow = flow ~from:r_sub ~into:super ~kind:Flow_subtype in
-  let prj = Prj_symm_neg in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let flow_prop_access ~def ~use =
+    flow ~from:def ~into:use ~kind:Flow_prop_access
 
-let prj_nullable ~sub:(r_sub, r_sub_prj) ~super =
-  let parent_flow = flow ~from:r_sub ~into:super ~kind:Flow_subtype in
-  let prj = Prj_symm_nullable in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let flow_return_expr ~expr ~ret =
+    flow ~from:expr ~into:ret ~kind:Flow_return_expr
 
-let prj_tuple ~sub:(r_sub, r_sub_prj) ~super idx =
-  let parent_flow = flow ~from:r_sub ~into:super ~kind:Flow_subtype in
-  let prj = Prj_symm_tuple idx in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let flow_return_hint ~hint ~use =
+    flow ~from:hint ~into:use ~kind:Flow_fun_return
 
-let prj_shape ~sub:(r_sub, r_sub_prj) ~super lbl ~kind_sub ~kind_super =
-  let parent_flow = flow ~from:r_sub ~into:super ~kind:Flow_subtype in
-  let prj = Prj_symm_shape (lbl, kind_sub, kind_super) in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let flow_param_hint ~hint ~param =
+    flow ~from:hint ~into:param ~kind:Flow_param_hint
 
-let prj_fn_param ~super:(r_super, r_super_prj) ~sub ~idx_sub ~idx_super =
-  let parent_flow = flow ~from:r_super ~into:(reverse sub) ~kind:Flow_subtype in
-  let prj = Prj_symm_fn_param (idx_super, idx_sub) in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_super_prj ~into ~kind:Flow_prj
+  let solved of_ ~solution ~in_ = Solved { solution; of_; in_ }
 
-let prj_fn_param_inout_co ~sub:(r_sub, r_sub_prj) ~super ~idx_sub ~idx_super =
-  let parent_flow = flow ~from:r_sub ~into:super ~kind:Flow_subtype in
-  let prj = Prj_symm_fn_param_inout (idx_sub, idx_super, Co) in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let axiom_extends ~child ~ancestor =
+    Axiom { axiom = Extends; prev = child; next = ancestor }
 
-let prj_fn_param_inout_contra
-    ~super:(r_super, r_super_prj) ~sub ~idx_sub ~idx_super =
-  let parent_flow = flow ~from:r_super ~into:(reverse sub) ~kind:Flow_subtype in
-  let prj = Prj_symm_fn_param_inout (idx_super, idx_sub, Contra) in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_super_prj ~into ~kind:Flow_prj
+  let axiom_upper_bound ~bound ~of_ =
+    Axiom { axiom = Upper_bound; prev = of_; next = bound }
 
-let prj_fn_ret ~sub:(r_sub, r_sub_prj) ~super =
-  let parent_flow = flow ~from:r_sub ~into:super ~kind:Flow_subtype in
-  let prj = Prj_symm_fn_ret in
-  let into = prj_symm parent_flow ~prj in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let axiom_lower_bound ~bound ~of_ =
+    Axiom { axiom = Lower_bound; prev = of_; next = bound }
 
-(* -- Asymmetric projections -- *)
-let prj_asymm_sub ~r_sub ~r_sub_prj prj =
-  let into = Prj (Asymm (Sub, prj), r_sub) in
-  flow ~from:r_sub_prj ~into ~kind:Flow_prj
+  let trans_lower_bound ~bound ~of_ = Lower_bound { bound; of_ }
 
-let prj_asymm_super ~r_super ~r_super_prj prj =
-  let from = Prj (Asymm (Super, prj), r_super) in
-  flow ~from ~into:r_super_prj ~kind:Flow_prj
+  let definition def of_ = Def (def, of_)
 
-let prj_union_sub ~r_sub ~r_sub_prj =
-  prj_asymm_sub ~r_sub ~r_sub_prj Prj_asymm_union
+  (* -- Symmetric projections -- *)
+  let prj_symm_co ~sub ~sub_prj ~super prj =
+    Prj_both { sub_prj; prj; sub; super }
 
-let prj_union_super ~r_super ~r_super_prj =
-  prj_asymm_super ~r_super ~r_super_prj Prj_asymm_union
+  let prj_symm_contra ~sub ~super ~super_prj prj =
+    Prj_both { sub_prj = super_prj; prj; sub; super }
 
-let prj_inter_sub ~r_sub ~r_sub_prj =
-  prj_asymm_sub ~r_sub ~r_sub_prj Prj_asymm_inter
+  let prj_ctor_co ~sub ~sub_prj ~super ctor_kind nm idx is_invariant =
+    let var =
+      if is_invariant then
+        Inv Co
+      else
+        Dir Co
+    in
+    let prj = Prj_symm_ctor (ctor_kind, nm, idx, var) in
+    prj_symm_co ~sub ~sub_prj ~super prj
 
-let prj_inter_super ~r_super ~r_super_prj =
-  prj_asymm_super ~r_super ~r_super_prj Prj_asymm_inter
+  let prj_ctor_contra ~sub ~super ~super_prj ctor_kind nm idx is_invariant =
+    let var =
+      if is_invariant then
+        Inv Contra
+      else
+        Dir Contra
+    in
+    let prj = Prj_symm_ctor (ctor_kind, nm, idx, var) in
+    prj_symm_contra ~sub ~super ~super_prj prj
 
-let prj_neg_sub ~r_sub ~r_sub_prj =
-  prj_asymm_sub ~r_sub ~r_sub_prj Prj_asymm_neg
+  let prj_neg ~sub ~sub_prj ~super =
+    prj_symm_co ~sub ~sub_prj ~super Prj_symm_neg
 
-let prj_neg_super ~r_super ~r_super_prj =
-  prj_asymm_super ~r_super ~r_super_prj Prj_asymm_neg
+  let prj_supportdyn ~sub ~sub_prj ~super =
+    prj_symm_co ~sub ~sub_prj ~super Prj_symm_supportdyn
 
-let prj_nullable_sub ~r_sub ~r_sub_prj =
-  prj_asymm_sub ~r_sub ~r_sub_prj Prj_asymm_nullable
+  let prj_nullable ~sub ~sub_prj ~super =
+    prj_symm_co ~sub ~sub_prj ~super Prj_symm_nullable
 
-let prj_nullable_super ~r_super ~r_super_prj =
-  prj_asymm_super ~r_super ~r_super_prj Prj_asymm_nullable
+  let prj_tuple ~sub ~sub_prj ~super idx =
+    let prj = Prj_symm_tuple idx in
+    prj_symm_co ~sub ~sub_prj ~super prj
 
-let missing_field = Missing_field
+  let prj_shape ~sub ~sub_prj ~super lbl ~kind_sub ~kind_super =
+    let prj = Prj_symm_shape (lbl, kind_sub, kind_super) in
+    prj_symm_co ~sub ~sub_prj ~super prj
 
-let pessimised_this p = from_witness_decl @@ Pessimised_this p
+  let prj_fn_param ~sub ~super ~super_prj ~idx_sub ~idx_super =
+    let prj = Prj_symm_fn_param (idx_super, idx_sub) in
+    prj_symm_contra ~sub ~super ~super_prj prj
+
+  let prj_fn_param_inout_co ~sub ~sub_prj ~super ~idx_sub ~idx_super =
+    let prj = Prj_symm_fn_param_inout (idx_sub, idx_super, Co) in
+    prj_symm_co ~sub ~sub_prj ~super prj
+
+  let prj_fn_param_inout_contra ~sub ~super ~super_prj ~idx_sub ~idx_super =
+    let prj = Prj_symm_fn_param_inout (idx_super, idx_sub, Contra) in
+    prj_symm_contra ~sub ~super ~super_prj prj
+
+  let prj_fn_ret ~sub ~sub_prj ~super =
+    let prj = Prj_symm_fn_ret in
+    prj_symm_co ~sub ~sub_prj ~super prj
+
+  (* -- Asymmetric projections -- *)
+
+  let prj_asymm_sub ~sub ~sub_prj prj =
+    Prj_one { part = sub_prj; prj; whole = sub }
+
+  let prj_asymm_super ~super ~super_prj prj =
+    Prj_one { part = super_prj; prj; whole = super }
+
+  let prj_union_sub ~sub ~sub_prj = prj_asymm_sub ~sub ~sub_prj Prj_asymm_union
+
+  let prj_union_super ~super ~super_prj =
+    prj_asymm_super ~super ~super_prj Prj_asymm_union
+
+  let prj_inter_sub ~sub ~sub_prj = prj_asymm_sub ~sub ~sub_prj Prj_asymm_inter
+
+  let prj_inter_super ~super ~super_prj =
+    prj_asymm_super ~super ~super_prj Prj_asymm_inter
+
+  let prj_neg_sub ~sub ~sub_prj = prj_asymm_sub ~sub ~sub_prj Prj_asymm_neg
+
+  let prj_neg_super ~super ~super_prj =
+    prj_asymm_super ~super ~super_prj Prj_asymm_neg
+
+  let prj_nullable_sub ~sub ~sub_prj =
+    prj_asymm_sub ~sub ~sub_prj Prj_asymm_nullable
+
+  let prj_nullable_super ~super ~super_prj =
+    prj_asymm_super ~super ~super_prj Prj_asymm_nullable
+
+  let prj_num_sub ~sub ~sub_prj = prj_asymm_sub ~sub ~sub_prj Prj_asymm_num
+
+  let prj_num_super ~super ~super_prj =
+    prj_asymm_super ~super ~super_prj Prj_asymm_num
+
+  let prj_arraykey_sub ~sub ~sub_prj =
+    prj_asymm_sub ~sub ~sub_prj Prj_asymm_arraykey
+
+  let prj_arraykey_super ~super ~super_prj =
+    prj_asymm_super ~super ~super_prj Prj_asymm_arraykey
+
+  let missing_field = Missing_field
+
+  let pessimised_this p = from_witness_decl @@ Pessimised_this p
+end
+
+include Constructors
 
 (* -- Visitor --------------------------------------------------------------- *)
 module Visitor = struct
@@ -2830,11 +2742,32 @@ module Visitor = struct
         | From_witness_locl witness -> From_witness_locl witness
         | From_witness_decl witness -> From_witness_decl witness
         | Idx (x, y) -> Idx (x, y)
-        | Flow (from, kind, into) ->
-          Flow (this#on_reason from, kind, this#on_reason into)
-        | Rev t -> Rev (this#on_reason t)
+        | Flow { from; kind; into } ->
+          Flow { from = this#on_reason from; kind; into = this#on_reason into }
+        | Axiom { prev; axiom; next } ->
+          Axiom
+            { prev = this#on_reason prev; axiom; next = this#on_reason next }
+        | Lower_bound { bound; of_ } ->
+          Lower_bound { bound = this#on_reason bound; of_ = this#on_reason of_ }
+        | Solved { solution; of_; in_ } ->
+          Solved
+            {
+              solution = this#on_reason solution;
+              of_;
+              in_ = this#on_reason in_;
+            }
         | Def (def, t) -> Def (def, this#on_reason t)
-        | Prj (prj, t) -> Prj (prj, this#on_reason t)
+        | Prj_both { sub_prj; prj; sub; super } ->
+          Prj_both
+            {
+              sub_prj = this#on_reason sub_prj;
+              prj;
+              sub = this#on_reason sub;
+              super = this#on_reason super;
+            }
+        | Prj_one { part; prj; whole } ->
+          Prj_one
+            { part = this#on_reason part; prj; whole = this#on_reason whole }
 
       method on_lazy l = l
     end
@@ -2852,357 +2785,101 @@ let force_lazy_values r =
 
 (* -- Predicates ------------------------------------------------------------ *)
 module Predicates = struct
+  let on_outermost t f =
+    let rec aux t ~solutions =
+      match t with
+      | Solved { solution; of_; in_ = t } ->
+        let solutions = Tvid.Map.add of_ solution solutions in
+        aux t ~solutions
+      | Flow { from = t; _ }
+      | Lower_bound { bound = t; _ }
+      | Axiom { next = t; _ }
+      | Prj_both { sub_prj = t; _ }
+      | Prj_one { part = t; _ }
+      | Def (_, t) ->
+        aux t ~solutions
+      | From_witness_locl
+          (Type_variable_generics (_, _, _, tvid) | Type_variable (_, tvid))
+        when Tvid.Map.mem tvid solutions ->
+        let t = Tvid.Map.find tvid solutions in
+        let solutions = Tvid.Map.remove tvid solutions in
+        aux t ~solutions
+      | _ -> f t
+    in
+    aux t ~solutions:Tvid.Map.empty
+
   let is_opaque_type_from_module r =
-    match r with
-    | Opaque_type_from_module _ -> true
-    | _ -> false
+    let p r =
+      match r with
+      | Opaque_type_from_module _ -> true
+      | _ -> false
+    in
+    on_outermost r p
 
   let is_none r =
-    match r with
-    | No_reason -> true
-    | _ -> false
+    let p r =
+      match r with
+      | No_reason -> true
+      | _ -> false
+    in
+    on_outermost r p
 
   let is_instantiate r =
-    match r with
-    | Instantiate _ -> true
-    | _ -> false
+    let p r =
+      match r with
+      | Instantiate _ -> true
+      | _ -> false
+    in
+    on_outermost r p
+
+  let is_captured_like r =
+    let p r =
+      match r with
+      | From_witness_locl (Captured_like _) -> true
+      | _ -> false
+    in
+    on_outermost r p
 
   let is_hint r =
-    match r with
-    | From_witness_decl (Hint _) -> true
-    | _ -> false
+    let p r =
+      match r with
+      | From_witness_decl (Hint _) -> true
+      | _ -> false
+    in
+    on_outermost r p
 
   let unpack_expr_dep_type_opt r =
-    match r with
-    | Expr_dep_type (r, p, e) -> Some (r, p, e)
-    | _ -> None
+    let f r =
+      match r with
+      | Expr_dep_type (r, p, e) -> Some (r, p, e)
+      | _ -> None
+    in
+    on_outermost r f
 
   let unpack_unpack_param_opt r =
-    match r with
-    | From_witness_locl (Unpack_param (p, p2, i)) -> Some (p, p2, i)
-    | _ -> None
+    let f r =
+      match r with
+      | From_witness_locl (Unpack_param (p, p2, i)) -> Some (p, p2, i)
+      | _ -> None
+    in
+    on_outermost r f
 
   let unpack_cstr_on_generics_opt r =
-    match r with
-    | From_witness_decl (Cstr_on_generics (p, sid)) -> Some (p, sid)
-    | _ -> None
+    let f r =
+      match r with
+      | From_witness_decl (Cstr_on_generics (p, sid)) -> Some (p, sid)
+      | _ -> None
+    in
+    on_outermost r f
 
   let unpack_shape_literal_opt r =
-    match r with
-    | From_witness_locl (Shape_literal p) -> Some p
-    | _ -> None
+    let f r =
+      match r with
+      | From_witness_locl (Shape_literal p) -> Some p
+      | _ -> None
+    in
+    on_outermost r f
 end
-
-(* ~~ Path ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
-
-type direction =
-  | Fwd
-  | Bwd
-
-let direction_to_json = function
-  | Fwd -> Hh_json.string_ "Fwd"
-  | Bwd -> Hh_json.string_ "Bwd"
-
-let flip = function
-  | Fwd -> Bwd
-  | Bwd -> Fwd
-
-type path_elem =
-  | Edge of {
-      out_of: prj option;
-      dir: direction;
-      kind: flow_kind;
-      in_to: prj option;
-    }
-  | Node of locl_phase t_
-
-let path_elem_to_json = function
-  | Edge { out_of; dir; in_to; kind } ->
-    Hh_json.(
-      JSON_Object
-        [
-          ( "Edge",
-            JSON_Object
-              (List.filter_opt
-                 [
-                   Some ("dir", direction_to_json dir);
-                   Some ("kind", flow_kind_to_json kind);
-                   Option.map out_of ~f:(fun prj -> ("out_of", prj_to_json prj));
-                   Option.map in_to ~f:(fun prj -> ("in_to", prj_to_json prj));
-                 ]) );
-        ])
-  | Node witness -> to_json witness
-
-let edge out_of dir kind in_to = Edge { out_of; dir; kind; in_to }
-
-type stats = {
-  max_depth: int;
-  length: int;
-  reversals: int;
-}
-
-let stats_to_json { max_depth; length; reversals } =
-  Hh_json.(
-    JSON_Object
-      [
-        ("max_depth", int_ max_depth);
-        ("length", int_ length);
-        ("reversals", int_ reversals);
-      ])
-
-let explain_reversals n =
-  if n = 1 then
-    "1 reversal"
-  else
-    Format.sprintf "%d reversals" n
-
-let explain_stats { max_depth; length; reversals } =
-  Format.sprintf
-    "This error has %d steps, a maximum depth of %d and contains %s."
-    length
-    max_depth
-    (explain_reversals reversals)
-
-let empty_stats = { max_depth = 0; length = 0; reversals = 0 }
-
-let append_stats
-    { max_depth = d1; length = l1; reversals = r1 }
-    { max_depth = d2; length = l2; reversals = r2 } =
-  { max_depth = max d1 d2; length = l1 + l2; reversals = r1 + r2 }
-
-let incr_stats_length t = { t with length = t.length + 1 }
-
-type path = {
-  path_elems: path_elem list;
-  stats: stats;
-}
-
-let path_to_json { stats; path_elems } =
-  Hh_json.(
-    JSON_Object
-      [
-        ("stats", stats_to_json stats);
-        ("path_elems", array_ path_elem_to_json path_elems);
-      ])
-
-let bracket prj =
-  match prj with
-  | Symm _ -> (Some prj, Some prj)
-  | Asymm (Sub, _) -> (Some prj, None)
-  | Asymm (Super, _) -> (None, Some prj)
-
-(** Convert a normalized [locl_phase t_] into a [path]  *)
-let to_path t =
-  let rec aux t ~dir ~cur_depth =
-    match t with
-    | Rev _ -> failwith "unnormalized reason"
-    | Flow (l, kind, r) ->
-      let (prj_ll_opt, elem_l, prj_lr_opt, stats_l, depth_l) =
-        aux l ~dir ~cur_depth
-      and (prj_rl_opt, elem_r, prj_rr_opt, stats_r, depth_r) =
-        aux r ~dir ~cur_depth
-      in
-      let stats = incr_stats_length @@ append_stats stats_l stats_r in
-      ( prj_ll_opt,
-        elem_l @ (edge prj_lr_opt dir kind prj_rl_opt :: elem_r),
-        prj_rr_opt,
-        stats,
-        max depth_l depth_r )
-    | Prj (prj, t) ->
-      let (dir, flipped) =
-        if prj_is_contra prj then
-          (flip dir, true)
-        else
-          (dir, false)
-      in
-      let cur_depth = cur_depth + 1 in
-      let (prj_l_inner, elem, prj_r_inner, stats, max_depth) =
-        aux t ~dir ~cur_depth
-      in
-      let (prj_l_opt, prj_r_opt) = bracket prj in
-      let stats =
-        if flipped then
-          { stats with reversals = stats.reversals + 1 }
-        else
-          stats
-      in
-      let prj_l_opt =
-        match (prj_l_inner, prj_l_opt) with
-        | (Some l, None)
-        | (None, Some l) ->
-          Some l
-        | (None, None) -> None
-        | _ -> failwith "ill-formed path"
-      and prj_r_opt =
-        match (prj_r_inner, prj_r_opt) with
-        | (Some r, None)
-        | (None, Some r) ->
-          Some r
-        | (None, None) -> None
-        | _ -> failwith "ill-formed path"
-      in
-      (prj_l_opt, elem, prj_r_opt, stats, max_depth)
-    | witness -> (None, [Node witness], None, empty_stats, cur_depth)
-  in
-  match aux t ~dir:Fwd ~cur_depth:0 with
-  | (None, path_elems, None, stats, max_depth) ->
-    let stats = { stats with max_depth } in
-    { path_elems; stats }
-  | _ -> failwith "ill-formed path"
-
-(* TODO(mjt) refactor so that extended reasons use a separate type for witnesses
-   and ensure we handle all cases statically *)
-let rec explain_witness = function
-  | Def (_pos_or_decl, r) -> explain_witness r
-  | Missing_field -> (Pos_or_decl.none, "no type")
-  | Idx (pos, _) -> (Pos_or_decl.of_raw_pos pos, "this index expression")
-  | Lambda_param (pos, _) ->
-    (Pos_or_decl.of_raw_pos pos, "this lambda parameter")
-  | Typeconst (_, (pos, _), _, _) -> (pos, "this type constant")
-  | Type_access (r, _) -> explain_witness r
-  | Expr_dep_type (r, _, _) -> explain_witness r
-  | From_witness_locl witness ->
-    (match witness with
-    | Is_refinement pos -> (Pos_or_decl.of_raw_pos pos, "this `is` expression")
-    | Witness pos -> (Pos_or_decl.of_raw_pos pos, "this expression")
-    | Type_variable pos -> (Pos_or_decl.of_raw_pos pos, "this type variable")
-    | Type_variable_generics (pos, x, y) ->
-      (Pos_or_decl.of_raw_pos pos, Format.sprintf "the generic `%s` on `%s`" x y)
-    | Unpack_param (pos, _, _) ->
-      (Pos_or_decl.of_raw_pos pos, "this unpacked parameter")
-    | Bitwise pos -> (Pos_or_decl.of_raw_pos pos, "this expression")
-    | Arith pos -> (Pos_or_decl.of_raw_pos pos, "this arithmetic expression")
-    | Idx_vector pos -> (Pos_or_decl.of_raw_pos pos, "this index expression")
-    | Splice pos -> (Pos_or_decl.of_raw_pos pos, "this splice expression")
-    | No_return pos -> (Pos_or_decl.of_raw_pos pos, "this declaration")
-    | Shape_literal pos -> (Pos_or_decl.of_raw_pos pos, "this shape literal")
-    | _ ->
-      ( witness_locl_to_raw_pos witness,
-        Format.sprintf
-          "this thing (`%s`)"
-          (constructor_string_of_witness_locl witness) ))
-  | From_witness_decl witness ->
-    (match witness with
-    | Hint pos -> (pos, "this hint")
-    | Witness_from_decl pos -> (pos, "this declaration")
-    | Support_dynamic_type pos -> (pos, "this function or method ")
-    | Pessimised_return pos -> (pos, "this return hint")
-    | Var_param_from_decl pos -> (pos, "this variadic parameter declaration")
-    | Cstr_on_generics (pos, _) ->
-      (pos, "the constraint on the generic parameter")
-    | Implicit_upper_bound (pos, nm) ->
-      ( pos,
-        Format.sprintf
-          "the implicit upper bound (`%s`) on the generic parameter"
-          nm )
-    | _ ->
-      ( witness_decl_to_raw_pos witness,
-        Format.sprintf
-          "this thing (`%s`)"
-          (constructor_string_of_witness_decl witness) ))
-  | r ->
-    (to_raw_pos r, Format.sprintf "this thing (`%s`)" (to_constructor_string r))
-
-let explain_step (edge, node) ~prefix =
-  match (edge, node) with
-  | ((None, Fwd, None, kind), rhs) ->
-    let (pos, expl) = explain_witness rhs in
-    let kind_expl = explain_flow_kind_fwd kind in
-    (pos, Format.sprintf "%sflows into %s %s" prefix expl kind_expl)
-  | ((None, Bwd, None, kind), rhs) ->
-    let (pos, expl) = explain_witness rhs in
-    let kind_expl = explain_flow_kind_bwd kind in
-    (pos, Format.sprintf "%sflows from %s %s" prefix expl kind_expl)
-  (* For projections the flow kind is always `Flow_prj` so there is no need for further explanation *)
-  | ((Some out_of, Fwd, None, _), rhs) ->
-    let prj_expl = explain_prj_right out_of in
-    let (pos, expl) = explain_witness rhs in
-    (pos, Format.sprintf "%sflows down into %s %s" prefix expl prj_expl)
-  | ((Some out_of, Bwd, None, _), rhs) ->
-    let prj_expl = explain_prj_right out_of in
-    let (pos, expl) = explain_witness rhs in
-    (pos, Format.sprintf "%sflows down from %s %s" prefix expl prj_expl)
-  | ((None, Fwd, Some in_to, _), rhs) ->
-    let prj_expl = explain_prj_left in_to in
-    let (pos, expl) = explain_witness rhs in
-    (pos, Format.sprintf "%sflows up into %s %s" prefix expl prj_expl)
-  | ((None, Bwd, Some in_to, _), rhs) ->
-    let prj_expl = explain_prj_left in_to in
-    let (pos, expl) = explain_witness rhs in
-    (pos, Format.sprintf "%sflows up from %s %s" prefix expl prj_expl)
-  | _ -> failwith "ill-formed path"
-
-let is_supportdyn_hint r =
-  match r with
-  | From_witness_decl (Hint pos) ->
-    String.equal
-      (Relative_path.suffix @@ Pos_or_decl.filename pos)
-      "supportdynamic.hhi"
-  | _ -> false
-
-(** For reporting purposed, drop expansion of `supportdyn` newtype *)
-let suppress_supportdyn = function
-  | (Edge { dir = Fwd; _ } as edge) :: Node rhs :: Edge _ :: path_elems
-    when is_supportdyn_hint rhs ->
-    edge :: path_elems
-  | Edge { dir = Bwd; _ } :: Node rhs :: path_elems when is_supportdyn_hint rhs
-    ->
-    path_elems
-  | path_elems -> path_elems
-
-let explain_path { path_elems; stats } =
-  let rec aux path_elems acc =
-    match suppress_supportdyn path_elems with
-    | Edge { out_of; dir; in_to; kind } :: Node rhs :: path_elems ->
-      let expl =
-        explain_step ~prefix:"which itself " ((out_of, dir, in_to, kind), rhs)
-      in
-      aux path_elems (expl :: acc)
-    | [] -> List.rev acc
-    | _ -> failwith "ill-formed path"
-  in
-
-  (* Handle supportdyn at the start of the path *)
-  let path_elems =
-    match path_elems with
-    | (Node _ as head) :: rest -> head :: suppress_supportdyn rest
-    | _ -> failwith "ill-formed path"
-  in
-  match path_elems with
-  | Node lhs :: Edge { out_of; dir; in_to; kind } :: Node rhs :: path_elems ->
-    let (lhs_pos, lhs_expl) = explain_witness lhs in
-    let lhs_expl =
-      Format.sprintf "%s\n\nHere's why: %s" (explain_stats stats) lhs_expl
-    in
-    let (rhs_pos, rhs_expl) =
-      explain_step ~prefix:"" ((out_of, dir, in_to, kind), rhs)
-    in
-    aux path_elems [(rhs_pos, rhs_expl); (lhs_pos, lhs_expl)]
-  | _ -> failwith "ill-formed path"
-
-(* ~~ Extended reasons rendering ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
-
-let explain t ~complexity:_ = explain_path @@ to_path @@ normalize t
-
-let debug t =
-  let t_norm = normalize t in
-  let path = to_path t_norm in
-
-  explain_path path
-  @ [
-      ( Pos_or_decl.none,
-        Format.sprintf "Raw:\n%s"
-        @@ Hh_json.json_to_string ~pretty:true
-        @@ to_json t );
-      ( Pos_or_decl.none,
-        Format.sprintf "Normalised:\n%s"
-        @@ Hh_json.json_to_string ~pretty:true
-        @@ to_json t_norm );
-      ( Pos_or_decl.none,
-        Format.sprintf "Path:\n%s"
-        @@ Hh_json.json_to_string ~pretty:true
-        @@ path_to_json path );
-    ]
 
 (* ~~ Aliases ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
 type t = locl_phase t_
@@ -3322,3 +2999,1214 @@ let string_of_ureason = function
   | URdynamic_prop -> "Dynamic access of property"
   | URlabel ->
     "This label is not a valid reference to a member of the given enum class"
+
+(* ~~ Extended reasons rendering ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
+
+module Derivation = struct
+  module Subtype_rule : sig
+    (** Tells us why a derivation step follows the previous one *)
+    type t
+
+    (** We reached the next step in the derivation by projecting into the subtype *)
+    val using_prj_sub : prj_asymm -> t
+
+    (** We reached the next step in the derivation by projecting into the supertype *)
+    val using_prj_super : prj_asymm -> t
+
+    (** We reached the next step in the derivation by projecting into both the
+       subtype and supertype *)
+    val using_prj : prj_symm -> t
+
+    (** We reached the next step in the derivation by making use of some
+        user-declared axiom on about the subtype *)
+    val using_axiom_sub : axiom -> t
+
+    (** We reached the next step in the derivation by making use of some
+        user-declared axiom on about the supertype *)
+    val using_axiom_super : axiom -> t
+
+    val to_json : t -> Hh_json.json
+
+    val explain : t -> string
+
+    val is_supportdyn : t -> bool
+  end = struct
+    type t =
+      | Using_prj of prj_symm
+      | Using_prj_sub of prj_asymm
+      | Using_prj_super of prj_asymm
+      | Using_axiom_sub of axiom
+      | Using_axiom_super of axiom
+
+    let is_supportdyn = function
+      | Using_prj Prj_symm_supportdyn -> true
+      | _ -> false
+
+    let using_prj prj = Using_prj prj
+
+    let using_prj_sub prj = Using_prj_sub prj
+
+    let using_prj_super prj = Using_prj_super prj
+
+    let using_axiom_sub axiom = Using_axiom_sub axiom
+
+    let using_axiom_super axiom = Using_axiom_super axiom
+
+    let to_json = function
+      | Using_prj prj ->
+        Hh_json.(JSON_Object [("Using_prj", prj_symm_to_json prj)])
+      | Using_prj_sub prj ->
+        Hh_json.(JSON_Object [("Using_prj_sub", prj_asymm_to_json prj)])
+      | Using_prj_super prj ->
+        Hh_json.(JSON_Object [("Using_prj_super", prj_asymm_to_json prj)])
+      | Using_axiom_sub axiom ->
+        Hh_json.(JSON_Object [("Using axiom_sub", axiom_to_json axiom)])
+      | Using_axiom_super axiom ->
+        Hh_json.(JSON_Object [("Using axiom_super", axiom_to_json axiom)])
+
+    let int_to_ordinal =
+      let sfxs = [| "th"; "st"; "nd"; "rd"; "th" |] in
+      fun n ->
+        let sfx =
+          if n >= 10 && n <= 20 then
+            "th"
+          else
+            sfxs.(min 4 (n mod 10))
+        in
+        Format.sprintf "%d%s" n sfx
+
+    let explain_axiom axiom ~sub =
+      let (subject, other) =
+        if sub then
+          ("subtype", "supertype")
+        else
+          ("supertype", "subtype")
+      in
+      match axiom with
+      | Extends ->
+        Format.sprintf
+          "The %s extends or implements the %s class or interface so next I checked that subtype constraint."
+          subject
+          other
+      | Upper_bound ->
+        Format.sprintf
+          "The %s declares an upper bound so next I checked that was a %s of the %s."
+          subject
+          subject
+          other
+      | Lower_bound ->
+        Format.sprintf
+          "The %s declares a lower bound so next I checked that was a %s of the %s."
+          subject
+          subject
+          other
+
+    let explain_ctor_kind = function
+      | Ctor_class -> "class or interface"
+      | Ctor_newtype -> "newtype"
+
+    let explain_field_kind = function
+      | Absent -> "missing"
+      | Required -> "required"
+      | Optional -> "optional"
+
+    let explain_prj = function
+      | Prj_symm_neg -> "These are negated types so I checked the inner type."
+      | Prj_symm_nullable ->
+        "These are nullable types so next I checked the non-null parts."
+      | Prj_symm_supportdyn ->
+        "These are `supportdyn` types so next I checked the non-dynamic parts."
+      | Prj_symm_fn_ret ->
+        "These are function types so next I checked function return types."
+      | Prj_symm_tuple idx ->
+        Format.sprintf
+          "These are tuple types so next I checked %s elements."
+          (int_to_ordinal @@ (idx + 1))
+      | Prj_symm_fn_param (idx_sub, idx_sup) when Int.equal idx_sub idx_sup ->
+        Format.sprintf
+          "These are function types so next I checked the %s function parameters.\nFunctions are contravariant in their parameters so the direction of the subtype relationship is reversed."
+          (int_to_ordinal @@ (idx_sub + 1))
+      | Prj_symm_fn_param (idx_sub, idx_sup) ->
+        Format.sprintf
+          "These are function types so next I checked the %s function parameter of the subtype and the %s parameter of the supertype.\nFunctions are contravariant in their parameters the direction of the subtype relationship is reversed."
+          (int_to_ordinal @@ (idx_sub + 1))
+          (int_to_ordinal @@ (idx_sup + 1))
+      | Prj_symm_fn_param_inout (idx_sub, idx_sup, Co)
+        when Int.equal idx_sub idx_sup ->
+        Format.sprintf
+          "These are function types so next I checked the %s function parameters.\nThis is an `inout` parameter which is invariant. This means the subtype relation must hold in both directions.\nHere I checked the covariant direction."
+          (int_to_ordinal @@ (idx_sub + 1))
+      | Prj_symm_fn_param_inout (idx_sub, idx_sup, Co) ->
+        Format.sprintf
+          "These are function types so next I checked the %s function parameter of the subtype and the %s parameter of the supertype.\nThese are `inout` parameters which are invariant. This means the subtype relation must hold in both directions.\nHere I checked the covariant direction."
+          (int_to_ordinal @@ (idx_sub + 1))
+          (int_to_ordinal @@ (idx_sup + 1))
+      | Prj_symm_fn_param_inout (idx_sub, idx_sup, Contra)
+        when Int.equal idx_sub idx_sup ->
+        Format.sprintf
+          "These are function types so next I checked the %s function parameters.\nThis is an `inout` parameter which is invariant. This means the subtype relation must hold in both directions.\nHere I checked the contravariant case so the direction of the subtype relationship is reversed."
+          (int_to_ordinal @@ (idx_sub + 1))
+      | Prj_symm_fn_param_inout (idx_sub, idx_sup, Contra) ->
+        Format.sprintf
+          "These are function types so next I checked the %s function parameter of the supertype and the %s parameter of the subtype. These are `inout` parameters which are invariant. This means the relation must hold in both directions.\nHere I checked the contravariant case so the direction of the subtype relationship is reversed."
+          (int_to_ordinal @@ (idx_sup + 1))
+          (int_to_ordinal @@ (idx_sub + 1))
+      | Prj_symm_ctor (ctor_kind, nm, idx, Dir Co) ->
+        Format.sprintf
+          "`%s` is a %s so next I checked the %s type arguments."
+          nm
+          (explain_ctor_kind ctor_kind)
+          (int_to_ordinal @@ (idx + 1))
+      | Prj_symm_ctor (ctor_kind, nm, idx, Dir Contra) ->
+        Format.sprintf
+          "`%s` is a %s so next I checked the %s type arguments.\nThe type parameter is contravariant so the direction of the subtype relationship is reversed."
+          nm
+          (explain_ctor_kind ctor_kind)
+          (int_to_ordinal @@ (idx + 1))
+      | Prj_symm_ctor (ctor_kind, nm, idx, Inv Co) ->
+        Format.sprintf
+          "`%s` is a %s so next I checked the %s type arguments are subtypes.\nThe type parameter is invariant so the subtype relationship must hold in both directions.\nHere I check the covariant case."
+          nm
+          (explain_ctor_kind ctor_kind)
+          (int_to_ordinal @@ (idx + 1))
+      | Prj_symm_ctor (ctor_kind, nm, idx, Inv Contra) ->
+        Format.sprintf
+          "`%s` is a %s so next I checked the %s type arguments are subtypes.\nThe type parameter is invariant so the subtype relationship must hold in both directions.\nHere I check the contravariant case so the direction of the subtype relationship is reversed."
+          nm
+          (explain_ctor_kind ctor_kind)
+          (int_to_ordinal @@ (idx + 1))
+      | Prj_symm_shape (nm, Absent, fld_kind_sup) ->
+        Format.sprintf
+          "These are shape types so next I tried to check the `%s` field.\nThe field is %s in the supertype but missing in the subtype."
+          nm
+          (explain_field_kind fld_kind_sup)
+      | Prj_symm_shape (nm, fld_kind_sub, Absent) ->
+        Format.sprintf
+          "These are shape types so next I tried to check the `%s` field.\nThe field is %s in the subtype but missing in the supertype."
+          nm
+          (explain_field_kind fld_kind_sub)
+      | Prj_symm_shape (nm, fld_kind_sub, fld_kind_sup)
+        when equal_field_kind fld_kind_sub fld_kind_sup ->
+        Format.sprintf
+          "These are shape types so next I checked the %s `%s` field."
+          (explain_field_kind fld_kind_sub)
+          nm
+      | Prj_symm_shape (nm, fld_kind_sub, fld_kind_sup) ->
+        Format.sprintf
+          "These are shape types so next I checked the `%s` field.\nThe field was %s in the subtype and %s in the supertype."
+          nm
+          (explain_field_kind fld_kind_sub)
+          (explain_field_kind fld_kind_sup)
+
+    let explain_prj_asymm_sub prj =
+      match prj with
+      | Prj_asymm_union ->
+        "The subtype is a union type so next I checked the subtype constraint is satisfied for all its elements."
+      | Prj_asymm_inter ->
+        "The subtype is an intersection type so next I checked that the subtype constraint is satisfied for at least one of its element."
+      | Prj_asymm_nullable ->
+        "The subtype is a nullable type so next I checked the subtype constraint is satisfied for both the null & non-null parts."
+      | Prj_asymm_num ->
+        "The subtype is a num type so next I checked the subtype constraint is satisfied for both the int and float parts."
+      | Prj_asymm_arraykey ->
+        "The subtype is an arraykey type so next I checked the subtype constraint is satisfied for both the int and string parts."
+      | Prj_asymm_neg ->
+        "The subtype is a negated type so next I checked the inner type."
+
+    let explain_prj_asymm_super prj =
+      match prj with
+      | Prj_asymm_union ->
+        "The supertype is a union type so next I checked the subtype constraint is satisfied for at least one element."
+      | Prj_asymm_inter ->
+        "The supertype is an intersection type so next I checked the subtype constraint is satsified for all of its elements."
+      | Prj_asymm_nullable ->
+        "The supertype is a nullable type so next I checked the subtype constraint is satisfied for either the null or non-null part."
+      | Prj_asymm_num ->
+        "The supertype is a num type so next I checked the subtype constraint is satisfied for either the int or float part."
+      | Prj_asymm_arraykey ->
+        "The supertype is an arraykey type so next I checked the subtype constraint is satisfied for either the int or string part."
+      | Prj_asymm_neg ->
+        "The supertype is a negated type so I checked the inner type."
+
+    let explain = function
+      | Using_prj prj -> explain_prj prj
+      | Using_prj_sub prj -> explain_prj_asymm_sub prj
+      | Using_prj_super prj -> explain_prj_asymm_super prj
+      | Using_axiom_sub axiom -> explain_axiom axiom ~sub:true
+      | Using_axiom_super axiom -> explain_axiom axiom ~sub:false
+  end
+
+  module Subtype_step : sig
+    type arg =
+      | Subtype
+      | Supertype
+      | Both
+
+    (** Represents a step in a subtyping derivation for a single subtype proposition*)
+    type t =
+      | Begin of {
+          sub: locl_phase t_;
+          super: locl_phase t_;
+        }
+      | Step of {
+          rule: Subtype_rule.t;
+          on_: arg;
+          sub: locl_phase t_;
+          super: locl_phase t_;
+        }
+
+    val begin_ : sub:locl_phase t_ -> super:locl_phase t_ -> t
+
+    val step :
+      Subtype_rule.t -> arg -> sub:locl_phase t_ -> super:locl_phase t_ -> t
+
+    val to_json : t -> Hh_json.json
+
+    val uses_supportdyn : t -> bool
+  end = struct
+    type arg =
+      | Subtype
+      | Supertype
+      | Both
+
+    let arg_to_json = function
+      | Subtype -> Hh_json.string_ "Subtype"
+      | Supertype -> Hh_json.string_ "Supertype"
+      | Both -> Hh_json.string_ "Both"
+
+    type t =
+      | Begin of {
+          sub: locl_phase t_;
+          super: locl_phase t_;
+        }
+      | Step of {
+          rule: Subtype_rule.t;
+          on_: arg;
+          sub: locl_phase t_;
+          super: locl_phase t_;
+        }
+
+    let step rule on_ ~sub ~super = Step { sub; super; rule; on_ }
+
+    let uses_supportdyn = function
+      | Begin _ -> false
+      | Step { rule; _ } -> Subtype_rule.is_supportdyn rule
+
+    let begin_ ~sub ~super = Begin { sub; super }
+
+    let to_json = function
+      | Begin { sub; super } ->
+        Hh_json.(
+          JSON_Object
+            [
+              ( "Begin",
+                JSON_Object [("sub", to_json sub); ("super", to_json super)] );
+            ])
+      | Step { sub; super; rule; on_ } ->
+        Hh_json.(
+          JSON_Object
+            [
+              ( "Step",
+                JSON_Object
+                  [
+                    ("rule", Subtype_rule.to_json rule);
+                    ("on_", arg_to_json on_);
+                    ("sub", to_json sub);
+                    ("super", to_json super);
+                  ] );
+            ])
+  end
+
+  (** Represents a complete derivation for a single subtype proposition and
+        the typing rule used to reach it from the previous subtype proposition *)
+  type t =
+    | Derivation of Subtype_step.t list
+    | Lower of {
+        bound: t;
+        in_: t;
+      }
+    | Transitive of {
+        lower: t;
+        upper: t;
+        in_: t;
+        on_: locl_phase t_;
+      }
+
+  let derivation steps = Derivation steps
+
+  let transitive ~upper ~lower ~on_ ~in_ = Transitive { in_; on_; upper; lower }
+
+  let lower_bound ~bound ~in_ = Lower { bound; in_ }
+
+  let to_json t =
+    let rec aux = function
+      | Derivation steps ->
+        Hh_json.(
+          JSON_Object [("Derivation", array_ Subtype_step.to_json steps)])
+      | Lower { bound; in_ } ->
+        Hh_json.(
+          JSON_Object
+            [("Lower", JSON_Object [("bound", aux bound); ("in_", aux in_)])])
+      | Transitive { lower; upper; on_; in_ } ->
+        Hh_json.(
+          JSON_Object
+            [
+              ( "Transitive",
+                JSON_Object
+                  [
+                    ("lower", aux lower);
+                    ("upper", aux upper);
+                    ("on_", to_json on_);
+                    ("in_", aux in_);
+                  ] );
+            ])
+    in
+    aux t
+
+  (* ~~ Construct a derviation from a reason ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
+  let rec push_solutions t ~solutions =
+    match t with
+    | From_witness_locl (Type_variable (_, id))
+    | From_witness_locl (Type_variable_generics (_, _, _, id))
+    | From_witness_locl (Type_variable_error (_, id)) ->
+      Option.value_map ~default:t ~f:(fun solution ->
+          solved id ~solution ~in_:t)
+      @@ Tvid.Map.find_opt id solutions
+    | Flow { from; into; kind } ->
+      Flow
+        {
+          from = push_solutions from ~solutions;
+          into = push_solutions into ~solutions;
+          kind;
+        }
+    | Def (pos, of_) -> Def (pos, push_solutions of_ ~solutions)
+    | Instantiate (r1, s, r2) ->
+      Instantiate (push_solutions r1 ~solutions, s, push_solutions r2 ~solutions)
+    | Typeconst (r1, p, q, r2) ->
+      Typeconst
+        (push_solutions r1 ~solutions, p, q, push_solutions r2 ~solutions)
+    | Expr_dep_type (r, s, t) ->
+      Expr_dep_type (push_solutions r ~solutions, s, t)
+    | Lost_info (x, t, y) -> Lost_info (x, push_solutions t ~solutions, y)
+    | Type_access (t, x) -> Type_access (push_solutions t ~solutions, x)
+    | Invariant_generic (t, x) ->
+      Invariant_generic (push_solutions ~solutions t, x)
+    | Contravariant_generic (t, x) ->
+      Contravariant_generic (push_solutions ~solutions t, x)
+    | Dynamic_coercion t -> Dynamic_coercion (push_solutions ~solutions t)
+    | _ -> t
+
+  let rec extract_last t =
+    match t with
+    | Prj_both { sub; _ } -> extract_last sub
+    | Prj_one { whole; _ } -> extract_last whole
+    | Axiom { prev; _ } -> extract_last prev
+    | Flow { into; _ } -> extract_last into
+    | Lower_bound { of_; _ } -> extract_last of_
+    | Solved _
+    | No_reason
+    | From_witness_decl _
+    | From_witness_locl _
+    | Instantiate _
+    | Def _
+    | Invalid
+    | Missing_field
+    | Idx _
+    | Arith_ret_float _
+    | Arith_ret_num _
+    | Lost_info _
+    | Format _
+    | Typeconst _
+    | Type_access _
+    | Expr_dep_type _
+    | Contravariant_generic _
+    | Invariant_generic _
+    | Lambda_param _
+    | Dynamic_coercion _
+    | Dynamic_partial_enforcement _
+    | Rigid_tvar_escape _
+    | Opaque_type_from_module _ ->
+      t
+
+  let rec extract_first t =
+    match t with
+    | Prj_both { sub_prj; _ } -> extract_first sub_prj
+    | Prj_one { part; _ } -> extract_first part
+    | Axiom { next; _ } -> extract_first next
+    | Flow { from; _ } -> extract_first from
+    | Lower_bound { bound; _ } -> extract_first bound
+    | Solved _
+    | No_reason
+    | From_witness_decl _
+    | From_witness_locl _
+    | Instantiate _
+    | Def _
+    | Invalid
+    | Missing_field
+    | Idx _
+    | Arith_ret_float _
+    | Arith_ret_num _
+    | Lost_info _
+    | Format _
+    | Typeconst _
+    | Type_access _
+    | Expr_dep_type _
+    | Contravariant_generic _
+    | Invariant_generic _
+    | Lambda_param _
+    | Dynamic_coercion _
+    | Dynamic_partial_enforcement _
+    | Rigid_tvar_escape _
+    | Opaque_type_from_module _ ->
+      t
+
+  (** Reasons are constructed by keeping track of preceeding subtype propositions
+      during subtype constraint simplification. We reach a child subtype proposition
+      either through a projection into a type constructor or using some user-declared
+      axiom. We can convert this to a list of derivation steps for each subtype constraint.
+      Since we also apply transitivity during constraint simplification, each reason may
+      actually contain multiple subtype derivations. We reach a new derivation either
+      because a upper- or lower-bound was added to a type variable and a new constraint
+      generated for an exist lower- or upper-bound.
+
+      This function is used to recover this representation from the reason representation. *)
+  let of_reason ~sub ~super =
+    let rec aux (sub, super) ~deriv ~solutions =
+      match (sub, super) with
+      (* -- Accumulate solutions -- *)
+      | (Solved { solution; of_; in_ }, _) ->
+        let solutions = Tvid.Map.add of_ (extract_first solution) solutions in
+        aux (in_, super) ~deriv ~solutions
+      | (_, Solved { solution; of_; in_ }) ->
+        let solutions = Tvid.Map.add of_ (extract_first solution) solutions in
+        aux (sub, in_) ~deriv ~solutions
+      (* -- Transitive constraints -- *)
+      | ( Lower_bound
+            {
+              bound = Lower_bound { bound = lb_sub; of_ = lb_super };
+              of_ = ub_sub;
+            },
+          ub_super ) ->
+        let lower = aux (lb_sub, lb_super) ~deriv:[] ~solutions
+        and upper = aux (ub_sub, ub_super) ~deriv:[] ~solutions
+        and in_ = aux (lb_sub, ub_super) ~deriv ~solutions
+        and on_ = extract_last lb_super in
+        transitive ~lower ~upper ~on_ ~in_
+      | (Lower_bound { bound; of_ }, super) ->
+        let bound = aux (bound, of_) ~deriv:[] ~solutions
+        and in_ = aux (bound, super) ~deriv ~solutions in
+        lower_bound ~bound ~in_
+      | (sub, Lower_bound { bound; of_ }) ->
+        let bound = aux (bound, of_) ~deriv:[] ~solutions
+        and in_ = aux (sub, bound) ~deriv ~solutions in
+        lower_bound ~bound ~in_
+      (* -- One-sided projection on subtype -- *)
+      | (Prj_one { part; whole; prj }, _) ->
+        let step =
+          let sub = push_solutions part ~solutions
+          and super = push_solutions super ~solutions
+          and rule = Subtype_rule.using_prj_sub prj in
+          Subtype_step.(step rule Subtype ~sub ~super)
+        in
+        let deriv = step :: deriv in
+        aux (whole, super) ~deriv ~solutions
+      | (Axiom { next; prev; axiom }, _) ->
+        let step =
+          let sub = push_solutions next ~solutions
+          and super = push_solutions super ~solutions
+          and rule = Subtype_rule.using_axiom_sub axiom in
+          Subtype_step.(step rule Subtype ~sub ~super)
+        in
+        let deriv = step :: deriv in
+        aux (prev, super) ~deriv ~solutions
+      (* -- One-sided projection on supertype -- *)
+      | (_, Prj_one { part; whole; prj }) ->
+        let step =
+          let sub = push_solutions sub ~solutions
+          and super = push_solutions part ~solutions
+          and rule = Subtype_rule.using_prj_super prj in
+          Subtype_step.(step rule Supertype ~sub ~super)
+        in
+        let deriv = step :: deriv in
+        aux (sub, whole) ~deriv ~solutions
+      | (_, Axiom { next; prev; axiom }) ->
+        let step =
+          let sub = push_solutions sub ~solutions
+          and super = push_solutions next ~solutions
+          and rule = Subtype_rule.using_axiom_super axiom in
+          Subtype_step.(step rule Supertype ~sub ~super)
+        in
+        let deriv = step :: deriv in
+        aux (sub, prev) ~deriv ~solutions
+      (* -- Two-sided projections -- *)
+      | (Prj_both { sub_prj; sub = parent_sub; super = parent_super; prj }, _)
+        ->
+        let step =
+          let sub = push_solutions sub_prj ~solutions
+          and super = push_solutions super ~solutions
+          and rule = Subtype_rule.using_prj prj in
+          Subtype_step.(step rule Both ~sub ~super)
+        in
+        let deriv = step :: deriv in
+        aux (parent_sub, parent_super) ~deriv ~solutions
+      | (_, Prj_both { sub_prj; sub = parent_sub; super = parent_super; prj })
+        ->
+        (* Does this happen? Should it?? *)
+        let step =
+          let sub = push_solutions sub ~solutions
+          and super = push_solutions sub_prj ~solutions
+          and rule = Subtype_rule.using_prj prj in
+          Subtype_step.(step rule Both ~sub ~super)
+        in
+        let deriv = step :: deriv in
+        aux (parent_sub, parent_super) ~deriv ~solutions
+      (* -- Reasons corresponding to a single step -- *)
+      | ( ( No_reason | From_witness_decl _ | From_witness_locl _
+          | Instantiate _ | Flow _ | Def _ | Invalid | Missing_field | Idx _
+          | Arith_ret_float _ | Arith_ret_num _ | Lost_info _ | Format _
+          | Typeconst _ | Type_access _ | Expr_dep_type _
+          | Contravariant_generic _ | Invariant_generic _ | Lambda_param _
+          | Dynamic_coercion _ | Dynamic_partial_enforcement _
+          | Rigid_tvar_escape _ | Opaque_type_from_module _ ),
+          ( No_reason | From_witness_decl _ | From_witness_locl _
+          | Instantiate _ | Flow _ | Def _ | Invalid | Missing_field | Idx _
+          | Arith_ret_float _ | Arith_ret_num _ | Lost_info _ | Format _
+          | Typeconst _ | Type_access _ | Expr_dep_type _
+          | Contravariant_generic _ | Invariant_generic _ | Lambda_param _
+          | Dynamic_coercion _ | Dynamic_partial_enforcement _
+          | Rigid_tvar_escape _ | Opaque_type_from_module _ ) ) ->
+        let step =
+          let sub = push_solutions sub ~solutions
+          and super = push_solutions super ~solutions in
+          Subtype_step.begin_ ~sub ~super
+        in
+        derivation (step :: deriv)
+    in
+
+    aux (sub, super) ~deriv:[] ~solutions:Tvid.Map.empty
+
+  (* ~~ Human-readable explanation of full derivation ~~~~~~~~~~~~~~~~~~~~~~~ *)
+
+  module Explain = struct
+    module Derivation_path = struct
+      type elem =
+        | Main
+        | Upper
+        | Lower
+        | Solution
+        | Step of int
+      [@@deriving eq]
+
+      let elem_to_string = function
+        | Main -> "Main"
+        | Upper -> "Upper"
+        | Lower -> "Lower"
+        | Solution -> "Solution"
+        | Step n -> Format.sprintf "Step %d" (n + 1)
+
+      type t = elem list [@@deriving eq]
+
+      let explain elems =
+        List.fold_left elems ~init:None ~f:(fun acc elem ->
+            let part = elem_to_string elem in
+            Some
+              (Option.value_map
+                 ~default:part
+                 ~f:(Format.sprintf "%s / %s" part)
+                 acc))
+    end
+
+    module State = struct
+      type t = { defs_seen: Derivation_path.t Pos_or_decl.Map.t }
+
+      let empty = { defs_seen = Pos_or_decl.Map.empty }
+
+      let def_seen { defs_seen } pos path =
+        { defs_seen = Pos_or_decl.Map.add pos path defs_seen }
+    end
+
+    module Config = struct
+      type def_config =
+        | Always  (** Always render a types definition whenever it appears *)
+        | Once
+            (** Render a types definition the first time it appears and provide a reference to it when it appear subsequently *)
+        | Never  (** Don't render definitions *)
+
+      type flow_config =
+        | Full  (** Render all steps of a flow *)
+        | Ends  (** Only render the start and endpoints of a flow *)
+
+      type deriv_config =
+        | Main  (** Render only the top-level derivation *)
+        | All  (** Render all transitive derivations *)
+        | Depth of int  (** Render derivations to a fixed depth  *)
+
+      type t = {
+        def_config: def_config;
+        flow_config: flow_config;
+        deriv_config: deriv_config;
+        suppress_supportdyn: bool;
+      }
+
+      let verbose =
+        {
+          def_config = Always;
+          flow_config = Full;
+          deriv_config = All;
+          suppress_supportdyn = false;
+        }
+
+      let chatty =
+        {
+          def_config = Once;
+          flow_config = Full;
+          deriv_config = Depth 2;
+          suppress_supportdyn = true;
+        }
+
+      let terse =
+        {
+          def_config = Never;
+          flow_config = Ends;
+          deriv_config = Main;
+          suppress_supportdyn = true;
+        }
+
+      let from_complexity complexity =
+        if complexity = 0 then
+          terse
+        else if complexity = 1 then
+          chatty
+        else
+          verbose
+
+      let suppress_derivation { deriv_config; _ } cur_depth =
+        match deriv_config with
+        | All -> false
+        | Main -> cur_depth > 0
+        | Depth max_depth -> cur_depth > max_depth
+
+      let get_def { def_config; suppress_supportdyn; _ } pos seen =
+        match def_config with
+        | Never -> None
+        | _
+          when suppress_supportdyn
+               && String.equal
+                    (Relative_path.suffix @@ Pos_or_decl.filename pos)
+                    "supportdynamic.hhi" ->
+          None
+        | Always -> Some (Either.First pos)
+        | Once ->
+          (match Pos_or_decl.Map.find_opt pos seen with
+          | Some path -> Some (Either.Second path)
+          | None -> Some (Either.First pos))
+    end
+
+    module Context = struct
+      type t = {
+        derivation_depth: int;
+        derivation_path: Derivation_path.t;
+        in_flow: bool;
+      }
+
+      let empty =
+        { derivation_depth = 0; derivation_path = []; in_flow = false }
+
+      let deepen ({ derivation_depth = d; _ } as t) =
+        { t with derivation_depth = d + 1 }
+
+      let enter ({ derivation_path = d; _ } as t) elem =
+        { t with derivation_path = elem :: d; in_flow = false }
+
+      let enter_main t = enter t Derivation_path.Main
+
+      let enter_upper t = enter t Derivation_path.Upper
+
+      let enter_lower t = enter t Derivation_path.Lower
+
+      let enter_solution t = enter t Derivation_path.Solution
+
+      let enter_step t n = enter t @@ Derivation_path.Step n
+
+      let set_in_flow t = { t with in_flow = true }
+
+      let in_flow { in_flow; _ } = in_flow
+
+      let explain_path { derivation_path; _ } =
+        Derivation_path.explain derivation_path
+
+      let is_toplevel { derivation_path; _ } =
+        match derivation_path with
+        | []
+        | [Derivation_path.Main] ->
+          true
+        | _ -> false
+    end
+
+    let with_prefix ls ~prefix ~sep =
+      match ls with
+      | [] -> []
+      | (pos, expl) :: rest ->
+        (pos, Format.sprintf "%s%s%s" prefix sep expl) :: rest
+
+    let with_suffix ls ~suffix ~sep =
+      match ls with
+      | [] -> []
+      | (pos, expl) :: rest ->
+        (pos, Format.sprintf "%s%s%s" expl sep suffix) :: rest
+
+    let finish_with_suffix ls ~suffix ~sep =
+      List.rev @@ with_suffix ~suffix ~sep @@ List.rev ls
+
+    let explain_flow_kind = function
+      | Flow_assign -> "via an assignment"
+      | Flow_call -> "as the return type of the function call"
+      | Flow_prop_access -> "as the type of property"
+      | Flow_local -> "as the type of the local variable"
+      | Flow_fun_return -> "as the return hint"
+      | Flow_param_hint -> "as the parameter hint"
+      | Flow_return_expr -> "because it is used in a return position"
+      | Flow_instantiate nm -> Format.sprintf "via the generic `%s`" nm
+
+    let rec explain t ~st ~cfg ~ctxt =
+      match t with
+      | _ when Config.suppress_derivation cfg ctxt.Context.derivation_depth ->
+        ([], st)
+      | Derivation steps ->
+        let (expl, st) = explain_steps steps ~st ~cfg ~ctxt in
+        let expl =
+          Option.value_map ~default:expl ~f:(fun prefix ->
+              with_prefix expl ~prefix ~sep:"\n\n")
+          @@ Context.explain_path ctxt
+        in
+        (expl, st)
+      | Transitive { lower; upper; in_; on_ } ->
+        let (expl_main, st) =
+          explain in_ ~st ~cfg ~ctxt:(Context.enter_main ctxt)
+        in
+        let ctxt = Context.deepen ctxt in
+        let (expl_lower, st) =
+          explain lower ~st ~cfg ~ctxt:(Context.enter_lower ctxt)
+        in
+        let (expl_upper, st) =
+          explain upper ~st ~cfg ~ctxt:(Context.enter_upper ctxt)
+        in
+
+        let main_path =
+          Context.(Option.value_exn @@ explain_path @@ enter_main ctxt)
+        in
+        let prefix_main =
+          let middle =
+            match explain_reason on_ ~st ~cfg ~ctxt with
+            | ((_, x) :: _, _) -> x
+            | _ -> "an inferred type"
+          in
+          Format.sprintf
+            "I checked the subtype constraint in [%s] because it was implied by the other constraints on the %s."
+            main_path
+            middle
+        and prefix_lower =
+          let lower_path =
+            Context.(Option.value_exn @@ explain_path @@ enter_lower ctxt)
+          in
+          Format.sprintf
+            "I found the subtype for [%s] when I checked the subtype constraint in [%s]."
+            main_path
+            lower_path
+        and prefix_upper =
+          let upper_path =
+            Context.(Option.value_exn @@ explain_path @@ enter_upper ctxt)
+          in
+          Format.sprintf
+            "I found the supertype for [%s] when I checked the subtype constraint in [%s]."
+            main_path
+            upper_path
+        in
+        let expl =
+          with_prefix expl_main ~prefix:prefix_main ~sep:"\n\n"
+          @ with_prefix expl_lower ~prefix:prefix_lower ~sep:"\n\n"
+          @ with_prefix expl_upper ~prefix:prefix_upper ~sep:"\n\n"
+        in
+        (expl, st)
+      | Lower { bound; in_ } ->
+        let (expl_main, st) =
+          explain in_ ~st ~cfg ~ctxt:(Context.enter_main ctxt)
+        in
+        let ctxt = Context.deepen ctxt in
+        let (expl_lower, st) =
+          explain bound ~st ~cfg ~ctxt:(Context.enter_lower ctxt)
+        in
+        let main_path =
+          Context.(Option.value_exn @@ explain_path @@ enter_main ctxt)
+        in
+        let prefix_main =
+          Format.sprintf
+            "I checked the subtype constraint in [%s] because it was implied by transitivity."
+            main_path
+        and prefix_lower =
+          let lower_path =
+            Context.(Option.value_exn @@ explain_path @@ enter_lower ctxt)
+          in
+          Format.sprintf
+            "I found the subtype for [%s] is when I checked the subtype constraint in [%s]."
+            main_path
+            lower_path
+        in
+        let expl =
+          with_prefix expl_main ~prefix:prefix_main ~sep:"\n\n"
+          @ with_prefix expl_lower ~prefix:prefix_lower ~sep:"\n\n"
+        in
+        (expl, st)
+
+    and explain_steps steps ~st ~cfg ~ctxt =
+      let steps =
+        if cfg.Config.suppress_supportdyn then
+          List.filter steps ~f:(fun step ->
+              not @@ Subtype_step.uses_supportdyn step)
+        else
+          steps
+      in
+      let n_steps = List.length steps in
+      let path = Context.explain_path ctxt in
+      let pfx =
+        Option.value_map path ~default:"Step" ~f:(Format.sprintf "[%s] Step")
+      in
+      let toplevel = Context.is_toplevel ctxt in
+      let (_, st, acc) =
+        List.fold_left
+          ~f:(fun (idx, st, acc) step ->
+            let (expl, st) =
+              explain_step step (idx, n_steps, pfx, toplevel) ~st ~cfg ~ctxt
+            in
+            (idx + 1, st, expl :: acc))
+          ~init:(0, st, [])
+          steps
+      in
+      (List.fold_right acc ~init:[] ~f:(fun xs ys -> List.append ys xs), st)
+
+    and explain_step step (idx, n_steps, pfx, toplevel) ~st ~cfg ~ctxt =
+      let ctxt = Context.enter_step ctxt idx in
+      let (sub, super, rule_opt, arg_opt) =
+        match step with
+        | Subtype_step.Begin { sub; super } -> (sub, super, None, None)
+        | Subtype_step.Step { sub; super; rule; on_ } ->
+          (sub, super, Some rule, Some on_)
+      in
+
+      let (expl_sub, st) =
+        match (arg_opt, sub) with
+        | (Some Subtype_step.Supertype, _) ->
+          let pos = to_pos sub in
+          ([(pos, "The subtype is the same as before.")], st)
+        | (_, Missing_field) ->
+          ( [
+              ( Pos_or_decl.none,
+                "The subtype didn't exist because the field was missing." );
+            ],
+            st )
+        | _ ->
+          let (expl_sub, st) = explain_reason sub ~st ~cfg ~ctxt in
+          ( with_prefix expl_sub ~prefix:"The subtype comes from this" ~sep:" ",
+            st )
+      in
+      let (expl_super, st) =
+        match (arg_opt, super) with
+        | (Some Subtype_step.Subtype, _) ->
+          let pos = to_pos super in
+          ([(pos, "The supertype is the same as before.")], st)
+        | (_, Missing_field) ->
+          ( [
+              ( Pos_or_decl.none,
+                "The supertype didn't exist because the field was missing." );
+            ],
+            st )
+        | _ ->
+          let (expl_super, st) = explain_reason super ~st ~cfg ~ctxt in
+          ( with_prefix
+              expl_super
+              ~prefix:"The supertype comes from this"
+              ~sep:" ",
+            st )
+      in
+
+      let prefix =
+        match (rule_opt, toplevel && idx = n_steps - 1) with
+        | (Some rule, true) ->
+          Format.sprintf
+            "%s %d of %d (here is where the error occurred)\n\n%s"
+            pfx
+            (idx + 1)
+            n_steps
+            (Subtype_rule.explain rule)
+        | (Some rule, false) ->
+          Format.sprintf
+            "%s %d of %d\n\n%s"
+            pfx
+            (idx + 1)
+            n_steps
+            (Subtype_rule.explain rule)
+        | (None, true) ->
+          Format.sprintf
+            "%s %d of %d (here is where the error occurred)\n\nI started by checking this subtype relationship."
+            pfx
+            (idx + 1)
+            n_steps
+        | (None, false) ->
+          Format.sprintf
+            "%s %d of %d\n\nI started by checking this subtype relationship."
+            pfx
+            (idx + 1)
+            n_steps
+      in
+      let expl_sub = with_prefix expl_sub ~prefix ~sep:"\n\n" in
+      (expl_sub @ expl_super, st)
+
+    and explain_reason reason ~st ~cfg ~ctxt =
+      match reason with
+      (* -- Expected 'atoms' in a derivation step -- *)
+      | From_witness_locl witness -> ([explain_witness_locl witness], st)
+      | From_witness_decl witness -> ([explain_witness_decl witness], st)
+      | Def (pos, r) -> explain_def (pos, r) ~st ~cfg ~ctxt
+      | Flow { from; into; kind } ->
+        let into =
+          match cfg.Config.flow_config with
+          | Config.Full -> into
+          | Config.Ends -> extract_last into
+        in
+        explain_flow (from, into, kind) ~st ~cfg ~ctxt
+      | Solved { solution; in_; _ } ->
+        explain_solved ~solution ~in_ ~st ~cfg ~ctxt
+      | Missing_field ->
+        (* This needs to be special cased in [explain_step] *)
+        ([(Pos_or_decl.none, "missing field")], st)
+      (* Special handling of legacy structured reasons
+         TODO(mjt) translate to flow?
+      *)
+      | Instantiate (r1, nm, r2) ->
+        explain_instantiate (r1, nm, r2) ~st ~cfg ~ctxt
+      | Idx (pos, r) -> explain_idx (pos, r) ~st ~cfg ~ctxt
+      | Arith_ret_float (pos, r, arg_pos) ->
+        explain_arith_ret_float (pos, r, arg_pos) ~st ~cfg ~ctxt
+      | Arith_ret_num (pos, r, arg_pos) ->
+        explain_arith_ret_num (pos, r, arg_pos) ~st ~cfg ~ctxt
+      | Lost_info (nm, r, blame) ->
+        explain_lost_info (nm, r, blame) ~st ~cfg ~ctxt
+      | Format (pos, nm, r) -> explain_format (pos, nm, r) ~st ~cfg ~ctxt
+      | Typeconst (r1, rs, str, r2) ->
+        explain_typeconst (r1, rs, str, r2) ~st ~cfg ~ctxt
+      | Type_access (r, rs) -> explain_type_access (r, rs) ~st ~cfg ~ctxt
+      | Expr_dep_type (r, pos, expr_dep_type_reason) ->
+        explain_expr_dep_type (r, pos, expr_dep_type_reason) ~st ~cfg ~ctxt
+      | Contravariant_generic (r, nm) ->
+        explain_contravariant_generic (r, nm) ~st ~cfg ~ctxt
+      | Invariant_generic (r, nm) ->
+        explain_invariant_generic (r, nm) ~st ~cfg ~ctxt
+      | Lambda_param (pos, r) -> explain_lambda_param (pos, r) ~st ~cfg ~ctxt
+      | Dynamic_coercion r -> explain_dynamic_coercion r ~st ~cfg ~ctxt
+      | Dynamic_partial_enforcement (pos, nm, r) ->
+        explain_dynamic_partial_enforcement (pos, nm, r) ~st ~cfg ~ctxt
+      | Rigid_tvar_escape (pos, str1, str2, r) ->
+        explain_rigid_tvar_escape (pos, str1, str2, r) ~st ~cfg ~ctxt
+      | Opaque_type_from_module (pos, str, r) ->
+        explain_opaque_type_from_module (pos, str, r) ~st ~cfg ~ctxt
+      (* Its possible that one of the following remains in the derivation
+          since we can have `Prj_one` in both subtype and supertype or
+         `Prj_both` as subtype and `Prj_one` in supertype and we will always
+         follow `Prj_one` before moving into `Prj_both` *)
+      | Lower_bound { of_; _ } -> explain_reason of_ ~st ~cfg ~ctxt
+      | Prj_both { sub_prj; _ } -> explain_reason sub_prj ~st ~cfg ~ctxt
+      | Prj_one { part; _ } -> explain_reason part ~st ~cfg ~ctxt
+      | Axiom { next; _ } -> explain_reason next ~st ~cfg ~ctxt
+      (* We have no provenance information  *)
+      | No_reason
+      | Invalid ->
+        ([(Pos_or_decl.none, "this element")], st)
+
+    and explain_witness_locl witness =
+      match witness with
+      | Is_refinement pos -> (Pos_or_decl.of_raw_pos pos, "`is` expression")
+      | Witness pos -> (Pos_or_decl.of_raw_pos pos, "expression")
+      | Type_variable (pos, _id) -> (Pos_or_decl.of_raw_pos pos, "type variable")
+      | Type_variable_generics (pos, x, y, _id) ->
+        ( Pos_or_decl.of_raw_pos pos,
+          Format.sprintf "generic parameter `%s` of `%s`" x y )
+      | Unpack_param (pos, _, _) ->
+        (Pos_or_decl.of_raw_pos pos, "unpacked parameter")
+      | Bitwise pos -> (Pos_or_decl.of_raw_pos pos, "expression")
+      | Arith pos -> (Pos_or_decl.of_raw_pos pos, "arithmetic expression")
+      | Idx_vector pos -> (Pos_or_decl.of_raw_pos pos, "index expression")
+      | Splice pos -> (Pos_or_decl.of_raw_pos pos, "splice expression")
+      | No_return pos -> (Pos_or_decl.of_raw_pos pos, "declaration")
+      | Shape_literal pos -> (Pos_or_decl.of_raw_pos pos, "shape literal")
+      | Destructure pos -> (Pos_or_decl.of_raw_pos pos, "destructure expression")
+      | Join_point pos -> (Pos_or_decl.of_raw_pos pos, "join point")
+      | _ ->
+        ( witness_locl_to_raw_pos witness,
+          Format.sprintf
+            "element (`%s`)"
+            (constructor_string_of_witness_locl witness) )
+
+    and explain_witness_decl witness =
+      match witness with
+      | Hint pos -> (pos, "hint")
+      | Witness_from_decl pos -> (pos, "declaration")
+      | Support_dynamic_type pos -> (pos, "function or method declaration")
+      | Pessimised_return pos -> (pos, "return hint")
+      | Var_param_from_decl pos -> (pos, "variadic parameter declaration")
+      | Tuple_from_splat pos -> (pos, "tuple from parameters")
+      | Cstr_on_generics (pos, _) -> (pos, "constraint on the generic parameter")
+      | Implicit_upper_bound (pos, nm) ->
+        ( pos,
+          Format.sprintf
+            "implicit upper bound (`%s`) on the generic parameter"
+            nm )
+      | Class_class (pos, nm) ->
+        ( pos,
+          Format.sprintf
+            "implicitly defined constant `::class` of class `%s`"
+            nm )
+      | _ ->
+        ( witness_decl_to_raw_pos witness,
+          Format.sprintf
+            "element (`%s`)"
+            (constructor_string_of_witness_decl witness) )
+
+    and explain_def (pos, reason) ~st ~cfg ~ctxt =
+      let (expl_reason, st) = explain_reason reason ~st ~cfg ~ctxt in
+      match Config.get_def cfg pos st.State.defs_seen with
+      | None -> (expl_reason, st)
+      | Some (Either.Second seen_at) ->
+        let expl_reason =
+          if Derivation_path.equal seen_at ctxt.Context.derivation_path then
+            let suffix = "(its definition was given above)" in
+            finish_with_suffix expl_reason ~suffix ~sep:" "
+          else
+            Option.value_map
+              (Derivation_path.explain seen_at)
+              ~default:expl_reason
+              ~f:(fun path ->
+                let suffix =
+                  Format.sprintf "(its definition was given in [%s])" path
+                in
+                finish_with_suffix expl_reason ~suffix ~sep:" ")
+        in
+        (expl_reason, st)
+      | Some (Either.First pos) ->
+        (* Suppress the 'definition' of supportdyn  *)
+        if
+          cfg.Config.suppress_supportdyn
+          && Pos_or_decl.is_hhi pos
+          && String.is_substring
+               (Relative_path.suffix (Pos_or_decl.filename pos))
+               ~substring:"supportdynamic"
+        then
+          (expl_reason, st)
+        else
+          let st = State.def_seen st pos ctxt.Context.derivation_path in
+          (expl_reason @ [(pos, "which is defined here")], st)
+
+    and explain_flow (from, into, kind) ~st ~cfg ~ctxt =
+      let (expl_from, st) = explain_reason from ~st ~cfg ~ctxt in
+      let (expl_into, st) =
+        explain_reason into ~st ~cfg ~ctxt:(Context.set_in_flow ctxt)
+      in
+      let suffix = explain_flow_kind kind
+      and prefix =
+        if Context.in_flow ctxt then
+          "which itself flows into this"
+        else
+          "and flows into this"
+      in
+      let expl_into =
+        with_suffix (with_prefix expl_into ~prefix ~sep:" ") ~suffix ~sep:" "
+      in
+      (expl_from @ expl_into, st)
+
+    and explain_solved ~solution ~in_ ~st ~cfg ~ctxt =
+      let (expl_in, st) = explain_reason in_ ~st ~cfg ~ctxt in
+      let (expl_solution, st) =
+        explain_reason solution ~st ~cfg ~ctxt:Context.(enter_solution ctxt)
+      in
+      let prefix = "which I solved to this" in
+      let expl_solution = with_prefix expl_solution ~prefix ~sep:" " in
+      (expl_in @ expl_solution, st)
+
+    and explain_instantiate (r1, nm, r2) ~st ~cfg ~ctxt =
+      explain_flow (r2, r1, Flow_instantiate nm) ~st ~cfg ~ctxt
+
+    and explain_idx (pos, _r) ~st ~cfg:_ ~ctxt:_ =
+      ([(Pos_or_decl.of_raw_pos pos, "index expression")], st)
+
+    and explain_arith_ret_float (pos, _r, _arg_pos) ~st ~cfg:_ ~ctxt:_ =
+      ([(Pos_or_decl.of_raw_pos pos, "arithmetic expression")], st)
+
+    and explain_arith_ret_num (pos, _r, _arg_pos) ~st ~cfg:_ ~ctxt:_ =
+      ([(Pos_or_decl.of_raw_pos pos, "arithmetic expression")], st)
+
+    and explain_lost_info (_nm, r, _blame) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_format (pos, _nm, _r) ~st ~cfg:_ ~ctxt:_ =
+      ([(Pos_or_decl.of_raw_pos pos, "format expression")], st)
+
+    and explain_typeconst (_r1, (pos, _), _str, _t2) ~st ~cfg:_ ~ctxt:_ =
+      ([(pos, "this type constant")], st)
+
+    and explain_type_access (r, _rs) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_expr_dep_type (r, _pos, _expr_dep_type_reason) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_contravariant_generic (r, _nm) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_invariant_generic (r, _nm) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_lambda_param (pos, _r) ~st ~cfg:_ ~ctxt:_ =
+      ([(Pos_or_decl.of_raw_pos pos, "lambda parameter")], st)
+
+    and explain_dynamic_coercion r ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_dynamic_partial_enforcement (_pos, _nm, r) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_rigid_tvar_escape (_pos, _str1, _str2, r) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+
+    and explain_opaque_type_from_module (_pos, _str, r) ~st ~cfg ~ctxt =
+      explain_reason r ~st ~cfg ~ctxt
+  end
+
+  let explain t ~complexity =
+    let st = Explain.State.empty
+    and cfg = Explain.Config.from_complexity complexity
+    and ctxt = Explain.Context.empty in
+    let (expl, _) = Explain.explain t ~st ~cfg ~ctxt in
+    let prefix = "Here's why:" in
+    Explain.with_prefix expl ~prefix ~sep:"\n\n"
+end
+
+let explain ~sub ~super ~complexity =
+  Derivation.(explain (of_reason ~sub ~super) ~complexity)
+
+let debug ~sub ~super =
+  let json_repr =
+    Hh_json.(
+      JSON_Object
+        [
+          ( "Subtype",
+            JSON_Object [("sub", to_json sub); ("super", to_json super)] );
+        ])
+  in
+  [
+    ( Pos_or_decl.none,
+      Format.sprintf "Derivation:\n%s"
+      @@ Hh_json.json_to_string ~pretty:true
+      @@ Derivation.(to_json @@ of_reason ~sub ~super) );
+    ( Pos_or_decl.none,
+      Format.sprintf "Reason:\n%s"
+      @@ Hh_json.json_to_string ~pretty:true json_repr );
+  ]

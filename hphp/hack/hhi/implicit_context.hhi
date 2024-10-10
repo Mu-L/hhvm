@@ -37,19 +37,21 @@ namespace HH {
 
   abstract class ImplicitContext {
     abstract const type T as nonnull;
+    abstract const bool IS_MEMO_SENSITIVE;
+    abstract const ctx CRun as [leak_safe];
 
     protected static async function runWithAsync<Tout>(
       this::T $context,
       (function()[_]: Awaitable<Tout>) $f,
-    )[zoned, ctx $f]: Awaitable<Tout>;
+    )[this::CRun, ctx $f]: Awaitable<Tout>;
 
     protected static function runWith<Tout>(
       this::T $context,
       (function()[_]: Tout) $f,
-    )[zoned, ctx $f]: Tout;
+    )[this::CRun, ctx $f]: Tout;
 
-    protected static function get()[zoned]: ?this::T;
-    protected static function exists()[zoned]: bool;
+    protected static function get()[this::CRun]: ?this::T;
+    protected static function exists()[this::CRun]: bool;
   }
 
   /**
@@ -66,36 +68,16 @@ namespace HH {
      * key.
      * Attempting to fetch the Implicit Context in this function or a recursive
      * callee will result in an exception.
-     * Calling an "uncategorized" memoized function including one using
-     * #SoftMakeICInaccessible will result in an exception.
      */
     string MakeICInaccessible = 'MakeICInaccessible';
-    /**
-     * Will throw if called with an Implicit Context value.
-     * Do not incorporate the Implicit Context state into the memoization cache
-     * key.
-     * Behaviors that would result in an exception under #MakeICInaccessible
-     * will log instead.
-     */
-    string SoftMakeICInaccessible = 'SoftMakeICInaccessible';
-    /**
-     * Default option for memoization attributes.
-     * Will throw if called with an Implicit Context value.
-     * Do not incorporate the Implicit Context state into the memoization cache
-     * key.
-     */
-    string Uncategorized = 'Uncategorized';
   }
 
   /**
    * States obtainable via get_state_unsafe
    */
   enum State: string as string {
-    NULL = 'NULL';
     VALUE = 'VALUE';
-    SOFT_SET = 'SOFT_SET';
     INACCESSIBLE = 'INACCESSIBLE';
-    SOFT_INACCESSIBLE = 'SOFT_INACCESSIBLE';
   }
 
 } // namespace HH

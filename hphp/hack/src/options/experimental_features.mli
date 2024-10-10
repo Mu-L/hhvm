@@ -18,8 +18,7 @@ type feature_status =
   | Migration
   | Deprecated
   | OngoingRelease
-      (** An OngoingRelease feature is always considered enabled in the runtime,
-      but not the type checker where it still needs the attribute. *)
+      (** An OngoingRelease feature is always considered enabled. *)
 [@@deriving eq, ord, show]
 
 (** Experimental features are enabled with a file attribute
@@ -35,14 +34,13 @@ type feature_name =
   | TypeConstMultipleBounds
   | TypeConstSuperBound
   | ClassConstDefault
-  | TypeRefinements
   | MethodTraitDiamond
   | UpcastExpression
   | RequireClass
   | NewtypeSuperBounds
-  | ExpressionTreeBlocks
   | Package
   | CaseTypes
+  | CaseTypeWhereClauses
   | ModuleLevelTraits
   | ModuleLevelTraitsExtensions
   | TypedLocalVariables
@@ -52,10 +50,13 @@ type feature_name =
   | ClassType
   | FunctionReferences
   | FunctionTypeOptionalParams
-  | ExpressionTreeMap
   | ExpressionTreeNest
   | SealedMethods
   | AwaitInSplice
+  | OpenTuples
+  | TypeSplat
+  | ExpressionTreeNestedBindings
+  | LikeTypeHints
 [@@deriving eq, ord, show]
 
 val feature_status_from_string : string -> feature_status option
@@ -64,4 +65,4 @@ val feature_name_from_string : string -> feature_name option
 
 (** Convert string/json pair to feature name/status. Fail if the name/status aren't valid. *)
 val parse_experimental_feature :
-  string * Hh_json.json -> feature_name * feature_status
+  string * Hh_json.json -> string * feature_status

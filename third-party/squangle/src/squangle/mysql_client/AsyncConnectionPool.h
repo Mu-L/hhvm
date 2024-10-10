@@ -22,8 +22,7 @@
 //   opening a new connection, requests a connection to the pool it was created
 //   by. The usage and error treat are the same.
 
-#ifndef COMMON_ASYNC_CONNECTION_POOL_H
-#define COMMON_ASYNC_CONNECTION_POOL_H
+#pragma once
 
 #include <folly/String.h>
 #include <folly/container/F14Map.h>
@@ -35,12 +34,12 @@
 
 #include "squangle/logger/DBEventCounter.h"
 #include "squangle/mysql_client/AsyncMysqlClient.h"
+#include "squangle/mysql_client/ConnectPoolOperation.h"
 #include "squangle/mysql_client/ConnectionPool.h"
 #include "squangle/mysql_client/Operation.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlConnectPoolOperationImpl.h"
 
-namespace facebook {
-namespace common {
-namespace mysql_client {
+namespace facebook::common::mysql_client {
 
 template <typename Client>
 class ConnectPoolOperation;
@@ -48,6 +47,8 @@ class AsyncConnectionPool;
 class PoolKey;
 
 using AsyncConnectPoolOperation = ConnectPoolOperation<AsyncMysqlClient>;
+using AsyncConnectPoolOperationImpl =
+    mysql_protocol::MysqlConnectPoolOperationImpl<AsyncMysqlClient>;
 
 class AsyncConnectionPool : public ConnectionPool<AsyncMysqlClient> {
  public:
@@ -134,10 +135,10 @@ class AsyncConnectionPool : public ConnectionPool<AsyncMysqlClient> {
   }
 
   std::unique_ptr<Connection> makeNewConnection(
-      const ConnectionKey& conn_key,
+      std::shared_ptr<const ConnectionKey> conn_key,
       std::unique_ptr<MysqlPooledHolder<AsyncMysqlClient>> mysqlConn) override {
     return std::make_unique<AsyncConnection>(
-        mysql_client_.get(), conn_key, std::move(mysqlConn));
+        *mysql_client_, std::move(conn_key), std::move(mysqlConn));
   }
 
   struct ShutdownData {
@@ -161,8 +162,4 @@ class AsyncConnectionPool : public ConnectionPool<AsyncMysqlClient> {
   AsyncConnectionPool& operator=(const AsyncConnectionPool&) = delete;
 };
 
-} // namespace mysql_client
-} // namespace common
-} // namespace facebook
-
-#endif // COMMON_ASYNC_CONNECTION_POOL_H
+} // namespace facebook::common::mysql_client

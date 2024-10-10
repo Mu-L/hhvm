@@ -40,7 +40,7 @@ class Client<::test::fixtures::basic::FB303Service> : public apache::thrift::Gen
   /** Glean {"file": "thrift/compiler/test/fixtures/basic/src/module.thrift", "service": "FB303Service", "function": "simple_rpc"} */
   virtual void simple_rpc(apache::thrift::RpcOptions& rpcOptions, std::unique_ptr<apache::thrift::RequestCallback> callback, ::std::int32_t p_int_parameter);
  protected:
-  void simple_rpcImpl(apache::thrift::RpcOptions& rpcOptions, std::shared_ptr<apache::thrift::transport::THeader> header, apache::thrift::ContextStack* contextStack, apache::thrift::RequestClientCallback::Ptr callback, ::std::int32_t p_int_parameter, bool stealRpcOptions = false);
+  void fbthrift_serialize_and_send_simple_rpc(apache::thrift::RpcOptions& rpcOptions, std::shared_ptr<apache::thrift::transport::THeader> header, apache::thrift::ContextStack* contextStack, apache::thrift::RequestClientCallback::Ptr callback, ::std::int32_t p_int_parameter, bool stealRpcOptions = false);
  public:
 
   /** Glean {"file": "thrift/compiler/test/fixtures/basic/src/module.thrift", "service": "FB303Service", "function": "simple_rpc"} */
@@ -56,10 +56,6 @@ class Client<::test::fixtures::basic::FB303Service> : public apache::thrift::Gen
   virtual folly::Future<::test::fixtures::basic::ReservedKeyword> future_simple_rpc(apache::thrift::RpcOptions& rpcOptions, ::std::int32_t p_int_parameter);
   /** Glean {"file": "thrift/compiler/test/fixtures/basic/src/module.thrift", "service": "FB303Service", "function": "simple_rpc"} */
   virtual folly::SemiFuture<::test::fixtures::basic::ReservedKeyword> semifuture_simple_rpc(apache::thrift::RpcOptions& rpcOptions, ::std::int32_t p_int_parameter);
-  /** Glean {"file": "thrift/compiler/test/fixtures/basic/src/module.thrift", "service": "FB303Service", "function": "simple_rpc"} */
-  virtual folly::Future<std::pair<::test::fixtures::basic::ReservedKeyword, std::unique_ptr<apache::thrift::transport::THeader>>> header_future_simple_rpc(apache::thrift::RpcOptions& rpcOptions, ::std::int32_t p_int_parameter);
-  /** Glean {"file": "thrift/compiler/test/fixtures/basic/src/module.thrift", "service": "FB303Service", "function": "simple_rpc"} */
-  virtual folly::SemiFuture<std::pair<::test::fixtures::basic::ReservedKeyword, std::unique_ptr<apache::thrift::transport::THeader>>> header_semifuture_simple_rpc(apache::thrift::RpcOptions& rpcOptions, ::std::int32_t p_int_parameter);
 
 #if FOLLY_HAS_COROUTINES
 #if __clang__
@@ -97,14 +93,14 @@ class Client<::test::fixtures::basic::FB303Service> : public apache::thrift::Gen
     auto cancellableCallback = cancellable ? CancellableCallback::create(&callback, channel_) : nullptr;
     static apache::thrift::RpcOptions* defaultRpcOptions = new apache::thrift::RpcOptions();
     auto wrappedCallback = apache::thrift::RequestClientCallback::Ptr(cancellableCallback ? (apache::thrift::RequestClientCallback*)cancellableCallback.get() : &callback);
-    const bool shouldProcessClientInterceptors = ctx && ctx->shouldProcessClientInterceptors();
-    if (shouldProcessClientInterceptors) {
-      co_await ctx->processClientInterceptorsOnRequest();
+    if (ctx != nullptr) {
+      auto argsAsRefs = std::tie(p_int_parameter);
+      ctx->processClientInterceptorsOnRequest(apache::thrift::ClientInterceptorOnRequestArguments(argsAsRefs), header.get()).throwUnlessValue();
     }
     if constexpr (hasRpcOptions) {
-      simple_rpcImpl(*rpcOptions, std::move(header), ctx.get(), std::move(wrappedCallback), p_int_parameter);
+      fbthrift_serialize_and_send_simple_rpc(*rpcOptions, header, ctx.get(), std::move(wrappedCallback), p_int_parameter);
     } else {
-      simple_rpcImpl(*defaultRpcOptions, std::move(header), ctx.get(), std::move(wrappedCallback), p_int_parameter);
+      fbthrift_serialize_and_send_simple_rpc(*defaultRpcOptions, header, ctx.get(), std::move(wrappedCallback), p_int_parameter);
     }
     if (cancellable) {
       folly::CancellationCallback cb(cancelToken, [&] { CancellableCallback::cancel(std::move(cancellableCallback)); });
@@ -112,8 +108,8 @@ class Client<::test::fixtures::basic::FB303Service> : public apache::thrift::Gen
     } else {
       co_await callback.co_waitUntilDone();
     }
-    if (shouldProcessClientInterceptors) {
-      co_await ctx->processClientInterceptorsOnResponse();
+    if (ctx != nullptr) {
+      ctx->processClientInterceptorsOnResponse(returnState.header()).throwUnlessValue();
     }
     if (returnState.isException()) {
       co_yield folly::coro::co_error(std::move(returnState.exception()));
@@ -152,9 +148,12 @@ class Client<::test::fixtures::basic::FB303Service> : public apache::thrift::Gen
   /** Glean {"file": "thrift/compiler/test/fixtures/basic/src/module.thrift", "service": "FB303Service", "function": "simple_rpc"} */
   virtual folly::exception_wrapper recv_instance_wrapped_simple_rpc(::test::fixtures::basic::ReservedKeyword& _return, ::apache::thrift::ClientReceiveState& state);
  private:
-  template <typename Protocol_, typename RpcOptions>
-  void simple_rpcT(Protocol_* prot, RpcOptions&& rpcOptions, std::shared_ptr<apache::thrift::transport::THeader> header, apache::thrift::ContextStack* contextStack, apache::thrift::RequestClientCallback::Ptr callback, ::std::int32_t p_int_parameter);
+  apache::thrift::SerializedRequest fbthrift_serialize_simple_rpc(const RpcOptions& rpcOptions, apache::thrift::transport::THeader& header, apache::thrift::ContextStack* contextStack, ::std::int32_t p_int_parameter);
+  template <typename RpcOptions>
+  void fbthrift_send_simple_rpc(apache::thrift::SerializedRequest&& request, RpcOptions&& rpcOptions, std::shared_ptr<apache::thrift::transport::THeader> header, apache::thrift::RequestClientCallback::Ptr callback);
   std::pair<::apache::thrift::ContextStack::UniquePtr, std::shared_ptr<::apache::thrift::transport::THeader>> simple_rpcCtx(apache::thrift::RpcOptions* rpcOptions);
+  template <typename CallbackType>
+  folly::SemiFuture<::test::fixtures::basic::ReservedKeyword> fbthrift_semifuture_simple_rpc(apache::thrift::RpcOptions& rpcOptions, ::std::int32_t p_int_parameter);
  public:
 };
 

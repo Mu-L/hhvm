@@ -21,7 +21,7 @@ type runtime_data_type
   Maps a type hint to its associated runtime data type. This is intended to
   be used to only as part of checking if a case type is well-formed.
 *)
-val data_type_from_hint : env -> Aast.hint -> runtime_data_type
+val data_type_from_hint : env -> Aast.hint -> env * runtime_data_type
 
 (**
   Checks if two different runtime data types can possibly overlap. Two
@@ -39,7 +39,8 @@ val check_overlapping :
   Typing_error.Primary.CaseType.t option
 
 (**
-  Given the variants of a case type (encoded as a locl_ty) and another locl_ty [intersecting_ty]
+  [filter_variants_using_datatype env reason variants intersecting_ty]:
+  Given the [variants] of a case type and another locl_ty [intersecting_ty],
   produce a new locl_ty containing only the types in the variant that map to an intersecting
   data type. For example:
     Given
@@ -57,8 +58,9 @@ val filter_variants_using_datatype :
   env -> Typing_reason.t -> locl_ty list -> locl_ty -> env * locl_ty
 
 (**
-   Look up case type via [name]. If the case type exist returns the list of
-   variant types. If the case type doesn't exist, returns [None].
+   [get_variant_tys env name ty_args] looks up a case type by [name] in the decls.
+   If the case type exists, it returns the list of
+   variant types. If the case type doesn't exist, it returns [None].
 *)
 val get_variant_tys : env -> string -> locl_ty list -> env * locl_ty list option
 
@@ -76,9 +78,9 @@ module AtomicDataTypes : sig
     | Label
     | Class of string
 
-  val of_ty : env -> atomic_ty -> t
+  val of_ty : env -> atomic_ty -> env * t
 
-  val of_predicate : env -> type_predicate -> t
+  val of_tag : env -> Typing_defs_core.type_tag -> env * t
 
   (** Computes the complement for the set of values contained in [t] *)
   val complement : t -> t

@@ -11,6 +11,8 @@
   (modules
     error_codes
   )
+  (libraries
+   utils_core)
 )
 
 (library
@@ -18,7 +20,8 @@
  (wrapped false)
  (modules
   warnings_saved_state)
- (libraries)
+ (libraries
+  utils_core)
  (preprocess
    (pps
     ppx_deriving.std)))

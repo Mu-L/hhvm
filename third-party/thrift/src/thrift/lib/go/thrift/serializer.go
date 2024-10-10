@@ -16,69 +16,50 @@
 
 package thrift
 
+import (
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
+)
+
 // A Serializer is used to turn a Struct in to a byte stream
 type Serializer struct {
 	Transport *MemoryBuffer
-	Protocol  Format
+	Protocol  types.Encoder
 }
 
-// WritableStruct is an interface used to encapsulate a message that can be written to a protocol
-type WritableStruct interface {
-	Write(p Format) error
-}
-
-// WritableException is an interface used to encapsulate an exception that can be written to a protocol
-type WritableException interface {
-	WritableStruct
-	Exception
-}
-
-// WritableResult is an interface used to encapsulate a result struct that can be written to a protocol
-type WritableResult interface {
-	WritableStruct
-	Exception() WritableException
-}
-
-// Struct is the interface used to encapsulate a message that can be read and written to a protocol
-type Struct interface {
-	Write(p Format) error
-	Read(p Format) error
-}
-
-// NewSerializer create a new serializer using the binary protocol
+// NewSerializer create a new serializer using the binary format
 func NewSerializer() *Serializer {
 	transport := NewMemoryBufferLen(1024)
-	protocol := NewBinaryProtocolTransport(transport)
+	protocol := NewBinaryFormat(transport)
 	return &Serializer{transport, protocol}
 }
 
-// NewCompactSerializer creates a new serializer using the compact protocol
+// NewCompactSerializer creates a new serializer using the compact format
 func NewCompactSerializer() *Serializer {
 	transport := NewMemoryBufferLen(1024)
-	protocol := NewCompactProtocol(transport)
+	protocol := NewCompactFormat(transport)
 	return &Serializer{transport, protocol}
 }
 
-func serializeCompact(msg Struct) ([]byte, error) {
+func serializeCompact(msg types.Struct) ([]byte, error) {
 	return NewCompactSerializer().Write(msg)
 }
 
-// NewJSONSerializer creates a new serializer using the JSON protocol
-func NewJSONSerializer() *Serializer {
+// NewCompactJSONSerializer creates a new serializer using the compact JSON format
+func NewCompactJSONSerializer() *Serializer {
 	transport := NewMemoryBufferLen(1024)
-	protocol := NewJSONProtocol(transport)
+	protocol := NewCompactJSONFormat(transport)
 	return &Serializer{transport, protocol}
 }
 
-// NewSimpleJSONSerializer creates a new serializer using the SimpleJSON protocol
+// NewSimpleJSONSerializer creates a new serializer using the SimpleJSON format
 func NewSimpleJSONSerializer() *Serializer {
 	transport := NewMemoryBufferLen(1024)
-	protocol := NewSimpleJSONProtocol(transport)
+	protocol := NewSimpleJSONFormat(transport)
 	return &Serializer{transport, protocol}
 }
 
 // WriteString writes msg to the serializer and returns it as a string
-func (s *Serializer) WriteString(msg Struct) (str string, err error) {
+func (s *Serializer) WriteString(msg types.Struct) (str string, err error) {
 	s.Transport.Reset()
 
 	if err = msg.Write(s.Protocol); err != nil {
@@ -86,9 +67,6 @@ func (s *Serializer) WriteString(msg Struct) (str string, err error) {
 	}
 
 	if err = s.Protocol.Flush(); err != nil {
-		return
-	}
-	if err = s.Transport.Flush(); err != nil {
 		return
 	}
 
@@ -96,7 +74,7 @@ func (s *Serializer) WriteString(msg Struct) (str string, err error) {
 }
 
 // Write writes msg to the serializer and returns it as a byte array
-func (s *Serializer) Write(msg Struct) (b []byte, err error) {
+func (s *Serializer) Write(msg types.Struct) (b []byte, err error) {
 	s.Transport.Reset()
 
 	if err = msg.Write(s.Protocol); err != nil {
@@ -104,10 +82,6 @@ func (s *Serializer) Write(msg Struct) (b []byte, err error) {
 	}
 
 	if err = s.Protocol.Flush(); err != nil {
-		return
-	}
-
-	if err = s.Transport.Flush(); err != nil {
 		return
 	}
 

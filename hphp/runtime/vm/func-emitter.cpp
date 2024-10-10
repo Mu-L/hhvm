@@ -208,14 +208,11 @@ const StaticString
   s_MemoizeLSB("__MemoizeLSB"),
   s_KeyedByIC("KeyedByIC"),
   s_MakeICInaccessible("MakeICInaccessible"),
-  s_SoftMakeICInaccessible("SoftMakeICInaccessible"),
-  s_Uncategorized("Uncategorized"),
   s_SoftInternal("__SoftInternal");
 
 namespace {
-  bool is_interceptable(const PreClass* preClass, const StringData* name) {
+  bool is_interceptable(const PreClass* preClass, const StringData* name, Attr attrs) {
     if (RO::RepoAuthoritative) return false;
-    if (Cfg::Eval::NonInterceptableFunctions.empty()) return true;
     auto fullname = [&]() {
       auto n = name->toCppString();
       if (!preClass) {
@@ -223,7 +220,15 @@ namespace {
       }
       return preClass->name()->toCppString() +"::"+ n;
     }();
-    return Cfg::Eval::NonInterceptableFunctions.count(fullname) == 0;
+    if (attrs & AttrBuiltin) {
+      if (Cfg::Jit::BuiltinsInterceptableByDefault) {
+        return true;
+      } else {
+        return (Cfg::Eval::InterceptableBuiltins.count(fullname) == 1);
+      }
+    } else {
+      return Cfg::Eval::NonInterceptableFunctions.count(fullname) == 0;
+    }
   }
 }
 
@@ -234,7 +239,7 @@ Func* FuncEmitter::create(Unit& unit, PreClass* preClass /* = NULL */) const {
   assertx(IMPLIES(attrs & AttrPersistent, persistent));
   attrSetter(attrs, persistent, AttrPersistent);
 
-  auto interceptable = is_interceptable(preClass, name);
+  auto interceptable = is_interceptable(preClass, name, attrs);
   attrSetter(attrs, interceptable, AttrInterceptable);
 
   if (!(attrs & AttrPersistent) && attrs & AttrBuiltin) {
@@ -292,32 +297,14 @@ Func* FuncEmitter::create(Unit& unit, PreClass* preClass /* = NULL */) const {
       assertx(tvIsVec(tv));
       IterateV(tv.m_data.parr, [&](TypedValue elem) {
         if (tvIsString(elem)) {
-          /*
-           * TODO: simplify this into a 2 state if else once Soft states are
-           * entirely removed
-          */
+          assertx(tv.m_data.parr->size() == 1);
           if (elem.m_data.pstr->same(s_KeyedByIC.get())) {
-            assertx(tv.m_data.parr->size() == 1);
             icType = Func::MemoizeICType::KeyedByIC;
           } else if (elem.m_data.pstr->same(s_MakeICInaccessible.get())) {
-            assertx(tv.m_data.parr->size() == 1);
-            icType = Func::MemoizeICType::MakeICInaccessible;
-          } else if (elem.m_data.pstr->same(s_SoftMakeICInaccessible.get())) {
-            assertx(tv.m_data.parr->size() <= 2);
-            icType = Func::MemoizeICType::MakeICInaccessible;
-          } else if (elem.m_data.pstr->same(s_Uncategorized.get())) {
             icType = Func::MemoizeICType::MakeICInaccessible;
           } else {
             assertx(false && "invalid string");
           }
-        } else if (tvIsInt(elem)) {
-          /*
-           * This would be the sample rate, we don't use it
-           * this branch will be removed once the SoftMakeICInaccessible
-           * is removed from www
-           * for now assert that the SoftMakeICInaccessible was mapped to non-soft
-          */
-          assertx(icType == Func::MemoizeICType::MakeICInaccessible);
         } else {
           assertx(false && "invalid input");
         }

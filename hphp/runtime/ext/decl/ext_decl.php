@@ -165,6 +165,7 @@ namespace HH {
     ?'is_inout' => bool,
     ?'has_default' => bool,
     ?'is_readonly' => bool,
+    ?'is_optional' => bool,
   );
 
   type ExtDeclSignature = shape(
@@ -308,7 +309,7 @@ namespace HH {
     <<__Native>>
     public static function parsePath(string $path)[]: FileDecls;
 
-      /*
+    /*
      * Parse a source file. May use cached data. This is the same as
      * parsePath, but provides an Awaitable API for Memcache.
      *

@@ -16,8 +16,7 @@
 
 #include <thrift/lib/cpp2/transport/rocket/test/util/TestServiceMock.h>
 
-namespace testutil {
-namespace testservice {
+namespace testutil::testservice {
 
 using namespace apache::thrift;
 
@@ -151,7 +150,7 @@ ResponseAndServerStream<int32_t, int32_t> TestStreamServiceMock::leakCheck(
       [=,
        detector = LeakDetector()]() -> folly::coro::AsyncGenerator<int32_t&&> {
         for (int i = from; i < to; ++i) {
-          co_yield std::move(i);
+          co_yield int(i);
         }
       });
 #else
@@ -304,5 +303,4 @@ TestStreamServiceMock::leakPublisherCheck() {
   return std::move(stream);
 }
 
-} // namespace testservice
-} // namespace testutil
+} // namespace testutil::testservice

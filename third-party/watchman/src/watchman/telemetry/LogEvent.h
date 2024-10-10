@@ -46,7 +46,7 @@ struct BaseEventData {
 
   void populate(DynamicEvent& event) const {
     std::chrono::duration<int64_t, std::nano> elapsed_time =
-        start_time - std::chrono::system_clock::now();
+        std::chrono::system_clock::now() - start_time;
     event.addInt(
         "start_time", std::chrono::system_clock::to_time_t(start_time));
     event.addInt(
@@ -68,6 +68,8 @@ struct MetadataEventData {
   int64_t recrawl = 0;
   bool case_sensitive = false;
   std::string watcher;
+  pid_t client_pid = 0;
+  std::string client_name;
 
   void populate(DynamicEvent& event) const {
     base.populate(event);
@@ -75,6 +77,13 @@ struct MetadataEventData {
     event.addBool("case_sensitive", case_sensitive);
     if (!watcher.empty()) {
       event.addString("watcher", watcher);
+    }
+
+    if (client_pid != 0) {
+      event.addInt("client_pid", client_pid);
+    }
+    if (!client_name.empty()) {
+      event.addString("client", client_name);
     }
   }
 };
@@ -85,16 +94,12 @@ struct DispatchCommand {
   MetadataEventData meta;
   std::string command;
   std::string args;
-  pid_t client_pid = 0;
 
   void populate(DynamicEvent& event) const {
     meta.populate(event);
     event.addString("command", command);
     if (!args.empty()) {
       event.addString("args", args);
-    }
-    if (client_pid != 0) {
-      event.addInt("client_pid", client_pid);
     }
   }
 };
@@ -151,7 +156,7 @@ struct SavedState {
   std::string project;
   std::string path;
   int64_t commit_date = 0;
-  std::string metadata;
+  std::optional<std::string> projectMetadata;
   std::string properties;
   bool success = false;
 
@@ -164,8 +169,8 @@ struct SavedState {
       event.addString("path", path);
     }
     event.addInt("commit_date", commit_date);
-    if (!metadata.empty()) {
-      event.addString("metadata", metadata);
+    if (projectMetadata.has_value()) {
+      event.addString("metadata", projectMetadata.value());
     }
     if (!properties.empty()) {
       event.addString("properties", properties);
@@ -186,6 +191,9 @@ struct QueryExecute {
   int64_t results = 0;
   int64_t walked = 0;
   std::string query;
+  int64_t eden_glob_files_duration_us = 0;
+  int64_t eden_changed_files_duration_us = 0;
+  int64_t eden_file_properties_duration_us = 0;
 
   void populate(DynamicEvent& event) const {
     meta.populate(event);
@@ -202,6 +210,17 @@ struct QueryExecute {
     event.addInt("walked", walked);
     if (!query.empty()) {
       event.addString("query", query);
+    }
+    if (eden_glob_files_duration_us != 0) {
+      event.addInt("eden_glob_files_duration_us", eden_glob_files_duration_us);
+    }
+    if (eden_changed_files_duration_us != 0) {
+      event.addInt(
+          "eden_changed_files_duration_us", eden_changed_files_duration_us);
+    }
+    if (eden_file_properties_duration_us != 0) {
+      event.addInt(
+          "eden_file_properties_duration_us", eden_file_properties_duration_us);
     }
   }
 };

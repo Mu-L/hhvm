@@ -8,12 +8,14 @@
 
 val go :
   ctx:Provider_context.t ->
+  error_filter:Tast_provider.ErrorFilter.t ->
   entry:Provider_context.entry ->
   range:Ide_api_types.range ->
   Lsp.CodeAction.result
 
 val resolve :
   ctx:Provider_context.t ->
+  error_filter:Tast_provider.ErrorFilter.t ->
   entry:Provider_context.entry ->
   range:Ide_api_types.range ->
   resolve_title:string ->

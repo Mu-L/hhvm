@@ -10,7 +10,7 @@ use crate::gen::global_options::SavedStateLoading;
 use crate::gen::package_info::PackageInfo;
 use crate::gen::parser_options::ParserOptions;
 use crate::gen::saved_state_rollouts::SavedStateRollouts;
-use crate::global_options::AllOrSome;
+use crate::global_options::NoneOrAllExcept;
 use crate::i_set;
 use crate::s_map;
 use crate::s_set;
@@ -74,6 +74,7 @@ impl Default for GlobalOptions {
             tco_custom_error_config: CustomErrorConfig::default(),
             tco_const_attribute: false,
             tco_check_attribute_locations: true,
+            tco_type_refinement_partition_shapes: false,
             tco_error_php_lambdas: false,
             tco_disallow_discarded_nullable_awaitables: false,
             glean_reponame: String::new(), // "www.autocomplete" in ocaml
@@ -122,7 +123,6 @@ impl Default for GlobalOptions {
             tco_record_fine_grained_dependencies: false,
             tco_loop_iteration_upper_bound: None,
             tco_populate_dead_unsafe_cast_heap: false,
-            tco_rust_elab: false,
             dump_tast_hashes: false,
             dump_tasts: vec![],
             tco_autocomplete_mode: false,
@@ -133,15 +133,19 @@ impl Default for GlobalOptions {
             tco_lsp_invalidation: false,
             tco_autocomplete_sort_text: false,
             tco_extended_reasons: None,
-            hack_warnings: AllOrSome::ASome(vec![]),
+            tco_disable_physical_equality: false,
+            hack_warnings: NoneOrAllExcept::AllExcept(vec![]),
+            warnings_default_all: false,
             tco_strict_switch: false,
             tco_allowed_files_for_ignore_readonly: vec![],
             tco_package_v2: false,
+            tco_package_v2_support_multifile_tests: false,
             tco_package_v2_bypass_package_check_for_class_const: true,
-            preexisting_warnings: false,
             re_no_cache: false,
             hh_distc_should_disable_trace_store: false,
+            hh_distc_exponential_backoff_num_retries: 10,
             tco_enable_abstract_method_optional_parameters: false,
+            recursive_case_types: false,
         }
     }
 }

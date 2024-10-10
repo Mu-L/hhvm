@@ -19,6 +19,7 @@ use bumpalo::Bump;
 use escaper::*;
 use hash::HashMap;
 use hash::HashSet;
+use hhbc_string_utils as string_utils;
 use itertools::Either;
 use itertools::Itertools;
 use lint_rust::LintError;
@@ -728,15 +729,27 @@ fn p_closure_parameter<'a>(
             let optional = map_optional(&c.optional, env, p_optional)?;
             let kind = p_param_kind(&c.call_convention, env)?;
             let readonlyness = map_optional(&c.readonly, env, p_readonly)?;
+            let splat = map_optional(&c.pre_ellipsis, env, p_splat)?;
             let info = Some(ast::HfParamInfo {
                 kind,
                 readonlyness,
                 optional,
+                splat,
             });
             let hint = p_hint(&c.type_, env)?;
             Ok((hint, info))
         }
         _ => missing_syntax("closure parameter", node, env),
+    }
+}
+
+fn p_union_or_intersection_element<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::Hint> {
+    match &node.children {
+        TupleOrUnionOrIntersectionElementTypeSpecifier(c) => {
+            let hint = p_hint(&c.type_, env)?;
+            Ok(hint)
+        }
+        _ => missing_syntax("union or intersection tuple element", node, env),
     }
 }
 
@@ -785,10 +798,31 @@ fn p_shape_field_name<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::ShapeFi
         }
     }
     match &node.children {
-        ScopeResolutionExpression(c) => Ok(SFclassConst(
-            pos_name(&c.qualifier, env)?,
-            p_pstring(&c.name, env)?,
-        )),
+        NameofExpression(n) => {
+            let cls_name = pos_name(&n.target, env)?;
+            if string_utils::class_id_is_dynamic(&cls_name.1) {
+                raise_parsing_error(
+                    node,
+                    env,
+                    &syntax_error::invalid_lazy_class_shape_field(&cls_name.1),
+                );
+            };
+            Ok(SFclassname(cls_name))
+        }
+        ScopeResolutionExpression(c) => {
+            let cls_name = pos_name(&c.qualifier, env)?;
+            let const_name = p_pstring(&c.name, env)?;
+            if string_utils::is_class(&const_name.1) && env.is_typechecker() {
+                if string_utils::class_id_is_dynamic(&cls_name.1) {
+                    raise_parsing_error(
+                        node,
+                        env,
+                        &syntax_error::invalid_lazy_class_shape_field(&cls_name.1),
+                    );
+                };
+            }
+            Ok(SFclassConst(cls_name, const_name))
+        }
         _ => {
             raise_parsing_error(node, env, &syntax_error::invalid_shape_field_name);
             let ast::Id(p, n) = pos_name(node, env)?;
@@ -902,6 +936,7 @@ fn p_hint_<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::Hint_> {
             let mut set = HashSet::default();
             for f in field_map.iter() {
                 if !set.insert(f.name.get_name()) {
+                    // This check is sketchy. It considers only the const names in class const cases
                     raise_hh_error(env, Naming::fd_name_already_bound(f.name.get_pos().clone()));
                 }
             }
@@ -911,9 +946,96 @@ fn p_hint_<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::Hint_> {
                 field_map,
             }))
         }
-        TupleTypeSpecifier(c) => Ok(Htuple(could_map(&c.types, env, p_hint)?)),
-        UnionTypeSpecifier(c) => Ok(Hunion(could_map(&c.types, env, p_hint)?)),
-        IntersectionTypeSpecifier(c) => Ok(Hintersection(could_map(&c.types, env, p_hint)?)),
+        TupleTypeSpecifier(c) => {
+            let nodes = c.types.syntax_node_to_list_skip_separator();
+            let (min, _) = nodes.size_hint();
+            let mut seen_optional = false;
+            let mut required = Vec::with_capacity(min);
+            let mut optional = Vec::with_capacity(min);
+            let mut variadic = None;
+            let mut splat = None;
+            for n in nodes {
+                match &n.children {
+                    TupleOrUnionOrIntersectionElementTypeSpecifier(c) => {
+                        let hint = p_hint(&c.type_, env)?;
+                        let has_optional = !c.optional.is_missing();
+                        let has_ellipsis = !c.ellipsis.is_missing();
+                        let has_pre_ellipsis = !c.pre_ellipsis.is_missing();
+                        if has_ellipsis && has_pre_ellipsis {
+                            raise_parsing_error(
+                                node,
+                                env,
+                                "A splat element cannot also be variadic",
+                            );
+                        }
+                        if has_ellipsis || has_pre_ellipsis {
+                            if variadic.is_some() || splat.is_some() {
+                                raise_parsing_error(
+                                    node,
+                                    env,
+                                    "There must be only one variadic or splat element",
+                                );
+                            } else if has_optional {
+                                raise_parsing_error(
+                                    node,
+                                    env,
+                                    &syntax_error::no_optional_on_variadic_parameter,
+                                );
+                            }
+                            if has_ellipsis {
+                                variadic = Some(hint);
+                            } else if has_pre_ellipsis {
+                                if seen_optional {
+                                    raise_parsing_error(
+                                        node,
+                                        env,
+                                        "There must be no splat elements following an optional element",
+                                    );
+                                }
+                                splat = Some(hint);
+                            }
+                        } else {
+                            if variadic.is_some() || splat.is_some() {
+                                raise_parsing_error(
+                                    node,
+                                    env,
+                                    "There must be no elements following a variadic or splat element",
+                                );
+                            }
+                            if has_optional {
+                                seen_optional = true;
+                                optional.push(hint);
+                            } else {
+                                if seen_optional {
+                                    raise_parsing_error(
+                                        node,
+                                        env,
+                                        "There must be no required elements following an optional element",
+                                    );
+                                }
+                                required.push(hint);
+                            }
+                        }
+                    }
+                    _ => raise_missing_syntax("tuple element", node, env),
+                }
+            }
+            let extra = match splat {
+                Some(h) => ast::TupleExtra::Hsplat(h),
+                None => ast::TupleExtra::Hextra(ast::TupleExtraInfo { optional, variadic }),
+            };
+            Ok(Htuple(ast::TupleInfo { required, extra }))
+        }
+        UnionTypeSpecifier(c) => Ok(Hunion(could_map(
+            &c.types,
+            env,
+            p_union_or_intersection_element,
+        )?)),
+        IntersectionTypeSpecifier(c) => Ok(Hintersection(could_map(
+            &c.types,
+            env,
+            p_union_or_intersection_element,
+        )?)),
         KeysetTypeSpecifier(c) => Ok(Happly(
             pos_name(&c.keyword, env)?,
             could_map(&c.type_, env, p_hint)?,
@@ -1185,8 +1307,8 @@ fn fail_if_invalid_class_creation<'a>(node: S<'a>, env: &mut Env<'a>, id: impl A
     let id = id.as_ref();
     let is_in_static_method = *env.in_static_method();
     if is_in_static_method
-        && ((id == special_classes::SELF && env.cls_generics_mut().values().any(|reif| *reif))
-            || (id == special_classes::PARENT && *env.parent_maybe_reified()))
+        && ((string_utils::is_self(id) && env.cls_generics_mut().values().any(|reif| *reif))
+            || (string_utils::is_parent(id) && *env.parent_maybe_reified()))
     {
         raise_parsing_error(node, env, &syntax_error::static_method_reified_obj_creation);
     }
@@ -1731,6 +1853,7 @@ fn p_lambda_expression<'a>(
                     info: ast::FunParamInfo::ParamRequired,
                     callconv: ast::ParamKind::Pnormal,
                     readonly: None,
+                    splat: None,
                     user_attributes: Default::default(),
                     visibility: None,
                 }],
@@ -3912,6 +4035,13 @@ fn p_readonly<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::ReadonlyKind> {
     }
 }
 
+fn p_splat<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::SplatKind> {
+    match token_kind(node) {
+        Some(TK::DotDotDot) => Ok(ast::SplatKind::Splat),
+        _ => missing_syntax("...", node, env),
+    }
+}
+
 fn p_optional<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::OptionalKind> {
     match token_kind(node) {
         Some(TK::Optional) => Ok(ast::OptionalKind::Optional),
@@ -3929,6 +4059,7 @@ fn param_template<'a>(node: S<'a>, env: &Env<'_>) -> ast::FunParam {
         info: ast::FunParamInfo::ParamRequired,
         callconv: ast::ParamKind::Pnormal,
         readonly: None,
+        splat: None,
         user_attributes: Default::default(),
         visibility: None,
     }
@@ -3942,6 +4073,7 @@ fn p_fun_param<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::FunParam> {
             optional,
             call_convention,
             readonly,
+            pre_ellipsis,
             type_,
             ellipsis,
             name,
@@ -3989,6 +4121,7 @@ fn p_fun_param<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::FunParam> {
                 _ => ast::FunParamInfo::ParamRequired,
             };
 
+            let splat = map_optional(pre_ellipsis, env, p_splat)?;
             Ok(ast::FunParam {
                 annotation: (),
                 type_hint: ast::TypeHint((), hint),
@@ -3998,6 +4131,7 @@ fn p_fun_param<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<ast::FunParam> {
                 info,
                 callconv,
                 readonly: map_optional(readonly, env, p_readonly)?,
+                splat,
                 /* implicit field via constructor parameter.
                  * This is always None except for constructors and the modifier
                  * can be only Public or Protected or Private.
@@ -4204,7 +4338,12 @@ fn p_fun_hdr<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<FunHdr> {
                 }
             };
             let contexts = p_contexts(contexts, env, None);
-            let mut constrs = p_where_constraint(false, node, where_clause, env)?;
+            let mut constrs = p_where_constraint(
+                WhereConstraintSource::FunctionHeader,
+                node,
+                where_clause,
+                env,
+            )?;
             rewrite_effect_polymorphism(
                 env,
                 &mut parameters,
@@ -4396,27 +4535,11 @@ fn process_attribute_constructor_call<'a>(
 
         if list.len() > 1 {
             let ast::Id(_, first) = pos_name(list[0], env)?;
-            let ast::Id(_, second) = pos_name(list[1], env)?;
-
-            if first == "#SoftMakeICInaccessible" {
-                if list.len() > 2 {
-                    raise_parsing_error(
-                        list[2],
-                        env,
-                        &syntax_error::memoize_invalid_arity(&name.1, 2, &first),
-                    );
-                }
-
-                if second.parse::<u32>().is_err() {
-                    raise_parsing_error(list[1], env, &syntax_error::memoize_invalid_sample_rate);
-                }
-            } else {
-                raise_parsing_error(
-                    list[1],
-                    env,
-                    &syntax_error::memoize_invalid_arity(&name.1, 1, &first),
-                );
-            }
+            raise_parsing_error(
+                list[1],
+                env,
+                &syntax_error::memoize_invalid_arity(&name.1, 1, &first),
+            );
         }
     }
     let params = could_map(constructor_call_argument_list, env, |n, e| {
@@ -5284,8 +5407,22 @@ fn contains_class_body<'a>(
     matches!(&c.body.children, ClassishBody(_))
 }
 
+enum WhereConstraintSource {
+    CaseTypeVariant,
+    FunctionHeader,
+}
+
+impl WhereConstraintSource {
+    fn as_str(&self) -> &'static str {
+        match self {
+            WhereConstraintSource::CaseTypeVariant => "case type variant",
+            WhereConstraintSource::FunctionHeader => "function header",
+        }
+    }
+}
+
 fn p_where_constraint<'a>(
-    is_class: bool,
+    parent_kind: WhereConstraintSource,
     parent: S<'a>,
     node: S<'a>,
     env: &mut Env<'a>,
@@ -5315,13 +5452,11 @@ fn p_where_constraint<'a>(
                 .map(|n| f(n, env))
                 .collect()
         }
-        _ => {
-            if is_class {
-                missing_syntax("classish declaration constraints", parent, env)
-            } else {
-                missing_syntax("function header constraints", parent, env)
-            }
-        }
+        _ => missing_syntax(
+            format!("{} constraints", parent_kind.as_str()).as_str(),
+            parent,
+            env,
+        ),
     }
 }
 
@@ -5506,7 +5641,7 @@ fn check_effect_memoized<'a>(
             )
         }
     }
-    // memoized functions with zoned or zoned_with must be #KeyedByIC
+    // memoized functions with zoned must be #KeyedByIC
     if has_any_policied_context(contexts) {
         if let Some(u) = user_attributes
             .iter()
@@ -5535,10 +5670,6 @@ fn check_effect_memoized<'a>(
     // #(Soft)?MakeICInaccessible can only be used on functions with defaults
     if let Some(u) = user_attributes.iter().find(|u| {
         is_memoize_attribute_with_flavor(u, Some(sn::memoize_option::MAKE_IC_INACCESSSIBLE))
-            || is_memoize_attribute_with_flavor(
-                u,
-                Some(sn::memoize_option::SOFT_MAKE_IC_INACCESSSIBLE),
-            )
     }) {
         if !has_any_context(
             contexts,
@@ -5812,6 +5943,14 @@ fn p_def<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<Vec<ast::Def>> {
             };
             let as_constraint = require_one("as", as_constraints);
             let super_constraint = require_one("super", super_constraints);
+            let vis = match token_kind(&c.keyword) {
+                Some(TK::Type) => ast::TypedefVisibility::Transparent,
+                Some(TK::Newtype) if is_module_newtype => ast::TypedefVisibility::OpaqueModule,
+                Some(TK::Newtype) => ast::TypedefVisibility::Opaque,
+                _ => missing_syntax("kind", &c.keyword, env)?,
+            };
+            let hint = p_hint(&c.type_, env)?;
+            let runtime_type = hint.clone();
             Ok(vec![ast::Def::mk_typedef(ast::Typedef {
                 annotation: (),
                 name: pos_name(&c.name, env)?,
@@ -5822,13 +5961,10 @@ fn p_def<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<Vec<ast::Def>> {
                 file_attributes: vec![],
                 namespace: mk_empty_ns_env(env),
                 mode: env.file_mode(),
-                vis: match token_kind(&c.keyword) {
-                    Some(TK::Type) => ast::TypedefVisibility::Transparent,
-                    Some(TK::Newtype) if is_module_newtype => ast::TypedefVisibility::OpaqueModule,
-                    Some(TK::Newtype) => ast::TypedefVisibility::Opaque,
-                    _ => missing_syntax("kind", &c.keyword, env)?,
-                },
-                kind: p_hint(&c.type_, env)?,
+                assignment: oxidized::aast::TypedefAssignment::SimpleTypeDef(
+                    oxidized::aast::TypedefVisibilityAndHint { vis, hint },
+                ),
+                runtime_type,
                 span: p_pos(node, env),
                 emit_id: None,
                 is_ctx: false,
@@ -5870,60 +6006,94 @@ fn p_def<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<Vec<ast::Def>> {
                 .filter_map(|bound| expect_hint(bound, env))
                 .collect::<Vec<_>>();
 
-            let variants = c
+            // lower the nodes into variants (hints and optionally where clauses)
+            let mut variants = c
                 .variants
                 .syntax_node_to_list()
                 .filter_map(|variant| {
                     if let CaseTypeVariant(ctv) = &variant.children {
-                        expect_hint(&ctv.type_, env)
+                        match expect_hint(&ctv.type_, env) {
+                            Some(hint) => {
+                                match p_where_constraint(
+                                    WhereConstraintSource::CaseTypeVariant,
+                                    node,
+                                    &ctv.where_clause,
+                                    env,
+                                ) {
+                                    Ok(where_constraints) => {
+                                        Some(oxidized::aast::TypedefCaseTypeVariant {
+                                            hint,
+                                            where_constraints,
+                                        })
+                                    }
+                                    Err(e) => {
+                                        emit_error(e, env);
+                                        None
+                                    }
+                                }
+                            }
+                            None => None,
+                        }
                     } else {
                         None
                     }
                 })
                 .collect::<Vec<_>>();
+            // because we want to be able to structurally know that the variant
+            // list is never empty in the AST, we store the variants as a head
+            // and tail instead of a single list
+            // assuming `variants` is non empty (else it's a parse error):
+            // we pop off the front of the list to use as the head (`variant`)
+            let variant;
+            if !variants.is_empty() {
+                variant = variants.remove(0);
+                let assignment =
+                    oxidized::aast::TypedefAssignment::CaseType(variant.clone(), variants.to_vec());
+                let runtime_type = if variants.is_empty() {
+                    variant.hint
+                } else {
+                    let mut hints = variants
+                        .into_iter()
+                        .map(|v| v.hint.clone())
+                        .collect::<Vec<_>>();
+                    hints.insert(0, variant.hint);
+                    let hint_ = ast::Hint_::Hunion(hints);
+                    let pos = p_pos(&c.variants, env);
+                    ast::Hint::new(pos, hint_)
+                };
 
-            // If there are more than one constraints create an intersection
-            let as_constraint = if as_constraints.len() > 1 {
-                let hint_ = ast::Hint_::Hintersection(as_constraints);
-                let pos = p_pos(&c.bounds, env);
-                Some(ast::Hint::new(pos, hint_))
+                // If there are more than one constraints create an intersection
+                let as_constraint = if as_constraints.len() > 1 {
+                    let hint_ = ast::Hint_::Hintersection(as_constraints);
+                    let pos = p_pos(&c.bounds, env);
+                    Some(ast::Hint::new(pos, hint_))
+                } else {
+                    as_constraints.into_iter().next()
+                };
+
+                Ok(vec![ast::Def::mk_typedef(ast::Typedef {
+                    annotation: (),
+                    name: pos_name(&c.name, env)?,
+                    tparams,
+                    as_constraint,
+                    super_constraint: None,
+                    user_attributes,
+                    file_attributes: vec![],
+                    namespace: mk_empty_ns_env(env),
+                    mode: env.file_mode(),
+                    assignment,
+                    runtime_type,
+                    span: p_pos(node, env),
+                    emit_id: None,
+                    is_ctx: false,
+                    internal: kinds.has(modifier::INTERNAL),
+                    module: None,
+                    docs_url,
+                    doc_comment: doc_comment_opt,
+                })])
             } else {
-                as_constraints.into_iter().next()
-            };
-
-            // If there are more than one variants create an union
-            let kind = if variants.len() > 1 {
-                let hint_ = ast::Hint_::Hunion(variants);
-                let pos = p_pos(&c.variants, env);
-                ast::Hint::new(pos, hint_)
-            } else {
-                match variants.into_iter().next() {
-                    Some(hint) => hint,
-                    // If there less than one variant it is an ill-defined case type
-                    None => return missing_syntax("case type variant", node, env),
-                }
-            };
-
-            Ok(vec![ast::Def::mk_typedef(ast::Typedef {
-                annotation: (),
-                name: pos_name(&c.name, env)?,
-                tparams,
-                as_constraint,
-                super_constraint: None,
-                user_attributes,
-                file_attributes: vec![],
-                namespace: mk_empty_ns_env(env),
-                mode: env.file_mode(),
-                vis: ast::TypedefVisibility::CaseType,
-                kind,
-                span: p_pos(node, env),
-                emit_id: None,
-                is_ctx: false,
-                internal: kinds.has(modifier::INTERNAL),
-                module: None,
-                docs_url,
-                doc_comment: doc_comment_opt,
-            })])
+                missing_syntax("case type variant", node, env)
+            }
         }
         ContextAliasDeclaration(c) => {
             let (super_constraint, as_constraint) = p_ctx_constraints(&c.as_constraint, env)?;
@@ -5958,6 +6128,7 @@ fn p_def<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<Vec<ast::Def>> {
                     ast::Hint::new(pos, hint_)
                 }
             };
+            let runtime_type = kind.clone();
             Ok(vec![ast::Def::mk_typedef(ast::Typedef {
                 annotation: (),
                 name: pos_name,
@@ -5973,8 +6144,13 @@ fn p_def<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<Vec<ast::Def>> {
                 namespace: mk_empty_ns_env(env),
                 mode: env.file_mode(),
                 file_attributes: vec![],
-                vis: ast::TypedefVisibility::Opaque,
-                kind,
+                assignment: oxidized::aast::TypedefAssignment::SimpleTypeDef(
+                    oxidized::aast::TypedefVisibilityAndHint {
+                        vis: ast::TypedefVisibility::Opaque,
+                        hint: kind,
+                    },
+                ),
+                runtime_type,
                 span: p_pos(node, env),
                 emit_id: None,
                 is_ctx: true,
@@ -5988,6 +6164,7 @@ fn p_def<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<Vec<ast::Def>> {
         EnumDeclaration(c) => {
             let span = p_pos(node, env);
             let p_enumerator = |n: S<'a>, e: &mut Env<'a>| -> Result<ast::ClassConst> {
+                let doc_comment_opt = extract_docblock(n, e);
                 match &n.children {
                     Enumerator(c) => Ok(ast::ClassConst {
                         user_attributes: Default::default(),
@@ -5995,7 +6172,7 @@ fn p_def<'a>(node: S<'a>, env: &mut Env<'a>) -> Result<Vec<ast::Def>> {
                         id: pos_name(&c.name, e)?,
                         kind: ast::ClassConstKind::CCConcrete(p_expr(&c.value, e)?),
                         span: span.clone(),
-                        doc_comment: None,
+                        doc_comment: doc_comment_opt,
                     }),
                     _ => missing_syntax("enumerator", n, e),
                 }

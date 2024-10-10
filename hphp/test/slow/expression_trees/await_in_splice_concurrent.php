@@ -1,19 +1,18 @@
 <?hh
 <<file: __EnableUnstableFeatures('expression_trees')>>
-<<file: __EnableUnstableFeatures('await_in_splice')>>
 
 async function myTestFunction2(
-): Awaitable<ExprTree<Code, Code::TAst, ExampleInt>> {
+): Awaitable<ExprTree<ExampleDsl, ExampleDsl::TAst, ExampleInt>> {
   echo 1;
   await RescheduleWaitHandle::create(0, 0);
   echo 2;
-  return Code`2`;
+  return ExampleDsl`2`;
 }
 
 <<__EntryPoint>>
 async function myTestFunction(): Awaitable<void> {
-  require 'expression_tree.inc';
-  $y = Code`
+  require __DIR__.'/../../../hack/test/expr_tree.php';
+  $y = ExampleDsl`
     ${await myTestFunction2()} +
     ${await myTestFunction2()}
   `;

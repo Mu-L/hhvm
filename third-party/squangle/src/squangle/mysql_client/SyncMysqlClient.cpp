@@ -7,26 +7,48 @@
  */
 
 #include <folly/Singleton.h>
+#include <memory>
 
+#include "squangle/mysql_client/ResetOperation.h"
 #include "squangle/mysql_client/SyncMysqlClient.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlConnectOperationImpl.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlFetchOperationImpl.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlSpecialOperationImpl.h"
 
-namespace facebook {
-namespace common {
-namespace mysql_client {
+namespace facebook::common::mysql_client {
 
-namespace {
-folly::Singleton<SyncMysqlClient> client([]() { return new SyncMysqlClient; });
-} // namespace
+// namespace {
+// folly::Singleton<SyncMysqlClient> client([]() { return new SyncMysqlClient;
+// }); } // namespace
 
 std::shared_ptr<SyncMysqlClient> SyncMysqlClient::defaultClient() {
   return folly::Singleton<SyncMysqlClient>::try_get();
 }
 
+std::unique_ptr<ConnectOperationImpl>
+SyncMysqlClient::createConnectOperationImpl(
+    MysqlClientBase* client_base,
+    std::shared_ptr<const ConnectionKey> conn_key) const {
+  return std::make_unique<mysql_protocol::MysqlConnectOperationImpl>(
+      client_base, std::move(conn_key));
+}
+
+std::unique_ptr<FetchOperationImpl> SyncMysqlClient::createFetchOperationImpl(
+    std::unique_ptr<OperationBase::ConnectionProxy> conn) const {
+  return std::make_unique<mysql_protocol::MysqlFetchOperationImpl>(
+      std::move(conn));
+}
+
+std::unique_ptr<SpecialOperationImpl>
+SyncMysqlClient::createSpecialOperationImpl(
+    std::unique_ptr<OperationBase::ConnectionProxy> conn) const {
+  return std::make_unique<mysql_protocol::MysqlSpecialOperationImpl>(
+      std::move(conn));
+}
+
 std::unique_ptr<Connection> SyncMysqlClient::createConnection(
-    ConnectionKey conn_key,
-    MYSQL* mysql_conn) {
-  return std::make_unique<SyncConnection>(
-      this, std::move(conn_key), mysql_conn);
+    std::shared_ptr<const ConnectionKey> conn_key) {
+  return std::make_unique<SyncConnection>(*this, std::move(conn_key));
 }
 
 SyncConnection::~SyncConnection() {
@@ -41,21 +63,16 @@ SyncConnection::~SyncConnection() {
     // callback instead points to the original callback function, which will
     // be called after COM_RESET_CONNECTION.
 
-    auto connHolder = stealMysqlConnectionHolder(true);
+    auto connHolder = stealConnectionHolder(true);
     auto conn = std::make_unique<SyncConnection>(
-        client(), *getKey(), std::move(connHolder));
+        client(), getKey(), std::move(connHolder));
     conn->needToCloneConnection_ = false;
     conn->setConnectionOptions(getConnectionOptions());
     conn->setConnectionDyingCallback(std::move(conn_dying_callback_));
     conn_dying_callback_ = nullptr;
     auto resetOp = Connection::resetConn(std::move(conn));
-    // addOperation() is necessary here for proper cancelling of reset
-    // operation in case of sudden SyncMysqlClient shutdown
-    resetOp->connection()->client()->addOperation(resetOp);
-    resetOp->run()->wait();
+    resetOp->run().wait();
   }
 }
 
-} // namespace mysql_client
-} // namespace common
-} // namespace facebook
+} // namespace facebook::common::mysql_client

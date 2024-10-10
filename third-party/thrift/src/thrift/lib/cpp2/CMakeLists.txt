@@ -280,6 +280,7 @@ add_library(
   server/ResourcePoolHandle.cpp
   server/RoundRobinRequestPile.cpp
   server/WeightedRequestPileQueue.cpp
+  server/SEParallelConcurrencyController.cpp
   server/ServerAttribute.cpp
   server/ServerFlags.cpp
   server/ServerInstrumentation.cpp
@@ -313,6 +314,8 @@ add_library(
   transport/rocket/framing/Parser.cpp
   transport/rocket/framing/Serializer.cpp
   transport/rocket/framing/Util.cpp
+  transport/rocket/payload/DefaultPayloadSerializerStrategy.cpp
+  transport/rocket/payload/PayloadSerializer.cpp
   transport/rocket/server/RocketRoutingHandler.cpp
   transport/rocket/server/RocketServerConnection.cpp
   transport/rocket/server/RocketServerConnectionPlugins.cpp

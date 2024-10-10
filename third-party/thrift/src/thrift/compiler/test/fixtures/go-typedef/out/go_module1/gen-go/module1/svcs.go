@@ -9,11 +9,11 @@ package module1
 import (
     "context"
     "fmt"
-    "strings"
+    "reflect"
 
     module0 "module0"
     module2 "module2"
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
 
@@ -22,11 +22,9 @@ var _ = module2.GoUnusedProtection__
 // (needed to ensure safety because of naive import list construction)
 var _ = context.Background
 var _ = fmt.Printf
-var _ = strings.Split
+var _ = reflect.Ptr
 var _ = thrift.ZERO
 var _ = metadata.GoUnusedProtection__
-
-
 
 type Finder interface {
     ByPlate(ctx context.Context, plate Plate) (*Automobile, error)
@@ -148,879 +146,24 @@ func (c *FinderClient) PreviousPlateContext(ctx context.Context, plate Plate) (P
     return c.chClient.PreviousPlate(ctx, plate)
 }
 
-type reqFinderByPlate struct {
-    Plate Plate `thrift:"plate,1" json:"plate" db:"plate"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqFinderByPlate)(nil)
-
-// Deprecated: FinderByPlateArgsDeprecated is deprecated, since it is supposed to be internal.
-type FinderByPlateArgsDeprecated = reqFinderByPlate
-
-func newReqFinderByPlate() *reqFinderByPlate {
-    return (&reqFinderByPlate{}).
-        SetPlateNonCompat(NewPlate())
-}
-
-func (x *reqFinderByPlate) GetPlate() Plate {
-    return x.Plate
-}
-
-func (x *reqFinderByPlate) SetPlateNonCompat(value Plate) *reqFinderByPlate {
-    x.Plate = value
-    return x
-}
-
-func (x *reqFinderByPlate) SetPlate(value Plate) *reqFinderByPlate {
-    x.Plate = value
-    return x
-}
-
-func (x *reqFinderByPlate) writeField1(p thrift.Format) error {  // Plate
-    if err := p.WriteFieldBegin("plate", thrift.STRING, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Plate
-    err := WritePlate(item, p)
-if err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFinderByPlate) readField1(p thrift.Format) error {  // Plate
-    result, err := ReadPlate(p)
-if err != nil {
-    return err
-}
-
-    x.Plate = result
-    return nil
-}
-
-func (x *reqFinderByPlate) toString1() string {  // Plate
-    return fmt.Sprintf("%v", x.Plate)
-}
-
-
-
-func (x *reqFinderByPlate) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqFinderByPlate"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFinderByPlate) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // plate
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqFinderByPlate) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqFinderByPlate({")
-    sb.WriteString(fmt.Sprintf("Plate:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respFinderByPlate struct {
-    Success *Automobile `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respFinderByPlate)(nil)
-var _ thrift.WritableResult = (*respFinderByPlate)(nil)
-
-// Deprecated: FinderByPlateResultDeprecated is deprecated, since it is supposed to be internal.
-type FinderByPlateResultDeprecated = respFinderByPlate
-
-func newRespFinderByPlate() *respFinderByPlate {
-    return (&respFinderByPlate{})
-}
-
-func (x *respFinderByPlate) GetSuccess() *Automobile {
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    return x.Success
-}
-
-func (x *respFinderByPlate) SetSuccessNonCompat(value Automobile) *respFinderByPlate {
-    x.Success = &value
-    return x
-}
-
-func (x *respFinderByPlate) SetSuccess(value *Automobile) *respFinderByPlate {
-    x.Success = value
-    return x
-}
-
-func (x *respFinderByPlate) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respFinderByPlate) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRUCT, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Success
-    if err := item.Write(p); err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFinderByPlate) readField0(p thrift.Format) error {  // Success
-    result := *NewAutomobile()
-err := result.Read(p)
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respFinderByPlate) toString0() string {  // Success
-    return fmt.Sprintf("%v", x.Success)
-}
-
-// Deprecated: Use newRespFinderByPlate().GetSuccess() instead.
-func (x *respFinderByPlate) DefaultGetSuccess() *Automobile {
-    if !x.IsSetSuccess() {
-        return NewAutomobile()
-    }
-    return x.Success
-}
-
-
-
-func (x *respFinderByPlate) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respFinderByPlate) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respFinderByPlate"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFinderByPlate) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRUCT)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respFinderByPlate) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respFinderByPlate({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqFinderAliasByPlate struct {
-    Plate Plate `thrift:"plate,1" json:"plate" db:"plate"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqFinderAliasByPlate)(nil)
-
-// Deprecated: FinderAliasByPlateArgsDeprecated is deprecated, since it is supposed to be internal.
-type FinderAliasByPlateArgsDeprecated = reqFinderAliasByPlate
-
-func newReqFinderAliasByPlate() *reqFinderAliasByPlate {
-    return (&reqFinderAliasByPlate{}).
-        SetPlateNonCompat(NewPlate())
-}
-
-func (x *reqFinderAliasByPlate) GetPlate() Plate {
-    return x.Plate
-}
-
-func (x *reqFinderAliasByPlate) SetPlateNonCompat(value Plate) *reqFinderAliasByPlate {
-    x.Plate = value
-    return x
-}
-
-func (x *reqFinderAliasByPlate) SetPlate(value Plate) *reqFinderAliasByPlate {
-    x.Plate = value
-    return x
-}
-
-func (x *reqFinderAliasByPlate) writeField1(p thrift.Format) error {  // Plate
-    if err := p.WriteFieldBegin("plate", thrift.STRING, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Plate
-    err := WritePlate(item, p)
-if err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFinderAliasByPlate) readField1(p thrift.Format) error {  // Plate
-    result, err := ReadPlate(p)
-if err != nil {
-    return err
-}
-
-    x.Plate = result
-    return nil
-}
-
-func (x *reqFinderAliasByPlate) toString1() string {  // Plate
-    return fmt.Sprintf("%v", x.Plate)
-}
-
-
-
-func (x *reqFinderAliasByPlate) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqFinderAliasByPlate"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFinderAliasByPlate) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // plate
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqFinderAliasByPlate) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqFinderAliasByPlate({")
-    sb.WriteString(fmt.Sprintf("Plate:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respFinderAliasByPlate struct {
-    Success *Car `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respFinderAliasByPlate)(nil)
-var _ thrift.WritableResult = (*respFinderAliasByPlate)(nil)
-
-// Deprecated: FinderAliasByPlateResultDeprecated is deprecated, since it is supposed to be internal.
-type FinderAliasByPlateResultDeprecated = respFinderAliasByPlate
-
-func newRespFinderAliasByPlate() *respFinderAliasByPlate {
-    return (&respFinderAliasByPlate{})
-}
-
-func (x *respFinderAliasByPlate) GetSuccess() *Car {
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    return x.Success
-}
-
-func (x *respFinderAliasByPlate) SetSuccessNonCompat(value Car) *respFinderAliasByPlate {
-    x.Success = &value
-    return x
-}
-
-func (x *respFinderAliasByPlate) SetSuccess(value *Car) *respFinderAliasByPlate {
-    x.Success = value
-    return x
-}
-
-func (x *respFinderAliasByPlate) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respFinderAliasByPlate) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRUCT, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Success
-    err := WriteCar(item, p)
-if err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFinderAliasByPlate) readField0(p thrift.Format) error {  // Success
-    result, err := ReadCar(p)
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respFinderAliasByPlate) toString0() string {  // Success
-    return fmt.Sprintf("%v", x.Success)
-}
-
-// Deprecated: Use newRespFinderAliasByPlate().GetSuccess() instead.
-func (x *respFinderAliasByPlate) DefaultGetSuccess() *Car {
-    if !x.IsSetSuccess() {
-        return NewCar()
-    }
-    return x.Success
-}
-
-
-
-func (x *respFinderAliasByPlate) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respFinderAliasByPlate) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respFinderAliasByPlate"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFinderAliasByPlate) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRUCT)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respFinderAliasByPlate) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respFinderAliasByPlate({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type reqFinderPreviousPlate struct {
-    Plate Plate `thrift:"plate,1" json:"plate" db:"plate"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*reqFinderPreviousPlate)(nil)
-
-// Deprecated: FinderPreviousPlateArgsDeprecated is deprecated, since it is supposed to be internal.
-type FinderPreviousPlateArgsDeprecated = reqFinderPreviousPlate
-
-func newReqFinderPreviousPlate() *reqFinderPreviousPlate {
-    return (&reqFinderPreviousPlate{}).
-        SetPlateNonCompat(NewPlate())
-}
-
-func (x *reqFinderPreviousPlate) GetPlate() Plate {
-    return x.Plate
-}
-
-func (x *reqFinderPreviousPlate) SetPlateNonCompat(value Plate) *reqFinderPreviousPlate {
-    x.Plate = value
-    return x
-}
-
-func (x *reqFinderPreviousPlate) SetPlate(value Plate) *reqFinderPreviousPlate {
-    x.Plate = value
-    return x
-}
-
-func (x *reqFinderPreviousPlate) writeField1(p thrift.Format) error {  // Plate
-    if err := p.WriteFieldBegin("plate", thrift.STRING, 1); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := x.Plate
-    err := WritePlate(item, p)
-if err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFinderPreviousPlate) readField1(p thrift.Format) error {  // Plate
-    result, err := ReadPlate(p)
-if err != nil {
-    return err
-}
-
-    x.Plate = result
-    return nil
-}
-
-func (x *reqFinderPreviousPlate) toString1() string {  // Plate
-    return fmt.Sprintf("%v", x.Plate)
-}
-
-
-
-func (x *reqFinderPreviousPlate) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("reqFinderPreviousPlate"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField1(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *reqFinderPreviousPlate) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 1 && wireType == thrift.Type(thrift.STRING)):  // plate
-            if err := x.readField1(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *reqFinderPreviousPlate) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("reqFinderPreviousPlate({")
-    sb.WriteString(fmt.Sprintf("Plate:%s", x.toString1()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-type respFinderPreviousPlate struct {
-    Success *Plate `thrift:"success,0,optional" json:"success,omitempty" db:"success"`
-}
-// Compile time interface enforcer
-var _ thrift.Struct = (*respFinderPreviousPlate)(nil)
-var _ thrift.WritableResult = (*respFinderPreviousPlate)(nil)
-
-// Deprecated: FinderPreviousPlateResultDeprecated is deprecated, since it is supposed to be internal.
-type FinderPreviousPlateResultDeprecated = respFinderPreviousPlate
-
-func newRespFinderPreviousPlate() *respFinderPreviousPlate {
-    return (&respFinderPreviousPlate{})
-}
-
-func (x *respFinderPreviousPlate) GetSuccess() Plate {
-    if !x.IsSetSuccess() {
-        return NewPlate()
-    }
-
-    return *x.Success
-}
-
-func (x *respFinderPreviousPlate) SetSuccessNonCompat(value Plate) *respFinderPreviousPlate {
-    x.Success = &value
-    return x
-}
-
-func (x *respFinderPreviousPlate) SetSuccess(value *Plate) *respFinderPreviousPlate {
-    x.Success = value
-    return x
-}
-
-func (x *respFinderPreviousPlate) IsSetSuccess() bool {
-    return x != nil && x.Success != nil
-}
-
-func (x *respFinderPreviousPlate) writeField0(p thrift.Format) error {  // Success
-    if !x.IsSetSuccess() {
-        return nil
-    }
-
-    if err := p.WriteFieldBegin("success", thrift.STRING, 0); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field begin error: ", x), err)
-    }
-
-    item := *x.Success
-    err := WritePlate(item, p)
-if err != nil {
-    return err
-}
-
-    if err := p.WriteFieldEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFinderPreviousPlate) readField0(p thrift.Format) error {  // Success
-    result, err := ReadPlate(p)
-if err != nil {
-    return err
-}
-
-    x.Success = &result
-    return nil
-}
-
-func (x *respFinderPreviousPlate) toString0() string {  // Success
-    if x.IsSetSuccess() {
-        return fmt.Sprintf("%v", *x.Success)
-    }
-    return fmt.Sprintf("%v", x.Success)
-}
-
-
-
-
-func (x *respFinderPreviousPlate) Exception() thrift.WritableException {
-    return nil
-}
-
-func (x *respFinderPreviousPlate) Write(p thrift.Format) error {
-    if err := p.WriteStructBegin("respFinderPreviousPlate"); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct begin error: ", x), err)
-    }
-
-    if err := x.writeField0(p); err != nil {
-        return err
-    }
-
-    if err := p.WriteFieldStop(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write field stop error: ", x), err)
-    }
-
-    if err := p.WriteStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T write struct end error: ", x), err)
-    }
-    return nil
-}
-
-func (x *respFinderPreviousPlate) Read(p thrift.Format) error {
-    if _, err := p.ReadStructBegin(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read error: ", x), err)
-    }
-
-    for {
-        _, wireType, id, err := p.ReadFieldBegin()
-        if err != nil {
-            return thrift.PrependError(fmt.Sprintf("%T field %d read error: ", x, id), err)
-        }
-
-        if wireType == thrift.STOP {
-            break;
-        }
-
-        switch {
-        case (id == 0 && wireType == thrift.Type(thrift.STRING)):  // success
-            if err := x.readField0(p); err != nil {
-                return err
-            }
-        default:
-            if err := p.Skip(wireType); err != nil {
-                return err
-            }
-        }
-
-        if err := p.ReadFieldEnd(); err != nil {
-            return err
-        }
-    }
-
-    if err := p.ReadStructEnd(); err != nil {
-        return thrift.PrependError(fmt.Sprintf("%T read struct end error: ", x), err)
-    }
-
-    return nil
-}
-
-func (x *respFinderPreviousPlate) String() string {
-    if x == nil {
-        return "<nil>"
-    }
-
-    var sb strings.Builder
-
-    sb.WriteString("respFinderPreviousPlate({")
-    sb.WriteString(fmt.Sprintf("Success:%s", x.toString0()))
-    sb.WriteString("})")
-
-    return sb.String()
-}
-
 
 type FinderProcessor struct {
-    processorMap       map[string]thrift.ProcessorFunctionContext
-    functionServiceMap map[string]string
+    processorFunctionMap map[string]thrift.ProcessorFunction
+    functionServiceMap   map[string]string
     handler            Finder
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorContext = (*FinderProcessor)(nil)
+var _ thrift.Processor = (*FinderProcessor)(nil)
 
 func NewFinderProcessor(handler Finder) *FinderProcessor {
     p := &FinderProcessor{
-        handler:            handler,
-        processorMap:       make(map[string]thrift.ProcessorFunctionContext),
-        functionServiceMap: make(map[string]string),
+        handler:              handler,
+        processorFunctionMap: make(map[string]thrift.ProcessorFunction),
+        functionServiceMap:   make(map[string]string),
     }
-    p.AddToProcessorMap("byPlate", &procFuncFinderByPlate{handler: handler})
-    p.AddToProcessorMap("aliasByPlate", &procFuncFinderAliasByPlate{handler: handler})
-    p.AddToProcessorMap("previousPlate", &procFuncFinderPreviousPlate{handler: handler})
+    p.AddToProcessorFunctionMap("byPlate", &procFuncFinderByPlate{handler: handler})
+    p.AddToProcessorFunctionMap("aliasByPlate", &procFuncFinderAliasByPlate{handler: handler})
+    p.AddToProcessorFunctionMap("previousPlate", &procFuncFinderPreviousPlate{handler: handler})
     p.AddToFunctionServiceMap("byPlate", "Finder")
     p.AddToFunctionServiceMap("aliasByPlate", "Finder")
     p.AddToFunctionServiceMap("previousPlate", "Finder")
@@ -1028,23 +171,20 @@ func NewFinderProcessor(handler Finder) *FinderProcessor {
     return p
 }
 
-func (p *FinderProcessor) AddToProcessorMap(key string, processor thrift.ProcessorFunctionContext) {
-    p.processorMap[key] = processor
+func (p *FinderProcessor) AddToProcessorFunctionMap(key string, processorFunction thrift.ProcessorFunction) {
+    p.processorFunctionMap[key] = processorFunction
 }
 
 func (p *FinderProcessor) AddToFunctionServiceMap(key, service string) {
     p.functionServiceMap[key] = service
 }
 
-func (p *FinderProcessor) GetProcessorFunctionContext(key string) (processor thrift.ProcessorFunctionContext, err error) {
-    if processor, ok := p.processorMap[key]; ok {
-        return processor, nil
-    }
-    return nil, nil
+func (p *FinderProcessor) GetProcessorFunction(key string) (processor thrift.ProcessorFunction) {
+    return p.processorFunctionMap[key]
 }
 
-func (p *FinderProcessor) ProcessorMap() map[string]thrift.ProcessorFunctionContext {
-    return p.processorMap
+func (p *FinderProcessor) ProcessorFunctionMap() map[string]thrift.ProcessorFunction {
+    return p.processorFunctionMap
 }
 
 func (p *FinderProcessor) FunctionServiceMap() map[string]string {
@@ -1060,9 +200,9 @@ type procFuncFinderByPlate struct {
     handler Finder
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncFinderByPlate)(nil)
+var _ thrift.ProcessorFunction = (*procFuncFinderByPlate)(nil)
 
-func (p *procFuncFinderByPlate) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncFinderByPlate) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqFinderByPlate()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -1071,7 +211,7 @@ func (p *procFuncFinderByPlate) Read(iprot thrift.Format) (thrift.Struct, thrift
     return args, nil
 }
 
-func (p *procFuncFinderByPlate) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncFinderByPlate) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -1112,9 +252,9 @@ type procFuncFinderAliasByPlate struct {
     handler Finder
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncFinderAliasByPlate)(nil)
+var _ thrift.ProcessorFunction = (*procFuncFinderAliasByPlate)(nil)
 
-func (p *procFuncFinderAliasByPlate) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncFinderAliasByPlate) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqFinderAliasByPlate()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -1123,7 +263,7 @@ func (p *procFuncFinderAliasByPlate) Read(iprot thrift.Format) (thrift.Struct, t
     return args, nil
 }
 
-func (p *procFuncFinderAliasByPlate) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncFinderAliasByPlate) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {
@@ -1164,9 +304,9 @@ type procFuncFinderPreviousPlate struct {
     handler Finder
 }
 // Compile time interface enforcer
-var _ thrift.ProcessorFunctionContext = (*procFuncFinderPreviousPlate)(nil)
+var _ thrift.ProcessorFunction = (*procFuncFinderPreviousPlate)(nil)
 
-func (p *procFuncFinderPreviousPlate) Read(iprot thrift.Format) (thrift.Struct, thrift.Exception) {
+func (p *procFuncFinderPreviousPlate) Read(iprot thrift.Decoder) (thrift.Struct, thrift.Exception) {
     args := newReqFinderPreviousPlate()
     if err := args.Read(iprot); err != nil {
         return nil, err
@@ -1175,7 +315,7 @@ func (p *procFuncFinderPreviousPlate) Read(iprot thrift.Format) (thrift.Struct, 
     return args, nil
 }
 
-func (p *procFuncFinderPreviousPlate) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Format) (err thrift.Exception) {
+func (p *procFuncFinderPreviousPlate) Write(seqId int32, result thrift.WritableStruct, oprot thrift.Encoder) (err thrift.Exception) {
     var err2 error
     messageType := thrift.REPLY
     switch result.(type) {

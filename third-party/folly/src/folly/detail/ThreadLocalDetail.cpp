@@ -31,34 +31,20 @@ constexpr auto kBigGrowthFactor = 1.7;
 namespace folly {
 namespace threadlocal_detail {
 
-struct ThreadEntry::LocalSet {
-  using Map = std::unordered_map<LocalLifetime const*, LocalCache*>;
-  Synchronized<Map> tracking;
-};
-
-FOLLY_NOINLINE ThreadEntry::LocalSet* ThreadEntry::newLocalSet() {
-  return new ThreadEntry::LocalSet();
+SharedPtrDeleter::SharedPtrDeleter(std::shared_ptr<void> const& ts) noexcept
+    : ts_{ts} {}
+SharedPtrDeleter::SharedPtrDeleter(SharedPtrDeleter const& that) noexcept
+    : ts_{that.ts_} {}
+SharedPtrDeleter::~SharedPtrDeleter() = default;
+void SharedPtrDeleter::operator()(
+    void* /* ptr */, folly::TLPDestructionMode) const {
+  ts_.reset();
 }
 
-FOLLY_NOINLINE ThreadEntry::LocalLifetime::LocalLifetime(
-    LocalSet& set, LocalCache& cache) noexcept
-    : caches{set} {
-  DCHECK(!cache.poison);
-  auto tracking = caches.tracking.wlock();
-  auto inserted = tracking->emplace(this, &cache).second;
-  DCHECK(inserted);
-}
-
-FOLLY_NOINLINE ThreadEntry::LocalLifetime::~LocalLifetime() {
-  auto tracking = caches.tracking.wlock();
-  auto it = tracking->find(this);
-  DCHECK(it != tracking->end());
-  DCHECK(it->second);
-  auto& cache = *it->second;
-  tracking->erase(it);
-  DCHECK(!cache.poison);
-  cache = {};
-  cache.poison = true;
+uintptr_t ElementWrapper::castForgetAlign(DeleterFunType* f) noexcept {
+  auto const p = reinterpret_cast<char const*>(f);
+  auto const q = std::launder(p);
+  return reinterpret_cast<uintptr_t>(q);
 }
 
 bool ThreadEntrySet::basicSanity() const {
@@ -238,13 +224,6 @@ void StaticMetaBase::cleanupThreadEntriesAndList(
     // before issuing a delete.
     DCHECK(tmp->meta->isThreadEntryRemovedFromAllInMap(tmp, true));
 
-    // Fail safe check to make sure that the ThreadEntry's local-caches are
-    // all cleared. Failure would indicate that something is using ThreadLocal
-    // instances for a given tag for the first time in a pthread-thread-specific
-    // destructor, such as in the destructor of some other ThreadLocal.
-    DCHECK(tmp->caches->tracking.rlock()->empty());
-
-    delete tmp->caches;
     delete tmp;
   }
 
@@ -458,16 +437,16 @@ void StaticMetaBase::reserve(EntryID* id) {
 
   meta.totalElementWrappers_ += (newCapacity - prevCapacity);
   free(reallocated);
+}
 
-  threadEntry->caches->tracking.withRLock([&](auto& tracking) {
-    for (auto [_, cachep] : tracking) {
-      DCHECK(cachep);
-      DCHECK(!cachep->poison);
-      DCHECK_EQ(threadEntry, cachep->threadEntry);
-      cachep->capacity = newCapacity;
-      cachep->elements = threadEntry->elements;
-    }
-  });
+FOLLY_NOINLINE void StaticMetaBase::ensureThreadEntryIsInSet(
+    ThreadEntry* te,
+    SynchronizedThreadEntrySet& set,
+    SynchronizedThreadEntrySet::RLockedPtr& rlock) {
+  rlock.unlock();
+  auto wlock = set.wlock();
+  wlock->insert(te);
+  rlock = wlock.moveFromWriteToRead();
 }
 
 /*

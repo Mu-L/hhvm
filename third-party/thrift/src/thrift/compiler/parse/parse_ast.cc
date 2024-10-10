@@ -36,7 +36,7 @@
 #include <thrift/compiler/diagnostic.h>
 #include <thrift/compiler/parse/lexer.h>
 #include <thrift/compiler/parse/parser.h>
-#include <thrift/compiler/sema/ast_mutator.h>
+#include <thrift/compiler/sema/sema.h>
 #include <thrift/compiler/source_location.h>
 
 namespace apache {
@@ -629,8 +629,7 @@ class ast_builder : public parser_actions {
       std::unique_ptr<t_throws> throws) override {
     auto return_name = ret.name.str;
     t_type_ref interaction;
-    t_type_ref return_type = t_type_ref::from_ptr(
-        ret.type, {ret.name.loc, ret.name.loc + ret.name.str.size()});
+    t_type_ref return_type = ret.type;
     if (size_t size = return_name.size()) {
       // Handle an interaction or return type name.
       std::string qualified_name;
@@ -1007,6 +1006,7 @@ std::unique_ptr<t_program_bundle> parse_ast(
     diagnostics_engine& diags,
     const std::string& path,
     const parsing_params& params,
+    const sema_params* sparams,
     t_program_bundle* already_parsed) {
   auto programs = std::make_unique<t_program_bundle>(
       std::make_unique<t_program>(
@@ -1094,22 +1094,18 @@ std::unique_ptr<t_program_bundle> parse_ast(
   } catch (const parsing_terminator&) {
     return {}; // Return a null program bundle if parsing failed.
   }
+  if (diags.has_errors()) {
+    return programs;
+  }
 
-  // Resolve types in the root program.
-  diagnostic_context ctx(
+  sema_context ctx(
       diags.source_mgr(),
       [&](auto diag) { diags.report(std::move(diag)); },
       diags.params());
-  if (!params.use_legacy_type_ref_resolution) {
-    type_ref_resolver{}(ctx, *programs);
+  if (sparams) {
+    ctx.sema_parameters() = *sparams;
   }
-  std::string program_prefix = root_program.name() + ".";
-  for (t_placeholder_typedef& t :
-       root_program.scope()->placeholder_typedefs()) {
-    if (!t.resolve() && t.name().find(program_prefix) == 0) {
-      diags.error(t, "Type `{}` not defined.", t.name());
-    }
-  }
+  sema(params.use_legacy_type_ref_resolution).run(ctx, *programs);
   return programs;
 }
 

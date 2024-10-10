@@ -11,18 +11,25 @@
 #include "thrift/compiler/test/fixtures/lazy_deserialization/gen-cpp2/simple_types.h"
 
 namespace apache::thrift::test {
+/** Glean {"file": "thrift/compiler/test/fixtures/lazy_deserialization/src/simple.thrift"} */
 namespace simple_constants {
 
+  /** Glean {"constant": "kSizeId"} */
   constexpr ::std::int32_t const kSizeId_ = static_cast<::std::int32_t>(100);
+  /** Glean {"constant": "kSizeId"} */
   constexpr ::std::int32_t kSizeId() {
     return kSizeId_;
   }
 
+  /** Glean {"constant": "kIndexId"} */
   constexpr ::std::int32_t const kIndexId_ = static_cast<::std::int32_t>(101);
+  /** Glean {"constant": "kIndexId"} */
   constexpr ::std::int32_t kIndexId() {
     return kIndexId_;
   }
 
+  FOLLY_EXPORT ::std::string_view _fbthrift_schema_80230e619119706c();
+  FOLLY_EXPORT ::folly::Range<const ::std::string_view*> _fbthrift_schema_80230e619119706c_includes();
 
 } // namespace simple_constants
 } // namespace apache::thrift::test

@@ -35,6 +35,11 @@ type 'a all_or_some =
   | ASome of 'a list
 [@@deriving eq, show]
 
+type 'a none_or_all_except =
+  | NNone
+  | All_except of 'a list
+[@@deriving eq, show]
+
 val default_saved_state : saved_state
 
 val with_saved_state_manifold_api_key :
@@ -48,6 +53,7 @@ val with_zstd_decompress_by_file : bool -> saved_state -> saved_state
 
 type extended_reasons_config =
   | Extended of int
+  | Legacy
   | Debug
 [@@deriving eq, show]
 
@@ -130,6 +136,8 @@ type t = {
       (** Allows additional error messages to be added to typing errors via config *)
   tco_const_attribute: bool;  (** Allow <<__Const>> attribute *)
   tco_check_attribute_locations: bool;
+  tco_type_refinement_partition_shapes: bool;
+      (** Use new type splitting logic for shape refinement *)
   glean_reponame: string;
       (** Reponame used for glean connection, default to "www.autocomplete" *)
   symbol_write_index_inherited_members: bool;
@@ -235,8 +243,6 @@ type t = {
       (** Dead UNSAFE_CAST codemod stashes patches through a TAST visitor in shared
          heap. This is only needed in dead UNSAFE_CAST removal mode. This option
          controls whether the heap will be populated or not. *)
-  tco_rust_elab: bool;
-      (** Use the Rust implementation of naming elaboration and NAST checks. *)
   dump_tast_hashes: bool;  (** Dump tast hashes in /tmp/hh_server/tast_hashes *)
   dump_tasts: string list;
       (** List of paths whose TASTs to be dumped in /tmp/hh_server/tasts *)
@@ -252,25 +258,32 @@ type t = {
   tco_autocomplete_sort_text: bool;
   tco_extended_reasons: extended_reasons_config option;
       (** Controls whether we retain the full path for reasons or only simple witnesses *)
-  hack_warnings: int all_or_some;  (** turn on hack warnings *)
+  tco_disable_physical_equality: bool;
+      (** If set to true, this disables the use of physical equality in subtyping *)
+  hack_warnings: int none_or_all_except;  (** turn on hack warnings *)
+  warnings_default_all: bool;
   tco_strict_switch: bool;
       (** Enable strict case checking in switch statements *)
   tco_allowed_files_for_ignore_readonly: string list;
   tco_package_v2: bool;
+      (** Option for the package v2 to strip the multifile filename mangling used in Hack tests.
+         Should be set to true only by the unit tests in the Hack test suite *)
+  tco_package_v2_support_multifile_tests: bool;
       (** Option to bypass package boundary violation errors to enable v0 of intern-prod separation *)
   tco_package_v2_bypass_package_check_for_class_const: bool;
       (** Option for package v2 to bypass package boundary violation errors on ::class during
           the ::class to nameof migration to unblock V0 of intern-prod separation *)
-  preexisting_warnings: bool;
-      (** Whether to show preexisting warnings from typechecked files *)
   re_no_cache: bool;
       (** Disable RE cache when calling hh_distc. Useful for performance testing.
         Corresponds to the `--no-cache` options of hh_distc. *)
   hh_distc_should_disable_trace_store: bool;
       (** Disable trace store when calling hh_distc. Useful for performance testing.
         Corresponds to the `--trace-store-mode local` options of hh_distc.*)
+  hh_distc_exponential_backoff_num_retries: int;
+      (** Number of retries when uploading/download/executing with hh_distc *)
   tco_enable_abstract_method_optional_parameters: bool;
       (** Enable use of optional on parameters in abstract methods *)
+  recursive_case_types: bool;  (** Enable recursive case types *)
 }
 [@@deriving eq, show]
 
@@ -310,6 +323,7 @@ val set :
   ?tco_custom_error_config:Custom_error_config.t ->
   ?tco_const_attribute:bool ->
   ?tco_check_attribute_locations:bool ->
+  ?tco_type_refinement_partition_shapes:bool ->
   ?glean_reponame:string ->
   ?symbol_write_index_inherited_members:bool ->
   ?symbol_write_ownership:bool ->
@@ -358,7 +372,6 @@ val set :
   ?tco_record_fine_grained_dependencies:bool ->
   ?tco_loop_iteration_upper_bound:int option ->
   ?tco_populate_dead_unsafe_cast_heap:bool ->
-  ?tco_rust_elab:bool ->
   ?dump_tast_hashes:bool ->
   ?dump_tasts:string list ->
   ?tco_autocomplete_mode:bool ->
@@ -368,15 +381,19 @@ val set :
   ?tco_lsp_invalidation:bool ->
   ?tco_autocomplete_sort_text:bool ->
   ?tco_extended_reasons:extended_reasons_config ->
-  ?hack_warnings:int all_or_some ->
+  ?tco_disable_physical_equality:bool ->
+  ?hack_warnings:int none_or_all_except ->
+  ?warnings_default_all:bool ->
   ?tco_strict_switch:bool ->
   ?tco_allowed_files_for_ignore_readonly:string list ->
   ?tco_package_v2:bool ->
+  ?tco_package_v2_support_multifile_tests:bool ->
   ?tco_package_v2_bypass_package_check_for_class_const:bool ->
-  ?preexisting_warnings:bool ->
   ?re_no_cache:bool ->
   ?hh_distc_should_disable_trace_store:bool ->
+  ?hh_distc_exponential_backoff_num_retries:int ->
   ?tco_enable_abstract_method_optional_parameters:bool ->
+  ?recursive_case_types:bool ->
   t ->
   t
 

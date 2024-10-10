@@ -12,6 +12,8 @@ import thrift.python.types as _fbthrift_python_types
 import thrift.python.exceptions as _fbthrift_python_exceptions
 
 
+import test.fixtures.another_interactions.shared.thrift_types
+
 
 class CustomException(metaclass=_fbthrift_python_exceptions.GeneratedErrorMeta):
     _fbthrift_SPEC = (
@@ -24,6 +26,7 @@ class CustomException(metaclass=_fbthrift_python_exceptions.GeneratedErrorMeta):
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            8, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -97,6 +100,7 @@ class _fbthrift_MyService_interact_args(metaclass=_fbthrift_python_types.StructM
             None,  # default value
             None,  # adapter info
             True, # field type is primitive
+            4, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -189,6 +193,7 @@ class _fbthrift_MyInteraction_frobnicate_result(metaclass=_fbthrift_python_types
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            11, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -310,6 +315,7 @@ class _fbthrift_Factories_interact_args(metaclass=_fbthrift_python_types.StructM
             None,  # default value
             None,  # adapter info
             True, # field type is primitive
+            4, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -402,6 +408,7 @@ class _fbthrift_MyInteraction_frobnicate_result(metaclass=_fbthrift_python_types
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            11, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -540,6 +547,7 @@ class _fbthrift_MyInteraction_frobnicate_result(metaclass=_fbthrift_python_types
             None,  # default value
             None,  # adapter info
             False, # field type is primitive
+            11, # IDL type (see BaseTypeEnum)
         ),
     )
 
@@ -639,6 +647,143 @@ class _fbthrift_SerialInteraction_frobnicate_result(metaclass=_fbthrift_python_t
 
 
 
+
+class _fbthrift_InteractWithShared_do_some_similar_things_args(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_InteractWithShared_do_some_similar_things_result(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+        _fbthrift_python_types.FieldInfo(
+            0,  # id
+            _fbthrift_python_types.FieldQualifier.Optional, # qualifier
+            "success",  # name
+            "success", # name
+            lambda: _fbthrift_python_types.StructTypeInfo(test.fixtures.another_interactions.shared.thrift_types.DoSomethingResult),  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            False, # field type is primitive
+        ),
+    )
+
+
+
+
+class _fbthrift_MyInteraction_frobnicate_args(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_MyInteraction_frobnicate_result(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+        _fbthrift_python_types.FieldInfo(
+            0,  # id
+            _fbthrift_python_types.FieldQualifier.Optional, # qualifier
+            "success",  # name
+            "success", # name
+            _fbthrift_python_types.typeinfo_i32,  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            False, # field type is primitive
+        ),
+        _fbthrift_python_types.FieldInfo(
+            1,  # id
+            _fbthrift_python_types.FieldQualifier.Optional, # qualifier
+            "ex",  # name
+            "ex",  # python name (from @python.Name annotation)
+            lambda: _fbthrift_python_types.StructTypeInfo(CustomException),  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            False, # field type is primitive
+            11, # IDL type (see BaseTypeEnum)
+        ),
+    )
+
+
+class _fbthrift_MyInteraction_ping_args(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_MyInteraction_truthify_args(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_MyInteraction_truthify_result(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_MyInteraction_truthify_result_stream(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+        _fbthrift_python_types.FieldInfo(
+            0,  # id
+            _fbthrift_python_types.FieldQualifier.Optional, # qualifier
+            "success",  # name
+            "success", # name
+            _fbthrift_python_types.typeinfo_bool,  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            False, # field type is primitive
+        ),
+    )
+
+
+
+
+class _fbthrift_SharedInteraction_init_args(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_SharedInteraction_init_result(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+        _fbthrift_python_types.FieldInfo(
+            0,  # id
+            _fbthrift_python_types.FieldQualifier.Optional, # qualifier
+            "success",  # name
+            "success", # name
+            _fbthrift_python_types.typeinfo_i32,  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            False, # field type is primitive
+        ),
+    )
+
+
+class _fbthrift_SharedInteraction_do_something_args(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_SharedInteraction_do_something_result(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+        _fbthrift_python_types.FieldInfo(
+            0,  # id
+            _fbthrift_python_types.FieldQualifier.Optional, # qualifier
+            "success",  # name
+            "success", # name
+            lambda: _fbthrift_python_types.StructTypeInfo(test.fixtures.another_interactions.shared.thrift_types.DoSomethingResult),  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            False, # field type is primitive
+        ),
+    )
+
+
+class _fbthrift_SharedInteraction_tear_down_args(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+class _fbthrift_SharedInteraction_tear_down_result(metaclass=_fbthrift_python_types.StructMeta):
+    _fbthrift_SPEC = (
+    )
+
+
+
 _fbthrift_python_types.fill_specs(
     _fbthrift_MyService_foo_args,
     _fbthrift_MyService_foo_result,
@@ -649,24 +794,20 @@ _fbthrift_python_types.fill_specs(
     _fbthrift_MyService_serialize_args,
     _fbthrift_MyService_serialize_result,
     _fbthrift_MyService_serialize_result_stream,
-    
     _fbthrift_MyInteraction_frobnicate_args,
     _fbthrift_MyInteraction_frobnicate_result,
     _fbthrift_MyInteraction_ping_args,
     _fbthrift_MyInteraction_truthify_args,
     _fbthrift_MyInteraction_truthify_result,
     _fbthrift_MyInteraction_truthify_result_stream,
-    
     _fbthrift_MyInteractionFast_frobnicate_args,
     _fbthrift_MyInteractionFast_frobnicate_result,
     _fbthrift_MyInteractionFast_ping_args,
     _fbthrift_MyInteractionFast_truthify_args,
     _fbthrift_MyInteractionFast_truthify_result,
     _fbthrift_MyInteractionFast_truthify_result_stream,
-    
     _fbthrift_SerialInteraction_frobnicate_args,
     _fbthrift_SerialInteraction_frobnicate_result,
-    
     _fbthrift_Factories_foo_args,
     _fbthrift_Factories_foo_result,
     _fbthrift_Factories_interact_args,
@@ -676,42 +817,48 @@ _fbthrift_python_types.fill_specs(
     _fbthrift_Factories_serialize_args,
     _fbthrift_Factories_serialize_result,
     _fbthrift_Factories_serialize_result_stream,
-    
     _fbthrift_MyInteraction_frobnicate_args,
     _fbthrift_MyInteraction_frobnicate_result,
     _fbthrift_MyInteraction_ping_args,
     _fbthrift_MyInteraction_truthify_args,
     _fbthrift_MyInteraction_truthify_result,
     _fbthrift_MyInteraction_truthify_result_stream,
-    
     _fbthrift_MyInteractionFast_frobnicate_args,
     _fbthrift_MyInteractionFast_frobnicate_result,
     _fbthrift_MyInteractionFast_ping_args,
     _fbthrift_MyInteractionFast_truthify_args,
     _fbthrift_MyInteractionFast_truthify_result,
     _fbthrift_MyInteractionFast_truthify_result_stream,
-    
     _fbthrift_SerialInteraction_frobnicate_args,
     _fbthrift_SerialInteraction_frobnicate_result,
-    
     _fbthrift_Perform_foo_args,
     _fbthrift_Perform_foo_result,
-    
     _fbthrift_MyInteraction_frobnicate_args,
     _fbthrift_MyInteraction_frobnicate_result,
     _fbthrift_MyInteraction_ping_args,
     _fbthrift_MyInteraction_truthify_args,
     _fbthrift_MyInteraction_truthify_result,
     _fbthrift_MyInteraction_truthify_result_stream,
-    
     _fbthrift_MyInteractionFast_frobnicate_args,
     _fbthrift_MyInteractionFast_frobnicate_result,
     _fbthrift_MyInteractionFast_ping_args,
     _fbthrift_MyInteractionFast_truthify_args,
     _fbthrift_MyInteractionFast_truthify_result,
     _fbthrift_MyInteractionFast_truthify_result_stream,
-    
     _fbthrift_SerialInteraction_frobnicate_args,
     _fbthrift_SerialInteraction_frobnicate_result,
-    
+    _fbthrift_InteractWithShared_do_some_similar_things_args,
+    _fbthrift_InteractWithShared_do_some_similar_things_result,
+    _fbthrift_MyInteraction_frobnicate_args,
+    _fbthrift_MyInteraction_frobnicate_result,
+    _fbthrift_MyInteraction_ping_args,
+    _fbthrift_MyInteraction_truthify_args,
+    _fbthrift_MyInteraction_truthify_result,
+    _fbthrift_MyInteraction_truthify_result_stream,
+    _fbthrift_SharedInteraction_init_args,
+    _fbthrift_SharedInteraction_init_result,
+    _fbthrift_SharedInteraction_do_something_args,
+    _fbthrift_SharedInteraction_do_something_result,
+    _fbthrift_SharedInteraction_tear_down_args,
+    _fbthrift_SharedInteraction_tear_down_result,
 )

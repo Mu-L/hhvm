@@ -11,10 +11,11 @@ license = "MIT"
 path = "lib.rs"
 
 [dependencies]
-bstr = { version = "1.4.0", features = ["serde", "std", "unicode"] }
+bstr = { version = "1.10.0", features = ["serde", "std", "unicode"] }
 bumpalo = { version = "3.14.0", features = ["allocator_api", "collections"] }
 escaper = { version = "0.0.0", path = "../../utils/escaper" }
 hash = { version = "0.0.0", path = "../../utils/hash" }
+hhbc_string_utils = { version = "0.0.0", path = "../../hackc/utils/cargo/hhbc_string_utils" }
 html_entities = { version = "0.0.0", path = "../../utils/html_entities" }
 itertools = "0.11.0"
 lazy_static = "1.4"
@@ -27,4 +28,4 @@ regex = "1.9.2"
 relative_path = { version = "0.0.0", path = "../../utils/rust/relative_path" }
 rescan_trivia = { version = "0.0.0", path = "../api/cargo/rescan_trivia" }
 stack_limit = { version = "0.0.0", path = "../../utils/stack_limit" }
-thiserror = "1.0.49"
+thiserror = "1.0.64"

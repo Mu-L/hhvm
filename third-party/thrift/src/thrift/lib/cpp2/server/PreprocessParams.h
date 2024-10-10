@@ -18,8 +18,7 @@
 
 #include <thrift/lib/cpp2/transport/core/ThriftRequest.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 class Cpp2ConnContext;
 
@@ -47,6 +46,13 @@ struct PreprocessParams {
     return folly::get_ptr(headers, transport::THeader::kClientId);
   }
 
+  const std::string* tenantId() const {
+    if (request_ && request_->getTHeader().tenantId()) {
+      return &*request_->getTHeader().tenantId();
+    }
+    return folly::get_ptr(headers, transport::THeader::kTenantId);
+  }
+
   const std::string* getServiceTraceMeta() const {
     if (request_ && request_->getTHeader().serviceTraceMeta()) {
       return &*request_->getTHeader().serviceTraceMeta();
@@ -59,5 +65,4 @@ struct PreprocessParams {
 };
 
 } // namespace server
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

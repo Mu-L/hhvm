@@ -16,7 +16,6 @@ impl Default for ParserOptions {
             disallow_func_ptrs_in_constants: false,
             enable_xhp_class_modifier: false,
             disable_xhp_element_mangling: false,
-            disallow_direct_superglobals_refs: false,
             allow_unstable_features: false, // true in /etc/hh.conf
             hhvm_compat_mode: false,
             hhi_mode: false,
@@ -41,7 +40,7 @@ impl Default for ParserOptions {
             disable_hh_ignore_error: 0,
             allowed_decl_fixme_codes: i_set::ISet::new(),
             use_legacy_experimental_feature_config: true,
-            experimental_features: vec![],
+            experimental_features: std::collections::BTreeMap::default(),
             consider_unspecified_experimental_features_released: true,
         }
     }

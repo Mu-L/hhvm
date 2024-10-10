@@ -16,7 +16,7 @@ import sys
 if sys.version_info[0] >= 3:
   long = int
 
-from .ttypes import UTF8STRINGS, Color, ThriftAdaptedEnum, MyAnnotation, Foo, Baz, Bar, DirectlyAdapted, IndependentDirectlyAdapted, StructWithFieldAdapter, TerseAdaptedFields, B, A, Config, MyStruct, AdaptTestStruct, AdaptTemplatedTestStruct, AdaptTemplatedNestedTestStruct, AdaptTestUnion, AdaptedStruct, DirectlyAdaptedStruct, StructFieldAdaptedStruct, CircularAdaptee, CircularStruct, ReorderedStruct, DeclaredAfterStruct, RenamedStruct, SameNamespaceStruct, HeapAllocated, MoveOnly, AlsoMoveOnly, ApplyAdapter, TransitiveAdapted, CountingStruct, Person, Person2, SetWithAdapter, StringWithAdapter, ListWithElemAdapter, ListWithElemAdapter_withAdapter, MyI64, DoubleTypedefI64, MyI32, FooWithAdapter, StructWithAdapter, UnionWithAdapter, AdaptedA, DurationMs, AdaptedBool, AdaptedByte, AdaptedShort, AdaptedInteger, AdaptedLong, AdaptedDouble, AdaptedString, DoubleTypedefBool, IOBuf, CustomProtocolType, IndirectionString, AdaptedEnum, AdaptedTypedef, TypedefOfDirect, AdaptedCircularAdaptee, CountingInt, FooWithAdapter_9317, ListWithElemAdapter_withAdapter_2312, MyI32_4873, StringWithAdapter_7208, Baz_7352, Foo_3943, Foo_6868, binary_5673, i32_5137, map_string_ListWithElemAdapter_withAdapter_8454
+from .ttypes import UTF8STRINGS, Color, ThriftAdaptedEnum, MyAnnotation, Foo, Baz, Bar, DirectlyAdapted, IndependentDirectlyAdapted, StructWithFieldAdapter, TerseAdaptedFields, B, A, Config, MyStruct, AdaptTestStruct, AdaptTemplatedTestStruct, AdaptTemplatedNestedTestStruct, AdaptTestUnion, AdaptedStruct, DirectlyAdaptedStruct, StructFieldAdaptedStruct, CircularAdaptee, CircularStruct, ReorderedStruct, DeclaredAfterStruct, RenamedStruct, SameNamespaceStruct, HeapAllocated, MoveOnly, AlsoMoveOnly, ApplyAdapter, TransitiveAdapted, CountingStruct, Person, Person2, RenamedStructWithStructAdapterAndFieldAdapter, SetWithAdapter, StringWithAdapter, ListWithElemAdapter, ListWithElemAdapter_withAdapter, MyI64, DoubleTypedefI64, MyI32, FooWithAdapter, StructWithAdapter, UnionWithAdapter, AdaptedA, DurationMs, AdaptedBool, AdaptedByte, AdaptedShort, AdaptedInteger, AdaptedLong, AdaptedDouble, AdaptedString, DoubleTypedefBool, IOBuf, CustomProtocolType, IndirectionString, AdaptedEnum, AdaptedTypedef, TypedefOfDirect, AdaptedCircularAdaptee, CountingInt, FooWithAdapter_9317, ListWithElemAdapter_withAdapter_2312, MyI32_4873, StringWithAdapter_7208, Baz_7352, Foo_3943, Foo_6868, binary_5673, i32_5137, map_string_ListWithElemAdapter_withAdapter_8454
 import ::my
 import my
 
@@ -37,13 +37,14 @@ except ImportError:
 def __EXPAND_THRIFT_SPEC(spec):
     next_id = 0
     for item in spec:
-        if next_id >= 0 and item[0] < 0:
-            next_id = item[0]
-        if item[0] != next_id:
-            for _ in range(next_id, item[0]):
+        item_id = item[0]
+        if next_id >= 0 and item_id < 0:
+            next_id = item_id
+        if item_id != next_id:
+            for _ in range(next_id, item_id):
                 yield None
         yield item
-        next_id = item[0] + 1
+        next_id = item_id + 1
 
 class ThriftEnumWrapper(int):
   def __new__(cls, enum_class, value):

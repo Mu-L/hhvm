@@ -58,23 +58,12 @@ cdef extern from "thrift/compiler/test/fixtures/basic-enum/gen-cpp2/module_types
     cdef cppclass cMyEnum "::test::fixtures::enumstrict::MyEnum":
         pass
 
+    cdef cppclass cMyUseIntrinsicDefaultEnum "::test::fixtures::enumstrict::MyUseIntrinsicDefaultEnum":
+        pass
+
     cdef cppclass cMyBigEnum "::test::fixtures::enumstrict::MyBigEnum":
         pass
 
-
-
-
-
-cdef class EmptyEnum(thrift.py3.types.CompiledEnum):
-    pass
-
-
-cdef class MyEnum(thrift.py3.types.CompiledEnum):
-    pass
-
-
-cdef class MyBigEnum(thrift.py3.types.CompiledEnum):
-    pass
 
 cdef extern from "thrift/compiler/test/fixtures/basic-enum/gen-cpp2/module_metadata.h" namespace "apache::thrift::detail::md":
     cdef cppclass ExceptionMetadata[T]:

@@ -17,8 +17,8 @@
 #include "mcrouter/AsyncLog.h"
 #include "mcrouter/AsyncWriter.h"
 #include "mcrouter/CarbonRouterInstanceBase.h"
+#include "mcrouter/McDistributionUtils.h"
 #include "mcrouter/McReqUtil.h"
-#include "mcrouter/McSpoolUtils.h"
 #include "mcrouter/McrouterFiberContext.h"
 #include "mcrouter/McrouterLogFailure.h"
 #include "mcrouter/ProxyDestination.h"
@@ -390,8 +390,13 @@ class DestinationRoute {
       const std::shared_ptr<AxonContext>& axonCtx,
       const std::optional<uint64_t>& bucketId) const {
     // return true if axonlog is enabled and appending to axon client succeed.
-    auto axonLogRes =
-        bucketId && axonCtx && spoolAxonProxy(req, axonCtx, *bucketId);
+    auto axonLogRes = bucketId && axonCtx &&
+        distributeDeleteRequest(
+                          req,
+                          axonCtx,
+                          *bucketId,
+                          invalidation::DistributionType::Async,
+                          axonCtx->defaultRegionFilter);
     // Try spool asynclog for mcreplay when:
     // 1. Axon is not enabled
     // 2. Axon is enabled, but isn't configured with fallback to Asynclog.

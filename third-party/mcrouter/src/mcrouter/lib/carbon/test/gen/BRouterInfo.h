@@ -24,6 +24,7 @@
 
 #include "mcrouter/lib/carbon/test/gen/BRouteHandleIf.h"
 #include "mcrouter/lib/carbon/test/gen/BRouterStats.h"
+#include "mcrouter/lib/carbon/test/gen/BRoutingGroups.h"
 
 // Forward declarations
 namespace folly {
@@ -79,6 +80,7 @@ struct BRouterInfo {
   static constexpr const char* name = "B";
   static constexpr const bool bucketization = false;
   static constexpr const bool useRequestAclChecker = false;
+  static constexpr const bool hasMcRefillRoute = false;
 
   template <class Route>
   using RouteHandle = BRouteHandle<Route>;

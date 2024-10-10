@@ -34,6 +34,7 @@ pub(crate) use crate as server;
 pub(crate) use ::::services;
 
 
+
 #[::async_trait::async_trait]
 pub trait MyRoot: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn do_root(
@@ -73,8 +74,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for MyRoot's methods.
 #[derive(Clone, Debug)]
 pub struct MyRootProcessor<P, H, R, RS> {
@@ -82,6 +81,7 @@ pub struct MyRootProcessor<P, H, R, RS> {
     supa: ::fbthrift::NullServiceProcessor<P, R, RS>,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_MyRoot_do_root {
 }
@@ -106,7 +106,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
-
 
 impl<P, H, R, RS> MyRootProcessor<P, H, R, RS>
 where
@@ -172,7 +171,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyRoot.do_root", exception = ?exn);
+                ::tracing::error!(method = "MyRoot.do_root", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -378,6 +377,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait MyNode: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn do_mid(
@@ -417,8 +417,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for MyNode's methods.
 #[derive(Clone, Debug)]
 pub struct MyNodeProcessor<P, H, R, RS, SS> {
@@ -426,6 +424,7 @@ pub struct MyNodeProcessor<P, H, R, RS, SS> {
     supa: SS,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_MyNode_do_mid {
 }
@@ -450,7 +449,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
-
 
 impl<P, H, R, RS, SS> MyNodeProcessor<P, H, R, RS, SS>
 where
@@ -518,7 +516,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyNode.do_mid", exception = ?exn);
+                ::tracing::error!(method = "MyNode.do_mid", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {
@@ -736,6 +734,7 @@ where
     }
 }
 
+
 #[::async_trait::async_trait]
 pub trait MyLeaf: ::std::marker::Send + ::std::marker::Sync + 'static {
     async fn do_leaf(
@@ -775,8 +774,6 @@ where
         ).await
     }
 }
-
-
 /// Processor for MyLeaf's methods.
 #[derive(Clone, Debug)]
 pub struct MyLeafProcessor<P, H, R, RS, SS> {
@@ -784,6 +781,7 @@ pub struct MyLeafProcessor<P, H, R, RS, SS> {
     supa: SS,
     _phantom: ::std::marker::PhantomData<(P, H, R, RS)>,
 }
+
 
 struct Args_MyLeaf_do_leaf {
 }
@@ -808,7 +806,6 @@ impl<P: ::fbthrift::ProtocolReader> ::fbthrift::Deserialize<P> for self::Args_My
         })
     }
 }
-
 
 impl<P, H, R, RS, SS> MyLeafProcessor<P, H, R, RS, SS>
 where
@@ -876,7 +873,7 @@ where
                 ::std::result::Result::Ok(res)
             }
             ::std::result::Result::Ok(::std::result::Result::Err(exn)) => {
-                ::tracing::info!(method = "MyLeaf.do_leaf", exception = ?exn);
+                ::tracing::error!(method = "MyLeaf.do_leaf", exception = ?exn);
                 ::std::result::Result::Err(exn)
             }
             ::std::result::Result::Err(exn) => {

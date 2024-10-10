@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class MyEnum(thrift.py3.types.Enum):
@@ -33,7 +29,7 @@ class MyStructNestedAnnotation(thrift.py3.types.Struct, _typing.Hashable):
         name: bool
         pass
 
-    name: Final[str] = ...
+    name: _typing.Final[str] = ...
 
     def __init__(
         self, *,
@@ -42,7 +38,7 @@ class MyStructNestedAnnotation(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        name: _typing.Union[str, '__NotSet', None]=NOTSET
+        name: _typing.Union[str, None]=None
     ) -> MyStructNestedAnnotation: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['MyStructNestedAnnotation'], bytes]]: ...
@@ -64,9 +60,8 @@ class SecretStruct(thrift.py3.types.Struct, _typing.Hashable):
         password: bool
         pass
 
-    id: Final[int] = ...
-
-    password: Final[str] = ...
+    id: _typing.Final[int] = ...
+    password: _typing.Final[str] = ...
 
     def __init__(
         self, *,
@@ -76,8 +71,8 @@ class SecretStruct(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        id: _typing.Union[int, '__NotSet', None]=NOTSET,
-        password: _typing.Union[str, '__NotSet', None]=NOTSET
+        id: _typing.Union[int, None]=None,
+        password: _typing.Union[str, None]=None
     ) -> SecretStruct: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['SecretStruct'], bytes]]: ...

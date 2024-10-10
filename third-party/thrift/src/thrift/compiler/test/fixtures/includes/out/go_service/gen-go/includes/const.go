@@ -7,7 +7,7 @@ package includes
 
 import (
     transitive "transitive"
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 var _ = transitive.GoUnusedProtection__
@@ -19,6 +19,6 @@ var GoUnusedProtection__ int
 var ExampleIncluded *Included = NewIncluded().
     SetMyIntFieldNonCompat(2).
     SetMyTransitiveFieldNonCompat(
-        *transitive.ExampleFoo,
+        transitive.ExampleFoo,
     )
 const IncludedConstant int64 = 42

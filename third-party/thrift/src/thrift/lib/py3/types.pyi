@@ -15,6 +15,7 @@
 import enum
 from typing import (
     Any,
+    Final,
     Iterable,
     Iterator,
     Mapping,
@@ -56,13 +57,11 @@ class Struct(Iterable[Tuple[str, Any]], metaclass=StructMeta):
     def __dir__(self) -> Sequence[str]: ...
 
 class Union(Struct):
-    # pyre-ignore[4]: it can be anything
-    type: Any
-    # pyre-ignore[4]: it can be anything
-    value: Any
+    # these are overridden in gencode, so can't be `Final` here
+    type: enum.Enum
+    value: object
     def __bool__(self) -> bool: ...
-    # pyre-ignore[3]: it can be anything
-    def get_type(self) -> Any: ...
+    def get_type(self) -> enum.Enum: ...
 
 class Container:
     def __repr__(self) -> str: ...
@@ -83,8 +82,8 @@ class EnumMeta(type):
     def __members__(self: Type[_T]) -> Mapping[str, _T]: ...
 
 class Enum(metaclass=EnumMeta):
-    name: str
-    value: int
+    name: Final[str]
+    value: Final[int]
     def __getattr__(self: eT, name: str) -> eT: ...
     def __init__(self: eT, value: tUnion[eT, int]) -> None: ...  # __call__ for meta
     def __repr__(self) -> str: ...

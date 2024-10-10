@@ -105,7 +105,7 @@ walkable!(CeVisibility => {
 #[derive(Copy, Clone, Debug, Eq, EqModuloPos, Hash, Ord, PartialEq, PartialOrd)]
 #[derive(Serialize, Deserialize)]
 pub enum TshapeFieldName {
-    TSFlitInt(Symbol),
+    TSFregexGroup(Symbol),
     TSFlitStr(Bytes),
     TSFclassConst(TypeName, Symbol),
 }
@@ -192,6 +192,29 @@ walkable!(impl<R: Reason, TY> for WhereConstraint<TY> => [0, 1, 2]);
 #[derive(ToOcamlRep, FromOcamlRep)]
 #[serde(bound = "R: Reason")]
 pub struct Ty<R: Reason>(R, Hc<Ty_<R>>);
+
+#[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(ToOcamlRep, FromOcamlRep)]
+#[serde(bound = "R: Reason")]
+pub struct TypedefCaseTypeVariant<R: Reason> {
+    pub hint: Ty<R>,
+    pub where_constraints: Box<[WhereConstraint<Ty<R>>]>,
+}
+
+walkable!(TypedefCaseTypeVariant<R> => [hint, where_constraints]);
+
+#[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(ToOcamlRep, FromOcamlRep)]
+#[serde(bound = "R: Reason")]
+pub enum TypedefTypeAssignment<R: Reason> {
+    SimpleTypeDef(aast::TypedefVisibility, Ty<R>),
+    CaseType(TypedefCaseTypeVariant<R>, Box<[TypedefCaseTypeVariant<R>]>),
+}
+
+walkable!(impl<R: Reason> for TypedefTypeAssignment<R> => {
+    Self::SimpleTypeDef(_, ty) => [ty],
+    Self::CaseType(variant, variants) => [variant, variants],
+});
 
 walkable!(Ty<R> as visit_decl_ty => [0, 1]);
 
@@ -290,6 +313,16 @@ walkable!(ShapeFieldType<R> => [ty]);
 #[serde(bound = "R: Reason")]
 pub struct ShapeType<R: Reason>(pub Ty<R>, pub BTreeMap<TshapeFieldName, ShapeFieldType<R>>);
 
+#[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(bound = "R: Reason")]
+pub struct TupleType<R: Reason>(pub Box<[Ty<R>]>, pub TupleExtra<R>);
+
+#[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]
+#[serde(bound = "R: Reason")]
+pub enum TupleExtra<R: Reason> {
+    Tsplat(Ty<R>),
+    Textra(Box<[Ty<R>]>, Ty<R>),
+}
 walkable!(ShapeType<R> => [0, 1]);
 
 #[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]
@@ -350,7 +383,7 @@ pub enum Ty_<R: Reason> {
     /// function, method, lambda, etc.
     Tfun(Box<FunType<R, Ty<R>>>),
     /// Tuple, with ordered list of the types of the elements of the tuple.
-    Ttuple(Box<[Ty<R>]>),
+    Ttuple(Box<TupleType<R>>),
     /// Whether all fields of this shape are known, types of each of the
     /// known arms.
     Tshape(Box<ShapeType<R>>),
@@ -400,7 +433,12 @@ impl<R: Reason> crate::visitor::Walkable<R> for Ty_<R> {
             }
             Tlike(ty) | Toption(ty) => ty.accept(v),
             Tfun(ft) => ft.accept(v),
-            Ttuple(tys) | Tunion(tys) | Tintersection(tys) => tys.accept(v),
+            Tunion(tys) | Tintersection(tys) => tys.accept(v),
+            Ttuple(tup) => {
+                let TupleType(required, extra) = &**tup;
+                required.accept(v);
+                extra.accept(v)
+            }
             Tshape(kind_and_fields) => {
                 let ShapeType(_, fields) = &**kind_and_fields;
                 fields.accept(v)
@@ -416,6 +454,18 @@ impl<R: Reason> crate::visitor::Walkable<R> for Ty_<R> {
             }
             Taccess(tt) => tt.accept(v),
             Trefinement(tr) => tr.accept(v),
+        }
+    }
+}
+
+impl<R: Reason> crate::visitor::Walkable<R> for TupleExtra<R> {
+    fn recurse(&self, v: &mut dyn crate::visitor::Visitor<R>) {
+        match self {
+            TupleExtra::Textra(optional, variadic) => {
+                optional.accept(v);
+                variadic.accept(v)
+            }
+            TupleExtra::Tsplat(splat) => splat.accept(v),
         }
     }
 }
@@ -679,11 +729,10 @@ walkable!(EnumType<R> => [base, constraint, includes]);
 pub struct TypedefType<R: Reason> {
     pub module: Option<Positioned<ModuleName, R::Pos>>,
     pub pos: R::Pos,
-    pub vis: aast::TypedefVisibility,
     pub tparams: Box<[Tparam<R, Ty<R>>]>,
     pub as_constraint: Option<Ty<R>>,
     pub super_constraint: Option<Ty<R>>,
-    pub ty: Ty<R>,
+    pub type_assignment: TypedefTypeAssignment<R>,
     pub is_ctx: bool,
     pub attributes: Box<[UserAttribute<R::Pos>]>,
     pub internal: bool,
@@ -691,7 +740,7 @@ pub struct TypedefType<R: Reason> {
     pub package_override: Option<String>,
 }
 
-walkable!(TypedefType<R> => [tparams, as_constraint, super_constraint, ty]);
+walkable!(TypedefType<R> => [tparams, as_constraint, super_constraint, type_assignment]);
 
 walkable!(ast_defs::ConstraintKind);
 

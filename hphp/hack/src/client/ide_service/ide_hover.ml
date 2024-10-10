@@ -238,6 +238,13 @@ will be less scary.
 See also `HH\\FIXME\\UNSAFE_CAST()`, which is still bad, but much more
 precise."
 
+let hh_ignore_info =
+  "`HH_IGNORE[N]` silences type checker warning N on the next line. It does
+not change runtime behavior.
+
+Note that `HH_IGNORE` applies to all occurrences of the warning on the
+next line."
+
 let keyword_info (khi : SymbolOccurrence.keyword_with_hover_docs) : string =
   let await_explanation =
     "\n\nThis does not give you threads. Only one function is running at any point in time."
@@ -418,76 +425,66 @@ let fun_defined_in def_opt : string =
     )
   | _ -> ""
 
-let make_hover_info under_dynamic_result ctx env_and_ty entry occurrence def_opt
-    =
+let make_hover_info under_dynamic_result ctx info_opt entry occurrence def_opt =
   SymbolOccurrence.(
-    Typing_defs.(
-      let defined_in =
-        match def_opt with
-        | Some def ->
-          Printf.sprintf
-            "// Defined in %s\n"
-            (split_class_name def.SymbolDefinition.full_name)
-        | None -> ""
+    let defined_in =
+      match def_opt with
+      | Some def ->
+        Printf.sprintf
+          "// Defined in %s\n"
+          (split_class_name def.SymbolDefinition.full_name)
+      | None -> ""
+    in
+    let print_locl_ty_with_identity ?(do_not_strip_dynamic = false) info =
+      let env = ServerInferType.get_env info in
+      let ty = ServerInferType.get_type info in
+      let ty =
+        if do_not_strip_dynamic then
+          ty
+        else
+          Tast_env.strip_dynamic env ty
       in
-
-      let snippet =
-        match (occurrence, env_and_ty) with
-        | ({ name; _ }, None) -> Utils.strip_hh_lib_ns name
-        | ({ type_ = Method (ClassName classname, name); _ }, Some (env, ty))
-          when String.equal name Naming_special_names.Members.__construct ->
-          let snippet_opt =
-            Option.Monad_infix.(
-              Decl_provider.get_class ctx classname |> Decl_entry.to_option
-              >>= fun c ->
-              fst (Folded_class.construct c) >>| fun elt ->
-              let ty = Lazy.force_val elt.ce_type in
-              Tast_env.print_ty_with_identity env (DeclTy ty) occurrence def_opt)
-          in
-          defined_in
-          ^
-          (match snippet_opt with
-          | Some s -> s
-          | None ->
-            Tast_env.print_ty_with_identity env (LoclTy ty) occurrence def_opt)
-        | ({ type_ = BestEffortArgument (recv, i); _ }, _) ->
-          let param_name = nth_param ctx recv i in
-          Printf.sprintf "Parameter: %s" (Option.value ~default:"$_" param_name)
-        | ({ type_ = Method _; _ }, Some (env, ty))
-        | ({ type_ = ClassConst _; _ }, Some (env, ty))
-        | ({ type_ = Property _; _ }, Some (env, ty)) ->
-          let ty = Tast_env.strip_dynamic env ty in
-          defined_in
-          ^ Tast_env.print_ty_with_identity env (LoclTy ty) occurrence def_opt
-        | ({ type_ = GConst; _ }, Some (env, ty)) ->
-          (match make_hover_const_definition entry def_opt with
-          | Some def_txt -> def_txt
-          | None ->
-            Tast_env.print_ty_with_identity env (LoclTy ty) occurrence def_opt)
-        | ({ type_ = Function; _ }, Some (env, ty)) ->
-          fun_defined_in def_opt
-          ^ Tast_env.print_ty_with_identity env (LoclTy ty) occurrence def_opt
-        | (occurrence, Some (env, ty)) ->
-          Tast_env.print_ty_with_identity env (LoclTy ty) occurrence def_opt
-          ^ under_dynamic_result
-      in
-      let addendum =
-        match occurrence with
-        | { name; type_ = Attribute _; _ } ->
-          List.concat
-            [
-              make_hover_attr_docs name;
-              make_hover_doc_block ctx entry occurrence def_opt;
-            ]
-        | { type_ = Keyword info; _ } -> [keyword_info info]
-        | { type_ = HhFixme; _ } -> [hh_fixme_info]
-        | { type_ = PureFunctionContext; _ } -> [pure_context_info]
-        | { type_ = BuiltInType bt; _ } ->
-          [SymbolOccurrence.built_in_type_hover bt]
-        | _ -> make_hover_doc_block ctx entry occurrence def_opt
-      in
-      HoverService.
-        { snippet; addendum; pos = Some occurrence.SymbolOccurrence.pos }))
+      Tast_env.print_ty_with_identity env ty occurrence def_opt
+    in
+    let snippet =
+      match (occurrence, info_opt) with
+      | ({ name; _ }, None) -> Utils.strip_hh_lib_ns name
+      | ({ type_ = BestEffortArgument (recv, i); _ }, _) ->
+        let param_name = nth_param ctx recv i in
+        Printf.sprintf "Parameter: %s" (Option.value ~default:"$_" param_name)
+      | ({ type_ = Method _; _ }, Some info)
+      | ({ type_ = ClassConst _; _ }, Some info)
+      | ({ type_ = Property _; _ }, Some info) ->
+        defined_in ^ print_locl_ty_with_identity info
+      | ({ type_ = GConst; _ }, Some info) ->
+        (match make_hover_const_definition entry def_opt with
+        | Some def_txt -> def_txt
+        | None -> print_locl_ty_with_identity info)
+      | ({ type_ = Function; _ }, Some info) ->
+        fun_defined_in def_opt
+        ^ print_locl_ty_with_identity ~do_not_strip_dynamic:true info
+      | (_, Some info) ->
+        print_locl_ty_with_identity ~do_not_strip_dynamic:true info
+        ^ under_dynamic_result
+    in
+    let addendum =
+      let { name; type_; is_declaration = _; pos = _ } = occurrence in
+      match type_ with
+      | Attribute _ ->
+        List.concat
+          [
+            make_hover_attr_docs name;
+            make_hover_doc_block ctx entry occurrence def_opt;
+          ]
+      | Keyword info -> [keyword_info info]
+      | HhFixme -> [hh_fixme_info]
+      | HhIgnore -> [hh_ignore_info]
+      | PureFunctionContext -> [pure_context_info]
+      | BuiltInType bt -> [SymbolOccurrence.built_in_type_hover bt]
+      | _ -> make_hover_doc_block ctx entry occurrence def_opt
+    in
+    HoverService.
+      { snippet; addendum; pos = Some occurrence.SymbolOccurrence.pos })
 
 let make_hover_info_with_fallback under_dynamic_result results =
   let class_fallback =
@@ -546,7 +543,7 @@ let go_quarantined
   let { Tast_provider.Compute_tast.tast; _ } =
     Tast_provider.compute_tast_quarantined ~ctx ~entry
   in
-  let env_and_ty =
+  let info_opt =
     ServerInferType.human_friendly_type_at_pos
       ~under_dynamic:false
       ctx
@@ -554,7 +551,7 @@ let go_quarantined
       line
       column
   in
-  let env_and_ty_dynamic =
+  let info_dynamic_opt =
     ServerInferType.human_friendly_type_at_pos
       ~under_dynamic:true
       ctx
@@ -563,22 +560,30 @@ let go_quarantined
       column
   in
   let under_dynamic_result =
-    match env_and_ty_dynamic with
-    | Some (env, ty') ->
-      (match env_and_ty with
+    match info_dynamic_opt with
+    | Some info_dynamic ->
+      let ty_dynamic = ServerInferType.get_type info_dynamic in
+      (match info_opt with
       | None -> ""
-      | Some (_, ty) ->
-        if Typing_defs.ty_equal ty ty' then
+      | Some info ->
+        let ty = ServerInferType.get_type info in
+        let env = ServerInferType.get_env info_dynamic in
+        (* If under dynamic the type is no worse then don't
+         * bother presenting it. Example: ~int in static mode, dynamic under dynamic mode.
+         *)
+        if Tast_env.is_sub_type env ty_dynamic ty then
           ""
         else
           Printf.sprintf
             " (%s when called dynamically)"
-            (Tast_env.print_ty env ty'))
+            (Tast_env.print_ty env ty_dynamic))
     | None -> ""
   in
   let result =
-    match (identities, env_and_ty) with
-    | ([], Some (env, ty)) ->
+    match (identities, info_opt) with
+    | ([], Some info) ->
+      let ty = ServerInferType.get_type info in
+      let env = ServerInferType.get_env info in
       (* There are no identities (named entities) at the cursor, but we
          know the type of the expression. Just show the type.
 
@@ -606,11 +611,14 @@ let go_quarantined
          This can occur if the user hovers over a literal in a call,
          e.g. `foo(123)`. *)
       let ty_result =
-        match env_and_ty with
-        | Some (env, ty) ->
+        match info_opt with
+        | Some info ->
+          let ty = ServerInferType.get_type info in
           [
             {
-              snippet = Tast_env.print_ty env ty ^ under_dynamic_result;
+              snippet =
+                Tast_env.print_ty (ServerInferType.get_env info) ty
+                ^ under_dynamic_result;
               addendum = [];
               pos = None;
             };
@@ -637,11 +645,11 @@ let go_quarantined
       |> List.map ~f:(fun (occurrence, def_opt) ->
              (* If we're hovering over a type hint, we're not interested
                 in the type of the enclosing expression. *)
-             let env_and_ty =
+             let info_opt =
                match occurrence.SymbolOccurrence.type_ with
                | SymbolOccurrence.TypeVar -> None
                | SymbolOccurrence.BuiltInType _ -> None
-               | _ -> env_and_ty
+               | _ -> info_opt
              in
              let path =
                def_opt
@@ -652,7 +660,7 @@ let go_quarantined
              let (ctx, entry) =
                Provider_context.add_entry_if_missing ~ctx ~path
              in
-             (ctx, env_and_ty, entry, occurrence, def_opt))
+             (ctx, info_opt, entry, occurrence, def_opt))
       |> make_hover_info_with_fallback under_dynamic_result
       |> filter_class_and_constructor
       |> List.remove_consecutive_duplicates ~equal:equal_hover_info

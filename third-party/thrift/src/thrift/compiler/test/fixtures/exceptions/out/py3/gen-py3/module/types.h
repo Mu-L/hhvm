@@ -10,7 +10,6 @@
 #include <functional>
 #include <folly/Range.h>
 
-#include <thrift/lib/py3/enums.h>
 #include "thrift/compiler/test/fixtures/exceptions/gen-cpp2/module_data.h"
 #include "thrift/compiler/test/fixtures/exceptions/gen-cpp2/module_types.h"
 #include "thrift/compiler/test/fixtures/exceptions/gen-cpp2/module_metadata.h"
@@ -113,6 +112,7 @@ inline const std::unordered_map<std::string_view, std::string_view>& PyStructTra
     ::cpp2::Serious>::namesmap() {
   static const folly::Indestructible<NamesMap> map {
     {
+      {"sonnet", "not_sonnet"},
     }
   };
   return *map;

@@ -443,11 +443,15 @@ struct FuncData : IRExtraData {
   {}
 
   std::string show() const {
-    return folly::format("{}", func->fullName()).str();
+    return folly::format("{} ({})", func->fullName(), func->getFuncId()).str();
   }
 
   bool equals(const FuncData& f) const {
     return func == f.func;
+  }
+
+  size_t hash() const {
+    return pointer_hash<Func>()(func);
   }
 
   size_t stableHash() const {
@@ -2788,6 +2792,62 @@ struct LoggingProfileData : IRExtraData {
   bool isStatic; // Whether the output is guaranteed to be static
 };
 
+struct LoggingSpeculateData : IRExtraData {
+  LoggingSpeculateData(const StringData* clsName, 
+                       const StringData* ctxName,
+                       const StringData* methName,
+                       Op op,
+                       uint32_t expectedId,
+                       bool success)
+    : clsName(clsName)
+    , ctxName(ctxName)
+    , methName(methName)
+    , opcode(op)
+    , expectedId(expectedId)
+    , success(success) {}
+
+  std::string show() const {
+    auto const clsStr = clsName ? clsName->data() : "[no cls]";
+    auto const ctxStr = ctxName ? ctxName->data() : "[no context]";
+    auto const methStr = methName ? methName->data() : "[no meth]";
+    return folly::sformat(
+      "Logging {} for speculation {}::{} in {} for op {} with id {}",
+      success ? "true" : "false",
+      clsStr,
+      methStr,
+      ctxStr,
+      opcodeToName(opcode),
+      expectedId);
+  }
+
+  size_t stableHash() const {
+    return folly::hash::hash_combine(
+      clsName->hash(),
+      ctxName->hash(),
+      methName->hash(),
+      std::hash<Op>()(opcode),
+      std::hash<uint32_t>()(expectedId),
+      std::hash<bool>()(success)
+    );
+  }
+
+  bool equals(const LoggingSpeculateData& o) const {
+    return clsName == o.clsName &&
+      ctxName == o.ctxName && 
+      methName == o.methName && 
+      opcode == o.opcode && 
+      expectedId == o.expectedId &&
+      success == o.success;
+  }
+
+  const StringData* clsName;
+  const StringData* ctxName;
+  const StringData* methName;
+  Op opcode;
+  uint32_t expectedId;
+  bool success;
+};
+
 struct SinkProfileData : IRExtraData {
   explicit SinkProfileData(bespoke::SinkProfile* profile)
     : profile(profile)
@@ -3008,6 +3068,7 @@ X(CheckCold,                    TransIDData);
 X(IncProfCounter,               TransIDData);
 X(IncCallCounter,               FuncData);
 X(LogArrayReach,                SinkProfileData);
+X(LogClsSpeculation,            LoggingSpeculateData);
 X(NewLoggingArray,              LoggingProfileData);
 X(BespokeGet,                   BespokeGetData);
 X(Call,                         CallData);
@@ -3151,6 +3212,7 @@ X(LdContResumeAddr,             IsAsyncData);
 X(LdContActRec,                 IsAsyncData);
 X(DecRef,                       DecRefData);
 X(DecRefNZ,                     DecRefData);
+X(DecReleaseCheck,              DecRefData);
 X(ProfileDecRef,                DecRefData);
 X(LdTVAux,                      LdTVAuxData);
 X(DbgAssertRefCount,            AssertReason);
@@ -3187,6 +3249,7 @@ X(RecordFuncCall,               FuncData);
 X(LdClsPropAddrOrNull,          ReadonlyData);
 X(LdClsPropAddrOrRaise,         ReadonlyData);
 X(EqClassId,                    ClassIdData);
+X(EqFuncId,                     FuncData);
 X(LdMBase,                      AliasClassData);
 X(ThrowMustBeEnclosedInReadonly,ClassData);
 X(ThrowMustBeMutableException,  ClassData);

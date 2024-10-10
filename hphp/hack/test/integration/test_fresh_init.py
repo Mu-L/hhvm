@@ -7,8 +7,8 @@ import time
 import unittest
 from typing import List, Optional, Tuple
 
-import common_tests
-from hh_paths import hh_client
+import hphp.hack.test.integration.common_tests as common_tests
+from hphp.hack.test.integration.hh_paths import hh_client
 
 
 class FreshInitTestDriver(common_tests.CommonTestDriver):
@@ -80,10 +80,12 @@ class TestFreshInit(common_tests.CommonTests):
         with open(os.path.join(self.test_driver.repo_dir, "foo_4.php"), "w") as f:
             f.write(
                 """<?hh // strict
-                function foo(?string $s): void {
-                  /* HH_FIXME[4010] We can delete this one */
-                  /* HH_FIXME[4089] We need to keep this one */
+                function expect_int(int $_): void {}
+                function foo(?string $s, ?int $i): void {
+                  /* HH_FIXME[4089] We can delete this one */
+                  /* HH_FIXME[4110] We need to keep this one */
                   /* HH_FIXME[4099] We can delete this one */
+                  expect_int($s);
                   if (/* HH_FIXME[4011] We can delete this one */   $s) {
                     print "hello";
                   } else if ($s /* HH_FIXME[4011] We can delete this one */) {
@@ -92,9 +94,28 @@ class TestFreshInit(common_tests.CommonTests):
                   /* HH_FIXME[4099] We can delete this one */
                   /* HH_FIXME[4098] We can delete this one */
                   print "done\n";
+                  /* HH_IGNORE[12003] We can delete this one */
+                  /* HH_IGNORE[4110] We can delete this one */
+                  /* HH_IGNORE[12001] We can delete this one */
+                  print "sauerkraut";
+                  if (/* HH_IGNORE[12004] We can delete this one */   $s) {
+                    print "hello";
+                  } else if ($s /* HH_FIXME[4011] We can delete this one */) {
+                    print "world";
+                  } else if (/* HH_IGNORE[12003] We need to keep this one */   $s) {
+                    print "hello";
+                  }
+                  /* HH_IGNORE[12003] We can delete this one */
+                  /* HH_IGNORE[12001] We need to keep this one */
+                  /* HH_FIXME[4099] We can delete this one */
+                  /* HH_IGNORE[12004] We can delete this one */
+                  $s === $i;
                 }
             """
             )
+
+        # Allow to print full diff in case of failure of the assert
+        self.maxDiff = None
 
         self.test_driver.start_hh_server(
             changed_files=["foo_4.php"], args=["--no-load"]
@@ -108,13 +129,26 @@ class TestFreshInit(common_tests.CommonTests):
             self.assertEqual(
                 out,
                 """<?hh // strict
-                function foo(?string $s): void {
+                function expect_int(int $_): void {}
+                function foo(?string $s, ?int $i): void {
+                  /* HH_FIXME[4110] We need to keep this one */
+                  expect_int($s);
                   if ($s) {
                     print "hello";
                   } else if ($s ) {
                     print "world";
                   }
                   print "done\n";
+                  print "sauerkraut";
+                  if ($s) {
+                    print "hello";
+                  } else if ($s ) {
+                    print "world";
+                  } else if (/* HH_IGNORE[12003] We need to keep this one */   $s) {
+                    print "hello";
+                  }
+                  /* HH_IGNORE[12001] We need to keep this one */
+                  $s === $i;
                 }
             """,
             )

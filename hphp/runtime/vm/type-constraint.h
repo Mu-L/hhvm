@@ -327,11 +327,13 @@ struct TypeConstraint {
    */
   bool isNullable() const { return contains(m_flags, TypeConstraintFlags::Nullable); }
   bool isSoft()     const { return contains(m_flags, TypeConstraintFlags::Soft); }
-  bool isExtended() const { return contains(m_flags, TypeConstraintFlags::ExtendedHint); }
   bool isTypeVar()  const { return contains(m_flags, TypeConstraintFlags::TypeVar); }
   bool isTypeConstant() const { return contains(m_flags, TypeConstraintFlags::TypeConstant); }
   bool isUpperBound() const { return contains(m_flags, TypeConstraintFlags::UpperBound); }
   bool isUnion() const { return contains(m_flags, TypeConstraintFlags::Union); }
+  bool isDisplayNullable() const {
+    return contains(m_flags, TypeConstraintFlags::DisplayNullable);
+  }
 
   bool isPrecise()  const { return !isUnion() && metaType() == MetaType::Precise; }
   bool isMixed()    const { return !isUnion() && m_u.single.type == Type::Mixed; }
@@ -351,8 +353,6 @@ struct TypeConstraint {
   bool isArrayLike() const { return !isUnion() && m_u.single.type == Type::ArrayLike; }
   bool isVecOrDict() const { return !isUnion() && m_u.single.type == Type::VecOrDict; }
   bool isClassname() const { return !isUnion() && m_u.single.type == Type::Classname; }
-
-  bool isSoftOrBuiltinSoft(const Func* func) const;
 
   bool isUnresolved() const {
     return isUnion()
@@ -557,8 +557,8 @@ private:
   template <CheckMode>
   bool checkImpl(tv_rval val, const Class* context) const;
 
-  template <bool, bool>
-  bool checkNamedTypeNonObj(tv_rval val) const;
+  template <CheckMode>
+  bool checkNamedTypeNonObj(tv_rval val, const Class* context) const;
 
   template <bool> static bool checkTypeAliasImpl(const ClassConstraint& oc, const Class* type);
 

@@ -62,7 +62,7 @@ type pos_byte_string = Pos_or_decl.t * Ast_defs.byte_string
     instead of Pos.t. Aast.shape_field_name is used in shape expressions,
     while this is used in shape types. *)
 type tshape_field_name =
-  | TSFlit_int of pos_string
+  | TSFregex_group of pos_string
   | TSFlit_str of pos_byte_string
   | TSFclass_const of pos_id * pos_string
 [@@deriving eq, ord, show]
@@ -164,6 +164,33 @@ type enforcement =
   | Enforced  (** The consumer enforces the type at runtime *)
 [@@deriving eq, show, ord]
 
+type type_tag =
+  | BoolTag
+  | IntTag
+  | StringTag
+  | ArraykeyTag
+  | FloatTag
+  | NumTag
+  | ResourceTag
+  | NullTag
+  | ClassTag of Ast_defs.id_
+[@@deriving eq, ord, hash, show { with_path = false }]
+
+type shape_field_predicate = {
+  (* T196048813 *)
+  (* sfp_optional: bool; *)
+  sfp_predicate: type_predicate;
+}
+
+and shape_predicate = {
+  (* T196048813 *)
+  (* sp_allows_unknown_fields: bool; *)
+  sp_fields: shape_field_predicate TShapeMap.t;
+}
+
+(* TODO optional and variadic components T201398626 T201398652 *)
+and tuple_predicate = { tp_required: type_predicate list }
+
 (** Represents the predicate of a type switch, i.e. in the expression
       ```
       if ($x is Bool) { ... } else { ... }
@@ -171,29 +198,12 @@ type enforcement =
 
     The predicate would be `is Bool`
   *)
-type type_predicate =
-  | IsBool
-  | IsInt
-  | IsString
-  | IsArraykey
-  | IsFloat
-  | IsNum
-  | IsResource
-  | IsNull
-  | IsTupleOf of type_predicate list
-[@@deriving eq, ord, hash, show]
+and type_predicate_ =
+  | IsTag of type_tag
+  | IsTupleOf of tuple_predicate
+  | IsShapeOf of shape_predicate
 
-(** Negation types represent the type of values that fail an `is` test
-    for either a primitive type, or a class-ish type C<_> *)
-type neg_type =
-  | Neg_class of pos_id
-      (** The negation of a class. If we think of types as denoting sets
-       of values, then (Neg_class C) is complement (Union tyl. C<tyl>), that is
-       all values that are not in C<t1, ..., tn> for any application of C to type
-       arguments. *)
-  | Neg_predicate of type_predicate
-      (** The set of all values that do not pass the given predicate *)
-[@@deriving hash, show]
+and type_predicate = Reason.t * type_predicate_ [@@deriving eq, ord, hash, show]
 
 (** Because Tfun is currently used as both a decl and locl ty, without this,
   the HH\Contexts\defaults alias must be stored in shared memory for a
@@ -313,8 +323,8 @@ and _ ty_ =
   (* A wrapper around fun_type, which contains the full type information for a
    * function, method, lambda, etc. *)
   | Tfun : 'phase ty fun_type -> 'phase ty_
-  (* Tuple, with ordered list of the types of the elements of the tuple. *)
-  | Ttuple : 'phase ty list -> 'phase ty_
+  (* A wrapper around tuple_type, which contains information about tuple elements *)
+  | Ttuple : 'phase tuple_type -> 'phase ty_
   (* A wrapper around shape_type, which contains information about shape fields *)
   | Tshape : 'phase shape_type -> 'phase ty_
   (* The type of a generic parameter. The constraints on a generic parameter
@@ -338,20 +348,6 @@ and _ ty_ =
   | Tvec_or_dict : 'phase ty * 'phase ty -> 'phase ty_
   (* Name of class, name of type const, remaining names of type consts *)
   | Taccess : 'phase taccess_type -> 'phase ty_
-  (* The type of an opaque type (e.g. a "newtype" outside of the file where it
-   * was defined) or enum. They are "opaque", which means that they only unify with
-   * themselves. However, it is possible to have a constraint that allows us to
-   * relax this. For example:
-   *
-   *   newtype my_type as int = ...
-   *
-   * Outside of the file where the type was defined, this translates to:
-   *
-   *   Tnewtype ((pos, "my_type"), [], Tprim Tint)
-   *
-   * Which means that my_type is abstract, but is subtype of int as well.
-   *)
-  | Tnewtype : string * 'phase ty list * 'phase ty -> 'phase ty_
   (*========== Below Are Types That Cannot Be Declared In User Code ==========*)
   | Tvar : Tvid.t -> locl_phase ty_
   (* This represents a type alias that lacks necessary type arguments. Given
@@ -362,6 +358,20 @@ and _ ty_ =
    *   type Foo2 = ...
    * that simply doesn't require type arguments.
    *)
+  | Tnewtype : string * locl_phase ty list * locl_phase ty -> locl_phase ty_
+      (** The type of an opaque type (e.g. a "newtype" outside of the file where it
+        was defined) or enum. They are "opaque", which means that they only unify with
+        themselves. However, it is possible to have a constraint that allows us to
+        relax this. For example:
+
+          newtype my_type as int = ...
+
+        Outside of the file where the type was defined, this translates to:
+
+          Tnewtype ((pos, "my_type"), [], Tprim Tint)
+
+        Which means that my_type is abstract, but is subtype of int as well.
+      *)
   | Tunapplied_alias : string -> locl_phase ty_
   (* see dependent_type *)
   | Tdependent : dependent_type * locl_ty -> locl_phase ty_
@@ -370,7 +380,7 @@ and _ ty_ =
    * If exact=Nonexact, this also includes subclasses
    *)
   | Tclass : pos_id * exact * locl_ty list -> locl_phase ty_
-  | Tneg : neg_type -> locl_phase ty_
+  | Tneg : type_predicate -> locl_phase ty_
   | Tlabel : string -> locl_phase ty_
       (** The type of the label expression #ID *)
 
@@ -403,6 +413,31 @@ and 'phase shape_type = {
   s_unknown_value: 'phase ty;
   s_fields: 'phase shape_field_type TShapeMap.t;
 }
+[@@deriving hash]
+
+(**
+  Required and extra components of a tuple. Extra components
+  are either optional + variadic, or a type splat.
+  Exmaple 1:
+    (string,bool,optional float,optional bool,int...)
+  has require components string, bool, optional components float, bool
+  and variadic component int.
+  Example 2:
+    (string,float,...T)
+  has required components string, float, and splat component T.
+*)
+and 'phase tuple_type = {
+  t_required: 'phase ty list;
+  t_extra: 'phase tuple_extra;
+}
+[@@deriving hash]
+
+and 'phase tuple_extra =
+  | Textra of {
+      t_optional: 'phase ty list;
+      t_variadic: 'phase ty;
+    }
+  | Tsplat of 'phase ty
 [@@deriving hash]
 
 val equal_decl_ty : decl_ty -> decl_ty -> bool
@@ -457,17 +492,20 @@ module Flags : sig
 
   val get_fp_readonly : 'a fun_param -> bool
 
+  val get_fp_splat : 'a fun_param -> bool
+
   val make_fp_flags :
     mode:param_mode ->
     accept_disposable:bool ->
-    has_default:bool ->
+    is_optional:bool ->
     readonly:bool ->
     ignore_readonly_error:bool ->
+    splat:bool ->
     Typing_defs_flags.FunParam.t
 
   val get_fp_accept_disposable : 'a fun_param -> bool
 
-  val get_fp_has_default : 'a fun_param -> bool
+  val get_fp_is_optional : 'a fun_param -> bool
 
   val get_fp_ignore_readonly_error : 'a fun_param -> bool
 

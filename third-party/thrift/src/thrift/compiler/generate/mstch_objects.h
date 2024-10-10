@@ -29,6 +29,7 @@
 #include <thrift/compiler/detail/mustache/mstch.h>
 #include <thrift/compiler/lib/cpp2/util.h>
 #include <thrift/compiler/lib/uri.h>
+#include <thrift/compiler/sema/sema_context.h>
 
 namespace apache {
 namespace thrift {
@@ -234,6 +235,22 @@ struct mstch_context : mstch_factories {
   std::unordered_map<std::string, std::shared_ptr<mstch_base>> struct_cache;
   std::unordered_map<std::string, std::shared_ptr<mstch_base>> service_cache;
   std::unordered_map<std::string, std::shared_ptr<mstch_base>> program_cache;
+
+  node_metadata_cache metadata_cache;
+
+  /**
+   * Sets or erases the option with the given `key` depending on the
+   * `condition`.
+   *
+   * If `condition` is true, `options[key]` will be set to the given `value`.
+   * Otherwise, the entry for `key` in `options` (if any) is removed.
+   *
+   * @return `this` (for chaining).
+   */
+  mstch_context& set_or_erase_option(
+      bool condition, const std::string& key, const std::string& value);
+
+  node_metadata_cache& cache() { return metadata_cache; }
 };
 
 std::shared_ptr<mstch_base> make_mstch_program_cached(
@@ -316,12 +333,17 @@ class mstch_base : public mstch::object {
     return make_mstch_array(container, context_.service_factory.get(), args...);
   }
 
-  template <typename C>
+  template <typename C, typename... Args>
   mstch::array make_mstch_interactions(
-      const C& container, const t_service* containing_service) {
+      const C& container,
+      const t_service* containing_service,
+      const Args&... args) {
     if (context_.interaction_factory) {
       return make_mstch_array(
-          container, *context_.interaction_factory, containing_service);
+          container,
+          *context_.interaction_factory,
+          args...,
+          containing_service);
     }
     return make_mstch_array(container, *context_.service_factory);
   }
@@ -420,12 +442,14 @@ class mstch_program : public mstch_base {
             {"program:structs", &mstch_program::structs},
             {"program:enums", &mstch_program::enums},
             {"program:services", &mstch_program::services},
+            {"program:interactions", &mstch_program::interactions},
             {"program:typedefs", &mstch_program::typedefs},
             {"program:constants", &mstch_program::constants},
             {"program:enums?", &mstch_program::has_enums},
             {"program:structs?", &mstch_program::has_structs},
             {"program:unions?", &mstch_program::has_unions},
             {"program:services?", &mstch_program::has_services},
+            {"program:interactions?", &mstch_program::has_interactions},
             {"program:typedefs?", &mstch_program::has_typedefs},
             {"program:constants?", &mstch_program::has_constants},
             {"program:thrift_uris?", &mstch_program::has_thrift_uris},
@@ -452,6 +476,7 @@ class mstch_program : public mstch_base {
         !program_->exceptions().empty();
   }
   mstch::node has_services() { return !program_->services().empty(); }
+  mstch::node has_interactions() { return !program_->interactions().empty(); }
   mstch::node has_typedefs() { return !program_->typedefs().empty(); }
   mstch::node has_constants() { return !program_->consts().empty(); }
   mstch::node has_unions() {
@@ -464,6 +489,7 @@ class mstch_program : public mstch_base {
   mstch::node structs();
   mstch::node enums();
   mstch::node services();
+  mstch::node interactions();
   mstch::node typedefs();
   mstch::node constants();
 
@@ -483,7 +509,7 @@ class mstch_service : public mstch_base {
       : mstch_base(ctx, pos),
         service_(s),
         containing_service_(containing_service) {
-    assert(!service_->is_interaction() == !containing_service);
+    assert(containing_service_ == nullptr || service_->is_interaction());
 
     register_cached_methods(
         this,
@@ -574,6 +600,7 @@ class mstch_service : public mstch_base {
     return service_->has_annotation("process_in_event_base") ||
         service_->find_structured_annotation_or_null(kCppProcessInEbThreadUri);
   }
+  mstch::node definition_key();
 
   virtual ~mstch_service() = default;
 

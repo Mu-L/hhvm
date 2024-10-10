@@ -81,7 +81,7 @@ target_link_libraries(
   fmt::fmt
 )
 
-# The base library.
+# The base compiler infrastructure library
 add_library(
   compiler_base
   STATIC
@@ -90,6 +90,18 @@ add_library(
   detail/pluggable_functions.cc
   diagnostic.cc
   source_location.cc
+)
+target_link_libraries(
+  compiler_base
+  fmt::fmt
+  Boost::boost
+  ${FBTHRIFT_COMPILER_LINK_CXXFS}
+)
+
+# The base Thrift compiler library.
+add_library(
+  compiler_lib
+  STATIC
 
   lib/schematizer.cc
   parse/lexer.cc
@@ -100,31 +112,25 @@ add_library(
   parse/parse_ast.h
   parse/token.cc
   parse/token.h
-  sema/const_checker.cc
+  sema/check_initializer.cc
   sema/explicit_include_validator.cc
   sema/scope_validator.cc
-  sema/standard_mutator.cc
+  sema/sema.cc
   sema/standard_validator.cc
 )
-target_compile_definitions(
-  compiler_base
-  PRIVATE -DTHRIFTY_HH="${COMPILER_DIR}/thrifty.hh"
-)
 target_link_libraries(
+  compiler_lib
   compiler_base
   compiler_ast
   fmt::fmt
-  ${FBTHRIFT_COMPILER_LINK_CXXFS}
 )
 
 # The Thrift compiler library.
 add_library(
   compiler
 
-  gen/cpp/gen.cc
-  gen/cpp/namespace_resolver.cc
-  gen/cpp/reference_type.cc
-  gen/cpp/type_resolver.cc
+  generate/cpp/reference_type.cc
+  generate/cpp/name_resolver.cc
 
   lib/cpp2/util.cc
   lib/go/util.cc
@@ -156,6 +162,28 @@ target_link_libraries(
   fmt::fmt
 )
 
+add_library(
+  whisker
+  STATIC
+
+  whisker/detail/string.cc
+  whisker/ast.cc
+  whisker/eval_context.cc
+  whisker/lexer.cc
+  whisker/mstch_compat.cc
+  whisker/object.cc
+  whisker/parser.cc
+  whisker/print_ast.cc
+  whisker/render.cc
+  whisker/token.cc
+  whisker/tree_printer.cc
+)
+target_link_libraries(
+  whisker
+  fmt::fmt
+  compiler_base
+)
+
 add_subdirectory(generate)
 
 # Force compiler_generators linking (compiler will optimize it out otherwise).
@@ -177,7 +205,7 @@ add_executable(
 target_link_libraries(
   thrift1
   compiler_ast
-  compiler_base
+  compiler_lib
   ${FBTHRIFT_COMPILER_LINK_CXXFS}
   ${GENERATE_LINKED}
 )
@@ -192,13 +220,25 @@ endif ()
 if (BUILD_SHARED_LIBS)
   # All but thrift1 since it's a binary.
   set_target_properties(
-    compiler_ast compiler_base compiler mustache compiler_generators
+    compiler_ast
+    compiler_base
+    compiler_lib
+    compiler
+    mustache
+    whisker
+    compiler_generators
     PROPERTIES VERSION ${PACKAGE_VERSION}
   )
 endif ()
 
 install(
-  TARGETS thrift1 compiler_ast compiler_base compiler mustache
+  TARGETS thrift1
+    compiler_ast
+    compiler_base
+    compiler_lib
+    compiler
+    mustache
+    whisker
   EXPORT fbthrift-exports
   RUNTIME DESTINATION ${BIN_INSTALL_DIR}
   LIBRARY DESTINATION ${LIB_INSTALL_DIR}

@@ -24,10 +24,12 @@ import (
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 const (
-	DefaulprotoID     = ProtocolIDCompact
+	DefaulprotoID     = types.ProtocolIDCompact
 	DefaultClientType = HeaderClientType
 )
 
@@ -47,7 +49,7 @@ type headerTransport struct {
 	persistentWriteInfoHeaders map[string]string
 
 	// Negotiated
-	protoID            ProtocolID
+	protoID            types.ProtocolID
 	readSeqID          uint32 // read (and written, if not set explicitly)
 	writeSeqID         uint32 // written, if set by user of transport
 	seqIDExplicitlySet bool
@@ -58,7 +60,7 @@ type headerTransport struct {
 }
 
 // newHeaderTransport creates a new transport with defaults.
-func newHeaderTransport(c net.Conn) *headerTransport {
+func newHeaderTransport(c net.Conn, protoID types.ProtocolID) *headerTransport {
 	conn := &connTimeout{Conn: c}
 	return &headerTransport{
 		conn:      conn,
@@ -70,7 +72,7 @@ func newHeaderTransport(c net.Conn) *headerTransport {
 		writeInfoHeaders:           map[string]string{},
 		persistentWriteInfoHeaders: map[string]string{},
 
-		protoID:         DefaulprotoID,
+		protoID:         protoID,
 		flags:           0,
 		clientType:      DefaultClientType,
 		writeTransforms: []TransformID{},
@@ -87,29 +89,6 @@ func (t *headerTransport) SeqID() uint32 {
 	return t.readSeqID
 }
 
-func (t *headerTransport) SetPersistentHeader(key, value string) {
-	t.persistentWriteInfoHeaders[key] = value
-}
-
-func (t *headerTransport) GetPersistentHeader(key string) (string, bool) {
-	v, ok := t.persistentWriteInfoHeaders[key]
-	return v, ok
-}
-
-func (t *headerTransport) GetPersistentHeaders() map[string]string {
-	res := map[string]string{}
-	for k, v := range t.persistentWriteInfoHeaders {
-		res[k] = v
-	}
-	return res
-}
-
-func (t *headerTransport) ClearPersistentHeaders() {
-	if len(t.persistentWriteInfoHeaders) != 0 {
-		t.persistentWriteInfoHeaders = map[string]string{}
-	}
-}
-
 // SetRequestHeader sets a request header
 func (t *headerTransport) SetRequestHeader(key, value string) {
 	t.writeInfoHeaders[key] = value
@@ -120,52 +99,16 @@ func (t *headerTransport) SetHeader(key, value string) {
 	t.writeInfoHeaders[key] = value
 }
 
-// GetRequestHeader returns a request header if the key exists, otherwise false
-func (t *headerTransport) GetRequestHeader(key string) (string, bool) {
-	v, ok := t.writeInfoHeaders[key]
-	return v, ok
-}
-
 // Deprecated Header is deprecated rather use GetRequestHeader
 func (t *headerTransport) Header(key string) (string, bool) {
 	v, ok := t.writeInfoHeaders[key]
 	return v, ok
 }
 
-// GetRequestHeaders returns all the request headers
-func (t *headerTransport) GetRequestHeaders() map[string]string {
-	res := map[string]string{}
-	for k, v := range t.writeInfoHeaders {
-		res[k] = v
-	}
-	return res
-}
-
-// Deprecated Headers is deprecated rather use GetRequestHeaders
-func (t *headerTransport) Headers() map[string]string {
-	res := map[string]string{}
-	for k, v := range t.writeInfoHeaders {
-		res[k] = v
-	}
-	return res
-}
-
 func (t *headerTransport) clearRequestHeaders() {
 	if len(t.writeInfoHeaders) != 0 {
 		t.writeInfoHeaders = map[string]string{}
 	}
-}
-
-func (t *headerTransport) GetResponseHeader(key string) (string, bool) {
-	if t.readHeader == nil {
-		return "", false
-	}
-	// per the C++ implementation, prefer persistent headers
-	if v, ok := t.readHeader.pHeaders[key]; ok {
-		return v, ok
-	}
-	v, ok := t.readHeader.headers[key]
-	return v, ok
 }
 
 func (t *headerTransport) GetResponseHeaders() map[string]string {
@@ -182,24 +125,10 @@ func (t *headerTransport) GetResponseHeaders() map[string]string {
 	return res
 }
 
-func (t *headerTransport) ProtocolID() ProtocolID {
-	return t.protoID
-}
-
-func (t *headerTransport) SetProtocolID(protoID ProtocolID) error {
-	if !(protoID == ProtocolIDBinary || protoID == ProtocolIDCompact) {
-		return NewTransportException(
-			NOT_IMPLEMENTED, fmt.Sprintf("unimplemented proto ID: %s (%#x)", protoID.String(), int64(protoID)),
-		)
-	}
-	t.protoID = protoID
-	return nil
-}
-
 func (t *headerTransport) AddTransform(trans TransformID) error {
 	if sup, ok := supportedTransforms[trans]; !ok || !sup {
-		return NewTransportException(
-			NOT_IMPLEMENTED, fmt.Sprintf("unimplemented transform ID: %s (%#x)", trans.String(), int64(trans)),
+		return types.NewTransportException(
+			types.NOT_IMPLEMENTED, fmt.Sprintf("unimplemented transform ID: %s (%#x)", trans.String(), int64(trans)),
 		)
 	}
 	for _, t := range t.writeTransforms {
@@ -246,7 +175,7 @@ func (t *headerTransport) ResetProtocol() error {
 	// Consume the header from the stream
 	err := hdr.Read(t.rbuf)
 	if err != nil {
-		return NewTransportExceptionFromError(err)
+		return types.NewTransportExceptionFromError(err)
 	}
 
 	// Set new header
@@ -264,12 +193,12 @@ func (t *headerTransport) ResetProtocol() error {
 	for _, trans := range hdr.transforms {
 		xformer, terr := trans.Untransformer()
 		if terr != nil {
-			return NewTransportExceptionFromError(terr)
+			return types.NewTransportExceptionFromError(terr)
 		}
 
 		t.framebuf, terr = xformer(t.framebuf)
 		if terr != nil {
-			return NewTransportExceptionFromError(terr)
+			return types.NewTransportExceptionFromError(terr)
 		}
 	}
 
@@ -277,7 +206,7 @@ func (t *headerTransport) ResetProtocol() error {
 	if len(hdr.transforms) > 0 {
 		err = t.applyUntransform()
 		if err != nil {
-			return NewTransportExceptionFromError(err)
+			return types.NewTransportExceptionFromError(err)
 		}
 	}
 
@@ -313,19 +242,19 @@ func (t *headerTransport) ReadByte() (byte, error) {
 // Write writes multiple bytes to the framebuffer, does not send to transport.
 func (t *headerTransport) Write(buf []byte) (int, error) {
 	n, err := t.wbuf.Write(buf)
-	return n, NewTransportExceptionFromError(err)
+	return n, types.NewTransportExceptionFromError(err)
 }
 
 // WriteByte writes a single byte to the framebuffer, does not send to transport.
 func (t *headerTransport) WriteByte(c byte) error {
 	err := t.wbuf.WriteByte(c)
-	return NewTransportExceptionFromError(err)
+	return types.NewTransportExceptionFromError(err)
 }
 
 // WriteString writes a string to the framebuffer, does not send to transport.
 func (t *headerTransport) WriteString(s string) (int, error) {
 	n, err := t.wbuf.WriteString(s)
-	return n, NewTransportExceptionFromError(err)
+	return n, types.NewTransportExceptionFromError(err)
 }
 
 // RemainingBytes returns how many bytes remain in the current recv framebuffer.
@@ -361,8 +290,8 @@ func applyTransforms(buf *bytes.Buffer, transforms []TransformID) (*bytes.Buffer
 			buf, tmpbuf = tmpbuf, buf
 			tmpbuf.Reset()
 		default:
-			return nil, NewTransportException(
-				NOT_IMPLEMENTED, fmt.Sprintf("unimplemented transform ID: %s (%#x)", trans.String(), int64(trans)),
+			return nil, types.NewTransportException(
+				types.NOT_IMPLEMENTED, fmt.Sprintf("unimplemented transform ID: %s (%#x)", trans.String(), int64(trans)),
 			)
 		}
 	}
@@ -397,32 +326,32 @@ func (t *headerTransport) flushHeader() error {
 
 	outbuf, err := applyTransforms(t.wbuf, t.writeTransforms)
 	if err != nil {
-		return NewTransportExceptionFromError(err)
+		return types.NewTransportExceptionFromError(err)
 	}
 	t.wbuf = outbuf
 
 	hdr.payloadLen = uint64(t.wbuf.Len())
 	err = hdr.calcLenFromPayload()
 	if err != nil {
-		return NewTransportExceptionFromError(err)
+		return types.NewTransportExceptionFromError(err)
 	}
 
 	err = hdr.Write(t.conn)
-	return NewTransportExceptionFromError(err)
+	return types.NewTransportExceptionFromError(err)
 }
 
 func (t *headerTransport) flushFramed() error {
 	buflen := t.wbuf.Len()
 	framesize := uint32(buflen)
 	if buflen > int(MaxFrameSize) {
-		return NewTransportException(
-			INVALID_FRAME_SIZE,
+		return types.NewTransportException(
+			types.INVALID_FRAME_SIZE,
 			fmt.Sprintf("cannot send bigframe of size %d", buflen),
 		)
 	}
 
 	err := binary.Write(t.conn, binary.BigEndian, framesize)
-	return NewTransportExceptionFromError(err)
+	return types.NewTransportExceptionFromError(err)
 }
 
 func (t *headerTransport) Flush() error {
@@ -437,8 +366,8 @@ func (t *headerTransport) Flush() error {
 		err = t.flushFramed()
 	default:
 		t.wbuf.Reset() // reset incase wbuf pointer changes in xform
-		return NewTransportException(
-			UNKNOWN_TRANSPORT_EXCEPTION,
+		return types.NewTransportException(
+			types.UNKNOWN_TRANSPORT_EXCEPTION,
 			fmt.Sprintf("tHeader cannot flush for clientType %s", t.clientType.String()),
 		)
 	}
@@ -453,7 +382,7 @@ func (t *headerTransport) Flush() error {
 		_, err = t.wbuf.WriteTo(t.conn)
 		if err != nil {
 			t.wbuf.Reset() // reset on return
-			return NewTransportExceptionFromError(err)
+			return types.NewTransportExceptionFromError(err)
 		}
 	}
 
@@ -461,5 +390,5 @@ func (t *headerTransport) Flush() error {
 	t.clearRequestHeaders()
 
 	t.wbuf.Reset() // reset incase wbuf pointer changes in xform
-	return NewTransportExceptionFromError(err)
+	return types.NewTransportExceptionFromError(err)
 }

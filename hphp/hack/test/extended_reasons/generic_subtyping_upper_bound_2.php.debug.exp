@@ -1,14 +1,16 @@
 error: Typing[4323] Invalid argument
 
+File "generic_subtyping_upper_bound_2.php", line 12, character 20 - line 12, character 21:
+
   9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
  10 | 
  11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
  12 |   rcvr_both_bounds(»$x«);
  13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 12, character 20 - line 12, character 21:
-
 `T` is a constrained type parameter
+
+File "generic_subtyping_upper_bound_2.php", line 9, character 27 - line 9, character 27:
 
  9 | function rcvr_both_bounds<»T« as D as B>(T $x): void {}
 10 | 
@@ -16,41 +18,29 @@ File "generic_subtyping_upper_bound_2.php", line 12, character 20 - line 12, cha
 12 |   rcvr_both_bounds($x);
 13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 9, character 27 - line 9, character 27:
-
 This type constraint is violated
+
+File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
 
  9 | function rcvr_both_bounds<T as »D« as B>(T $x): void {}
 10 | 
 11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
 12 |   rcvr_both_bounds($x);
 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
 
 Expected `D`
 
+File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
+
  9 | function rcvr_both_bounds<T as »D« as B>(T $x): void {}
 10 | 
 11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
 12 |   rcvr_both_bounds($x);
 13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
-
 But got `A`
 
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as »A«>(T $x): void {
- 12 |   rcvr_both_bounds($x);
- 13 | }
-
 File "generic_subtyping_upper_bound_2.php", line 11, character 49 - line 11, character 49:
-
-This error has 6 steps, a maximum depth of 1 and contains 1 reversal.
-
-Here's why: this hint
 
   9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
  10 | 
@@ -58,29 +48,322 @@ Here's why: this hint
  12 |   rcvr_both_bounds($x);
  13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 11, character 49 - line 11, character 49:
+Derivation:
+{
+  "Derivation":[
+    {
+      "Begin":{
+        "sub":[
+          {
+            "Support_dynamic_type":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":9,
+                "char_start":10,
+                "char_end":25
+              }
+            ]
+          }
+        ],
+        "super":[
+          {
+            "Witness":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":12,
+                "char_start":3,
+                "char_end":22
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Step":{
+        "rule":{"Using_prj":{"Prj_symm_fn_param":[0,0]}},
+        "on_":"Both",
+        "sub":[
+          {
+            "Flow":{
+              "from":[
+                {
+                  "Hint":[
+                    {
+                      "filename":"generic_subtyping_upper_bound_2.php",
+                      "line":11,
+                      "char_start":52,
+                      "char_end":52
+                    }
+                  ]
+                }
+              ],
+              "kind":"Flow_param_hint",
+              "into":[
+                {
+                  "Flow":{
+                    "from":[
+                      {
+                        "Witness":[
+                          {
+                            "filename":"generic_subtyping_upper_bound_2.php",
+                            "line":11,
+                            "char_start":54,
+                            "char_end":55
+                          }
+                        ]
+                      }
+                    ],
+                    "kind":"Flow_local",
+                    "into":[
+                      {
+                        "Witness":[
+                          {
+                            "filename":"generic_subtyping_upper_bound_2.php",
+                            "line":12,
+                            "char_start":20,
+                            "char_end":21
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "super":[
+          {
+            "Cstr_on_generics":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":9,
+                "char_start":32,
+                "char_end":32
+              },
+              {
+                "Tuple2":[
+                  {
+                    "filename":"generic_subtyping_upper_bound_2.php",
+                    "line":9,
+                    "char_start":27,
+                    "char_end":27
+                  },
+                  "T"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Step":{
+        "rule":{"Using axiom_sub":"Upper_bound"},
+        "on_":"Subtype",
+        "sub":[
+          {
+            "Def":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":4,
+                "char_start":7,
+                "char_end":7
+              },
+              [
+                {
+                  "Hint":[
+                    {
+                      "filename":"generic_subtyping_upper_bound_2.php",
+                      "line":11,
+                      "char_start":49,
+                      "char_end":49
+                    }
+                  ]
+                }
+              ]
+            ]
+          }
+        ],
+        "super":[
+          {
+            "Cstr_on_generics":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":9,
+                "char_start":32,
+                "char_end":32
+              },
+              {
+                "Tuple2":[
+                  {
+                    "filename":"generic_subtyping_upper_bound_2.php",
+                    "line":9,
+                    "char_start":27,
+                    "char_end":27
+                  },
+                  "T"
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}
 
-flows into this hint becuase it is the upper bound
+File "", line 0, character 0 - line 0, character -1:
 
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(»T« $x): void {
- 12 |   rcvr_both_bounds($x);
- 13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 11, character 52 - line 11, character 52:
+Reason:
+{
+  "Subtype":{
+    "sub":[
+      {
+        "Axiom":{
+          "prev":[
+            {
+              "Prj_both":{
+                "sub_prj":[
+                  {
+                    "Flow":{
+                      "from":[
+                        {
+                          "Hint":[
+                            {
+                              "filename":"generic_subtyping_upper_bound_2.php",
+                              "line":11,
+                              "char_start":52,
+                              "char_end":52
+                            }
+                          ]
+                        }
+                      ],
+                      "kind":"Flow_param_hint",
+                      "into":[
+                        {
+                          "Flow":{
+                            "from":[
+                              {
+                                "Witness":[
+                                  {
+                                    "filename":"generic_subtyping_upper_bound_2.php",
+                                    "line":11,
+                                    "char_start":54,
+                                    "char_end":55
+                                  }
+                                ]
+                              }
+                            ],
+                            "kind":"Flow_local",
+                            "into":[
+                              {
+                                "Witness":[
+                                  {
+                                    "filename":"generic_subtyping_upper_bound_2.php",
+                                    "line":12,
+                                    "char_start":20,
+                                    "char_end":21
+                                  }
+                                ]
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ],
+                "prj":{"Prj_symm_fn_param":[0,0]},
+                "sub":[
+                  {
+                    "Support_dynamic_type":[
+                      {
+                        "filename":"generic_subtyping_upper_bound_2.php",
+                        "line":9,
+                        "char_start":10,
+                        "char_end":25
+                      }
+                    ]
+                  }
+                ],
+                "super":[
+                  {
+                    "Witness":[
+                      {
+                        "filename":"generic_subtyping_upper_bound_2.php",
+                        "line":12,
+                        "char_start":3,
+                        "char_end":22
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ],
+          "axiom":"Upper_bound",
+          "next":[
+            {
+              "Def":[
+                {
+                  "filename":"generic_subtyping_upper_bound_2.php",
+                  "line":4,
+                  "char_start":7,
+                  "char_end":7
+                },
+                [
+                  {
+                    "Hint":[
+                      {
+                        "filename":"generic_subtyping_upper_bound_2.php",
+                        "line":11,
+                        "char_start":49,
+                        "char_end":49
+                      }
+                    ]
+                  }
+                ]
+              ]
+            }
+          ]
+        }
+      }
+    ],
+    "super":[
+      {
+        "Cstr_on_generics":[
+          {
+            "filename":"generic_subtyping_upper_bound_2.php",
+            "line":9,
+            "char_start":32,
+            "char_end":32
+          },
+          {
+            "Tuple2":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":9,
+                "char_start":27,
+                "char_end":27
+              },
+              "T"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
 
-which itself flows into this expression because it is a parameter hint
+File "", line 0, character 0 - line 0, character -1:
 
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(T »$x«): void {
- 12 |   rcvr_both_bounds($x);
- 13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 11, character 54 - line 11, character 55:
+error: Typing[4323] Invalid argument
 
-which itself flows into this expression because the local variable has this type
+File "generic_subtyping_upper_bound_2.php", line 12, character 20 - line 12, character 21:
 
   9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
  10 | 
@@ -88,29 +371,19 @@ which itself flows into this expression because the local variable has this type
  12 |   rcvr_both_bounds(»$x«);
  13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 12, character 20 - line 12, character 21:
+`T` is a constrained type parameter
 
-which itself flows up into this expression as the 1st function parameter
+File "generic_subtyping_upper_bound_2.php", line 9, character 27 - line 9, character 27:
 
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
- 12 |   »rcvr_both_bounds($x)«;
- 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 12, character 3 - line 12, character 22:
-
-which itself flows from this function or method  because they are required to be subtypes
-
- 9 | function »rcvr_both_bounds«<T as D as B>(T $x): void {}
+ 9 | function rcvr_both_bounds<»T« as D as B>(T $x): void {}
 10 | 
 11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
 12 |   rcvr_both_bounds($x);
 13 | }
 
-File "generic_subtyping_upper_bound_2.php", line 9, character 10 - line 9, character 25:
+This type constraint is violated
 
-which itself flows down into the constraint on the generic parameter as the 1st function parameter
+File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
 
  9 | function rcvr_both_bounds<T as »D« as B>(T $x): void {}
 10 | 
@@ -118,343 +391,227 @@ which itself flows down into the constraint on the generic parameter as the 1st 
 12 |   rcvr_both_bounds($x);
 13 | }
 
+Expected `D`
+
 File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
 
-Raw:
-[
-  {
-    "Def":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":4,
-        "char_start":7,
-        "char_end":7
-      },
-      [
-        {
-          "Hint":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":11,
-              "char_start":49,
-              "char_end":49
-            }
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_upper_bound",
-  {
-    "Hint":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":52,
-        "char_end":52
-      }
-    ]
-  },
-  "Flow_param_hint",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":54,
-        "char_end":55
-      }
-    ]
-  },
-  "Flow_local",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":12,
-        "char_start":20,
-        "char_end":21
-      }
-    ]
-  },
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-      [
-        {
-          "Witness":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":12,
-              "char_start":3,
-              "char_end":22
-            }
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Rev":[
-            [
+ 9 | function rcvr_both_bounds<T as »D« as B>(T $x): void {}
+10 | 
+11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
+12 |   rcvr_both_bounds($x);
+13 | }
+
+But got `T as A`
+
+File "generic_subtyping_upper_bound_2.php", line 11, character 52 - line 11, character 52:
+
+  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
+ 10 | 
+ 11 | function call_both_bounds_with_upper_bound<T as A>(»T« $x): void {
+ 12 |   rcvr_both_bounds($x);
+ 13 | }
+
+Derivation:
+{
+  "Derivation":[
+    {
+      "Begin":{
+        "sub":[
+          {
+            "Support_dynamic_type":[
               {
-                "Support_dynamic_type":[
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":9,
+                "char_start":10,
+                "char_end":25
+              }
+            ]
+          }
+        ],
+        "super":[
+          {
+            "Witness":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":12,
+                "char_start":3,
+                "char_end":22
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "Step":{
+        "rule":{"Using_prj":{"Prj_symm_fn_param":[0,0]}},
+        "on_":"Both",
+        "sub":[
+          {
+            "Flow":{
+              "from":[
+                {
+                  "Hint":[
+                    {
+                      "filename":"generic_subtyping_upper_bound_2.php",
+                      "line":11,
+                      "char_start":52,
+                      "char_end":52
+                    }
+                  ]
+                }
+              ],
+              "kind":"Flow_param_hint",
+              "into":[
+                {
+                  "Flow":{
+                    "from":[
+                      {
+                        "Witness":[
+                          {
+                            "filename":"generic_subtyping_upper_bound_2.php",
+                            "line":11,
+                            "char_start":54,
+                            "char_end":55
+                          }
+                        ]
+                      }
+                    ],
+                    "kind":"Flow_local",
+                    "into":[
+                      {
+                        "Witness":[
+                          {
+                            "filename":"generic_subtyping_upper_bound_2.php",
+                            "line":12,
+                            "char_start":20,
+                            "char_end":21
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "super":[
+          {
+            "Cstr_on_generics":[
+              {
+                "filename":"generic_subtyping_upper_bound_2.php",
+                "line":9,
+                "char_start":32,
+                "char_end":32
+              },
+              {
+                "Tuple2":[
                   {
                     "filename":"generic_subtyping_upper_bound_2.php",
                     "line":9,
-                    "char_start":10,
-                    "char_end":25
-                  }
+                    "char_start":27,
+                    "char_end":27
+                  },
+                  "T"
                 ]
               }
             ]
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {
-    "Cstr_on_generics":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":9,
-        "char_start":32,
-        "char_end":32
-      },
-      {
-        "Tuple2":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":9,
-            "char_start":27,
-            "char_end":27
-          },
-          "T"
+          }
         ]
       }
-    ]
-  }
-]
-
+    }
+  ]
+}
 
 File "", line 0, character 0 - line 0, character -1:
 
-Normalised:
-[
-  {
-    "Def":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":4,
-        "char_start":7,
-        "char_end":7
-      },
-      [
-        {
-          "Hint":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":11,
-              "char_start":49,
-              "char_end":49
-            }
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_upper_bound",
-  {
-    "Hint":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":52,
-        "char_end":52
-      }
-    ]
-  },
-  "Flow_param_hint",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":54,
-        "char_end":55
-      }
-    ]
-  },
-  "Flow_local",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":12,
-        "char_start":20,
-        "char_end":21
-      }
-    ]
-  },
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-      [
-        {
-          "Witness":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":12,
-              "char_start":3,
-              "char_end":22
-            }
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Support_dynamic_type":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":9,
-              "char_start":10,
-              "char_end":25
-            }
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {
-    "Cstr_on_generics":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":9,
-        "char_start":32,
-        "char_end":32
-      },
-      {
-        "Tuple2":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":9,
-            "char_start":27,
-            "char_end":27
-          },
-          "T"
-        ]
-      }
-    ]
-  }
-]
 
-
-File "", line 0, character 0 - line 0, character -1:
-
-Path:
+Reason:
 {
-  "stats":{"max_depth":1,"length":6,"reversals":1},
-  "path_elems":[
-    [
+  "Subtype":{
+    "sub":[
       {
-        "Def":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":4,
-            "char_start":7,
-            "char_end":7
-          },
-          [
+        "Prj_both":{
+          "sub_prj":[
             {
-              "Hint":[
+              "Flow":{
+                "from":[
+                  {
+                    "Hint":[
+                      {
+                        "filename":"generic_subtyping_upper_bound_2.php",
+                        "line":11,
+                        "char_start":52,
+                        "char_end":52
+                      }
+                    ]
+                  }
+                ],
+                "kind":"Flow_param_hint",
+                "into":[
+                  {
+                    "Flow":{
+                      "from":[
+                        {
+                          "Witness":[
+                            {
+                              "filename":"generic_subtyping_upper_bound_2.php",
+                              "line":11,
+                              "char_start":54,
+                              "char_end":55
+                            }
+                          ]
+                        }
+                      ],
+                      "kind":"Flow_local",
+                      "into":[
+                        {
+                          "Witness":[
+                            {
+                              "filename":"generic_subtyping_upper_bound_2.php",
+                              "line":12,
+                              "char_start":20,
+                              "char_end":21
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          ],
+          "prj":{"Prj_symm_fn_param":[0,0]},
+          "sub":[
+            {
+              "Support_dynamic_type":[
                 {
                   "filename":"generic_subtyping_upper_bound_2.php",
-                  "line":11,
-                  "char_start":49,
-                  "char_end":49
+                  "line":9,
+                  "char_start":10,
+                  "char_end":25
+                }
+              ]
+            }
+          ],
+          "super":[
+            {
+              "Witness":[
+                {
+                  "filename":"generic_subtyping_upper_bound_2.php",
+                  "line":12,
+                  "char_start":3,
+                  "char_end":22
                 }
               ]
             }
           ]
-        ]
+        }
       }
     ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_upper_bound"}},
-    [
-      {
-        "Hint":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":11,
-            "char_start":52,
-            "char_end":52
-          }
-        ]
-      }
-    ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_param_hint"}},
-    [
-      {
-        "Witness":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":11,
-            "char_start":54,
-            "char_end":55
-          }
-        ]
-      }
-    ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_local"}},
-    [
-      {
-        "Witness":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":12,
-            "char_start":20,
-            "char_end":21
-          }
-        ]
-      }
-    ],
-    {
-      "Edge":{"dir":"Fwd","kind":"Flow_prj","in_to":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}}
-    },
-    [
-      {
-        "Witness":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":12,
-            "char_start":3,
-            "char_end":22
-          }
-        ]
-      }
-    ],
-    {"Edge":{"dir":"Bwd","kind":"Flow_subtype"}},
-    [
-      {
-        "Support_dynamic_type":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":9,
-            "char_start":10,
-            "char_end":25
-          }
-        ]
-      }
-    ],
-    {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_subtype_toplevel",
-        "out_of":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}
-      }
-    },
-    [
+    "super":[
       {
         "Cstr_on_generics":[
           {
@@ -477,414 +634,10 @@ Path:
         ]
       }
     ]
-  ]
+  }
 }
 
-
 File "", line 0, character 0 - line 0, character -1:
 
-error: Typing[4323] Invalid argument
 
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
- 12 |   rcvr_both_bounds(»$x«);
- 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 12, character 20 - line 12, character 21:
-
-`T` is a constrained type parameter
-
- 9 | function rcvr_both_bounds<»T« as D as B>(T $x): void {}
-10 | 
-11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
-12 |   rcvr_both_bounds($x);
-13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 9, character 27 - line 9, character 27:
-
-This type constraint is violated
-
- 9 | function rcvr_both_bounds<T as »D« as B>(T $x): void {}
-10 | 
-11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
-12 |   rcvr_both_bounds($x);
-13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
-
-Expected `D`
-
- 9 | function rcvr_both_bounds<T as »D« as B>(T $x): void {}
-10 | 
-11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
-12 |   rcvr_both_bounds($x);
-13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
-
-But got `T as A`
-
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(»T« $x): void {
- 12 |   rcvr_both_bounds($x);
- 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 11, character 52 - line 11, character 52:
-
-This error has 5 steps, a maximum depth of 1 and contains 1 reversal.
-
-Here's why: this hint
-
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(»T« $x): void {
- 12 |   rcvr_both_bounds($x);
- 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 11, character 52 - line 11, character 52:
-
-flows into this expression because it is a parameter hint
-
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(T »$x«): void {
- 12 |   rcvr_both_bounds($x);
- 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 11, character 54 - line 11, character 55:
-
-which itself flows into this expression because the local variable has this type
-
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
- 12 |   rcvr_both_bounds(»$x«);
- 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 12, character 20 - line 12, character 21:
-
-which itself flows up into this expression as the 1st function parameter
-
-  9 | function rcvr_both_bounds<T as D as B>(T $x): void {}
- 10 | 
- 11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
- 12 |   »rcvr_both_bounds($x)«;
- 13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 12, character 3 - line 12, character 22:
-
-which itself flows from this function or method  because they are required to be subtypes
-
- 9 | function »rcvr_both_bounds«<T as D as B>(T $x): void {}
-10 | 
-11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
-12 |   rcvr_both_bounds($x);
-13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 9, character 10 - line 9, character 25:
-
-which itself flows down into the constraint on the generic parameter as the 1st function parameter
-
- 9 | function rcvr_both_bounds<T as »D« as B>(T $x): void {}
-10 | 
-11 | function call_both_bounds_with_upper_bound<T as A>(T $x): void {
-12 |   rcvr_both_bounds($x);
-13 | }
-
-File "generic_subtyping_upper_bound_2.php", line 9, character 32 - line 9, character 32:
-
-Raw:
-[
-  {
-    "Hint":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":52,
-        "char_end":52
-      }
-    ]
-  },
-  "Flow_param_hint",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":54,
-        "char_end":55
-      }
-    ]
-  },
-  "Flow_local",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":12,
-        "char_start":20,
-        "char_end":21
-      }
-    ]
-  },
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-      [
-        {
-          "Witness":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":12,
-              "char_start":3,
-              "char_end":22
-            }
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Rev":[
-            [
-              {
-                "Support_dynamic_type":[
-                  {
-                    "filename":"generic_subtyping_upper_bound_2.php",
-                    "line":9,
-                    "char_start":10,
-                    "char_end":25
-                  }
-                ]
-              }
-            ]
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {
-    "Cstr_on_generics":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":9,
-        "char_start":32,
-        "char_end":32
-      },
-      {
-        "Tuple2":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":9,
-            "char_start":27,
-            "char_end":27
-          },
-          "T"
-        ]
-      }
-    ]
-  }
-]
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-Normalised:
-[
-  {
-    "Hint":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":52,
-        "char_end":52
-      }
-    ]
-  },
-  "Flow_param_hint",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":11,
-        "char_start":54,
-        "char_end":55
-      }
-    ]
-  },
-  "Flow_local",
-  {
-    "Witness":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":12,
-        "char_start":20,
-        "char_end":21
-      }
-    ]
-  },
-  "Flow_prj",
-  {
-    "Prj":[
-      {"Symm":[{"Prj_symm_fn_param":[0,0]}]},
-      [
-        {
-          "Witness":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":12,
-              "char_start":3,
-              "char_end":22
-            }
-          ]
-        },
-        "Flow_subtype",
-        {
-          "Support_dynamic_type":[
-            {
-              "filename":"generic_subtyping_upper_bound_2.php",
-              "line":9,
-              "char_start":10,
-              "char_end":25
-            }
-          ]
-        }
-      ]
-    ]
-  },
-  "Flow_subtype_toplevel",
-  {
-    "Cstr_on_generics":[
-      {
-        "filename":"generic_subtyping_upper_bound_2.php",
-        "line":9,
-        "char_start":32,
-        "char_end":32
-      },
-      {
-        "Tuple2":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":9,
-            "char_start":27,
-            "char_end":27
-          },
-          "T"
-        ]
-      }
-    ]
-  }
-]
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-Path:
-{
-  "stats":{"max_depth":1,"length":5,"reversals":1},
-  "path_elems":[
-    [
-      {
-        "Hint":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":11,
-            "char_start":52,
-            "char_end":52
-          }
-        ]
-      }
-    ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_param_hint"}},
-    [
-      {
-        "Witness":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":11,
-            "char_start":54,
-            "char_end":55
-          }
-        ]
-      }
-    ],
-    {"Edge":{"dir":"Fwd","kind":"Flow_local"}},
-    [
-      {
-        "Witness":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":12,
-            "char_start":20,
-            "char_end":21
-          }
-        ]
-      }
-    ],
-    {
-      "Edge":{"dir":"Fwd","kind":"Flow_prj","in_to":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}}
-    },
-    [
-      {
-        "Witness":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":12,
-            "char_start":3,
-            "char_end":22
-          }
-        ]
-      }
-    ],
-    {"Edge":{"dir":"Bwd","kind":"Flow_subtype"}},
-    [
-      {
-        "Support_dynamic_type":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":9,
-            "char_start":10,
-            "char_end":25
-          }
-        ]
-      }
-    ],
-    {
-      "Edge":{
-        "dir":"Fwd",
-        "kind":"Flow_subtype_toplevel",
-        "out_of":{"Symm":[{"Prj_symm_fn_param":[0,0]}]}
-      }
-    },
-    [
-      {
-        "Cstr_on_generics":[
-          {
-            "filename":"generic_subtyping_upper_bound_2.php",
-            "line":9,
-            "char_start":32,
-            "char_end":32
-          },
-          {
-            "Tuple2":[
-              {
-                "filename":"generic_subtyping_upper_bound_2.php",
-                "line":9,
-                "char_start":27,
-                "char_end":27
-              },
-              "T"
-            ]
-          }
-        ]
-      }
-    ]
-  ]
-}
-
-
-File "", line 0, character 0 - line 0, character -1:
-
-2 errors found.
+2 errors found

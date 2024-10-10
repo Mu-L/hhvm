@@ -251,7 +251,7 @@ function class_id(): void {
 
 let class_id_cases =
   [
-    (("class_id.php", 3, 12), "A");
+    (("class_id.php", 3, 12), "(function(int $id): void)");
     (("class_id.php", 5, 3), "A");
     (("class_id.php", 7, 3), "A");
     (("class_id.php", 9, 3), "A");
@@ -298,7 +298,10 @@ let test () =
     let compare_type expected type_at =
       let ty_str =
         match type_at with
-        | Some (env, ty) -> Tast_env.print_ty env ty
+        | Some info ->
+          Tast_env.print_ty
+            (ServerInferType.get_env info)
+            (ServerInferType.get_type info)
         | None ->
           Test.fail
             (Printf.sprintf "No type inferred at %s:%d:%d" file line col)

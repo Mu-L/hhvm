@@ -33,7 +33,7 @@ val print_hint : env -> Aast.hint -> string
     {!SymbolDefinition.t}. *)
 val print_ty_with_identity :
   env ->
-  Typing_defs.phase_ty ->
+  Typing_defs.locl_ty ->
   'b SymbolOccurrence.t ->
   'b SymbolDefinition.t option ->
   string
@@ -109,6 +109,9 @@ val fully_expand : env -> Tast.ty -> Tast.ty
 (** Strip ~ from type *)
 val strip_dynamic : env -> Tast.ty -> Tast.ty
 
+(** Strip supportdyn from type, return whether it was there or not *)
+val strip_supportdyn : env -> Tast.ty -> bool * Tast.ty
+
 (** Types that can have methods called on them. Usually a class but
     also includes dynamic types *)
 type receiver_identifier =
@@ -172,6 +175,11 @@ val localize :
   env -> Typing_defs.expand_env -> Typing_defs.decl_ty -> env * Tast.ty
 
 val localize_hint_for_refinement : env -> Aast.hint -> env * Tast.ty
+
+(** Return [Result.Ok ()] if the current hint is supported in the new
+  constraint-based refinement logic. Otherwise returns [Result.Err string],
+  where [string] is the reason why the hint isn't supported. *)
+val supports_new_refinement : env -> Aast.hint -> (unit, string) Result.t
 
 (** Transforms a declaration phase type ({!Typing_defs.decl_ty})
     into a localized type ({!Typing_defs.locl_ty} = {!Tast.ty}).

@@ -54,8 +54,7 @@ namespace folly {
 class IOBuf;
 }
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 class StreamClientCallback;
 class SinkClientCallback;
@@ -406,37 +405,23 @@ void RequestChannel::sendRequestAsync(
   }
 }
 
-template <RpcKind Kind, class Protocol, typename RpcOptions>
+template <RpcKind Kind, typename RpcOptions>
 void clientSendT(
-    Protocol* prot,
+    apache::thrift::SerializedRequest&& serializedRequest,
     RpcOptions&& rpcOptions,
     typename apache::thrift::detail::RequestClientCallbackType<Kind>::Ptr
         callback,
-    apache::thrift::ContextStack* ctx,
     std::shared_ptr<apache::thrift::transport::THeader>&& header,
     RequestChannel* channel,
-    apache::thrift::MethodMetadata&& methodMetadata,
-    folly::FunctionRef<void(Protocol*)> writefunc,
-    folly::FunctionRef<size_t(Protocol*)> sizefunc) {
-  auto request = preprocessSendT(
-      prot,
-      rpcOptions,
-      ctx,
-      *header,
-      methodMetadata.name_view(),
-      writefunc,
-      sizefunc,
-      channel->getChecksumSamplingRate());
-
+    apache::thrift::MethodMetadata&& methodMetadata) {
   channel->sendRequestAsync<Kind>(
       std::forward<RpcOptions>(rpcOptions),
       std::move(methodMetadata),
-      std::move(request),
+      std::move(serializedRequest),
       std::move(header),
       std::move(callback));
 }
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift
 
 #endif // #ifndef THRIFT_ASYNC_REQUESTCHANNEL_H_

@@ -26,9 +26,7 @@
 #include <thrift/lib/cpp2/type/Tag.h>
 #include <thrift/lib/thrift/gen-cpp2/patch_types.h>
 
-namespace apache {
-namespace thrift {
-namespace op {
+namespace apache::thrift::op {
 
 namespace detail {
 
@@ -75,6 +73,12 @@ struct PatchType<type::binary_t> {
 template <class T>
 struct SafePatchType {};
 
+template <class T>
+struct SafePatchValueType {};
+
+template <typename T>
+using detect_safe_patch_value_type = typename SafePatchValueType<T>::type;
+
 } // namespace detail
 
 /// The safe patch represenations for the base thrift types.
@@ -85,6 +89,10 @@ struct SafePatchType {};
 template <typename T>
 using safe_patch_type =
     typename detail::SafePatchType<type::infer_tag<T>>::type;
+
+/// The value type for the safe patch.
+template <typename T>
+using safe_patch_value_type = typename detail::SafePatchValueType<T>::type;
 
 /// The patch represenations for the base thrift types.
 ///
@@ -118,6 +126,10 @@ template <typename T>
 inline constexpr bool is_assign_only_patch_v = false;
 template <typename T>
 inline constexpr bool is_assign_only_patch_v<detail::AssignPatch<T>> = true;
+
+template <typename T>
+constexpr static bool is_safe_patch_v =
+    folly::is_detected_v<detail::detect_safe_patch_value_type, T>;
 
 template <typename T>
 std::string prettyPrintPatch(
@@ -164,11 +176,9 @@ op::safe_patch_type<Tag> toSafePatch(const op::patch_type<Tag>& patch) {
 
   op::safe_patch_type<Tag> safePatch;
   safePatch.data() = queue.move();
-  safePatch.version() = detail::kThriftStaticPatchVersion;
+  safePatch.version() = detail::calculateMinSafePatchVersion(patch);
 
   return safePatch;
 }
 
-} // namespace op
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift::op

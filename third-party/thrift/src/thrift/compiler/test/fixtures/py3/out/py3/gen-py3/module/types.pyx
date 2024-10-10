@@ -20,7 +20,11 @@ from thrift.py3.types cimport make_unique
 cimport thrift.py3.types
 cimport thrift.py3.exceptions
 cimport thrift.python.exceptions
+from thrift.python.types import EnumMeta as __EnumMeta
 from thrift.python.std_libcpp cimport sv_to_str as __sv_to_str, string_view as __cstring_view
+from thrift.python.types cimport(
+    BadEnum as __BadEnum,
+)
 from thrift.py3.types cimport (
     cSetOp as __cSetOp,
     richcmp as __richcmp,
@@ -35,16 +39,9 @@ from thrift.py3.types cimport (
     get_field_name_by_index as __get_field_name_by_index,
     reset_field as __reset_field,
     translate_cpp_enum_to_python,
-    SetMetaClass as __SetMetaClass,
     const_pointer_cast,
     make_const_shared,
     constant_shared_ptr,
-    NOTSET as __NOTSET,
-    EnumData as __EnumData,
-    EnumFlagsData as __EnumFlagsData,
-    UnionTypeEnumData as __UnionTypeEnumData,
-    createEnumDataForUnionType as __createEnumDataForUnionType,
-    BadEnum as __BadEnum,
 )
 from thrift.py3.types import _is_python_enum, _is_python_struct
 cimport thrift.py3.serializer as serializer
@@ -59,6 +56,13 @@ from collections.abc import Sequence, Set, Mapping, Iterable
 import weakref as __weakref
 import builtins as _builtins
 import importlib
+
+from module.types_impl_FBTHRIFT_ONLY_DO_NOT_USE import (
+    AnEnum,
+    AnEnumRenamed,
+    Flags,
+    __BinaryUnionType,
+)
 
 from module.containers_FBTHRIFT_ONLY_DO_NOT_USE import (
     List__i16,
@@ -75,210 +79,6 @@ from module.containers_FBTHRIFT_ONLY_DO_NOT_USE import (
     List__AnEnum,
     List__Map__i32_double,
 )
-
-
-
-cdef __EnumData __AnEnum_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cAnEnum](), AnEnum)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __AnEnumMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __AnEnum_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __AnEnum_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __AnEnum_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __AnEnum_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class AnEnum(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __AnEnum_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cAnEnum].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.AnEnum"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "module.thrift_types"
-        )
-        return python_types.AnEnum(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> AnEnum, <PyTypeObject*> __AnEnumMeta)
-
-
-cdef __EnumData __AnEnumRenamed_enum_data  = __EnumData._fbthrift_create(thrift.py3.types.createEnumData[cAnEnumRenamed](), AnEnumRenamed)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __AnEnumRenamedMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __AnEnumRenamed_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __AnEnumRenamed_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __AnEnumRenamed_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __AnEnumRenamed_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class AnEnumRenamed(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __AnEnumRenamed_enum_data.get_by_name(name)
-
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cAnEnumRenamed].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.AnEnumRenamed"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "module.thrift_types"
-        )
-        return python_types.AnEnumRenamed(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> AnEnumRenamed, <PyTypeObject*> __AnEnumRenamedMeta)
-
-
-cdef __EnumFlagsData __Flags_enum_data  = __EnumFlagsData._fbthrift_create(thrift.py3.types.createEnumFlagsData[cFlags](), Flags)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __FlagsMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __Flags_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __Flags_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __Flags_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __Flags_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class Flags(thrift.py3.types.Flag):
-    cdef get_by_name(self, str name):
-        return __Flags_enum_data.get_by_name(name)
-
-
-    def __invert__(self):
-        return __Flags_enum_data.get_invert(self.value)
-
-    @staticmethod
-    def __get_metadata__():
-        cdef __fbthrift_cThriftMetadata meta
-        EnumMetadata[cFlags].gen(meta)
-        return __MetadataBox.box(cmove(meta))
-
-    @staticmethod
-    def __get_thrift_name__():
-        return "module.Flags"
-
-    def _to_python(self):
-        import importlib
-        python_types = importlib.import_module(
-            "module.thrift_types"
-        )
-        return python_types.Flags(self.value)
-
-    def _to_py3(self):
-        return self
-
-    def _to_py_deprecated(self):
-        return self.value
-
-
-__SetMetaClass(<PyTypeObject*> Flags, <PyTypeObject*> __FlagsMeta)
-
-
-
-cdef __UnionTypeEnumData __BinaryUnion_union_type_enum_data  = __UnionTypeEnumData._fbthrift_create(
-    __createEnumDataForUnionType[cBinaryUnion](),
-    __BinaryUnionType,
-)
-
-
-@__cython.internal
-@__cython.auto_pickle(False)
-cdef class __BinaryUnion_Union_TypeMeta(thrift.py3.types.EnumMeta):
-    def _fbthrift_get_by_value(cls, int value):
-        return __BinaryUnion_union_type_enum_data.get_by_value(value)
-
-    def _fbthrift_get_all_names(cls):
-        return __BinaryUnion_union_type_enum_data.get_all_names()
-
-    def __len__(cls):
-        return __BinaryUnion_union_type_enum_data.size()
-
-    def __getattribute__(cls, str name not None):
-        if name.startswith("__") or name.startswith("_fbthrift_") or name == "mro":
-            return super().__getattribute__(name)
-        return __BinaryUnion_union_type_enum_data.get_by_name(name)
-
-
-@__cython.final
-@__cython.auto_pickle(False)
-cdef class __BinaryUnionType(thrift.py3.types.CompiledEnum):
-    cdef get_by_name(self, str name):
-        return __BinaryUnion_union_type_enum_data.get_by_name(name)
-
-
-__SetMetaClass(<PyTypeObject*> __BinaryUnionType, <PyTypeObject*> __BinaryUnion_Union_TypeMeta)
 
 
 cdef object get_types_reflection():
@@ -310,7 +110,6 @@ cdef class SimpleException(thrift.py3.exceptions.GeneratedError):
         return __fbthrift_inst
 
     cdef inline err_code_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).err_code_ref().value()
 
     @property
@@ -429,7 +228,6 @@ cdef class OptionalRefStruct(thrift.py3.types.Struct):
     cdef inline optional_blob_impl(self):
         if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).optional_blob_ref().has_value():
             return None
-
         if self.__fbthrift_cached_optional_blob is None:
             if not deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).optional_blob_ref().value_unchecked():
                 return None
@@ -556,7 +354,6 @@ cdef class SimpleStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline is_on_impl(self):
-
         return <pbool> deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).is_on_ref().value()
 
     @property
@@ -564,7 +361,6 @@ cdef class SimpleStruct(thrift.py3.types.Struct):
         return self.is_on_impl()
 
     cdef inline tiny_int_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).tiny_int_ref().value()
 
     @property
@@ -572,7 +368,6 @@ cdef class SimpleStruct(thrift.py3.types.Struct):
         return self.tiny_int_impl()
 
     cdef inline small_int_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).small_int_ref().value()
 
     @property
@@ -580,7 +375,6 @@ cdef class SimpleStruct(thrift.py3.types.Struct):
         return self.small_int_impl()
 
     cdef inline nice_sized_int_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).nice_sized_int_ref().value()
 
     @property
@@ -588,7 +382,6 @@ cdef class SimpleStruct(thrift.py3.types.Struct):
         return self.nice_sized_int_impl()
 
     cdef inline big_int_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).big_int_ref().value()
 
     @property
@@ -596,7 +389,6 @@ cdef class SimpleStruct(thrift.py3.types.Struct):
         return self.big_int_impl()
 
     cdef inline real_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).real_ref().value()
 
     @property
@@ -604,7 +396,6 @@ cdef class SimpleStruct(thrift.py3.types.Struct):
         return self.real_impl()
 
     cdef inline smaller_real_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).smaller_real_ref().value()
 
     @property
@@ -845,7 +636,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline structOne_impl(self):
-
         if self.__fbthrift_cached_structOne is None:
             self.__fbthrift_cached_structOne = SimpleStruct._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).structOne_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_structOne
@@ -855,7 +645,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.structOne_impl()
 
     cdef inline structTwo_impl(self):
-
         if self.__fbthrift_cached_structTwo is None:
             self.__fbthrift_cached_structTwo = SimpleStruct._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).structTwo_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_structTwo
@@ -865,7 +654,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.structTwo_impl()
 
     cdef inline an_integer_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).an_integer_ref().value()
 
     @property
@@ -873,7 +661,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.an_integer_impl()
 
     cdef inline name_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).name_ref().value()).decode('UTF-8')
 
     @property
@@ -881,7 +668,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.name_impl()
 
     cdef inline an_enum_impl(self):
-
         if self.__fbthrift_cached_an_enum is None:
             self.__fbthrift_cached_an_enum = translate_cpp_enum_to_python(AnEnum, <int>(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).an_enum_ref().value()))
         return self.__fbthrift_cached_an_enum
@@ -891,7 +677,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.an_enum_impl()
 
     cdef inline some_bytes_impl(self):
-
         return deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).some_bytes_ref().value()
 
     @property
@@ -899,7 +684,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.some_bytes_impl()
 
     cdef inline sender_impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).sender_ref().value()).decode('UTF-8')
 
     @property
@@ -907,7 +691,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.sender_impl()
 
     cdef inline cdef__impl(self):
-
         return (<bytes>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).cdef__ref().value()).decode('UTF-8')
 
     @property
@@ -915,7 +698,6 @@ cdef class ComplexStruct(thrift.py3.types.Struct):
         return self.cdef__impl()
 
     cdef inline bytes_with_cpp_type_impl(self):
-
         return (<const char*>deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).bytes_with_cpp_type_ref().value().data())[:deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).bytes_with_cpp_type_ref().value().size()]
 
     @property
@@ -1169,7 +951,6 @@ cdef class BinaryUnionStruct(thrift.py3.types.Struct):
         return __fbthrift_inst
 
     cdef inline u_impl(self):
-
         if self.__fbthrift_cached_u is None:
             self.__fbthrift_cached_u = BinaryUnion._create_FBTHRIFT_ONLY_DO_NOT_USE(__reference_shared_ptr(deref(self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE).u_ref().ref(), self._cpp_obj_FBTHRIFT_ONLY_DO_NOT_USE))
         return self.__fbthrift_cached_u

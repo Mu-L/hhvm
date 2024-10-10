@@ -243,9 +243,10 @@ impl<'a, T, V> SyntaxChildrenIterator<'a, T, V> {
                 })
             },
             CaseTypeVariant(x) => {
-                get_index(2).and_then(|index| { match index {
+                get_index(3).and_then(|index| { match index {
                         0 => Some(&x.bar),
                     1 => Some(&x.type_),
+                    2 => Some(&x.where_clause),
                         _ => None,
                     }
                 })
@@ -513,17 +514,18 @@ impl<'a, T, V> SyntaxChildrenIterator<'a, T, V> {
                 })
             },
             ParameterDeclaration(x) => {
-                get_index(10).and_then(|index| { match index {
+                get_index(11).and_then(|index| { match index {
                         0 => Some(&x.attribute),
                     1 => Some(&x.visibility),
                     2 => Some(&x.optional),
                     3 => Some(&x.call_convention),
                     4 => Some(&x.readonly),
-                    5 => Some(&x.type_),
-                    6 => Some(&x.ellipsis),
-                    7 => Some(&x.name),
-                    8 => Some(&x.default_value),
-                    9 => Some(&x.parameter_end),
+                    5 => Some(&x.pre_ellipsis),
+                    6 => Some(&x.type_),
+                    7 => Some(&x.ellipsis),
+                    8 => Some(&x.name),
+                    9 => Some(&x.default_value),
+                    10 => Some(&x.parameter_end),
                         _ => None,
                     }
                 })
@@ -1578,12 +1580,23 @@ impl<'a, T, V> SyntaxChildrenIterator<'a, T, V> {
                 })
             },
             ClosureParameterTypeSpecifier(x) => {
-                get_index(5).and_then(|index| { match index {
+                get_index(6).and_then(|index| { match index {
                         0 => Some(&x.optional),
                     1 => Some(&x.call_convention),
                     2 => Some(&x.readonly),
-                    3 => Some(&x.type_),
-                    4 => Some(&x.ellipsis),
+                    3 => Some(&x.pre_ellipsis),
+                    4 => Some(&x.type_),
+                    5 => Some(&x.ellipsis),
+                        _ => None,
+                    }
+                })
+            },
+            TupleOrUnionOrIntersectionElementTypeSpecifier(x) => {
+                get_index(4).and_then(|index| { match index {
+                        0 => Some(&x.optional),
+                    1 => Some(&x.pre_ellipsis),
+                    2 => Some(&x.type_),
+                    3 => Some(&x.ellipsis),
                         _ => None,
                     }
                 })

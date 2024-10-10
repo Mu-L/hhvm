@@ -610,29 +610,8 @@ Variant HHVM_FUNCTION(facts_type_to_path, const String& typeName) {
   }
 }
 
-Variant HHVM_FUNCTION(facts_type_to_path_relative, const String& typeName) {
-  auto fileRes = Facts::getFactsOrThrow().getTypeFileRelative(typeName);
-  if (!fileRes) {
-    return Variant{Variant::NullInit{}};
-  } else {
-    return Variant{fileRes->m_path};
-  }
-}
-
 Variant HHVM_FUNCTION(
     facts_type_or_type_alias_to_path,
-    const String& typeName) {
-  auto fileRes =
-      Facts::getFactsOrThrow().getTypeOrTypeAliasFileRelative(typeName);
-  if (!fileRes) {
-    return Variant{Variant::NullInit{}};
-  } else {
-    return Variant{fileRes->m_path};
-  }
-}
-
-Variant HHVM_FUNCTION(
-    facts_type_or_type_alias_to_path_relative,
     const String& typeName) {
   auto fileRes =
       Facts::getFactsOrThrow().getTypeOrTypeAliasFileRelative(typeName);
@@ -652,29 +631,7 @@ Variant HHVM_FUNCTION(facts_function_to_path, const String& functionName) {
   }
 }
 
-Variant HHVM_FUNCTION(
-    facts_function_to_path_relative,
-    const String& functionName) {
-  auto fileRes = Facts::getFactsOrThrow().getFunctionFileRelative(functionName);
-  if (!fileRes) {
-    return Variant{Variant::NullInit{}};
-  } else {
-    return Variant{fileRes->m_path};
-  }
-}
-
 Variant HHVM_FUNCTION(facts_constant_to_path, const String& constantName) {
-  auto fileRes = Facts::getFactsOrThrow().getConstantFileRelative(constantName);
-  if (!fileRes) {
-    return Variant{Variant::NullInit{}};
-  } else {
-    return Variant{fileRes->m_path};
-  }
-}
-
-Variant HHVM_FUNCTION(
-    facts_constant_to_path_relative,
-    const String& constantName) {
   auto fileRes = Facts::getFactsOrThrow().getConstantFileRelative(constantName);
   if (!fileRes) {
     return Variant{Variant::NullInit{}};
@@ -692,28 +649,7 @@ Variant HHVM_FUNCTION(facts_module_to_path, const String& moduleName) {
   }
 }
 
-Variant HHVM_FUNCTION(facts_module_to_path_relative, const String& moduleName) {
-  auto fileRes = Facts::getFactsOrThrow().getModuleFileRelative(moduleName);
-  if (!fileRes) {
-    return Variant{Variant::NullInit{}};
-  } else {
-    return Variant{fileRes->m_path};
-  }
-}
-
 Variant HHVM_FUNCTION(facts_type_alias_to_path, const String& typeAliasName) {
-  auto fileRes =
-      Facts::getFactsOrThrow().getTypeAliasFileRelative(typeAliasName);
-  if (!fileRes) {
-    return Variant{Variant::NullInit{}};
-  } else {
-    return Variant{fileRes->m_path};
-  }
-}
-
-Variant HHVM_FUNCTION(
-    facts_type_alias_to_path_relative,
-    const String& typeAliasName) {
   auto fileRes =
       Facts::getFactsOrThrow().getTypeAliasFileRelative(typeAliasName);
   if (!fileRes) {
@@ -773,6 +709,15 @@ Array HHVM_FUNCTION(
     const String& baseType,
     const Variant& filters) {
   return Facts::getFactsOrThrow().getDerivedTypes(baseType, filters);
+}
+
+Array HHVM_FUNCTION(
+    facts_transitive_subtypes,
+    const String& baseType,
+    const Variant& filters,
+    bool includeInterfaceRequireExtends) {
+  return Facts::getFactsOrThrow().getTransitiveDerivedTypes(
+      baseType, filters, includeInterfaceRequireExtends);
 }
 
 Array HHVM_FUNCTION(
@@ -901,30 +846,13 @@ void FactsExtension::moduleRegisterNative() {
   HHVM_NAMED_FE(HH\\Facts\\sync, HHVM_FN(facts_sync));
   HHVM_NAMED_FE(HH\\Facts\\type_to_path, HHVM_FN(facts_type_to_path));
   HHVM_NAMED_FE(
-      HH\\Facts\\type_to_path_relative, HHVM_FN(facts_type_to_path_relative));
-  HHVM_NAMED_FE(
       HH\\Facts\\type_or_type_alias_to_path,
       HHVM_FN(facts_type_or_type_alias_to_path));
-  HHVM_NAMED_FE(
-      HH\\Facts\\type_or_type_alias_to_path_relative,
-      HHVM_FN(facts_type_or_type_alias_to_path_relative));
   HHVM_NAMED_FE(HH\\Facts\\function_to_path, HHVM_FN(facts_function_to_path));
-  HHVM_NAMED_FE(
-      HH\\Facts\\function_to_path_relative,
-      HHVM_FN(facts_function_to_path_relative));
   HHVM_NAMED_FE(HH\\Facts\\constant_to_path, HHVM_FN(facts_constant_to_path));
-  HHVM_NAMED_FE(
-      HH\\Facts\\constant_to_path_relative,
-      HHVM_FN(facts_constant_to_path_relative));
   HHVM_NAMED_FE(HH\\Facts\\module_to_path, HHVM_FN(facts_module_to_path));
   HHVM_NAMED_FE(
-      HH\\Facts\\module_to_path_relative,
-      HHVM_FN(facts_module_to_path_relative));
-  HHVM_NAMED_FE(
       HH\\Facts\\type_alias_to_path, HHVM_FN(facts_type_alias_to_path));
-  HHVM_NAMED_FE(
-      HH\\Facts\\type_alias_to_path_relative,
-      HHVM_FN(facts_type_alias_to_path_relative));
 
   HHVM_NAMED_FE(HH\\Facts\\path_to_types, HHVM_FN(facts_path_to_types));
   HHVM_NAMED_FE(HH\\Facts\\path_to_functions, HHVM_FN(facts_path_to_functions));
@@ -940,6 +868,8 @@ void FactsExtension::moduleRegisterNative() {
   HHVM_NAMED_FE(HH\\Facts\\is_abstract, HHVM_FN(facts_is_abstract));
   HHVM_NAMED_FE(HH\\Facts\\is_final, HHVM_FN(facts_is_final));
   HHVM_NAMED_FE(HH\\Facts\\subtypes, HHVM_FN(facts_subtypes));
+  HHVM_NAMED_FE(
+      HH\\Facts\\transitive_subtypes, HHVM_FN(facts_transitive_subtypes));
   HHVM_NAMED_FE(HH\\Facts\\supertypes, HHVM_FN(facts_supertypes));
   HHVM_NAMED_FE(
       HH\\Facts\\types_with_attribute, HHVM_FN(facts_types_with_attribute));

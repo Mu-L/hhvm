@@ -142,14 +142,21 @@ type enum_type = {
 }
 [@@deriving eq, show]
 
+type typedef_case_type_variant = decl_ty * decl_where_constraint list
+[@@deriving eq, show]
+
+type typedef_type_assignment =
+  | SimpleTypeDef of Ast_defs.typedef_visibility * decl_ty
+  | CaseType of typedef_case_type_variant * typedef_case_type_variant list
+[@@deriving eq, show]
+
 type typedef_type = {
   td_module: Ast_defs.id option;
   td_pos: Pos_or_decl.t;
-  td_vis: Aast.typedef_visibility;
   td_tparams: decl_tparam list;
   td_as_constraint: decl_ty option;
   td_super_constraint: decl_ty option;
-  td_type: decl_ty;
+  td_type_assignment: typedef_type_assignment;
   td_is_ctx: bool;
   td_attributes: user_attribute list;
   td_internal: bool;
@@ -167,32 +174,6 @@ type deserialization_error =
   | Not_supported of string
   | Deserialization_error of string
 [@@deriving show]
-
-module Type_expansions : sig
-  (** A list of the type defs and type access we have expanded thus far. Used
-      to prevent entering into a cycle when expanding these types. *)
-  type t
-
-  val empty : t
-
-  (** If we are expanding the RHS of a type definition, [report_cycle] contains
-      the position and id of the LHS. This way, if the RHS expands at some point
-      to the LHS id, we are able to report a cycle. *)
-  val empty_w_cycle_report : report_cycle:(Pos.t * string) option -> t
-
-  (** Returns:
-    - [None] if there was no cycle
-    - [Some None] if there was a cycle which did not involve the first
-      type expansion, i.e. error reporting should be done elsewhere
-    - [Some (Some pos)] if there was a cycle involving the first type
-      expansion in which case an error should be reported at [pos]. *)
-  val add_and_check_cycles :
-    t -> Pos_or_decl.t * string -> t * Pos.t option option
-
-  val ids : t -> string list
-
-  val positions : t -> Pos_or_decl.t list
-end
 
 (** How should we treat the wildcard character _ when localizing?
  *  1. Generate a fresh type variable, e.g. in type argument to constructor or function,
@@ -238,14 +219,14 @@ val empty_expand_env : expand_env
 val empty_expand_env_with_on_error :
   Typing_error.Reasons_callback.t -> expand_env
 
-(** Returns:
-    - [None] if there was no cycle
-    - [Some None] if there was a cycle which did not involve the first
-      type expansion, i.e. error reporting should be done elsewhere
-    - [Some (Some pos)] if there was a cycle involving the first type
-      expansion in which case an error should be reported at [pos]. *)
+(** [add_type_expansion_check_cycles ety_env expansion] adds
+  and [expansion] to [ety_env.expansions] and
+  checks that that [expansion] hasn't already been done,
+  i.e. wasn't already in ety_env.expansions. *)
 val add_type_expansion_check_cycles :
-  expand_env -> Pos_or_decl.t * string -> expand_env * Pos.t option option
+  expand_env ->
+  Type_expansions.expansion ->
+  (expand_env, Type_expansions.cycle_reporter) result
 
 (** Returns whether there was an attempt at expanding a cyclic type. *)
 val cyclic_expansion : expand_env -> bool

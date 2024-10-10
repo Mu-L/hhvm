@@ -42,6 +42,7 @@ class ServiceHandler<::cpp2::Raiser> : public apache::thrift::ServerInterface {
   typedef ::cpp2::RaiserAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -95,6 +96,7 @@ class ServiceHandler<::cpp2::Raiser> : public apache::thrift::ServerInterface {
 namespace cpp2 {
 using RaiserSvIf [[deprecated("Use apache::thrift::ServiceHandler<Raiser> instead")]] = ::apache::thrift::ServiceHandler<Raiser>;
 } // namespace cpp2
+
 namespace cpp2 {
 class RaiserSvNull : public ::apache::thrift::ServiceHandler<Raiser> {
  public:

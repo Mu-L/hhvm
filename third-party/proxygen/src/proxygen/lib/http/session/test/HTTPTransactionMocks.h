@@ -67,6 +67,7 @@ class MockHTTPTransactionTransport : public HTTPTransaction::Transport {
               (HTTPTransaction*, size_t),
               (noexcept));
   MOCK_METHOD((size_t), sendChunkTerminator, (HTTPTransaction*), (noexcept));
+  MOCK_METHOD((size_t), sendPadding, (HTTPTransaction*, uint16_t), (noexcept));
   MOCK_METHOD((size_t),
               sendEOM,
               (HTTPTransaction*, const HTTPHeaders*),
@@ -377,17 +378,25 @@ class MockHTTPTransaction : public HTTPTransaction {
   MOCK_METHOD(bool, canSendHeaders, (), (const));
   MOCK_METHOD(void, sendHeaders, (const HTTPMessage& headers));
   MOCK_METHOD(void, sendHeadersWithEOM, (const HTTPMessage& headers));
+  MOCK_METHOD(void,
+              sendHeadersWithOptionalEOM,
+              (const HTTPMessage& headers, bool eom));
   MOCK_METHOD(void, sendBody, (std::shared_ptr<folly::IOBuf>));
 
   void sendBody(std::unique_ptr<folly::IOBuf> iob) noexcept override {
     sendBody(std::shared_ptr<folly::IOBuf>(iob.release()));
   }
 
+  void sendAbort() {
+    return HTTPTransaction::sendAbort();
+  }
+
+  MOCK_METHOD(void, sendPadding, (uint16_t));
   MOCK_METHOD(void, sendChunkHeader, (size_t));
   MOCK_METHOD(void, sendChunkTerminator, ());
   MOCK_METHOD(void, sendTrailers, (const HTTPHeaders& trailers));
   MOCK_METHOD(void, sendEOM, ());
-  MOCK_METHOD(void, sendAbort, ());
+  MOCK_METHOD(void, sendAbort, (ErrorCode errorCode));
   MOCK_METHOD(void, drop, ());
   MOCK_METHOD(void, pauseIngress, ());
   MOCK_METHOD(void, resumeIngress, ());

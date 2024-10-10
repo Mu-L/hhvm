@@ -59,11 +59,6 @@ interface MyServiceClientIf extends \IThriftSyncIf {
 trait MyServiceClientBase {
   require extends \ThriftClientBase;
 
-}
-
-class MyServiceAsyncClient extends \ThriftClientBase implements MyServiceAsyncClientIf {
-  use MyServiceClientBase;
-
   /**
    * Original thrift definition:-
    * bool
@@ -79,40 +74,26 @@ class MyServiceAsyncClient extends \ThriftClientBase implements MyServiceAsyncCl
       'count' => $count,
     ));
     await $this->asyncHandler_->genBefore("MyService", "second", $args);
-    $currentseqid = $this->sendImplHelper($args, "second", false);
+    $currentseqid = $this->sendImplHelper($args, "second", false, "MyService" );
     return await $this->genAwaitResponse(MyService_second_result::class, "second", false, $currentseqid, $rpc_options);
   }
+
+}
+
+class MyServiceAsyncClient extends \ThriftClientBase implements MyServiceAsyncClientIf {
+  use MyServiceClientBase;
 
 }
 
 class MyServiceClient extends \ThriftClientBase implements MyServiceClientIf {
   use MyServiceClientBase;
 
-  /**
-   * Original thrift definition:-
-   * bool
-   *   second(1: i64 count);
-   */
-  public async function second(int $count): Awaitable<bool> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = MyService_second_args::fromShape(shape(
-      'count' => $count,
-    ));
-    await $this->asyncHandler_->genBefore("MyService", "second", $args);
-    $currentseqid = $this->sendImplHelper($args, "second", false);
-    return await $this->genAwaitResponse(MyService_second_result::class, "second", false, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_second(int $count): int {
     $args = MyService_second_args::fromShape(shape(
       'count' => $count,
     ));
-    return $this->sendImplHelper($args, "second", false);
+    return $this->sendImplHelper($args, "second", false, "MyService" );
   }
   public function recv_second(?int $expectedsequenceid = null): bool {
     return $this->recvImplHelper(MyService_second_result::class, "second", false, $expectedsequenceid);

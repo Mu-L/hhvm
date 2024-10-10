@@ -20,23 +20,24 @@ import (
 	"crypto/tls"
 	"net"
 	"time"
+
+	"github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
 )
 
 // clientOptions thrift and connectivity options for the thrift client
 type clientOptions struct {
-	protocol          ProtocolID
-	transport         TransportID
-	persistentHeaders map[string]string
-	identity          string
-	timeout           time.Duration
 	conn              net.Conn
+	transport         TransportID
+	protocol          types.ProtocolID
+	timeout           time.Duration
+	persistentHeaders map[string]string
 }
 
 // ClientOption is a single configuration setting for the thrift client
 type ClientOption func(*clientOptions) error
 
 // WithProtocolID sets protocol to given protocolID
-func WithProtocolID(id ProtocolID) ClientOption {
+func WithProtocolID(id types.ProtocolID) ClientOption {
 	return func(opts *clientOptions) error {
 		opts.protocol = id
 		return nil
@@ -59,6 +60,14 @@ func WithUpgradeToRocket() ClientOption {
 	}
 }
 
+// Deprecated: Use WithUpgradeToRocket. This is only used for testing purposes.
+func WithRocket() ClientOption {
+	return func(opts *clientOptions) error {
+		opts.transport = TransportIDRocket
+		return nil
+	}
+}
+
 // WithPersistentHeader sets a Header persistent info value
 func WithPersistentHeader(name, value string) ClientOption {
 	return func(opts *clientOptions) error {
@@ -70,7 +79,7 @@ func WithPersistentHeader(name, value string) ClientOption {
 // WithIdentity sets the Header identity field
 func WithIdentity(name string) ClientOption {
 	return func(opts *clientOptions) error {
-		opts.identity = name
+		opts.persistentHeaders[IdentityHeader] = name
 		return nil
 	}
 }
@@ -134,81 +143,47 @@ func DialTLS(addr string, timeout time.Duration, tlsConfig *tls.Config) (net.Con
 	return tls.Client(conn, config), nil
 }
 
+func newDefaultPersistentHeaders() map[string]string {
+	// set Identity Headers
+	return map[string]string{
+		IDVersionHeader: IDVersion,
+		IdentityHeader:  "",
+	}
+}
+
 // newOptions creates a new options objects and inits it
 func newOptions(opts ...ClientOption) (*clientOptions, error) {
 	res := &clientOptions{
-		protocol:          ProtocolIDCompact,
-		transport:         TransportIDHeader,
-		persistentHeaders: map[string]string{},
+		protocol:          types.ProtocolIDCompact,
+		transport:         TransportIDUnknown,
+		persistentHeaders: newDefaultPersistentHeaders(),
 	}
 	for _, opt := range opts {
 		if err := opt(res); err != nil {
 			return nil, err
 		}
 	}
+	if res.transport == TransportIDUnknown {
+		panic(NewTransportException(types.NOT_SUPPORTED, "no transport specified! Please use thrift.WithHeader() or thrift.WithUpgradeToRocket() in the thrift.NewClient call"))
+	}
 	return res, nil
-}
-
-func setOptions(proto Protocol, options *clientOptions) error {
-	for name, value := range options.persistentHeaders {
-		proto.SetPersistentHeader(name, value)
-	}
-	if err := proto.SetProtocolID(options.protocol); err != nil {
-		return err
-	}
-	SetIdentity(proto, options.identity)
-	proto.SetTimeout(options.timeout)
-	return nil
 }
 
 // NewClient will return a connected thrift protocol object.
 // Effectively, this is an open thrift connection to a server.
 // A thrift client can use this connection to communicate with a server.
-func NewClient(opts ...ClientOption) (Protocol, error) {
+func NewClient(opts ...ClientOption) (types.Protocol, error) {
 	options, err := newOptions(opts...)
 	if err != nil {
 		return nil, err
 	}
 	switch options.transport {
 	case TransportIDHeader:
-		trans, err := NewSocket(SocketConn(options.conn))
-		if err != nil {
-			return nil, err
-		}
-		proto, err := NewHeaderProtocol(trans)
-		if err != nil {
-			return nil, err
-		}
-		if err := setOptions(proto, options); err != nil {
-			return nil, err
-		}
-		return proto, nil
+		return newHeaderProtocol(options.conn, options.protocol, options.timeout, options.persistentHeaders)
 	case TransportIDRocket:
-		conn, err := NewSocket(SocketConn(options.conn))
-		if err != nil {
-			return nil, err
-		}
-		protocol, err := NewRocketClient(conn)
-		if err != nil {
-			return nil, err
-		}
-		if err := setOptions(protocol, options); err != nil {
-			return nil, err
-		}
-		return protocol, nil
+		return newRocketClient(options.conn, options.protocol, options.timeout, options.persistentHeaders)
 	case TransportIDUpgradeToRocket:
-		conn, err := NewSocket(SocketConn(options.conn))
-		if err != nil {
-			return nil, err
-		}
-		protocol, err := NewUpgradeToRocketClient(conn)
-		if err != nil {
-			return nil, err
-		}
-		if err := setOptions(protocol, options); err != nil {
-			return nil, err
-		}
-		return protocol, nil
+		return newUpgradeToRocketClient(options.conn, options.protocol, options.timeout, options.persistentHeaders)
 	default:
 		panic("framed and unframed transport are not supported")
 	}

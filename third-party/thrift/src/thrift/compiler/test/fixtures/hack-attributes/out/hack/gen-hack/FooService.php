@@ -61,12 +61,6 @@ interface FooServiceClientIf extends \IThriftSyncIf {
 trait FooServiceClientBase {
   require extends \ThriftClientBase;
 
-}
-
-<<Oncalls('thrift')>>
-class FooServiceAsyncClient extends \ThriftClientBase implements FooServiceAsyncClientIf {
-  use FooServiceClientBase;
-
   /**
    * Original thrift definition:-
    * i32
@@ -82,9 +76,15 @@ class FooServiceAsyncClient extends \ThriftClientBase implements FooServiceAsync
       'str_arg' => $str_arg,
     ));
     await $this->asyncHandler_->genBefore("FooService", "ping", $args);
-    $currentseqid = $this->sendImplHelper($args, "ping", false);
+    $currentseqid = $this->sendImplHelper($args, "ping", false, "FooService" );
     return await $this->genAwaitResponse(\test\fixtures\jsenum\FooService_ping_result::class, "ping", false, $currentseqid, $rpc_options);
   }
+
+}
+
+<<Oncalls('thrift')>>
+class FooServiceAsyncClient extends \ThriftClientBase implements FooServiceAsyncClientIf {
+  use FooServiceClientBase;
 
 }
 
@@ -92,31 +92,12 @@ class FooServiceAsyncClient extends \ThriftClientBase implements FooServiceAsync
 class FooServiceClient extends \ThriftClientBase implements FooServiceClientIf {
   use FooServiceClientBase;
 
-  /**
-   * Original thrift definition:-
-   * i32
-   *   ping(1: string str_arg);
-   */
-  public async function ping(string $str_arg): Awaitable<int> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = \test\fixtures\jsenum\FooService_ping_args::fromShape(shape(
-      'str_arg' => $str_arg,
-    ));
-    await $this->asyncHandler_->genBefore("FooService", "ping", $args);
-    $currentseqid = $this->sendImplHelper($args, "ping", false);
-    return await $this->genAwaitResponse(\test\fixtures\jsenum\FooService_ping_result::class, "ping", false, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_ping(string $str_arg): int {
     $args = \test\fixtures\jsenum\FooService_ping_args::fromShape(shape(
       'str_arg' => $str_arg,
     ));
-    return $this->sendImplHelper($args, "ping", false);
+    return $this->sendImplHelper($args, "ping", false, "FooService" );
   }
   public function recv_ping(?int $expectedsequenceid = null): int {
     return $this->recvImplHelper(\test\fixtures\jsenum\FooService_ping_result::class, "ping", false, $expectedsequenceid);

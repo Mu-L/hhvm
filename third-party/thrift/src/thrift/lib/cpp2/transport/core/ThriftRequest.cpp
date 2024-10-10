@@ -23,8 +23,7 @@
 THRIFT_FLAG_DEFINE_int64(queue_time_logging_threshold_ms, 5);
 THRIFT_FLAG_DEFINE_bool(enable_request_event_logging, true);
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 namespace detail {
 THRIFT_PLUGGABLE_FUNC_REGISTER(
@@ -120,6 +119,8 @@ ThriftRequestCore::ThriftRequestCore(
   if (auto compressionConfig = metadata.compressionConfig_ref()) {
     compressionConfig_ = *compressionConfig;
   }
+
+  header_.setChecksum(metadata.checksum().to_optional());
 
   if (auto* observer = serverConfigs_.getObserver()) {
     observer->receivedRequest(&reqContext_.getMethodName());
@@ -295,7 +296,8 @@ void ThriftRequestCore::sendReply(
     if (!isOneway()) {
       auto metadata = makeResponseRpcMetadata(
           header_.extractAllWriteHeaders(),
-          header_.extractProxiedPayloadMetadata());
+          header_.extractProxiedPayloadMetadata(),
+          header_.getChecksum());
       if (crc32c) {
         metadata.crc32c_ref() = *crc32c;
       }
@@ -329,7 +331,8 @@ void ThriftRequestCore::sendException(
     if (!isOneway()) {
       auto metadata = makeResponseRpcMetadata(
           header_.extractAllWriteHeaders(),
-          header_.extractProxiedPayloadMetadata());
+          header_.extractProxiedPayloadMetadata(),
+          std::nullopt /*checksum*/);
       if (checkResponseSize(*response.buffer())) {
         sendThriftException(
             std::move(metadata),
@@ -350,7 +353,8 @@ void ThriftRequestCore::sendException(
 
 ResponseRpcMetadata ThriftRequestCore::makeResponseRpcMetadata(
     transport::THeader::StringToStringMap&& writeHeaders,
-    std::optional<ProxiedPayloadMetadata> proxiedPayloadMetadata) {
+    std::optional<ProxiedPayloadMetadata> proxiedPayloadMetadata,
+    std::optional<Checksum> checksum) {
   ResponseRpcMetadata metadata;
 
   if (auto tfmr = detail::makeThriftFrameworkMetadataOnResponse(writeHeaders)) {
@@ -377,8 +381,11 @@ ResponseRpcMetadata ThriftRequestCore::makeResponseRpcMetadata(
 
   queueMetadata.queueTimeoutMs_ref() = queueTimeout_.value.count();
 
+  if (checksum) {
+    metadata.checksum() = *checksum;
+  }
+
   return metadata;
 }
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

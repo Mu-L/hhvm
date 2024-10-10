@@ -85,6 +85,12 @@ getIntegerMapMask(const Mask& mask);
 [[nodiscard]] const MapStringToMask* FOLLY_NULLABLE
 getStringMapMask(const Mask& mask);
 
+// If mask is an AnyMask, return it, otherwise return nullptr
+[[nodiscard]] const MapTypeToMask* FOLLY_NULLABLE getTypeMask(const Mask& mask);
+
+// If mask is an any-mask, return it, otherwise return nullptr
+// TODO
+
 // Moves the given object to the field (can be field ref or smart pointer).
 template <typename T, typename U>
 void moveObject(T& field, U&& object) {
@@ -100,10 +106,9 @@ void moveObject(T& field, U&& object) {
 // Throws a runtime error if the mask contains a map mask.
 void throwIfContainsMapMask(const Mask& mask);
 
-template <typename Struct>
-void compare_impl(
-    const Struct& original, const Struct& modified, FieldIdToMask& mask) {
-  op::for_each_field_id<Struct>([&](auto id) {
+template <typename T>
+void compare_impl(const T& original, const T& modified, FieldIdToMask& mask) {
+  op::for_each_field_id<T>([&](auto id) {
     using Id = decltype(id);
     int16_t fieldId = folly::to_underlying(id());
     auto&& original_field = op::get<Id>(original);
@@ -122,8 +127,8 @@ void compare_impl(
       return;
     }
     // check if nested fields need to be added to mask
-    using FieldType = op::get_native_type<Struct, Id>;
-    if constexpr (is_thrift_struct_v<FieldType>) {
+    using FieldType = op::get_native_type<T, Id>;
+    if constexpr (is_thrift_class_v<FieldType>) {
       compare_impl(
           *original_ptr, *modified_ptr, mask[fieldId].includes_ref().emplace());
       return;

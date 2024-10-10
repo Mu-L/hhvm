@@ -16,270 +16,6 @@ pub(crate) use crate as client;
 pub(crate) use ::::services;
 
 
-/// Client definitions for `NestedContainers`.
-pub struct NestedContainersImpl<P, T, S = ::fbthrift::NoopSpawner> {
-    transport: T,
-    _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
-}
-
-impl<P, T, S> NestedContainersImpl<P, T, S>
-where
-    P: ::fbthrift::Protocol,
-    T: ::fbthrift::Transport,
-    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
-    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
-    P::Deserializer: ::std::marker::Send,
-    S: ::fbthrift::help::Spawner,
-{
-    pub fn new(
-        transport: T,
-    ) -> Self {
-        Self {
-            transport,
-            _phantom: ::std::marker::PhantomData,
-        }
-    }
-
-    pub fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
-    }
-
-
-    fn _mapList_impl(
-        &self,
-        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapListError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"NestedContainers";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"NestedContainers.mapList";
-        let args = self::Args_NestedContainers_mapList {
-            foo: arg_foo,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("mapList", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "NestedContainers.mapList"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::MapListReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::nested_containers::MapListError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "NestedContainers.mapList"))
-        .boxed()
-    }
-
-    fn _mapSet_impl(
-        &self,
-        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapSetError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"NestedContainers";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"NestedContainers.mapSet";
-        let args = self::Args_NestedContainers_mapSet {
-            foo: arg_foo,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("mapSet", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "NestedContainers.mapSet"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::MapSetReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::nested_containers::MapSetError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "NestedContainers.mapSet"))
-        .boxed()
-    }
-
-    fn _listMap_impl(
-        &self,
-        arg_foo: &[::std::collections::BTreeMap<::std::primitive::i32, ::std::primitive::i32>],
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListMapError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"NestedContainers";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"NestedContainers.listMap";
-        let args = self::Args_NestedContainers_listMap {
-            foo: arg_foo,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("listMap", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "NestedContainers.listMap"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::ListMapReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::nested_containers::ListMapError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "NestedContainers.listMap"))
-        .boxed()
-    }
-
-    fn _listSet_impl(
-        &self,
-        arg_foo: &[::std::collections::BTreeSet<::std::primitive::i32>],
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListSetError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"NestedContainers";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"NestedContainers.listSet";
-        let args = self::Args_NestedContainers_listSet {
-            foo: arg_foo,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("listSet", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "NestedContainers.listSet"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::ListSetReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::nested_containers::ListSetError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "NestedContainers.listSet"))
-        .boxed()
-    }
-
-    fn _turtles_impl(
-        &self,
-        arg_foo: &[::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>>>],
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::TurtlesError>> {
-        use ::tracing::Instrument as _;
-        use ::futures::FutureExt as _;
-
-        const SERVICE_NAME: &::std::ffi::CStr = c"NestedContainers";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"NestedContainers.turtles";
-        let args = self::Args_NestedContainers_turtles {
-            foo: arg_foo,
-            _phantom: ::std::marker::PhantomData,
-        };
-
-        let transport = self.transport();
-
-        // need to do call setup outside of async block because T: Transport isn't Send
-        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("turtles", &args) {
-            ::std::result::Result::Ok(res) => res,
-            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
-        };
-
-        let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
-            .instrument(::tracing::trace_span!("call", method = "NestedContainers.turtles"));
-
-        async move {
-            let reply_env = call.await?;
-
-            let de = P::deserializer(reply_env);
-            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::TurtlesReader, S>(de).await?;
-
-            let res = match res {
-                ::std::result::Result::Ok(res) => res,
-                ::std::result::Result::Err(aexn) => {
-                    ::std::result::Result::Err(crate::errors::nested_containers::TurtlesError::ApplicationException(aexn))
-                }
-            };
-            res
-        }
-        .instrument(::tracing::info_span!("stream", method = "NestedContainers.turtles"))
-        .boxed()
-    }
-}
-
-impl<P, T, S> ::fbthrift::help::GetTransport<T> for NestedContainersImpl<P, T, S>
-where
-    T: ::fbthrift::Transport,
-{
-    fn transport(&self) -> &T {
-        &self.transport
-    }
-}
-
 pub trait NestedContainers: ::std::marker::Send {
     fn mapList(
         &self,
@@ -339,6 +75,389 @@ where
 
     fn transport(&self) -> &T;
 }
+
+#[allow(deprecated)]
+impl<'a, S> NestedContainers for S
+where
+    S: ::std::convert::AsRef<dyn NestedContainers + 'a>,
+    S: ::std::marker::Send,
+{
+    fn mapList(
+        &self,
+        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapListError>> {
+        self.as_ref().mapList(
+            arg_foo,
+        )
+    }
+    fn mapSet(
+        &self,
+        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapSetError>> {
+        self.as_ref().mapSet(
+            arg_foo,
+        )
+    }
+    fn listMap(
+        &self,
+        arg_foo: &[::std::collections::BTreeMap<::std::primitive::i32, ::std::primitive::i32>],
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListMapError>> {
+        self.as_ref().listMap(
+            arg_foo,
+        )
+    }
+    fn listSet(
+        &self,
+        arg_foo: &[::std::collections::BTreeSet<::std::primitive::i32>],
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListSetError>> {
+        self.as_ref().listSet(
+            arg_foo,
+        )
+    }
+    fn turtles(
+        &self,
+        arg_foo: &[::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>>>],
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::TurtlesError>> {
+        self.as_ref().turtles(
+            arg_foo,
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> NestedContainersExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn NestedContainers + 'a> + ::std::convert::AsRef<dyn NestedContainersExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn mapList_with_rpc_opts(
+        &self,
+        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapListError>> {
+        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).mapList_with_rpc_opts(
+            arg_foo,
+            rpc_options,
+        )
+    }
+    fn mapSet_with_rpc_opts(
+        &self,
+        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapSetError>> {
+        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).mapSet_with_rpc_opts(
+            arg_foo,
+            rpc_options,
+        )
+    }
+    fn listMap_with_rpc_opts(
+        &self,
+        arg_foo: &[::std::collections::BTreeMap<::std::primitive::i32, ::std::primitive::i32>],
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListMapError>> {
+        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).listMap_with_rpc_opts(
+            arg_foo,
+            rpc_options,
+        )
+    }
+    fn listSet_with_rpc_opts(
+        &self,
+        arg_foo: &[::std::collections::BTreeSet<::std::primitive::i32>],
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListSetError>> {
+        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).listSet_with_rpc_opts(
+            arg_foo,
+            rpc_options,
+        )
+    }
+    fn turtles_with_rpc_opts(
+        &self,
+        arg_foo: &[::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>>>],
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::TurtlesError>> {
+        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).turtles_with_rpc_opts(
+            arg_foo,
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
+/// Client definitions for `NestedContainers`.
+pub struct NestedContainersImpl<P, T, S = ::fbthrift::NoopSpawner> {
+    transport: T,
+    _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
+}
+
+
+impl<P, T, S> NestedContainersImpl<P, T, S>
+where
+    P: ::fbthrift::Protocol,
+    T: ::fbthrift::Transport,
+    P::Frame: ::fbthrift::Framing<DecBuf = ::fbthrift::FramingDecoded<T>>,
+    ::fbthrift::ProtocolEncoded<P>: ::fbthrift::BufMutExt<Final = ::fbthrift::FramingEncodedFinal<T>>,
+    P::Deserializer: ::std::marker::Send,
+    S: ::fbthrift::help::Spawner,
+{
+    pub fn new(
+        transport: T,
+    ) -> Self {
+        Self {
+            transport,
+            _phantom: ::std::marker::PhantomData,
+        }
+    }
+
+    pub fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+
+
+
+    fn _mapList_impl(
+        &self,
+        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapListError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"NestedContainers";
+        let service_method_name = c"NestedContainers.mapList";
+
+        let args = self::Args_NestedContainers_mapList {
+            foo: arg_foo,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("mapList", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "NestedContainers.mapList"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::MapListReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::nested_containers::MapListError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "NestedContainers.mapList"))
+        .boxed()
+    }
+
+    fn _mapSet_impl(
+        &self,
+        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapSetError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"NestedContainers";
+        let service_method_name = c"NestedContainers.mapSet";
+
+        let args = self::Args_NestedContainers_mapSet {
+            foo: arg_foo,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("mapSet", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "NestedContainers.mapSet"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::MapSetReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::nested_containers::MapSetError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "NestedContainers.mapSet"))
+        .boxed()
+    }
+
+    fn _listMap_impl(
+        &self,
+        arg_foo: &[::std::collections::BTreeMap<::std::primitive::i32, ::std::primitive::i32>],
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListMapError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"NestedContainers";
+        let service_method_name = c"NestedContainers.listMap";
+
+        let args = self::Args_NestedContainers_listMap {
+            foo: arg_foo,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("listMap", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "NestedContainers.listMap"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::ListMapReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::nested_containers::ListMapError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "NestedContainers.listMap"))
+        .boxed()
+    }
+
+    fn _listSet_impl(
+        &self,
+        arg_foo: &[::std::collections::BTreeSet<::std::primitive::i32>],
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListSetError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"NestedContainers";
+        let service_method_name = c"NestedContainers.listSet";
+
+        let args = self::Args_NestedContainers_listSet {
+            foo: arg_foo,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("listSet", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "NestedContainers.listSet"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::ListSetReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::nested_containers::ListSetError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "NestedContainers.listSet"))
+        .boxed()
+    }
+
+    fn _turtles_impl(
+        &self,
+        arg_foo: &[::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>>>],
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::TurtlesError>> {
+        use ::tracing::Instrument as _;
+        use ::futures::FutureExt as _;
+
+        let service_name = c"NestedContainers";
+        let service_method_name = c"NestedContainers.turtles";
+
+        let args = self::Args_NestedContainers_turtles {
+            foo: arg_foo,
+            _phantom: ::std::marker::PhantomData,
+        };
+
+        let transport = self.transport();
+
+        // need to do call setup outside of async block because T: Transport isn't Send
+        let request_env = match ::fbthrift::help::serialize_request_envelope::<P, _>("turtles", &args) {
+            ::std::result::Result::Ok(res) => res,
+            ::std::result::Result::Err(err) => return ::futures::future::err(err.into()).boxed(),
+        };
+
+        let call = transport
+            .call(service_name, service_method_name, request_env, rpc_options)
+            .instrument(::tracing::trace_span!("call", method = "NestedContainers.turtles"));
+
+        async move {
+            let reply_env = call.await?;
+
+            let de = P::deserializer(reply_env);
+            let res = ::fbthrift::help::async_deserialize_response_envelope::<P, crate::errors::nested_containers::TurtlesReader, S>(de).await?;
+
+            let res = match res {
+                ::std::result::Result::Ok(res) => res,
+                ::std::result::Result::Err(aexn) => {
+                    ::std::result::Result::Err(crate::errors::nested_containers::TurtlesError::ApplicationException(aexn))
+                }
+            };
+            res
+        }
+        .instrument(::tracing::info_span!("stream", method = "NestedContainers.turtles"))
+        .boxed()
+    }
+}
+
+impl<P, T, S> ::fbthrift::help::GetTransport<T> for NestedContainersImpl<P, T, S>
+where
+    T: ::fbthrift::Transport,
+{
+    fn transport(&self) -> &T {
+        &self.transport
+    }
+}
+
+
 
 struct Args_NestedContainers_mapList<'a> {
     foo: &'a ::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
@@ -553,117 +672,6 @@ where
 
     fn transport(&self) -> &T {
         self.transport()
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> NestedContainers for S
-where
-    S: ::std::convert::AsRef<dyn NestedContainers + 'a>,
-    S: ::std::marker::Send,
-{
-    fn mapList(
-        &self,
-        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapListError>> {
-        self.as_ref().mapList(
-            arg_foo,
-        )
-    }
-    fn mapSet(
-        &self,
-        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapSetError>> {
-        self.as_ref().mapSet(
-            arg_foo,
-        )
-    }
-    fn listMap(
-        &self,
-        arg_foo: &[::std::collections::BTreeMap<::std::primitive::i32, ::std::primitive::i32>],
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListMapError>> {
-        self.as_ref().listMap(
-            arg_foo,
-        )
-    }
-    fn listSet(
-        &self,
-        arg_foo: &[::std::collections::BTreeSet<::std::primitive::i32>],
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListSetError>> {
-        self.as_ref().listSet(
-            arg_foo,
-        )
-    }
-    fn turtles(
-        &self,
-        arg_foo: &[::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>>>],
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::TurtlesError>> {
-        self.as_ref().turtles(
-            arg_foo,
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> NestedContainersExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn NestedContainers + 'a> + ::std::convert::AsRef<dyn NestedContainersExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn mapList_with_rpc_opts(
-        &self,
-        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::vec::Vec<::std::primitive::i32>>,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapListError>> {
-        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).mapList_with_rpc_opts(
-            arg_foo,
-            rpc_options,
-        )
-    }
-    fn mapSet_with_rpc_opts(
-        &self,
-        arg_foo: &::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::MapSetError>> {
-        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).mapSet_with_rpc_opts(
-            arg_foo,
-            rpc_options,
-        )
-    }
-    fn listMap_with_rpc_opts(
-        &self,
-        arg_foo: &[::std::collections::BTreeMap<::std::primitive::i32, ::std::primitive::i32>],
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListMapError>> {
-        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).listMap_with_rpc_opts(
-            arg_foo,
-            rpc_options,
-        )
-    }
-    fn listSet_with_rpc_opts(
-        &self,
-        arg_foo: &[::std::collections::BTreeSet<::std::primitive::i32>],
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::ListSetError>> {
-        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).listSet_with_rpc_opts(
-            arg_foo,
-            rpc_options,
-        )
-    }
-    fn turtles_with_rpc_opts(
-        &self,
-        arg_foo: &[::std::vec::Vec<::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeMap<::std::primitive::i32, ::std::collections::BTreeSet<::std::primitive::i32>>>>],
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<(), crate::errors::nested_containers::TurtlesError>> {
-        <Self as ::std::convert::AsRef<dyn NestedContainersExt<T>>>::as_ref(self).turtles_with_rpc_opts(
-            arg_foo,
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
     }
 }
 

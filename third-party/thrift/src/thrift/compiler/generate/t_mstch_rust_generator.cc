@@ -30,14 +30,14 @@
 #include <fmt/core.h>
 
 #include <thrift/compiler/ast/t_struct.h>
-#include <thrift/compiler/gen/cpp/namespace_resolver.h>
+#include <thrift/compiler/generate/cpp/name_resolver.h>
 #include <thrift/compiler/generate/mstch_objects.h>
 #include <thrift/compiler/generate/t_mstch_generator.h>
 #include <thrift/compiler/lib/rust/uri.h>
 #include <thrift/compiler/lib/rust/util.h>
 #include <thrift/compiler/lib/uri.h>
 #include <thrift/compiler/sema/ast_validator.h>
-#include <thrift/compiler/sema/diagnostic_context.h>
+#include <thrift/compiler/sema/sema_context.h>
 
 namespace apache {
 namespace thrift {
@@ -1332,6 +1332,7 @@ class rust_mstch_struct : public mstch_struct {
             {"struct:rust_structured_annotations",
              &rust_mstch_struct::rust_structured_annotations},
             {"struct:generated?", &rust_mstch_struct::rust_generated_struct},
+            {"struct:all_optional?", &rust_mstch_struct::rust_all_optional},
         });
   }
   mstch::node rust_name() { return type_rust_name(struct_); }
@@ -1441,6 +1442,14 @@ class rust_mstch_struct : public mstch_struct {
     return structured_annotations_node(*struct_, 1, context_, pos_, options_);
   }
   mstch::node rust_generated_struct() { return (*struct_).generated(); }
+  mstch::node rust_all_optional() {
+    for (const auto& field : struct_->fields()) {
+      if (field.get_req() != t_field::e_req::optional) {
+        return false;
+      }
+    }
+    return true;
+  }
 
  private:
   const rust_codegen_options& options_;
@@ -2415,8 +2424,7 @@ void t_mstch_rust_generator::generate_program() {
     namespace_rust = program_->name();
   }
 
-  std::string namespace_cpp2 =
-      gen::cpp::namespace_resolver::gen_namespace(*program_);
+  std::string namespace_cpp2 = cpp_name_resolver::gen_namespace(*program_);
 
   std::string service_names;
   for (const t_service* service : program_->services()) {
@@ -2456,7 +2464,7 @@ void t_mstch_rust_generator::set_mstch_factories() {
 namespace {
 
 void validate_struct_annotations(
-    diagnostic_context& ctx,
+    sema_context& ctx,
     const t_structured& s,
     const rust_codegen_options& options) {
   if (!validate_rust_serde(s)) {
@@ -2493,7 +2501,7 @@ void validate_struct_annotations(
   }
 }
 
-bool validate_enum_annotations(diagnostic_context& ctx, const t_enum& e) {
+bool validate_enum_annotations(sema_context& ctx, const t_enum& e) {
   if (!validate_rust_serde(e)) {
     ctx.report(
         e,
@@ -2504,8 +2512,7 @@ bool validate_enum_annotations(diagnostic_context& ctx, const t_enum& e) {
   return true;
 }
 
-bool validate_program_annotations(
-    diagnostic_context& ctx, const t_program& program) {
+bool validate_program_annotations(sema_context& ctx, const t_program& program) {
   for (auto t : program.typedefs()) {
     if (node_has_adapter(*t)) {
       if (node_has_custom_rust_type(*t)) {

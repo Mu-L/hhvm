@@ -24,8 +24,8 @@
 
 #include <folly/Format.h>
 #include <folly/ThreadLocal.h>
+#include <folly/coro/BlockingWait.h>
 #include <folly/executors/CPUThreadPoolExecutor.h>
-#include <folly/experimental/coro/BlockingWait.h>
 #include <folly/io/async/AsyncSocket.h>
 #include <folly/io/async/EventBase.h>
 #include <folly/io/async/Request.h>
@@ -251,6 +251,32 @@ class DebuggingFrameHandler : public rocket::SetupFrameHandler {
   apache::thrift::ResourcePoolSet resourcePoolSet_;
 };
 
+class RejectingFrameInterceptor : public rocket::SetupFrameInterceptor {
+ public:
+  /*
+   * Blocks requests if the metadata has security mech as plaintext. This is for
+   * testing purposes, and is not a real use case.
+   */
+  folly::Expected<folly::Unit, std::runtime_error> acceptSetup(
+      const RequestSetupMetadata& meta,
+      const ConnectionLoggingContext&) override {
+    const auto& clientMeta = meta.clientMetadata_ref();
+    if (!clientMeta) {
+      return folly::Unit();
+    }
+    const auto& otherMeta = clientMeta->otherMetadata_ref();
+    if (!otherMeta) {
+      return folly::Unit();
+    }
+    if (auto* value = folly::get_ptr(*otherMeta, "security_mech")) {
+      if (*value == "plaintext") {
+        return folly::makeUnexpected(std::runtime_error("Failed"));
+      }
+    }
+    return folly::Unit();
+  }
+};
+
 namespace {
 static std::atomic<uint64_t> currentTick = 0;
 std::set<std::string> excludeFromRecentRequestsCount;
@@ -264,6 +290,13 @@ THRIFT_PLUGGABLE_FUNC_SET(
     createRocketDebugSetupFrameHandler,
     apache::thrift::ThriftServer& thriftServer) {
   return std::make_unique<DebuggingFrameHandler>(thriftServer);
+}
+
+THRIFT_PLUGGABLE_FUNC_SET(
+    std::unique_ptr<apache::thrift::rocket::SetupFrameInterceptor>,
+    createSecuritySetupFrameInterceptor,
+    apache::thrift::ThriftServer&) {
+  return std::make_unique<RejectingFrameInterceptor>();
 }
 
 THRIFT_PLUGGABLE_FUNC_SET(uint64_t, getCurrentServerTick) {
@@ -327,7 +360,8 @@ class RequestInstrumentationTest : public ::testing::Test {
   auto makeHeaderClient() {
     return server().newClient<InstrumentationTestServiceAsyncClient>(
         nullptr, [&](auto socket) mutable {
-          return HeaderClientChannel::newChannel(std::move(socket));
+          return HeaderClientChannel::newChannel(
+              HeaderClientChannel::WithoutRocketUpgrade{}, std::move(socket));
         });
   }
   auto makeRocketClient() {
@@ -345,8 +379,10 @@ class RequestInstrumentationTest : public ::testing::Test {
         });
   }
 
-  template <typename ClientChannelT>
-  auto makeSingleSocketClient(folly::EventBase* eventBase) {
+  auto makeSingleSocketClient(
+      folly::EventBase* eventBase,
+      std::function<ClientChannel::Ptr(folly::AsyncTransport::UniquePtr)>
+          channelFactory) {
     struct ViaEventBaseDeleter {
       folly::Executor::KeepAlive<folly::EventBase> ka_;
 
@@ -358,7 +394,7 @@ class RequestInstrumentationTest : public ::testing::Test {
     eventBase->runInEventBaseThreadAndWait([&] {
       auto socket =
           folly::AsyncSocket::newSocket(eventBase, server().getAddress());
-      channel = ClientChannelT::newChannel(std::move(socket));
+      channel = channelFactory(std::move(socket));
     });
     return std::
         unique_ptr<InstrumentationTestServiceAsyncClient, ViaEventBaseDeleter>{
@@ -415,6 +451,20 @@ TEST_F(RequestInstrumentationTest, simpleRocketRequestTest) {
     EXPECT_TRUE(
         methodName == "sendRequest" || methodName == "sendStreamingRequest");
   }
+}
+
+TEST_F(RequestInstrumentationTest, requestInterceptedTest) {
+  apache::thrift::RequestSetupMetadata meta;
+  meta.clientMetadata().ensure().otherMetadata().ensure()["security_mech"] =
+      "plaintext";
+  auto client = server().newClient<InstrumentationTestServiceAsyncClient>(
+      nullptr, [meta = std::move(meta)](auto socket) mutable {
+        return apache::thrift::RocketClientChannel::newChannelWithMetadata(
+            std::move(socket), std::move(meta));
+      });
+  EXPECT_THROW(
+      client->sync_sendRequest(),
+      apache::thrift::transport::TTransportException);
 }
 
 TEST_F(RequestInstrumentationTest, threadSnapshot) {
@@ -573,10 +623,19 @@ TEST_F(RequestInstrumentationTest, ConnectionSnapshotsTest) {
   {
     folly::ScopedEventBaseThread eventBaseThread;
     auto evb = eventBaseThread.getEventBase();
-    auto client1 = makeSingleSocketClient<RocketClientChannel>(evb);
-    auto client2 = makeSingleSocketClient<RocketClientChannel>(evb);
-    auto client3 = makeSingleSocketClient<RocketClientChannel>(evb);
-    auto headerClient = makeSingleSocketClient<HeaderClientChannel>(evb);
+    std::function<RocketClientChannel::Ptr(folly::AsyncTransport::UniquePtr)>
+        fn = [](folly::AsyncTransport::UniquePtr transport) {
+          return RocketClientChannel::newChannel(std::move(transport));
+        };
+    auto client1 = makeSingleSocketClient(evb, fn);
+    auto client2 = makeSingleSocketClient(evb, fn);
+    auto client3 = makeSingleSocketClient(evb, fn);
+    auto headerClient = makeSingleSocketClient(
+        evb, [](folly::AsyncTransport::UniquePtr transport) {
+          return HeaderClientChannel::newChannel(
+              HeaderClientChannel::WithoutRocketUpgrade{},
+              std::move(transport));
+        });
 
     for (size_t i = 0; i < 10; ++i) {
       client1->semifuture_sendRequest();
@@ -1200,7 +1259,10 @@ TEST_P(TimestampsTest, Basic) {
   auto now = std::chrono::steady_clock::now();
   handler()->setCallback([&](TestInterface* ti) {
     validateTimestamps(
-        forceTimestamps, now, ti->getConnectionContext()->getTimestamps());
+        forceTimestamps, now, ti->getRequestContext()->getTimestamps());
+    if (rocket) {
+      EXPECT_GT(ti->getRequestContext()->getWiredRequestBytes(), 0);
+    }
     now = std::chrono::steady_clock::now();
   });
   client->sync_runCallback();

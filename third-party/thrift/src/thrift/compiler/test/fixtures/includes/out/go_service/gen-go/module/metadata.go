@@ -6,41 +6,30 @@
 package module
 
 import (
+    "maps"
+
     includes "includes"
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
-
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
 
 var _ = includes.GoUnusedProtection__
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
 var (
-    premadeThriftType_includes_Included = metadata.NewThriftType().SetTStruct(
+    premadeThriftType_module_MyStruct = metadata.NewThriftType().SetTStruct(
         metadata.NewThriftStructType().
-            SetName("includes.Included"),
-            )
-    premadeThriftType_i64 = metadata.NewThriftType().SetTPrimitive(
-        metadata.ThriftPrimitiveType_THRIFT_I64_TYPE.Ptr(),
-            )
-    premadeThriftType_includes_IncludedInt64 = metadata.NewThriftType().SetTTypedef(
-        metadata.NewThriftTypedefType().
-            SetName("includes.IncludedInt64").
-            SetUnderlyingType(premadeThriftType_i64),
+            SetName("module.MyStruct"),
             )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "module.MyStruct": premadeThriftType_module_MyStruct,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
     metadata.NewThriftStruct().
@@ -52,17 +41,17 @@ var structMetadatas = []*metadata.ThriftStruct{
     SetId(1).
     SetName("MyIncludedField").
     SetIsOptional(false).
-    SetType(premadeThriftType_includes_Included),
+    SetType(includes.GetMetadataThriftType("includes.Included")),
             metadata.NewThriftField().
     SetId(2).
     SetName("MyOtherIncludedField").
     SetIsOptional(false).
-    SetType(premadeThriftType_includes_Included),
+    SetType(includes.GetMetadataThriftType("includes.Included")),
             metadata.NewThriftField().
     SetId(3).
     SetName("MyIncludedInt").
     SetIsOptional(false).
-    SetType(premadeThriftType_includes_IncludedInt64),
+    SetType(includes.GetMetadataThriftType("includes.IncludedInt64")),
         },
     ),
 }
@@ -74,6 +63,12 @@ var enumMetadatas = []*metadata.ThriftEnum{
 }
 
 var serviceMetadatas = []*metadata.ThriftService{
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.
@@ -100,7 +95,7 @@ func GetEnumsMetadata() map[string]*metadata.ThriftEnum {
     }
 
     // ...now add enum metadatas from recursively included programs.
-    mapsCopy(allEnumsMap, includes.GetEnumsMetadata())
+    maps.Copy(allEnumsMap, includes.GetEnumsMetadata())
 
     return allEnumsMap
 }
@@ -115,7 +110,7 @@ func GetStructsMetadata() map[string]*metadata.ThriftStruct {
     }
 
     // ...now add struct metadatas from recursively included programs.
-    mapsCopy(allStructsMap, includes.GetStructsMetadata())
+    maps.Copy(allStructsMap, includes.GetStructsMetadata())
 
     return allStructsMap
 }
@@ -130,7 +125,7 @@ func GetExceptionsMetadata() map[string]*metadata.ThriftException {
     }
 
     // ...now add exception metadatas from recursively included programs.
-    mapsCopy(allExceptionsMap, includes.GetExceptionsMetadata())
+    maps.Copy(allExceptionsMap, includes.GetExceptionsMetadata())
 
     return allExceptionsMap
 }
@@ -145,7 +140,7 @@ func GetServicesMetadata() map[string]*metadata.ThriftService {
     }
 
     // ...now add service metadatas from recursively included programs.
-    mapsCopy(allServicesMap, includes.GetServicesMetadata())
+    maps.Copy(allServicesMap, includes.GetServicesMetadata())
 
     return allServicesMap
 }

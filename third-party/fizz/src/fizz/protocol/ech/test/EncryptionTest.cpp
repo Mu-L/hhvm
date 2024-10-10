@@ -15,10 +15,12 @@
 #include <fizz/crypto/Crypto.h>
 #include <fizz/crypto/hpke/Hpke.h>
 #include <fizz/crypto/hpke/Utils.h>
+#include <fizz/protocol/DefaultFactory.h>
 #include <fizz/protocol/ech/Encryption.h>
 #include <fizz/protocol/ech/test/TestUtil.h>
+#include <fizz/protocol/test/Matchers.h>
 #include <fizz/protocol/test/Mocks.h>
-#include <fizz/protocol/test/TestMessages.h>
+#include <fizz/protocol/test/TestUtil.h>
 #include <fizz/record/Extensions.h>
 #include <folly/lang/Bits.h>
 
@@ -50,16 +52,21 @@ class MockOpenSSLECKeyExchange256 : public openssl::OpenSSLECKeyExchange {
   MOCK_METHOD(void, generateKeyPair, ());
 };
 
+void checkExtensions(
+    const std::vector<Extension>& testExts,
+    const std::vector<Extension>& expectedExts) {
+  EXPECT_EQ(testExts.size(), expectedExts.size());
+  for (size_t extIndex = 0; extIndex < testExts.size(); ++extIndex) {
+    EXPECT_TRUE(folly::IOBufEqualTo()(
+        testExts[extIndex].extension_data,
+        expectedExts[extIndex].extension_data));
+  }
+}
+
 void checkDecodedChlo(ClientHello decodedChlo, ClientHello expectedChlo) {
   EXPECT_TRUE(folly::IOBufEqualTo()(
       decodedChlo.legacy_session_id, expectedChlo.legacy_session_id));
-  EXPECT_EQ(decodedChlo.extensions.size(), expectedChlo.extensions.size());
-  for (size_t extIndex = 0; extIndex < decodedChlo.extensions.size();
-       ++extIndex) {
-    EXPECT_TRUE(folly::IOBufEqualTo()(
-        decodedChlo.extensions[extIndex].extension_data,
-        expectedChlo.extensions[extIndex].extension_data));
-  }
+  checkExtensions(decodedChlo.extensions, expectedChlo.extensions);
   EXPECT_EQ(decodedChlo.random, expectedChlo.random);
   EXPECT_EQ(decodedChlo.cipher_suites, expectedChlo.cipher_suites);
   EXPECT_EQ(
@@ -85,7 +92,8 @@ hpke::SetupResult constructSetupResult(
   kex->setPrivateKey(std::move(privateKey));
   EXPECT_CALL(*kex, generateKeyPair()).Times(1);
 
-  return constructHpkeSetupResult(std::move(kex), supportedConfig);
+  return constructHpkeSetupResult(
+      fizz::DefaultFactory(), std::move(kex), supportedConfig);
 }
 
 OuterECHClientHello getTestOuterECHClientHelloWithInner(ClientHello chloInner) {
@@ -100,12 +108,14 @@ OuterECHClientHello getTestOuterECHClientHelloWithInner(ClientHello chloInner) {
   auto setupResult = constructSetupResult(supportedConfig);
   chloInner.legacy_session_id = folly::IOBuf::copyBuffer(testLegacySessionId);
 
+  std::vector<ExtensionType> outerExtensionTypes = {ExtensionType::key_share};
   return encryptClientHello(
       supportedConfig,
       std::move(chloInner),
       getClientHelloOuter(),
       setupResult,
-      folly::none);
+      folly::none,
+      outerExtensionTypes);
 }
 
 OuterECHClientHello getTestOuterECHClientHello() {
@@ -127,6 +137,44 @@ void checkSupportedConfigValid(
       result.value().cipherSuite.aead_id, hpke::AeadId::TLS_AES_128_GCM_SHA256);
   EXPECT_EQ(result.value().configId, 0xFB);
   EXPECT_EQ(result.value().maxLen, 100);
+}
+auto hpkeContext(OuterECHClientHello& clientECH) {
+  // Create HPKE setup prefix
+  std::string tlsEchPrefix = "tls ech";
+  tlsEchPrefix += '\0';
+  auto hpkePrefix = folly::IOBuf::copyBuffer(tlsEchPrefix);
+  hpkePrefix->prependChain(encode(getECHConfig()));
+
+  auto kex = std::make_unique<MockOpenSSLECKeyExchange256>();
+  kex->setPrivateKey(getPrivateKey(kP256Key));
+
+  auto suiteId = hpke::generateHpkeSuiteId(
+      NamedGroup::secp256r1,
+      HashFunction::Sha256,
+      CipherSuite::TLS_AES_128_GCM_SHA256);
+
+  auto dhkem = std::make_unique<DHKEM>(
+      std::move(kex),
+      NamedGroup::secp256r1,
+      std::make_unique<fizz::hpke::Hkdf>(
+          fizz::hpke::Hkdf::v1(openssl::hasherFactory<fizz::Sha256>())));
+
+  hpke::SetupParam setupParam{
+      std::move(dhkem),
+      fizz::DefaultFactory().makeAead(CipherSuite::TLS_AES_128_GCM_SHA256),
+      std::make_unique<fizz::hpke::Hkdf>(
+          fizz::hpke::Hkdf::v1(openssl::hasherFactory<fizz::Sha256>())),
+      std::move(suiteId),
+  };
+
+  auto context = setupWithDecap(
+      hpke::Mode::Base,
+      clientECH.enc->coalesce(),
+      folly::none,
+      std::move(hpkePrefix),
+      folly::none,
+      std::move(setupParam));
+  return context;
 }
 
 } // namespace
@@ -226,46 +274,18 @@ TEST(EncryptionTest, TestValidEncryptClientHello) {
   // getTestOuterECHClientHello()
   expectedChlo.legacy_session_id =
       folly::IOBuf::copyBuffer("test legacy session id");
+  // expectedChlo should have OuterExtensions
+  OuterExtensions expectedOuterExt;
+  expectedOuterExt.types = {ExtensionType::key_share};
+  auto it = std::find_if(
+      expectedChlo.extensions.begin(),
+      expectedChlo.extensions.end(),
+      [](const auto& ext) {
+        return ext.extension_type == ExtensionType::key_share;
+      });
+  *it = encodeExtension(expectedOuterExt);
 
-  // Create HPKE setup prefix
-  std::string tlsEchPrefix = "tls ech";
-  tlsEchPrefix += '\0';
-  auto hpkePrefix = folly::IOBuf::copyBuffer(tlsEchPrefix);
-  hpkePrefix->prependChain(encode(getECHConfig()));
-
-  const std::unique_ptr<folly::IOBuf> prefix =
-      folly::IOBuf::copyBuffer("HPKE-v1");
-
-  auto kex = std::make_unique<MockOpenSSLECKeyExchange256>();
-  kex->setPrivateKey(getPrivateKey(kP256Key));
-
-  auto suiteId = hpke::generateHpkeSuiteId(
-      NamedGroup::secp256r1,
-      HashFunction::Sha256,
-      CipherSuite::TLS_AES_128_GCM_SHA256);
-
-  auto kdfId = hpke::getKDFId(HashFunction::Sha256);
-
-  auto dhkem = std::make_unique<DHKEM>(
-      std::move(kex),
-      NamedGroup::secp256r1,
-      hpke::makeHpkeHkdf(prefix->clone(), kdfId));
-
-  hpke::SetupParam setupParam{
-      std::move(dhkem),
-      makeCipher(hpke::AeadId::TLS_AES_128_GCM_SHA256),
-      hpke::makeHpkeHkdf(prefix->clone(), kdfId),
-      std::move(suiteId),
-  };
-
-  auto context = setupWithDecap(
-      hpke::Mode::Base,
-      clientECH.enc->coalesce(),
-      folly::none,
-      std::move(hpkePrefix),
-      folly::none,
-      std::move(setupParam));
-
+  auto context = hpkeContext(clientECH);
   // Get client hello inner by decrypting
   auto clientHelloOuter = getClientHelloOuter();
   auto dummyECH = getTestOuterECHClientHello();
@@ -318,6 +338,7 @@ TEST(EncryptionTest, TestTryToDecryptECH) {
   kex->setPrivateKey(std::move(privateKey));
 
   auto context = setupDecryptionContext(
+      fizz::DefaultFactory(),
       getECHConfig(),
       testECH.cipher_suite,
       testECH.enc->clone(),
@@ -337,6 +358,48 @@ TEST(EncryptionTest, TestTryToDecryptECH) {
   checkDecodedChlo(std::move(chlo), std::move(expectedChlo));
 }
 
+TEST(EncryptionTest, TestInnerClientHelloOuterExtensionsSuccess) {
+  auto innerChlo = TestMessages::clientHello();
+
+  // Extract key_share and replace with OuterExtensions
+  Extension encodedClientKeyShare;
+  OuterExtensions outer;
+  outer.types = {ExtensionType::key_share};
+  auto it = std::find_if(
+      innerChlo.extensions.begin(), innerChlo.extensions.end(), [](auto& ext) {
+        return ext.extension_type == ExtensionType::key_share;
+      });
+  if (it != innerChlo.extensions.end()) {
+    encodedClientKeyShare = it->clone();
+    innerChlo.extensions.erase(it);
+  }
+  innerChlo.extensions.push_back(encodeExtension(std::move(outer)));
+  auto clientECH = getTestOuterECHClientHelloWithInner(std::move(innerChlo));
+  auto context = hpkeContext(clientECH);
+  auto outerChlo = getClientHelloOuter();
+  outerChlo.extensions.push_back(encodeExtension(clientECH));
+
+  auto decryptedChlo = decryptECHWithContext(
+      outerChlo,
+      getECHConfig(),
+      clientECH.cipher_suite,
+      std::move(clientECH.enc),
+      std::move(clientECH.config_id),
+      std::move(clientECH.payload),
+      ECHVersion::Draft15,
+      context);
+
+  auto decryptedClientKeyShare =
+      findExtension(decryptedChlo.extensions, ExtensionType::key_share)
+          ->clone();
+  EXPECT_EQ(
+      decryptedClientKeyShare.extension_type,
+      encodedClientKeyShare.extension_type);
+  EXPECT_TRUE(folly::IOBufEqualTo()(
+      decryptedClientKeyShare.extension_data,
+      encodedClientKeyShare.extension_data));
+}
+
 TEST(EncryptionTest, TestInnerClientHelloOuterExtensionsContainsECH) {
   auto innerChlo = TestMessages::clientHello();
   // Add OuterExtensions with ECH extension. Should blow up on decrypt.
@@ -344,45 +407,7 @@ TEST(EncryptionTest, TestInnerClientHelloOuterExtensionsContainsECH) {
   outer.types = {ExtensionType::encrypted_client_hello};
   innerChlo.extensions.push_back(encodeExtension(std::move(outer)));
   auto clientECH = getTestOuterECHClientHelloWithInner(std::move(innerChlo));
-
-  // Create HPKE setup prefix
-  std::string tlsEchPrefix = "tls ech";
-  tlsEchPrefix += '\0';
-  auto hpkePrefix = folly::IOBuf::copyBuffer(tlsEchPrefix);
-  hpkePrefix->prependChain(encode(getECHConfig()));
-
-  const std::unique_ptr<folly::IOBuf> prefix =
-      folly::IOBuf::copyBuffer("HPKE-v1");
-
-  auto kex = std::make_unique<MockOpenSSLECKeyExchange256>();
-  kex->setPrivateKey(getPrivateKey(kP256Key));
-
-  auto suiteId = hpke::generateHpkeSuiteId(
-      NamedGroup::secp256r1,
-      HashFunction::Sha256,
-      CipherSuite::TLS_AES_128_GCM_SHA256);
-
-  auto kdfId = hpke::getKDFId(HashFunction::Sha256);
-
-  auto dhkem = std::make_unique<DHKEM>(
-      std::move(kex),
-      NamedGroup::secp256r1,
-      hpke::makeHpkeHkdf(prefix->clone(), kdfId));
-
-  hpke::SetupParam setupParam{
-      std::move(dhkem),
-      makeCipher(hpke::AeadId::TLS_AES_128_GCM_SHA256),
-      hpke::makeHpkeHkdf(prefix->clone(), kdfId),
-      std::move(suiteId),
-  };
-
-  auto context = setupWithDecap(
-      hpke::Mode::Base,
-      clientECH.enc->coalesce(),
-      folly::none,
-      std::move(hpkePrefix),
-      folly::none,
-      std::move(setupParam));
+  auto context = hpkeContext(clientECH);
   auto outerChlo = getClientHelloOuter();
   outerChlo.extensions.push_back(encodeExtension(clientECH));
 
@@ -407,44 +432,7 @@ TEST(EncryptionTest, TestInnerClientHelloOuterExtensionsContainsDupes) {
   innerChlo.extensions.push_back(encodeExtension(std::move(outer)));
   auto clientECH = getTestOuterECHClientHelloWithInner(std::move(innerChlo));
 
-  // Create HPKE setup prefix
-  std::string tlsEchPrefix = "tls ech";
-  tlsEchPrefix += '\0';
-  auto hpkePrefix = folly::IOBuf::copyBuffer(tlsEchPrefix);
-  hpkePrefix->prependChain(encode(getECHConfig()));
-
-  const std::unique_ptr<folly::IOBuf> prefix =
-      folly::IOBuf::copyBuffer("HPKE-v1");
-
-  auto kex = std::make_unique<MockOpenSSLECKeyExchange256>();
-  kex->setPrivateKey(getPrivateKey(kP256Key));
-
-  auto suiteId = hpke::generateHpkeSuiteId(
-      NamedGroup::secp256r1,
-      HashFunction::Sha256,
-      CipherSuite::TLS_AES_128_GCM_SHA256);
-
-  auto kdfId = hpke::getKDFId(HashFunction::Sha256);
-
-  auto dhkem = std::make_unique<DHKEM>(
-      std::move(kex),
-      NamedGroup::secp256r1,
-      hpke::makeHpkeHkdf(prefix->clone(), kdfId));
-
-  hpke::SetupParam setupParam{
-      std::move(dhkem),
-      makeCipher(hpke::AeadId::TLS_AES_128_GCM_SHA256),
-      hpke::makeHpkeHkdf(prefix->clone(), kdfId),
-      std::move(suiteId),
-  };
-
-  auto context = setupWithDecap(
-      hpke::Mode::Base,
-      clientECH.enc->coalesce(),
-      folly::none,
-      std::move(hpkePrefix),
-      folly::none,
-      std::move(setupParam));
+  auto context = hpkeContext(clientECH);
   auto outerChlo = getClientHelloOuter();
   outerChlo.extensions.push_back(encodeExtension(clientECH));
 
@@ -906,6 +894,39 @@ TEST(EncryptionTest, TestGenerateGreasePsk) {
     EXPECT_TRUE(
         folly::IOBufEqualTo()(hrrGreasePsk.binders[i].binder, randomBinder));
   }
+}
+
+TEST(EncryptionTest, TestGenerateAndReplaceOuterExtensions) {
+  // Make some arbitrary extensions
+  Extension supportedVersions = encodeExtension(SupportedVersions());
+  Extension supportedGroups = encodeExtension(SupportedGroups());
+  Extension keyShare = encodeExtension(ClientKeyShare());
+  Extension signatureAlgorithms = encodeExtension(SignatureAlgorithms());
+  Extension certificateAuthorities = encodeExtension(CertificateAuthorities());
+
+  std::vector<Extension> exts;
+  exts.push_back(supportedVersions.clone());
+  exts.push_back(supportedGroups.clone());
+  exts.push_back(keyShare.clone());
+  exts.push_back(signatureAlgorithms.clone());
+  exts.push_back(certificateAuthorities.clone());
+
+  static const std::vector<ExtensionType> outerExtensionTypes = {
+      ExtensionType::signature_algorithms, ExtensionType::supported_groups};
+  OuterExtensions expectedOuterExt;
+  // Types in the constructed OuterExtensions should be in the same order as in
+  // the original extensions list
+  expectedOuterExt.types = {
+      ExtensionType::supported_groups, ExtensionType::signature_algorithms};
+  std::vector<Extension> expectedExts;
+  expectedExts.push_back(supportedVersions.clone());
+  expectedExts.push_back(encodeExtension(expectedOuterExt));
+  expectedExts.push_back(keyShare.clone());
+  expectedExts.push_back(certificateAuthorities.clone());
+
+  auto extsWithOuterExtensions =
+      generateAndReplaceOuterExtensions(std::move(exts), outerExtensionTypes);
+  checkExtensions(extsWithOuterExtensions, expectedExts);
 }
 
 } // namespace test

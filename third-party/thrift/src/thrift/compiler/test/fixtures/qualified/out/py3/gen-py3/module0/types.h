@@ -10,23 +10,11 @@
 #include <functional>
 #include <folly/Range.h>
 
-#include <thrift/lib/py3/enums.h>
 #include "thrift/compiler/test/fixtures/qualified/gen-cpp2/module0_data.h"
 #include "thrift/compiler/test/fixtures/qualified/gen-cpp2/module0_types.h"
 #include "thrift/compiler/test/fixtures/qualified/gen-cpp2/module0_metadata.h"
 namespace thrift {
 namespace py3 {
-
-
-template<>
-inline const std::vector<std::pair<std::string_view, std::string_view>>& PyEnumTraits<
-    ::module0::Enum>::namesmap() {
-  static const folly::Indestructible<NamesMap> pairs {
-    {
-    }
-  };
-  return *pairs;
-}
 
 
 

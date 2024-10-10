@@ -27,11 +27,11 @@
 
 namespace apache::thrift {
 
-template <typename ProtocolReader, typename T, bool Contiguous>
+template <typename T, typename ProtocolReader, bool Contiguous>
 class StructuredCursorReader;
-template <typename ProtocolReader, typename Tag, bool Contiguous>
+template <typename Tag, typename ProtocolReader, bool Contiguous>
 class ContainerCursorReader;
-template <typename ProtocolReader, typename Tag, bool Contiguous>
+template <typename Tag, typename ProtocolReader, bool Contiguous>
 class ContainerCursorIterator;
 
 template <typename T>
@@ -39,6 +39,7 @@ class StructuredCursorWriter;
 template <typename Tag>
 class ContainerCursorWriter;
 class StringCursorWriter;
+class ManagedStringViewWithConversions;
 
 namespace detail {
 
@@ -114,6 +115,8 @@ class BaseCursorReader {
             return "Child reader not passed to endRead";
           case State::Done:
             return "Reader already finalized";
+          default:
+            return "State is unknown";
         }
       }());
     }
@@ -168,6 +171,8 @@ class BaseCursorWriter {
             return "Child writer not passed to endWrite";
           case State::Done:
             return "Writer already finalized";
+          default:
+            return "State is unknown";
         }
       }());
     }
@@ -334,7 +339,7 @@ std::string_view readStringView(ProtocolReader& protocol) {
   return std::string_view(reinterpret_cast<const char*>(c.data()), size);
 }
 
-template <typename ProtocolReader, typename Tag, typename T>
+template <typename Tag, typename ProtocolReader, typename T>
 void decodeTo(ProtocolReader& protocol, T& t) {
   if constexpr (
       std::is_same_v<T, std::string_view> &&
@@ -366,7 +371,10 @@ struct IsSupportedCppType<type::cpp_type<T, Tag>> {
     } else if constexpr (type::is_a_v<Tag, type::string_c>) {
       return std::is_same_v<T, folly::IOBuf> ||
           std::is_same_v<T, std::unique_ptr<folly::IOBuf>> ||
-          std::is_same_v<T, folly::fbstring> || std::is_same_v<T, std::string>;
+          std::is_same_v<T, folly::fbstring> ||
+          std::is_same_v<T, std::string> ||
+          std::is_same_v<T, ManagedStringViewWithConversions>;
+      ;
     } else if constexpr (type::is_a_v<Tag, type::container_c>) {
       return HasValueType<T>::value;
     }

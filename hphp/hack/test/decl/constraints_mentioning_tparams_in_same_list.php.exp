@@ -93,8 +93,9 @@
                        fp_type = (Rhint ([14:21-23]), (Tgeneric ("Ta", [])));
                        fp_flags =
                        { Typing_defs_flags.FunParam.accept_disposable = false;
-                         inout = false; has_default = false;
-                         readonly = false; ignore_readonly_error = false };
+                         inout = false; is_optional = false;
+                         readonly = false; ignore_readonly_error = false;
+                         splat = false };
                        fp_def_value = None }
                       ];
                     ft_implicit_params =
@@ -159,8 +160,11 @@
             [(Constraint_as,
               (Rhint ([19:13-21]),
                (Ttuple
-                  [(Rhint ([19:14-16]), (Tgeneric ("Ta", [])));
-                    (Rhint ([19:18-20]), (Tgeneric ("Tb", [])))])))
+                  { t_required =
+                    [(Rhint ([19:14-16]), (Tgeneric ("Ta", [])));
+                      (Rhint ([19:18-20]), (Tgeneric ("Tb", [])))];
+                    t_optional = [];
+                    t_variadic = (Rhint ([19:13-21]), (Tunion [])) })))
               ];
             tp_reified = Erased; tp_user_attributes = [] }
           ];

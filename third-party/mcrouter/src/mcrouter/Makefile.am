@@ -67,8 +67,8 @@ libmcroutercore_a_SOURCES = \
   McrouterLogger.h \
   McrouterManager.cpp\
   McrouterManager.h\
-  McSpoolUtils.h \
-  McSpoolUtils.cpp \
+  McDistributionUtils.h \
+  McDistributionUtils.cpp \
   lib/invalidation/McInvalidationKvPairs.h \
   lib/invalidation/McInvalidationKvPairs.cpp \
   lib/invalidation/McInvalidationDefs.h \
@@ -135,7 +135,11 @@ libmcroutercore_a_SOURCES = \
   routes/FailoverRoute-inl.h \
   routes/FailoverRoute.h \
   routes/FailoverWithExptimeRouteFactory.h \
+  routes/HashStopAllowListRoute.h \
+  routes/HashStopAllowListRoute.cpp \
   routes/HostIdRouteFactory.h \
+  routes/KeyParseRoute.h \
+  routes/KeyParseRoute.cpp \
   routes/KeySplitRoute-inl.h \
   routes/KeySplitRoute.h \
   routes/L1L2CacheRouteFactory.h \
@@ -149,6 +153,7 @@ libmcroutercore_a_SOURCES = \
   routes/McBucketRoute.h \
   routes/DistributionRoute-inl.h \
   routes/DistributionRoute.h \
+  routes/McRefillRoute.h \
   routes/McExtraRouteHandleProvider-inl.h \
   routes/McExtraRouteHandleProvider.h \
   routes/McImportResolver.cpp \
@@ -254,6 +259,7 @@ mcrouter_LDADD = \
   libmcroutercore.a \
   lib/libmcrouter.a \
   -lthriftcpp2 \
+  -lserverdbginfo \
   -ltransport \
   -lthriftanyrep \
   -lthrifttype \
@@ -264,6 +270,7 @@ mcrouter_LDADD = \
   -lthriftmetadata \
   -lasync \
   -lconcurrency \
+  -lruntime \
   -lthrift-core \
 	-lfmt \
   -lwangle \

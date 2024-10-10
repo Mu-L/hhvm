@@ -136,7 +136,7 @@ and hint_ p env = function
         hf_is_readonly_return = readonly_ret;
       } ->
     let make_param ((p, _) as x) param_info =
-      let (has_default, readonly, kind) =
+      let (is_optional, readonly, splat, kind) =
         match param_info with
         | Some p ->
           let readonly =
@@ -144,14 +144,19 @@ and hint_ p env = function
             | Some Ast_defs.Readonly -> true
             | _ -> false
           in
-          let has_default =
+          let is_optional =
             match p.hfparam_optional with
             | Some Ast_defs.Optional -> true
             | _ -> false
           in
+          let splat =
+            match p.hfparam_splat with
+            | Some Ast_defs.Splat -> true
+            | _ -> false
+          in
           let param_kind = get_param_mode p.hfparam_kind in
-          (has_default, readonly, param_kind)
-        | None -> (false, false, FPnormal)
+          (is_optional, readonly, splat, param_kind)
+        | None -> (false, false, false, FPnormal)
       in
       {
         fp_pos = Decl_env.make_decl_pos env p;
@@ -161,9 +166,10 @@ and hint_ p env = function
           make_fp_flags
             ~mode:kind
             ~accept_disposable:false
-            ~has_default
+            ~is_optional
             ~readonly
-            ~ignore_readonly_error:false;
+            ~ignore_readonly_error:false
+            ~splat;
         fp_def_value = None;
       }
     in
@@ -254,9 +260,21 @@ and hint_ p env = function
           { cr_consts = SMap.add id rc cr_consts })
     in
     Trefinement (root_ty, class_ref)
-  | Htuple hl ->
-    let tyl = List.map hl ~f:(hint env) in
-    Ttuple tyl
+  | Htuple { tup_required; tup_extra } ->
+    let t_required = List.map tup_required ~f:(hint env) in
+    let t_extra =
+      match tup_extra with
+      | Hextra { tup_optional; tup_variadic } ->
+        let t_optional = List.map tup_optional ~f:(hint env) in
+        let t_variadic =
+          match tup_variadic with
+          | None -> hint env (p, Hnothing)
+          | Some t -> hint env t
+        in
+        Textra { t_optional; t_variadic }
+      | Hsplat tup_splat -> Tsplat (hint env tup_splat)
+    in
+    Ttuple { t_required; t_extra }
   | Hunion hl ->
     let tyl = List.map hl ~f:(hint env) in
     Tunion tyl

@@ -83,7 +83,7 @@ let load_saved_state_exn
         warning_hashes_path;
       Warnings_saved_state.empty
     ) else
-      Marshal.from_channel (In_channel.create ~binary:true warning_hashes_path)
+      Warnings_saved_state.read_from_disk warning_hashes_path
   in
   (old_naming_table, { old_errors; old_warnings })
 
@@ -176,7 +176,7 @@ let dump_dep_graph_64bit ~mode ~db_name ~incremental_info_file =
     let open Hh_json in
     Out_channel.with_file incremental_info_file ~f:(fun fh ->
         json_to_output fh
-        @@ JSON_Object [("base_dep_graph", opt_string_to_json base_dep_graph)])
+        @@ JSON_Object [("base_dep_graph", string_opt base_dep_graph)])
   in
   let dep_table_edges_added =
     Typing_deps.save_discovered_edges

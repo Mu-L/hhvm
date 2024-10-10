@@ -20,6 +20,7 @@
       "definition_html": "void apache::thrift::op::detail::Decode&lt; type::bool_t &gt;::operator()",
       "argsstring_html": "(Protocol &amp;prot, bool &amp;b) const",
       "name_html": "operator()",
+      "qualifiedname_html": "apache::thrift::op::detail::Decode&lt; type::bool_t &gt;::operator()",
       "param": [
         {
           "type_html": "Protocol &amp;",
@@ -32,11 +33,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "691",
+        "line": "694",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "691",
-        "bodyend": "693"
+        "bodystart": "694",
+        "bodyend": "696"
       },
       "definition": {
         "simple_html": "template &lt;typename Protocol&gt;\nvoid operator()(Protocol&amp; prot, bool&amp; b) const",
@@ -68,6 +69,7 @@
       "definition_html": "void apache::thrift::op::detail::Decode&lt; type::bool_t &gt;::operator()",
       "argsstring_html": "(Protocol &amp;prot, std::vector&lt; bool &gt;::reference t) const",
       "name_html": "operator()",
+      "qualifiedname_html": "apache::thrift::op::detail::Decode&lt; type::bool_t &gt;::operator()",
       "param": [
         {
           "type_html": "Protocol &amp;",
@@ -80,11 +82,11 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "line": "696",
+        "line": "699",
         "column": "8",
         "bodyfile": "fbcode/thrift/lib/cpp2/op/detail/Encode.h",
-        "bodystart": "696",
-        "bodyend": "700"
+        "bodystart": "699",
+        "bodyend": "703"
       },
       "definition": {
         "simple_html": "template &lt;typename Protocol&gt;\nvoid operator()(Protocol&amp; prot, std::vector&lt;bool&gt;::reference t) const",

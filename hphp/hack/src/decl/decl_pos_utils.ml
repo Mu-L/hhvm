@@ -44,7 +44,12 @@ struct
     | Tvec_or_dict (ty1, ty2) -> Tvec_or_dict (ty ty1, ty ty2)
     | Tprim _ as x -> x
     | Tgeneric (name, args) -> Tgeneric (name, List.map args ~f:ty)
-    | Ttuple tyl -> Ttuple (List.map tyl ~f:ty)
+    | Ttuple { t_required; t_extra } ->
+      Ttuple
+        {
+          t_required = List.map t_required ~f:ty;
+          t_extra = tuple_extra t_extra;
+        }
     | Tunion tyl -> Tunion (List.map tyl ~f:ty)
     | Tintersection tyl -> Tintersection (List.map tyl ~f:ty)
     | Toption x -> Toption (ty x)
@@ -56,15 +61,19 @@ struct
       let rs = Class_refinement.map ty rs in
       Trefinement (ty root_ty, rs)
     | Tshape s -> Tshape (shape_type s)
-    | Tnewtype (name, tyl, bound) ->
-      let tyl = List.map tyl ~f:ty in
-      let bound = ty bound in
-      Tnewtype (name, tyl, bound)
+
+  and tuple_extra e =
+    match e with
+    | Tsplat t_splat -> Tsplat (ty t_splat)
+    | Textra { t_optional; t_variadic } ->
+      Textra
+        { t_optional = List.map t_optional ~f:ty; t_variadic = ty t_variadic }
 
   and ty_opt x = Option.map x ~f:ty
 
   and shape_field_name = function
-    | Typing_defs.TSFlit_int (p, s) -> Typing_defs.TSFlit_int (pos_or_decl p, s)
+    | Typing_defs.TSFregex_group (p, s) ->
+      Typing_defs.TSFregex_group (pos_or_decl p, s)
     | Typing_defs.TSFlit_str (p, s) -> Typing_defs.TSFlit_str (pos_or_decl p, s)
     | Typing_defs.TSFclass_const (id, s) ->
       Typing_defs.TSFclass_const (positioned_id id, positioned_id s)
@@ -213,11 +222,15 @@ struct
     {
       td_module = tdef.td_module;
       td_pos = pos_or_decl tdef.td_pos;
-      td_vis = tdef.td_vis;
       td_tparams = List.map tdef.td_tparams ~f:type_param;
       td_as_constraint = ty_opt tdef.td_as_constraint;
       td_super_constraint = ty_opt tdef.td_super_constraint;
-      td_type = ty tdef.td_type;
+      td_type_assignment =
+        (match tdef.td_type_assignment with
+        | SimpleTypeDef (vis, t) -> SimpleTypeDef (vis, ty t)
+        | CaseType (variant, variants) ->
+          let f (t, wcs) = (ty t, List.map wcs ~f:where_constraint) in
+          CaseType (f variant, List.map variants ~f));
       td_is_ctx = tdef.td_is_ctx;
       td_attributes = List.map tdef.td_attributes ~f:user_attribute;
       td_internal = tdef.td_internal;

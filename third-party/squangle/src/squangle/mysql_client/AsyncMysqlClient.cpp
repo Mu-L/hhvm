@@ -19,14 +19,14 @@
 
 #include "squangle/logger/DBEventLogger.h"
 #include "squangle/mysql_client/AsyncMysqlClient.h"
-#include "squangle/mysql_client/Operation.h"
+#include "squangle/mysql_client/ConnectOperation.h"
+#include "squangle/mysql_client/ResetOperation.h"
 #include "squangle/mysql_client/SemiFutureAdapter.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlConnectOperationImpl.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlFetchOperationImpl.h"
+#include "squangle/mysql_client/mysql_protocol/MysqlSpecialOperationImpl.h"
 
-DECLARE_int64(mysql_mysql_timeout_micros);
-
-namespace facebook {
-namespace common {
-namespace mysql_client {
+namespace facebook::common::mysql_client {
 
 namespace {
 folly::Singleton<AsyncMysqlClient> client(
@@ -64,7 +64,7 @@ void AsyncMysqlClient::init() {
   eventBase->waitUntilRunning();
 }
 
-bool AsyncMysqlClient::runInThread(folly::Cob&& fn, bool wait) {
+bool AsyncMysqlClient::runInThread(std::function<void()>&& fn, bool wait) {
   auto scheduleTime = std::chrono::steady_clock::now();
   auto func = [fn = std::move(fn), scheduleTime, this]() mutable {
     auto delay = std::chrono::duration_cast<std::chrono::microseconds>(
@@ -147,11 +147,31 @@ AsyncMysqlClient::~AsyncMysqlClient() {
 }
 
 db::SquangleLoggingData AsyncMysqlClient::makeSquangleLoggingData(
-    const ConnectionKey* connKey,
+    std::shared_ptr<const ConnectionKey> connKey,
     const db::ConnectionContextBase* connContext) {
-  db::SquangleLoggingData ret(connKey, connContext);
-  ret.clientPerfStats = collectPerfStats();
-  return ret;
+  return db::SquangleLoggingData(
+      std::move(connKey), connContext, collectPerfStats());
+}
+
+std::unique_ptr<ConnectOperationImpl>
+AsyncMysqlClient::createConnectOperationImpl(
+    MysqlClientBase* client_base,
+    std::shared_ptr<const ConnectionKey> conn_key) const {
+  return std::make_unique<mysql_protocol::MysqlConnectOperationImpl>(
+      client_base, std::move(conn_key));
+}
+
+std::unique_ptr<FetchOperationImpl> AsyncMysqlClient::createFetchOperationImpl(
+    std::unique_ptr<OperationBase::ConnectionProxy> conn) const {
+  return std::make_unique<mysql_protocol::MysqlFetchOperationImpl>(
+      std::move(conn));
+}
+
+std::unique_ptr<SpecialOperationImpl>
+AsyncMysqlClient::createSpecialOperationImpl(
+    std::unique_ptr<OperationBase::ConnectionProxy> conn) const {
+  return std::make_unique<mysql_protocol::MysqlSpecialOperationImpl>(
+      std::move(conn));
 }
 
 void AsyncMysqlClient::cleanupCompletedOperations() {
@@ -201,77 +221,8 @@ std::unique_ptr<Connection> AsyncMysqlClient::connect(
 }
 
 std::unique_ptr<Connection> AsyncMysqlClient::createConnection(
-    ConnectionKey conn_key,
-    MYSQL* mysql_conn) {
-  return std::make_unique<AsyncConnection>(
-      this, std::move(conn_key), mysql_conn);
-}
-
-static inline MysqlHandler::Status toHandlerStatus(net_async_status status) {
-  if (status == NET_ASYNC_ERROR) {
-    return MysqlHandler::Status::ERROR;
-  } else if (status == NET_ASYNC_COMPLETE) {
-    return MysqlHandler::Status::DONE;
-  } else {
-    return MysqlHandler::Status::PENDING;
-  }
-}
-
-MysqlHandler::Status AsyncMysqlClient::AsyncMysqlHandler::tryConnect(
-    MYSQL* mysql,
-    const ConnectionOptions& /*opts*/,
-    const ConnectionKey& conn_key,
-    int flags) {
-  const auto usingUnixSocket = !conn_key.unixSocketPath().empty();
-
-  // When using unix socket (AF_UNIX), host/port do not matter.
-  return toHandlerStatus(mysql_real_connect_nonblocking(
-      mysql,
-      usingUnixSocket ? nullptr : conn_key.host().c_str(),
-      conn_key.user().c_str(),
-      conn_key.password().c_str(),
-      conn_key.db_name().c_str(),
-      usingUnixSocket ? 0 : conn_key.port(),
-      usingUnixSocket ? conn_key.unixSocketPath().c_str() : nullptr,
-      flags));
-}
-
-MysqlHandler::Status AsyncMysqlClient::AsyncMysqlHandler::runQuery(
-    MYSQL* mysql,
-    folly::StringPiece queryStmt) {
-  return toHandlerStatus(
-      mysql_real_query_nonblocking(mysql, queryStmt.begin(), queryStmt.size()));
-}
-
-MysqlHandler::Status AsyncMysqlClient::AsyncMysqlHandler::resetConn(
-    MYSQL* mysql) {
-  return toHandlerStatus(mysql_reset_connection_nonblocking(mysql));
-}
-
-MysqlHandler::Status AsyncMysqlClient::AsyncMysqlHandler::changeUser(
-    MYSQL* mysql,
-    const std::string& user,
-    const std::string& password,
-    const std::string& database) {
-  return toHandlerStatus(mysql_change_user_nonblocking(
-      mysql, user.c_str(), password.c_str(), database.c_str()));
-}
-
-MysqlHandler::Status AsyncMysqlClient::AsyncMysqlHandler::nextResult(
-    MYSQL* mysql) {
-  return toHandlerStatus(mysql_next_result_nonblocking(mysql));
-}
-
-MysqlHandler::Status AsyncMysqlClient::AsyncMysqlHandler::fetchRow(
-    MYSQL_RES* res,
-    MYSQL_ROW& row) {
-  auto status = toHandlerStatus(mysql_fetch_row_nonblocking(res, &row));
-  DCHECK_NE(status, ERROR); // Should never be an error
-  return status;
-}
-
-MYSQL_RES* AsyncMysqlClient::AsyncMysqlHandler::getResult(MYSQL* mysql) {
-  return mysql_use_result(mysql);
+    std::shared_ptr<const ConnectionKey> conn_key) {
+  return std::make_unique<AsyncConnection>(*this, std::move(conn_key), nullptr);
 }
 
 AsyncConnection::~AsyncConnection() {
@@ -286,24 +237,17 @@ AsyncConnection::~AsyncConnection() {
     // callback instead points to the original callback function, which will
     // be called after COM_RESET_CONNECTION.
 
-    auto connHolder = stealMysqlConnectionHolder(true);
+    auto connHolder = stealConnectionHolder(true);
     auto conn = std::make_unique<AsyncConnection>(
-        client(), *getKey(), std::move(connHolder));
+        client(), getKey(), std::move(connHolder));
     conn->needToCloneConnection_ = false;
     conn->setConnectionOptions(getConnectionOptions());
     conn->setConnectionDyingCallback(std::move(conn_dying_callback_));
     conn_dying_callback_ = nullptr;
 
     auto resetOp = Connection::resetConn(std::move(conn));
-    runInThread([resetOp = std::move(resetOp)] {
-      // addOperation() is necessary here for proper cancelling of reset
-      // operation in case of sudden AsyncMysqlClient shutdown
-      resetOp->connection()->client()->addOperation(resetOp);
-      resetOp->run();
-    });
+    runInThread([resetOp = std::move(resetOp)] { resetOp->run(); });
   }
 }
 
-} // namespace mysql_client
-} // namespace common
-} // namespace facebook
+} // namespace facebook::common::mysql_client

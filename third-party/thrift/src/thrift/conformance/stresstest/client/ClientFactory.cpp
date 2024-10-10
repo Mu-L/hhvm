@@ -94,7 +94,9 @@ std::shared_ptr<fizz::client::FizzClientContext> getFizzContext(
       folly::readFile(cfg.certPath.c_str(), cert);
       folly::readFile(cfg.keyPath.c_str(), key);
       auto selfCert = fizz::openssl::CertUtils::makeSelfCert(cert, key);
-      ctx->setClientCertificate(std::move(selfCert));
+      auto certMgr = std::make_shared<fizz::client::CertManager>();
+      certMgr->addCert(std::move(selfCert));
+      ctx->setClientCertManager(std::move(certMgr));
     }
     return ctx;
   }();
@@ -255,8 +257,8 @@ THRIFT_PLUGGABLE_FUNC_REGISTER(
     std::shared_ptr<StressTestAsyncClient> connection =
         ClientFactory::createRocketClient(evb, cfg.connConfig);
     for (size_t i = 0; i < cfg.numClientsPerConnection; i++) {
-      clients.emplace_back(
-          std::make_unique<ThriftStressTestClient>(connection, stats));
+      clients.emplace_back(std::make_unique<ThriftStressTestClient>(
+          connection, stats, cfg.enableChecksum));
     }
   }
   return clients;

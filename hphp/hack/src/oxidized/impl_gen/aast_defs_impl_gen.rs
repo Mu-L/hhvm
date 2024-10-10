@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<03e895d494776242c95ed973b19d6174>>
+// @generated SignedSource<<4c3bf7fe8e085140d6eb786e2a9989fb>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -2930,6 +2930,69 @@ impl ClassTypeconst {
         }
     }
 }
+impl TypedefAssignment {
+    pub fn mk_simple_type_def(p0: TypedefVisibilityAndHint) -> Self {
+        TypedefAssignment::SimpleTypeDef(p0)
+    }
+    pub fn mk_case_type(p0: TypedefCaseTypeVariant, p1: Vec<TypedefCaseTypeVariant>) -> Self {
+        TypedefAssignment::CaseType(p0, p1)
+    }
+    pub fn is_simple_type_def(&self) -> bool {
+        match self {
+            TypedefAssignment::SimpleTypeDef(..) => true,
+            _ => false,
+        }
+    }
+    pub fn is_case_type(&self) -> bool {
+        match self {
+            TypedefAssignment::CaseType(..) => true,
+            _ => false,
+        }
+    }
+    pub fn as_simple_type_def(&self) -> Option<&TypedefVisibilityAndHint> {
+        match self {
+            TypedefAssignment::SimpleTypeDef(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_case_type(&self) -> Option<(&TypedefCaseTypeVariant, &Vec<TypedefCaseTypeVariant>)> {
+        match self {
+            TypedefAssignment::CaseType(p0, p1) => Some((p0, p1)),
+            _ => None,
+        }
+    }
+    pub fn as_simple_type_def_mut(&mut self) -> Option<&mut TypedefVisibilityAndHint> {
+        match self {
+            TypedefAssignment::SimpleTypeDef(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_case_type_mut(
+        &mut self,
+    ) -> Option<(
+        &mut TypedefCaseTypeVariant,
+        &mut Vec<TypedefCaseTypeVariant>,
+    )> {
+        match self {
+            TypedefAssignment::CaseType(p0, p1) => Some((p0, p1)),
+            _ => None,
+        }
+    }
+    pub fn as_simple_type_def_into(self) -> Option<TypedefVisibilityAndHint> {
+        match self {
+            TypedefAssignment::SimpleTypeDef(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_case_type_into(
+        self,
+    ) -> Option<(TypedefCaseTypeVariant, Vec<TypedefCaseTypeVariant>)> {
+        match self {
+            TypedefAssignment::CaseType(p0, p1) => Some((p0, p1)),
+            _ => None,
+        }
+    }
+}
 impl MdNameKind {
     pub fn mk_mdname_global(p0: Pos) -> Self {
         MdNameKind::MDNameGlobal(p0)
@@ -3552,7 +3615,7 @@ impl Hint_ {
     pub fn mk_hfun(p0: HintFun) -> Self {
         Hint_::Hfun(p0)
     }
-    pub fn mk_htuple(p0: Vec<Hint>) -> Self {
+    pub fn mk_htuple(p0: TupleInfo) -> Self {
         Hint_::Htuple(p0)
     }
     pub fn mk_hclass_args(p0: Hint) -> Self {
@@ -3774,7 +3837,7 @@ impl Hint_ {
             _ => None,
         }
     }
-    pub fn as_htuple(&self) -> Option<&Vec<Hint>> {
+    pub fn as_htuple(&self) -> Option<&TupleInfo> {
         match self {
             Hint_::Htuple(p0) => Some(p0),
             _ => None,
@@ -3876,7 +3939,7 @@ impl Hint_ {
             _ => None,
         }
     }
-    pub fn as_htuple_mut(&mut self) -> Option<&mut Vec<Hint>> {
+    pub fn as_htuple_mut(&mut self) -> Option<&mut TupleInfo> {
         match self {
             Hint_::Htuple(p0) => Some(p0),
             _ => None,
@@ -3978,7 +4041,7 @@ impl Hint_ {
             _ => None,
         }
     }
-    pub fn as_htuple_into(self) -> Option<Vec<Hint>> {
+    pub fn as_htuple_into(self) -> Option<TupleInfo> {
         match self {
             Hint_::Htuple(p0) => Some(p0),
             _ => None,
@@ -4215,6 +4278,62 @@ impl CtxRefinement {
     pub fn as_crloose_into(self) -> Option<CtxRefinementBounds> {
         match self {
             CtxRefinement::CRloose(p0) => Some(p0),
+            _ => None,
+        }
+    }
+}
+impl TupleExtra {
+    pub fn mk_hextra(p0: TupleExtraInfo) -> Self {
+        TupleExtra::Hextra(p0)
+    }
+    pub fn mk_hsplat(p0: Hint) -> Self {
+        TupleExtra::Hsplat(p0)
+    }
+    pub fn is_hextra(&self) -> bool {
+        match self {
+            TupleExtra::Hextra(..) => true,
+            _ => false,
+        }
+    }
+    pub fn is_hsplat(&self) -> bool {
+        match self {
+            TupleExtra::Hsplat(..) => true,
+            _ => false,
+        }
+    }
+    pub fn as_hextra(&self) -> Option<&TupleExtraInfo> {
+        match self {
+            TupleExtra::Hextra(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_hsplat(&self) -> Option<&Hint> {
+        match self {
+            TupleExtra::Hsplat(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_hextra_mut(&mut self) -> Option<&mut TupleExtraInfo> {
+        match self {
+            TupleExtra::Hextra(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_hsplat_mut(&mut self) -> Option<&mut Hint> {
+        match self {
+            TupleExtra::Hsplat(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_hextra_into(self) -> Option<TupleExtraInfo> {
+        match self {
+            TupleExtra::Hextra(p0) => Some(p0),
+            _ => None,
+        }
+    }
+    pub fn as_hsplat_into(self) -> Option<Hint> {
+        match self {
+            TupleExtra::Hsplat(p0) => Some(p0),
             _ => None,
         }
     }

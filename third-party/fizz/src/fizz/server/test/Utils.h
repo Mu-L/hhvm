@@ -10,9 +10,10 @@
 #include <fizz/backend/openssl/OpenSSL.h>
 #include <fizz/backend/openssl/certificate/CertUtils.h>
 #include <fizz/backend/openssl/certificate/OpenSSLSelfCertImpl.h>
+#include <fizz/crypto/RandomGenerator.h>
 #include <fizz/protocol/DefaultCertificateVerifier.h>
 #include <fizz/protocol/DefaultFactory.h>
-#include <fizz/protocol/test/Utilities.h>
+#include <fizz/protocol/test/CertUtil.h>
 #include <fizz/server/AsyncFizzServer.h>
 #include <fizz/server/TicketTypes.h>
 #include <folly/io/async/AsyncServerSocket.h>

@@ -50,9 +50,9 @@ impl WitnessLocl {
             | Self::IdxSetElement(pos)
             | Self::UnsetField(pos, _)
             | Self::Regex(pos)
-            | Self::TypeVariable(pos)
-            | Self::TypeVariableGenerics(pos, _, _)
-            | Self::TypeVariableError(pos)
+            | Self::TypeVariable(pos, _)
+            | Self::TypeVariableGenerics(pos, _, _, _)
+            | Self::TypeVariableError(pos, _)
             | Self::Shape(pos, _)
             | Self::ShapeLiteral(pos)
             | Self::Destructure(pos)
@@ -64,7 +64,8 @@ impl WitnessLocl {
             | Self::MissingClass(pos)
             | Self::CapturedLike(pos)
             | Self::UnsafeCast(pos)
-            | Self::Pattern(pos) => pos,
+            | Self::Pattern(pos)
+            | Self::JoinPoint(pos) => pos,
         }
     }
 }
@@ -96,22 +97,13 @@ impl WitnessDecl {
             | Self::PessimisedInout(pos_or_decl)
             | Self::PessimisedReturn(pos_or_decl)
             | Self::PessimisedProp(pos_or_decl)
-            | Self::PessimisedThis(pos_or_decl) => pos_or_decl,
+            | Self::PessimisedThis(pos_or_decl)
+            | Self::TupleFromSplat(pos_or_decl) => pos_or_decl,
         }
     }
 }
 
 impl Reason {
-    pub fn rev_pos(&self) -> Option<&Pos> {
-        match self {
-            T_::Flow(r, _, _) => r.rev_pos(),
-            T_::Prj(_, r) => r.rev_pos(),
-            T_::Def(_, r) => r.rev_pos(),
-            T_::Rev(r) => r.pos(),
-            _ => self.pos(),
-        }
-    }
-
     pub fn pos(&self) -> Option<&Pos> {
         use T_::*;
         match self {
@@ -129,10 +121,7 @@ impl Reason {
             | RigidTvarEscape(pos, _, _, _) => Some(pos),
             DynamicPartialEnforcement(pos_or_decl, _, _)
             | OpaqueTypeFromModule(pos_or_decl, _, _) => Some(pos_or_decl),
-            Flow(t, _, _)
-            | Prj(_, t)
-            | Def(_, t)
-            | LostInfo(_, t, _)
+            LostInfo(_, t, _)
             | TypeAccess(t, _)
             | InvariantGeneric(t, _)
             | ContravariantGeneric(t, _)
@@ -140,7 +129,13 @@ impl Reason {
             | ExprDepType(t, _, _)
             | Typeconst(t, _, _, _)
             | Instantiate(_, _, t) => t.pos(),
-            Rev(t) => t.rev_pos(),
+            LowerBound { .. }
+            | Flow { .. }
+            | PrjBoth { .. }
+            | PrjOne { .. }
+            | Axiom { .. }
+            | Def(_, _)
+            | Solved { .. } => None,
         }
     }
 }

@@ -162,6 +162,9 @@ STUI(proxy_queue_full, 0, 1)
 STUI(proxy_queues_all_full, 0, 1)
 // distribution stats
 STUI(distribution_axon_write_success, 0, 1)
+STUI(distribution_set_axon_write_success, 0, 1)
+STUI(distribution_set_axon_write_fail, 0, 1)
+STUI(distribution_set_local_region_write, 0, 1)
 STUI(distribution_axon_write_failed, 0, 1)
 STUI(distribution_async_spool_failed, 0, 1)
 STUI(distribution_replay_no_source, 0, 1)
@@ -325,6 +328,8 @@ STAT(client_queue_notify_period, stat_double, 0, .dbl = 0.0)
 STAT(asynclog_duration_us, stat_double, 0, .dbl = 0.0)
 // avg time spent appending to axon proxy
 STAT(axon_proxy_duration_us, stat_double, 0, .dbl = 0.0)
+// Time spent in mcrouter, excluding time spent over network.
+STAT(processing_time_us, stat_double, 0, .dbl = 0.0)
 #undef GROUP
 #define GROUP ods_stats | basic_stats | max_stats
 STUI(destination_max_pending_reqs, 0, 1)
@@ -414,3 +419,7 @@ EXTERNAL_STAT(prefix_acl_concurrent_refresh_fail)
 EXTERNAL_STAT(prefix_acl_refresh_success)
 EXTERNAL_STAT(prefix_acl_refresh_timeout)
 EXTERNAL_STAT(prefix_acl_refresh_error)
+
+#define GROUP visitor_stats
+STUI(rim_report_failed, 0, 1)
+#undef GROUP

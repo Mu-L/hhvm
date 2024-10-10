@@ -215,6 +215,20 @@ class MockCertificateVerifier : public CertificateVerifier {
       (const));
 };
 
+class MockCertificateSerialization : public CertificateSerialization {
+ public:
+  MOCK_METHOD(
+      std::unique_ptr<folly::IOBuf>,
+      serialize,
+      (const fizz::Cert&),
+      (const));
+  MOCK_METHOD(
+      std::shared_ptr<const fizz::Cert>,
+      deserialize,
+      (folly::ByteRange),
+      (const));
+};
+
 class MockFactory : public ::fizz::DefaultFactory {
  public:
   MOCK_METHOD(
@@ -250,11 +264,14 @@ class MockFactory : public ::fizz::DefaultFactory {
   MOCK_METHOD(
       std::unique_ptr<KeyExchange>,
       makeKeyExchange,
-      (NamedGroup group, Factory::KeyExchangeMode mode),
+      (NamedGroup group, KeyExchangeRole role),
+      (const));
+  MOCK_METHOD(
+      const HasherFactoryWithMetadata*,
+      makeHasherFactory,
+      (HashFunction),
       (const));
   MOCK_METHOD(std::unique_ptr<Aead>, makeAead, (CipherSuite cipher), (const));
-  MOCK_METHOD(Random, makeRandom, (), (const));
-  MOCK_METHOD(uint32_t, makeTicketAgeAdd, (), (const));
 
   MOCK_METHOD(
       std::unique_ptr<PeerCert>,
@@ -269,6 +286,8 @@ class MockFactory : public ::fizz::DefaultFactory {
   MOCK_CONST_METHOD1(
       makeRandomBytes,
       std::unique_ptr<folly::IOBuf>(size_t count));
+
+  MOCK_METHOD(void, makeRandomBytes, (unsigned char*, size_t), (const));
 
   void setDefaults() {
     ON_CALL(*this, makePlaintextReadRecordLayer())
@@ -313,15 +332,20 @@ class MockFactory : public ::fizz::DefaultFactory {
       ret->setDefaults();
       return ret;
     }));
+    ON_CALL(*this, makeHasherFactory(_))
+        .WillByDefault(
+            InvokeWithoutArgs([]() -> const fizz::HasherFactoryWithMetadata* {
+              const static HasherFactoryWithMetadata instance =
+                  HasherFactoryWithMetadata::bind<::fizz::Sha256>(
+                      []() -> std::unique_ptr<::fizz::Hasher> {
+                        return std::make_unique<NiceMock<MockHasher>>();
+                      });
+              return &instance;
+            }));
     ON_CALL(*this, makeAead(_)).WillByDefault(InvokeWithoutArgs([]() {
       auto ret = std::make_unique<NiceMock<MockAead>>();
       ret->setDefaults();
       return ret;
-    }));
-    ON_CALL(*this, makeRandom()).WillByDefault(InvokeWithoutArgs([]() {
-      Random random;
-      random.fill(0x44);
-      return random;
     }));
     ON_CALL(*this, makeRandomBytes(_)).WillByDefault(Invoke([](size_t count) {
       auto random = folly::IOBuf::create(count);
@@ -329,9 +353,10 @@ class MockFactory : public ::fizz::DefaultFactory {
       random->append(count);
       return random;
     }));
-    ON_CALL(*this, makeTicketAgeAdd()).WillByDefault(InvokeWithoutArgs([]() {
-      return 0x44444444;
-    }));
+    ON_CALL(*this, makeRandomBytes(_, _))
+        .WillByDefault(Invoke([](unsigned char* out, size_t count) {
+          memset(out, 0x44, count);
+        }));
     ON_CALL(*this, _makePeerCert(_, _)).WillByDefault(InvokeWithoutArgs([]() {
       return std::make_unique<NiceMock<MockPeerCert>>();
     }));
@@ -343,7 +368,7 @@ class MockAsyncKexFactory : public ::fizz::DefaultFactory {
   MOCK_METHOD(
       std::unique_ptr<KeyExchange>,
       makeKeyExchange,
-      (NamedGroup group, Factory::KeyExchangeMode mode),
+      (NamedGroup group, KeyExchangeRole role),
       (const));
 };
 

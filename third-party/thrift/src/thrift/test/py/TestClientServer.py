@@ -40,20 +40,23 @@ from thrift.transport import TSocket, TSSLSocket, TTransport
 from thrift.transport.THeaderTransport import CLIENT_TYPE, THeaderTransport, TRANSFORM
 from ThriftTest import SecondService, ThriftTest
 from ThriftTest.ttypes import *
-from libfb.py import parutil
+import importlib.resources
 
 
 _servers = []
 _ports = {}
 
 try:
+    # pyre-fixme[21]: Could not find name `fastproto` in `thrift.protocol`.
     from thrift.protocol import fastproto
 except ImportError:
     fastproto = None
 
 
 def start_server(server_type, ssl, server_header, server_context, multiple, port):
-    server_bin = parutil.get_file_path("python_test_server")
+    server_bin = str(
+        importlib.resources.files(__package__).joinpath("python_test_server")
+    )
 
     args = [server_bin, "--port", str(port)]
     if ssl:

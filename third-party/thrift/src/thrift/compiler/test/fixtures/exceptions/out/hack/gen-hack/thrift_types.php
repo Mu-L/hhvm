@@ -857,118 +857,6 @@ class ExceptionMessage implements \IThriftSyncStruct, \IThriftStructMetadata {
 }
 
 /**
- * Generates a const of type schema. Struct containing the schema of the
- * annotated type. Optionally specify name to override default
- * schema<structName>.
- *
- * Original thrift struct:-
- * GenerateRuntimeSchema
- */
-<<\ThriftTypeInfo(shape('uri' => 'facebook.com/thrift/annotation/GenerateRuntimeSchema'))>>
-class GenerateRuntimeSchema implements \IThriftSyncStruct, \IThriftStructMetadata {
-  use \ThriftSerializationTrait;
-
-  const \ThriftStructTypes::TSpec SPEC = dict[
-    1 => shape(
-      'var' => 'name',
-      'type' => \TType::STRING,
-    ),
-  ];
-  const dict<string, int> FIELDMAP = dict[
-    'name' => 1,
-  ];
-
-  const type TConstructorShape = shape(
-    ?'name' => ?string,
-  );
-
-  const int STRUCTURAL_ID = 2593878277785201336;
-  /**
-   * Original thrift field:-
-   * 1: string name
-   */
-  public string $name;
-
-  public function __construct(?string $name = null)[] {
-    $this->name = $name ?? '';
-  }
-
-  public static function withDefaultValues()[]: this {
-    return new static();
-  }
-
-  public static function fromShape(self::TConstructorShape $shape)[]: this {
-    return new static(
-      Shapes::idx($shape, 'name'),
-    );
-  }
-
-  public function getName()[]: string {
-    return 'GenerateRuntimeSchema';
-  }
-
-  public static function getStructMetadata()[]: \tmeta_ThriftStruct {
-    return \tmeta_ThriftStruct::fromShape(
-      shape(
-        "name" => "thrift.GenerateRuntimeSchema",
-        "fields" => vec[
-          \tmeta_ThriftField::fromShape(
-            shape(
-              "id" => 1,
-              "type" => \tmeta_ThriftType::fromShape(
-                shape(
-                  "t_primitive" => \tmeta_ThriftPrimitiveType::THRIFT_STRING_TYPE,
-                )
-              ),
-              "name" => "name",
-            )
-          ),
-        ],
-        "is_union" => false,
-      )
-    );
-  }
-
-  public static function getAllStructuredAnnotations()[write_props]: \TStructAnnotations {
-    return shape(
-      'struct' => dict[
-        '\facebook\thrift\annotation\Structured' => \facebook\thrift\annotation\Structured::fromShape(
-          shape(
-          )
-        ),
-        '\facebook\thrift\annotation\Service' => \facebook\thrift\annotation\Service::fromShape(
-          shape(
-          )
-        ),
-        '\facebook\thrift\annotation\TConst' => \facebook\thrift\annotation\TConst::fromShape(
-          shape(
-          )
-        ),
-        '\facebook\thrift\annotation\Enum' => \facebook\thrift\annotation\Enum::fromShape(
-          shape(
-          )
-        ),
-        '\facebook\thrift\annotation\Typedef' => \facebook\thrift\annotation\Typedef::fromShape(
-          shape(
-          )
-        ),
-        '\facebook\thrift\annotation\Experimental' => \facebook\thrift\annotation\Experimental::fromShape(
-          shape(
-          )
-        ),
-      ],
-      'fields' => dict[
-      ],
-    );
-  }
-
-  public function getInstanceKey()[write_props]: string {
-    return \TCompactSerializer::serialize($this);
-  }
-
-}
-
-/**
  * Indicates that a field's value should never be stored on the stack, and that
  * identical values can be shared in immutable contexts.
  *
@@ -1400,16 +1288,19 @@ class DeprecatedUnvalidatedAnnotations implements \IThriftSyncStruct, \IThriftSt
 
 /**
  * In addition to reserved words, Thrift reserves all identifiers
- * that contain the case-insensitive substring fbthrift.
+ * that contain the case-insensitive substring fbthrift preceded
+ * by one or more underscores.
  * The use of such identifiers requires users to explicitly annotate
- * the usage with `@thrift.AllowReservedIdentifierName`,
+ * the usage with
+ *   `@thrift.AllowReservedFilename` for filenames
+ *   `@thrift.AllowReservedIdentifier` for all other identifiers
  * and may result in undefined behavior.
  *
  * Original thrift struct:-
- * AllowReservedIdentifierName
+ * AllowReservedIdentifier
  */
-<<\ThriftTypeInfo(shape('uri' => 'facebook.com/thrift/annotation/AllowReservedIdentifierName'))>>
-class AllowReservedIdentifierName implements \IThriftSyncStruct, \IThriftStructMetadata {
+<<\ThriftTypeInfo(shape('uri' => 'facebook.com/thrift/annotation/AllowReservedIdentifier'))>>
+class AllowReservedIdentifier implements \IThriftSyncStruct, \IThriftStructMetadata {
   use \ThriftSerializationTrait;
 
   const \ThriftStructTypes::TSpec SPEC = dict[
@@ -1435,13 +1326,75 @@ class AllowReservedIdentifierName implements \IThriftSyncStruct, \IThriftStructM
   }
 
   public function getName()[]: string {
-    return 'AllowReservedIdentifierName';
+    return 'AllowReservedIdentifier';
   }
 
   public static function getStructMetadata()[]: \tmeta_ThriftStruct {
     return \tmeta_ThriftStruct::fromShape(
       shape(
-        "name" => "thrift.AllowReservedIdentifierName",
+        "name" => "thrift.AllowReservedIdentifier",
+        "is_union" => false,
+      )
+    );
+  }
+
+  public static function getAllStructuredAnnotations()[write_props]: \TStructAnnotations {
+    return shape(
+      'struct' => dict[
+        '\facebook\thrift\annotation\Definition' => \facebook\thrift\annotation\Definition::fromShape(
+          shape(
+          )
+        ),
+      ],
+      'fields' => dict[
+      ],
+    );
+  }
+
+  public function getInstanceKey()[write_props]: string {
+    return \TCompactSerializer::serialize($this);
+  }
+
+}
+
+/**
+ * Original thrift struct:-
+ * AllowReservedFilename
+ */
+<<\ThriftTypeInfo(shape('uri' => 'facebook.com/thrift/annotation/AllowReservedFilename'))>>
+class AllowReservedFilename implements \IThriftSyncStruct, \IThriftStructMetadata {
+  use \ThriftSerializationTrait;
+
+  const \ThriftStructTypes::TSpec SPEC = dict[
+  ];
+  const dict<string, int> FIELDMAP = dict[
+  ];
+
+  const type TConstructorShape = shape(
+  );
+
+  const int STRUCTURAL_ID = 957977401221134810;
+
+  public function __construct()[] {
+  }
+
+  public static function withDefaultValues()[]: this {
+    return new static();
+  }
+
+  public static function fromShape(self::TConstructorShape $shape)[]: this {
+    return new static(
+    );
+  }
+
+  public function getName()[]: string {
+    return 'AllowReservedFilename';
+  }
+
+  public static function getStructMetadata()[]: \tmeta_ThriftStruct {
+    return \tmeta_ThriftStruct::fromShape(
+      shape(
+        "name" => "thrift.AllowReservedFilename",
         "is_union" => false,
       )
     );
@@ -1451,10 +1404,6 @@ class AllowReservedIdentifierName implements \IThriftSyncStruct, \IThriftStructM
     return shape(
       'struct' => dict[
         '\facebook\thrift\annotation\Program' => \facebook\thrift\annotation\Program::fromShape(
-          shape(
-          )
-        ),
-        '\facebook\thrift\annotation\Definition' => \facebook\thrift\annotation\Definition::fromShape(
           shape(
           )
         ),

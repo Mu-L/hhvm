@@ -19,14 +19,17 @@ use oxidized_by_ref::shallow_decl_defs::ShallowProp;
 use oxidized_by_ref::shallow_decl_defs::ShallowTypeconst;
 use oxidized_by_ref::shallow_decl_defs::Typeconst;
 use oxidized_by_ref::typing_defs::ModuleReference;
+use oxidized_by_ref::typing_defs::TypedefTypeAssignment;
 use oxidized_by_ref::typing_defs_core::FunParams;
 use oxidized_by_ref::typing_defs_core::ShapeType;
 use oxidized_by_ref::typing_defs_core::Tparam;
 use oxidized_by_ref::typing_defs_core::TshapeFieldName;
+use oxidized_by_ref::typing_defs_core::TupleType;
 use oxidized_by_ref::typing_defs_core::Ty;
 use oxidized_by_ref::typing_defs_core::Ty_;
 use oxidized_by_ref::typing_defs_core::UserAttribute;
 use oxidized_by_ref::typing_defs_core::UserAttributeParam;
+use oxidized_by_ref::typing_reason;
 use ty::reason::BReason;
 
 use crate::ffi::ExtDeclAttribute;
@@ -124,18 +127,36 @@ pub fn get_file_typedefs(parsed_file: &ParsedFile<'_>, name: &str) -> Vec<ExtDec
         .decls
         .typedefs()
         .filter(|(cname, _)| name.is_empty() || name == strip_global_ns(cname))
-        .map(|(cname, decl)| ExtDeclTypeDef {
-            name: fmt_type(cname),
-            module: id_or_empty(decl.module),
-            visibility: enum_typedef_visibility(decl.vis),
-            tparams: get_typed_params(decl.tparams),
-            as_constraint: extract_type_name_opt(decl.as_constraint),
-            super_constraint: extract_type_name_opt(decl.super_constraint),
-            type_: extract_type_name(decl.type_),
-            is_ctx: decl.is_ctx,
-            attributes: get_attributes(decl.attributes, ""),
-            internal: decl.internal,
-            docs_url: str_or_empty(decl.docs_url),
+        .map(|(cname, decl)| {
+            let (visibility, type_) = match decl.type_assignment {
+                TypedefTypeAssignment::SimpleTypeDef((vis, hint)) => {
+                    (enum_typedef_visibility(*vis), extract_type_name(hint))
+                }
+                TypedefTypeAssignment::CaseType((variant, variants)) => {
+                    let mut hints = variants.iter().map(|v| v.0).collect::<Vec<_>>();
+                    hints.insert(0, variant.0);
+                    (
+                        String::from("case_type"),
+                        extract_type_name(&Ty(
+                            &typing_reason::Reason::NoReason, // the position is ignored when printing the type
+                            Ty_::Tunion(&hints),
+                        )),
+                    )
+                }
+            };
+            ExtDeclTypeDef {
+                name: fmt_type(cname),
+                module: id_or_empty(decl.module),
+                visibility,
+                tparams: get_typed_params(decl.tparams),
+                as_constraint: extract_type_name_opt(decl.as_constraint),
+                super_constraint: extract_type_name_opt(decl.super_constraint),
+                type_,
+                is_ctx: decl.is_ctx,
+                attributes: get_attributes(decl.attributes, ""),
+                internal: decl.internal,
+                docs_url: str_or_empty(decl.docs_url),
+            }
         })
         .collect()
 }
@@ -145,7 +166,18 @@ pub fn get_type_structure(parsed_file: &ParsedFile<'_>, name: &str) -> Vec<ExtDe
         .decls
         .typedefs()
         .filter(|(cname, _)| name.is_empty() || name == strip_global_ns(cname))
-        .map(|(_cname, decl)| build_type_structure(decl.type_))
+        .map(|(_cname, decl)| match decl.type_assignment {
+            TypedefTypeAssignment::SimpleTypeDef((_vis, hint)) => build_type_structure(hint),
+            TypedefTypeAssignment::CaseType((variant, variants)) => {
+                let mut hints = variants.iter().map(|v| v.0).collect::<Vec<_>>();
+                hints.insert(0, variant.0);
+                build_type_structure(&Ty(
+                    // the reason is not included in the type structure
+                    &typing_reason::Reason::NoReason,
+                    Ty_::Tunion(&hints),
+                ))
+            }
+        })
         .collect()
 }
 
@@ -327,7 +359,8 @@ fn get_method_params(params: &FunParams<'_>) -> Vec<ExtDeclMethodParam> {
             type_: extract_type_name(p.type_),
             accept_disposable: p.flags.accepts_disposable(),
             is_inout: p.flags.is_inout(),
-            has_default: p.flags.has_default(),
+            has_default: p.def_value.is_some(),
+            is_optional: p.flags.is_optional(),
             is_readonly: p.flags.is_readonly(),
             def_value: str_or_empty(p.def_value),
         })
@@ -602,12 +635,12 @@ fn build_type_structure(outer_ty: &Ty<'_>) -> ExtDeclTypeStructure {
                 .map(
                     |(shape_field, shape_field_type)| ExtDeclTypeStructureSubType {
                         name: match shape_field.0 {
+                            TshapeFieldName::TSFregexGroup(field_name) => field_name.1.to_string(),
                             TshapeFieldName::TSFlitStr(field_name) => field_name.1.to_string(),
                             TshapeFieldName::TSFclassConst(((_pos, classish_name), field_name)) => {
                                 let cname = fmt_type(classish_name);
                                 format!("{}::{}", cname, field_name.1)
                             }
-                            TshapeFieldName::TSFlitInt(field_name) => field_name.1.to_string(),
                         },
                         type_: build_type_structure(shape_field_type.ty),
                         optional: shape_field_type.optional,
@@ -639,11 +672,11 @@ fn build_type_structure(outer_ty: &Ty<'_>) -> ExtDeclTypeStructure {
                 },
             ],
         },
-        Ty_::Ttuple(tys) => ExtDeclTypeStructure {
+        Ty_::Ttuple(&TupleType { required, extra: _ }) => ExtDeclTypeStructure {
             type_: extract_type_name(outer_ty),
             kind: String::from("tuple"),
             nullable: false,
-            subtypes: tys
+            subtypes: required
                 .iter()
                 .map(build_unnamed_type_structure_subtype)
                 .collect(),
@@ -777,6 +810,5 @@ fn enum_typedef_visibility(x: oxidized_by_ref::ast_defs::TypedefVisibility) -> S
         TypedefVisibility::Transparent => String::from("transparent"),
         TypedefVisibility::Opaque => String::from("opaque"),
         TypedefVisibility::OpaqueModule => String::from("opaque_module"),
-        TypedefVisibility::CaseType => String::from("case_type"),
     }
 }

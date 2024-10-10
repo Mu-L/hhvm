@@ -149,7 +149,7 @@ function getServerCmd($serverPort, $adminPort, $debugPort, $home, $root,
   $includePathConfig = ' -vServer.IncludeSearchPaths.0='.$root;
   $adminPortConfig = $adminPort ? ' -vAdminServer.Port='.$adminPort : '';
   $debugPortConfig = $debugPort ? ' -vEval.Debugger.Port='.$debugPort : '';
-  $useJit = array_key_exists('HHVM_JIT', $_ENV) && $_ENV['HHVM_JIT'] == 1;
+  $useJit = array_key_exists('HHVM_JIT', \HH\global_get('_ENV')) && \HH\global_get('_ENV')['HHVM_JIT'] == 1;
   $jitConfig = ' -vEval.Jit='.($useJit ? "true" : "false");
   // To emulate sandbox setup, let Sandbox.Home be '$home'
   // and user name be 'debugger', so that the server can find the
@@ -321,28 +321,6 @@ function stopServer($adminPort, $serverProc) {
   for ($instance_id = 0; $instance_id < $next_instance_id; $instance_id++) {
     try_unlink("{$LOG_ROOT}_server{$test_run_id}_{$instance_id}.hhbc");
   }
-}
-
-// Start a new server to takeover the old one, we want to assign a new
-// server id in order to distinguish between the two servers.
-function takeoverOldServer($serverPort, $adminPort, $home, $root,
-                           $socketFile, $oldServerProc, $customArgs,
-                           $serverId) {
-  $status = proc_get_status($oldServerProc);
-  if ($status === false || !$status['running']) {
-    tlog('Old server is not running');
-    return;
-  }
-  $customArgs .= " -vServer.TakeoverFilename={$socketFile}";
-  $cmd = getServerCmd($serverPort, $adminPort, false, $home, $root,
-                      $customArgs, $serverId);
-  $pipes = dict[];
-  $serverProc = proc_open($cmd, dict[], inout $pipes);
-  if (!is_resource($serverProc)) {
-    tlog('Failed to start a shell process for the server');
-    return;
-  }
-  return $serverProc;
 }
 
 <<__DynamicallyCallable>>

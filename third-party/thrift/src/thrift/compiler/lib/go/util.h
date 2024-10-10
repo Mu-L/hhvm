@@ -30,7 +30,7 @@ class codegen_data {
  public:
   // the import path for the supporting library
   std::string thrift_lib_import =
-      "github.com/facebook/fbthrift/thrift/lib/go/thrift";
+      "github.com/facebook/fbthrift/thrift/lib/go/thrift/types";
   // the import path for the supporting metadata library
   std::string thrift_metadata_import =
       "github.com/facebook/fbthrift/thrift/lib/thrift/metadata";
@@ -45,6 +45,10 @@ class codegen_data {
   bool compat_setters = true;
   // whether to generate Thrift metadata
   bool gen_metadata = true;
+  // whether to generate DefaultGet method
+  bool gen_default_get = true;
+  // whether to use reflect codec
+  bool use_reflect_codec = false;
 
   // Records field names for every struct in the program.
   // This is needed to resolve some edge case name collisions.
@@ -91,10 +95,10 @@ class codegen_data {
       {"thrift", 0},
       {"context", 0},
       {"fmt", 0},
-      {"strings", 0},
       {"sync", 0},
       {"metadata", 0},
       {"maps", 0},
+      {"reflect", 0},
   };
 
   struct go_munged_names_cache_key_ {

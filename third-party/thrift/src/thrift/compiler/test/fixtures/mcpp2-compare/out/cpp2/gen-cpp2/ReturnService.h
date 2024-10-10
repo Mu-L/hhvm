@@ -44,6 +44,7 @@ class ServiceHandler<::some::valid::ns::ReturnService> : public apache::thrift::
   typedef ::some::valid::ns::ReturnServiceAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -213,6 +214,7 @@ class ServiceHandler<::some::valid::ns::ReturnService> : public apache::thrift::
 namespace some::valid::ns {
 using ReturnServiceSvIf [[deprecated("Use apache::thrift::ServiceHandler<ReturnService> instead")]] = ::apache::thrift::ServiceHandler<ReturnService>;
 } // namespace some::valid::ns
+
 namespace some::valid::ns {
 class ReturnServiceSvNull : public ::apache::thrift::ServiceHandler<ReturnService> {
  public:

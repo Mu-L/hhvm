@@ -555,8 +555,7 @@ let is_value_collection_ty env ty =
 let rec has_no_object_ref_ty env (seen : SSet.t) ty =
   let open Typing_defs_core in
   let (env, ty) = Tast_env.expand_type env ty in
-  let tenv = Tast_env.tast_env_as_typing_env env in
-  let ty = Typing_utils.strip_dynamic tenv ty in
+  let ty = Tast_env.strip_dynamic env ty in
   match get_node ty with
   (* Allow all primitive types *)
   | Tprim _ -> true
@@ -571,7 +570,15 @@ let rec has_no_object_ref_ty env (seen : SSet.t) ty =
     List.exists tyl ~f:(fun l -> has_no_object_ref_ty env seen l)
   (* Only error if there isn't a type that it could be that's primitive *)
   | Tunion tyl -> List.exists tyl ~f:(fun l -> has_no_object_ref_ty env seen l)
-  | Ttuple tyl -> List.for_all tyl ~f:(fun l -> has_no_object_ref_ty env seen l)
+  | Ttuple { t_required; t_extra } ->
+    List.for_all t_required ~f:(fun l -> has_no_object_ref_ty env seen l)
+    && begin
+         match t_extra with
+         | Textra { t_optional; t_variadic } ->
+           List.for_all t_optional ~f:(fun l -> has_no_object_ref_ty env seen l)
+           && has_no_object_ref_ty env seen t_variadic
+         | Tsplat t_splat -> has_no_object_ref_ty env seen t_splat
+       end
   | Tdependent (_, upper) ->
     (* check upper bounds *)
     has_no_object_ref_ty env seen upper

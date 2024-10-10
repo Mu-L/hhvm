@@ -16,11 +16,82 @@ pub(crate) use crate as client;
 pub(crate) use ::::services;
 
 
+pub trait Service: ::std::marker::Send {
+    fn func(
+        &self,
+        arg_arg1: &::std::primitive::str,
+        arg_arg2: &::std::primitive::str,
+        arg_arg3: &crate::types::Foo,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>>;
+}
+
+pub trait ServiceExt<T>: Service
+where
+    T: ::fbthrift::Transport,
+{
+    fn func_with_rpc_opts(
+        &self,
+        arg_arg1: &::std::primitive::str,
+        arg_arg2: &::std::primitive::str,
+        arg_arg3: &crate::types::Foo,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>>;
+
+    fn transport(&self) -> &T;
+}
+
+#[allow(deprecated)]
+impl<'a, S> Service for S
+where
+    S: ::std::convert::AsRef<dyn Service + 'a>,
+    S: ::std::marker::Send,
+{
+    fn func(
+        &self,
+        arg_arg1: &::std::primitive::str,
+        arg_arg2: &::std::primitive::str,
+        arg_arg3: &crate::types::Foo,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>> {
+        self.as_ref().func(
+            arg_arg1,
+            arg_arg2,
+            arg_arg3,
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> ServiceExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn Service + 'a> + ::std::convert::AsRef<dyn ServiceExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn func_with_rpc_opts(
+        &self,
+        arg_arg1: &::std::primitive::str,
+        arg_arg2: &::std::primitive::str,
+        arg_arg3: &crate::types::Foo,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>> {
+        <Self as ::std::convert::AsRef<dyn ServiceExt<T>>>::as_ref(self).func_with_rpc_opts(
+            arg_arg1,
+            arg_arg2,
+            arg_arg3,
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
 /// Client definitions for `Service`.
 pub struct ServiceImpl<P, T, S = ::fbthrift::NoopSpawner> {
     transport: T,
     _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
 }
+
 
 impl<P, T, S> ServiceImpl<P, T, S>
 where
@@ -45,6 +116,7 @@ where
     }
 
 
+
     fn _func_impl(
         &self,
         arg_arg1: &::std::primitive::str,
@@ -55,8 +127,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"Service";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"Service.func";
+        let service_name = c"Service";
+        let service_method_name = c"Service.func";
+
         let args = self::Args_Service_func {
             arg1: arg_arg1,
             arg2: arg_arg2,
@@ -73,7 +146,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "Service.func"));
 
         async move {
@@ -104,29 +177,7 @@ where
     }
 }
 
-pub trait Service: ::std::marker::Send {
-    fn func(
-        &self,
-        arg_arg1: &::std::primitive::str,
-        arg_arg2: &::std::primitive::str,
-        arg_arg3: &crate::types::Foo,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>>;
-}
 
-pub trait ServiceExt<T>: Service
-where
-    T: ::fbthrift::Transport,
-{
-    fn func_with_rpc_opts(
-        &self,
-        arg_arg1: &::std::primitive::str,
-        arg_arg2: &::std::primitive::str,
-        arg_arg3: &crate::types::Foo,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>>;
-
-    fn transport(&self) -> &T;
-}
 
 struct Args_Service_func<'a> {
     arg1: &'a ::std::primitive::str,
@@ -205,53 +256,6 @@ where
 
     fn transport(&self) -> &T {
         self.transport()
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> Service for S
-where
-    S: ::std::convert::AsRef<dyn Service + 'a>,
-    S: ::std::marker::Send,
-{
-    fn func(
-        &self,
-        arg_arg1: &::std::primitive::str,
-        arg_arg2: &::std::primitive::str,
-        arg_arg3: &crate::types::Foo,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>> {
-        self.as_ref().func(
-            arg_arg1,
-            arg_arg2,
-            arg_arg3,
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> ServiceExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn Service + 'a> + ::std::convert::AsRef<dyn ServiceExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn func_with_rpc_opts(
-        &self,
-        arg_arg1: &::std::primitive::str,
-        arg_arg2: &::std::primitive::str,
-        arg_arg3: &crate::types::Foo,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::MyI32_4873, crate::errors::service::FuncError>> {
-        <Self as ::std::convert::AsRef<dyn ServiceExt<T>>>::as_ref(self).func_with_rpc_opts(
-            arg_arg1,
-            arg_arg2,
-            arg_arg3,
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
     }
 }
 
@@ -353,12 +357,92 @@ impl ::fbthrift::ClientFactory for make_Service {
     }
 }
 
+pub trait AdapterService: ::std::marker::Send {
+    fn count(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>>;
 
+    fn adaptedTypes(
+        &self,
+        arg_arg: &crate::types::HeapAllocated,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>>;
+}
+
+pub trait AdapterServiceExt<T>: AdapterService
+where
+    T: ::fbthrift::Transport,
+{
+    fn count_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>>;
+    fn adaptedTypes_with_rpc_opts(
+        &self,
+        arg_arg: &crate::types::HeapAllocated,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>>;
+
+    fn transport(&self) -> &T;
+}
+
+#[allow(deprecated)]
+impl<'a, S> AdapterService for S
+where
+    S: ::std::convert::AsRef<dyn AdapterService + 'a>,
+    S: ::std::marker::Send,
+{
+    fn count(
+        &self,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>> {
+        self.as_ref().count(
+        )
+    }
+    fn adaptedTypes(
+        &self,
+        arg_arg: &crate::types::HeapAllocated,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>> {
+        self.as_ref().adaptedTypes(
+            arg_arg,
+        )
+    }
+}
+
+#[allow(deprecated)]
+impl<'a, S, T> AdapterServiceExt<T> for S
+where
+    S: ::std::convert::AsRef<dyn AdapterService + 'a> + ::std::convert::AsRef<dyn AdapterServiceExt<T> + 'a>,
+    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
+    T: ::fbthrift::Transport,
+{
+    fn count_with_rpc_opts(
+        &self,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>> {
+        <Self as ::std::convert::AsRef<dyn AdapterServiceExt<T>>>::as_ref(self).count_with_rpc_opts(
+            rpc_options,
+        )
+    }
+    fn adaptedTypes_with_rpc_opts(
+        &self,
+        arg_arg: &crate::types::HeapAllocated,
+        rpc_options: T::RpcOptions,
+    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>> {
+        <Self as ::std::convert::AsRef<dyn AdapterServiceExt<T>>>::as_ref(self).adaptedTypes_with_rpc_opts(
+            arg_arg,
+            rpc_options,
+        )
+    }
+
+    fn transport(&self) -> &T {
+        ::fbthrift::help::GetTransport::transport(self)
+    }
+}
 /// Client definitions for `AdapterService`.
 pub struct AdapterServiceImpl<P, T, S = ::fbthrift::NoopSpawner> {
     transport: T,
     _phantom: ::std::marker::PhantomData<fn() -> (P, S)>,
 }
+
 
 impl<P, T, S> AdapterServiceImpl<P, T, S>
 where
@@ -383,6 +467,7 @@ where
     }
 
 
+
     fn _count_impl(
         &self,
         rpc_options: T::RpcOptions,
@@ -390,8 +475,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"AdapterService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"AdapterService.count";
+        let service_name = c"AdapterService";
+        let service_method_name = c"AdapterService.count";
+
         let args = self::Args_AdapterService_count {
             _phantom: ::std::marker::PhantomData,
         };
@@ -405,7 +491,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "AdapterService.count"));
 
         async move {
@@ -434,8 +520,9 @@ where
         use ::tracing::Instrument as _;
         use ::futures::FutureExt as _;
 
-        const SERVICE_NAME: &::std::ffi::CStr = c"AdapterService";
-        const SERVICE_METHOD_NAME: &::std::ffi::CStr = c"AdapterService.adaptedTypes";
+        let service_name = c"AdapterService";
+        let service_method_name = c"AdapterService.adaptedTypes";
+
         let args = self::Args_AdapterService_adaptedTypes {
             arg: arg_arg,
             _phantom: ::std::marker::PhantomData,
@@ -450,7 +537,7 @@ where
         };
 
         let call = transport
-            .call(SERVICE_NAME, SERVICE_METHOD_NAME, request_env, rpc_options)
+            .call(service_name, service_method_name, request_env, rpc_options)
             .instrument(::tracing::trace_span!("call", method = "AdapterService.adaptedTypes"));
 
         async move {
@@ -481,33 +568,7 @@ where
     }
 }
 
-pub trait AdapterService: ::std::marker::Send {
-    fn count(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>>;
 
-    fn adaptedTypes(
-        &self,
-        arg_arg: &crate::types::HeapAllocated,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>>;
-}
-
-pub trait AdapterServiceExt<T>: AdapterService
-where
-    T: ::fbthrift::Transport,
-{
-    fn count_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>>;
-    fn adaptedTypes_with_rpc_opts(
-        &self,
-        arg_arg: &crate::types::HeapAllocated,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>>;
-
-    fn transport(&self) -> &T;
-}
 
 struct Args_AdapterService_count<'a> {
     _phantom: ::std::marker::PhantomData<&'a ()>,
@@ -600,59 +661,6 @@ where
 
     fn transport(&self) -> &T {
         self.transport()
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S> AdapterService for S
-where
-    S: ::std::convert::AsRef<dyn AdapterService + 'a>,
-    S: ::std::marker::Send,
-{
-    fn count(
-        &self,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>> {
-        self.as_ref().count(
-        )
-    }
-    fn adaptedTypes(
-        &self,
-        arg_arg: &crate::types::HeapAllocated,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>> {
-        self.as_ref().adaptedTypes(
-            arg_arg,
-        )
-    }
-}
-
-#[allow(deprecated)]
-impl<'a, S, T> AdapterServiceExt<T> for S
-where
-    S: ::std::convert::AsRef<dyn AdapterService + 'a> + ::std::convert::AsRef<dyn AdapterServiceExt<T> + 'a>,
-    S: ::std::marker::Send + ::fbthrift::help::GetTransport<T>,
-    T: ::fbthrift::Transport,
-{
-    fn count_with_rpc_opts(
-        &self,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::CountingStruct, crate::errors::adapter_service::CountError>> {
-        <Self as ::std::convert::AsRef<dyn AdapterServiceExt<T>>>::as_ref(self).count_with_rpc_opts(
-            rpc_options,
-        )
-    }
-    fn adaptedTypes_with_rpc_opts(
-        &self,
-        arg_arg: &crate::types::HeapAllocated,
-        rpc_options: T::RpcOptions,
-    ) -> ::futures::future::BoxFuture<'static, ::std::result::Result<crate::types::HeapAllocated, crate::errors::adapter_service::AdaptedTypesError>> {
-        <Self as ::std::convert::AsRef<dyn AdapterServiceExt<T>>>::as_ref(self).adaptedTypes_with_rpc_opts(
-            arg_arg,
-            rpc_options,
-        )
-    }
-
-    fn transport(&self) -> &T {
-        ::fbthrift::help::GetTransport::transport(self)
     }
 }
 

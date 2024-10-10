@@ -8,6 +8,8 @@ use std::collections::BTreeMap;
 use pos::TypeName;
 use ty::decl::subst::Subst;
 use ty::decl::ty::ShapeType;
+use ty::decl::ty::TupleExtra;
+use ty::decl::ty::TupleType;
 use ty::decl::AbstractTypeconst;
 use ty::decl::ClassConst;
 use ty::decl::ClassRefinement;
@@ -112,11 +114,16 @@ impl<'a, R: Reason> Substitution<'a, R> {
             | Ty_::Tnonnull
             | Ty_::Tany
             | Ty_::Tprim(_) => x.clone(),
-            Ty_::Ttuple(tys) => Ty_::Ttuple(
-                tys.iter()
-                    .map(|t| self.instantiate(t))
-                    .collect::<Box<[_]>>(),
-            ),
+            Ty_::Ttuple(params) => {
+                let TupleType(ref required, ref extra) = **params;
+                Ty_::Ttuple(Box::new(TupleType(
+                    required
+                        .iter()
+                        .map(|t| self.instantiate(t))
+                        .collect::<Box<[_]>>(),
+                    self.instantiate_tuple_extra(extra),
+                )))
+            }
             Ty_::Tunion(tys) => Ty_::Tunion(
                 tys.iter()
                     .map(|t| self.instantiate(t))
@@ -238,6 +245,20 @@ impl<'a, R: Reason> Substitution<'a, R> {
         RefinedConst {
             bound,
             is_ctx: rc.is_ctx,
+        }
+    }
+
+    fn instantiate_tuple_extra(&self, e: &TupleExtra<R>) -> TupleExtra<R> {
+        use TupleExtra;
+        match &e {
+            TupleExtra::Textra(optional, variadic) => TupleExtra::Textra(
+                optional
+                    .into_iter()
+                    .map(|ty| self.instantiate(ty))
+                    .collect(),
+                self.instantiate(variadic),
+            ),
+            TupleExtra::Tsplat(splat) => TupleExtra::Tsplat(self.instantiate(splat)),
         }
     }
 

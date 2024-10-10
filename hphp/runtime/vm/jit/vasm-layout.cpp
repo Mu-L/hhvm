@@ -86,9 +86,12 @@ jit::vector<Vlabel> rpoLayout(Vunit& unit) {
   if (unit.context) {
     auto const kind = unit.context->kind;
     if ((isPrologue(kind)  && !Cfg::Jit::LayoutPrologueSplitHotCold) ||
-        (isProfiling(kind) && !Cfg::Jit::LayoutProfileSplitHotCold)) {
+        (isProfiling(kind) && !Cfg::Jit::LayoutProfileSplitHotCold)  ||
+        (isLive(kind)      && !Cfg::Jit::LayoutLiveSplitHotCold)) {
       for (auto b : labels) {
-        if (unit.blocks[b].area_idx == AreaIndex::Cold) {
+        if (unit.blocks[b].area_idx == AreaIndex::Cold ||
+            (unit.blocks[b].area_idx == AreaIndex::Frozen &&
+             !Cfg::Jit::LayoutSplitFrozen)) {
           unit.blocks[b].area_idx = AreaIndex::Main;
         }
       }
@@ -301,7 +304,15 @@ Clusterizer::Clusterizer(Vunit& unit, const Scale& scale)
   sortClusters();
   if (Cfg::Jit::PGOLayoutSplitHotCold) {
     splitHotColdClusters();
+  } else {
+    for (auto b : m_blocks) {
+      if (unit.blocks[b].area_idx != AreaIndex::Frozen ||
+          Cfg::Jit::PGOLayoutResplitFrozen) {
+        unit.blocks[b].area_idx = AreaIndex::Main;
+      }
+    }
   }
+
   FTRACE(1, "{}", toString());
 }
 
@@ -563,7 +574,12 @@ void Clusterizer::splitHotColdClusters() {
     FTRACE(3, "  -> C{}: {} (avg wgt = {}): ",
            cid, area_names[unsigned(area)], clusterAvgWgt[cid]);
     for (auto b : m_clusters[cid]) {
-      m_unit.blocks[b].area_idx = area;
+      // If JitPGOLayoutResplitFrozen is false, don't change the area of blocks
+      // initially assigned to frozen.
+      if (m_unit.blocks[b].area_idx != AreaIndex::Frozen ||
+          Cfg::Jit::PGOLayoutResplitFrozen) {
+        m_unit.blocks[b].area_idx = area;
+      }
       FTRACE(3, "{}, ", b);
     }
     FTRACE(3, "\n");
@@ -608,14 +624,6 @@ jit::vector<Vlabel> pgoLayout(Vunit& unit) {
   assertx(labels[0] == unit.entry);
   assertx(!RuntimeOption::EvalReusableTCPadding ||
           unit.blocks[unit.entry].area_idx == AreaIndex::Main);
-
-  if (!Cfg::Jit::PGOLayoutSplitHotCold) {
-    for (auto b : labels) {
-      if (unit.blocks[b].area_idx == AreaIndex::Cold) {
-        unit.blocks[b].area_idx = AreaIndex::Main;
-      }
-    }
-  }
 
   if (Trace::moduleEnabled(Trace::layout, 1)) {
     FTRACE(1, "pgoLayout: final block list: ");

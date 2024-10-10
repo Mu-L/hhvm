@@ -5,18 +5,14 @@
 #  @generated
 #
 
+import enum as _python_std_enum
 import folly.iobuf as _fbthrift_iobuf
 import thrift.py3.types
 import thrift.py3.exceptions
-from thrift.py3.types import __NotSet, NOTSET
 import typing as _typing
-from typing_extensions import Final
 
 import sys
 import itertools
-
-
-__property__ = property
 
 
 class Foo(thrift.py3.types.Struct, _typing.Hashable):
@@ -26,11 +22,9 @@ class Foo(thrift.py3.types.Struct, _typing.Hashable):
         field3: bool
         pass
 
-    field1: Final[int] = ...
-
-    field2: Final[int] = ...
-
-    field3: Final[int] = ...
+    field1: _typing.Final[int] = ...
+    field2: _typing.Final[int] = ...
+    field3: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -41,9 +35,9 @@ class Foo(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field1: _typing.Union[int, '__NotSet', None]=NOTSET,
-        field2: _typing.Union[int, '__NotSet', None]=NOTSET,
-        field3: _typing.Union[int, '__NotSet', None]=NOTSET
+        field1: _typing.Union[int, None]=None,
+        field2: _typing.Union[int, None]=None,
+        field3: _typing.Union[int, None]=None
     ) -> Foo: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Foo'], bytes]]: ...
@@ -66,11 +60,9 @@ class Foo2(thrift.py3.types.Struct, _typing.Hashable):
         field3: bool
         pass
 
-    field1: Final[int] = ...
-
-    field2: Final[int] = ...
-
-    field3: Final[int] = ...
+    field1: _typing.Final[int] = ...
+    field2: _typing.Final[int] = ...
+    field3: _typing.Final[int] = ...
 
     def __init__(
         self, *,
@@ -81,9 +73,9 @@ class Foo2(thrift.py3.types.Struct, _typing.Hashable):
 
     def __call__(
         self, *,
-        field1: _typing.Union[int, '__NotSet', None]=NOTSET,
-        field2: _typing.Union[int, '__NotSet', None]=NOTSET,
-        field3: _typing.Union[int, '__NotSet', None]=NOTSET
+        field1: _typing.Union[int, None]=None,
+        field2: _typing.Union[int, None]=None,
+        field3: _typing.Union[int, None]=None
     ) -> Foo2: ...
 
     def __reduce__(self) -> _typing.Tuple[_typing.Callable, _typing.Tuple[_typing.Type['Foo2'], bytes]]: ...

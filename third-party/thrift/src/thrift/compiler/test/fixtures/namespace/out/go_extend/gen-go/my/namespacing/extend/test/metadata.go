@@ -6,24 +6,17 @@
 package test
 
 import (
+    "maps"
+
     test0 "my/namespacing/test"
-    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift"
+    thrift "github.com/facebook/fbthrift/thrift/lib/go/thrift/types"
     metadata "github.com/facebook/fbthrift/thrift/lib/thrift/metadata"
 )
-
-// mapsCopy is a copy of maps.Copy from Go 1.21
-// TODO: remove mapsCopy once we can safely upgrade to Go 1.21 without requiring any rollback.
-func mapsCopy[M1 ~map[K]V, M2 ~map[K]V, K comparable, V any](dst M1, src M2) {
-	for k, v := range src {
-		dst[k] = v
-	}
-}
 
 var _ = test0.GoUnusedProtection__
 // (needed to ensure safety because of naive import list construction)
 var _ = thrift.ZERO
-// TODO: uncomment when can safely upgrade to Go 1.21 without requiring any rollback.
-// var _ = maps.Copy[map[int]int, map[int]int]
+var _ = maps.Copy[map[int]int, map[int]int]
 var _ = metadata.GoUnusedProtection__
 
 // Premade Thrift types
@@ -31,11 +24,11 @@ var (
     premadeThriftType_bool = metadata.NewThriftType().SetTPrimitive(
         metadata.ThriftPrimitiveType_THRIFT_BOOL_TYPE.Ptr(),
             )
-    premadeThriftType_hsmodule_HsFoo = metadata.NewThriftType().SetTStruct(
-        metadata.NewThriftStructType().
-            SetName("hsmodule.HsFoo"),
-            )
 )
+
+var premadeThriftTypesMap = map[string]*metadata.ThriftType{
+    "bool": premadeThriftType_bool,
+}
 
 var structMetadatas = []*metadata.ThriftStruct{
 }
@@ -62,11 +55,17 @@ var serviceMetadatas = []*metadata.ThriftService{
     SetId(1).
     SetName("struct1").
     SetIsOptional(false).
-    SetType(premadeThriftType_hsmodule_HsFoo),
+    SetType(test0.GetMetadataThriftType("hsmodule.HsFoo")),
         },
     ),
         },
     ),
+}
+
+// GetMetadataThriftType (INTERNAL USE ONLY).
+// Returns metadata ThriftType for a given full type name.
+func GetMetadataThriftType(fullName string) *metadata.ThriftType {
+    return premadeThriftTypesMap[fullName]
 }
 
 // GetThriftMetadata returns complete Thrift metadata for current and imported packages.
@@ -93,7 +92,7 @@ func GetEnumsMetadata() map[string]*metadata.ThriftEnum {
     }
 
     // ...now add enum metadatas from recursively included programs.
-    mapsCopy(allEnumsMap, test0.GetEnumsMetadata())
+    maps.Copy(allEnumsMap, test0.GetEnumsMetadata())
 
     return allEnumsMap
 }
@@ -108,7 +107,7 @@ func GetStructsMetadata() map[string]*metadata.ThriftStruct {
     }
 
     // ...now add struct metadatas from recursively included programs.
-    mapsCopy(allStructsMap, test0.GetStructsMetadata())
+    maps.Copy(allStructsMap, test0.GetStructsMetadata())
 
     return allStructsMap
 }
@@ -123,7 +122,7 @@ func GetExceptionsMetadata() map[string]*metadata.ThriftException {
     }
 
     // ...now add exception metadatas from recursively included programs.
-    mapsCopy(allExceptionsMap, test0.GetExceptionsMetadata())
+    maps.Copy(allExceptionsMap, test0.GetExceptionsMetadata())
 
     return allExceptionsMap
 }
@@ -138,7 +137,7 @@ func GetServicesMetadata() map[string]*metadata.ThriftService {
     }
 
     // ...now add service metadatas from recursively included programs.
-    mapsCopy(allServicesMap, test0.GetServicesMetadata())
+    maps.Copy(allServicesMap, test0.GetServicesMetadata())
 
     return allServicesMap
 }

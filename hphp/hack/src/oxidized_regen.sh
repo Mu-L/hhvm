@@ -82,6 +82,7 @@ summary "Write oxidized/gen/"
   hphp/hack/src/parser/full_fidelity_parser_env.ml                            \
   hphp/hack/src/search/utils/searchTypes.ml                                   \
   hphp/hack/src/typing/service/reason_collector.ml                            \
+  hphp/hack/src/typing/service/refinement_counter.ml                          \
   hphp/hack/src/typing/service/tast_collector.ml                              \
   hphp/hack/src/typing/service/tast_hashes.ml                                 \
   hphp/hack/src/typing/service/type_counter.ml                                \
@@ -182,7 +183,6 @@ summary "Write oxidized_by_ref/gen/"
   hphp/hack/src/options/saved_state_rollouts.ml                               \
   hphp/hack/src/package/package.ml                                            \
   hphp/hack/src/package/packageInfo.ml                                        \
-  hphp/hack/src/parser/scoured_comments.ml                                    \
   hphp/hack/src/typing/typing_defs_core.ml                                    \
   hphp/hack/src/typing/typing_defs.ml                                         \
   hphp/hack/src/typing/typing_reason.ml                                       \

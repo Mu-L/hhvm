@@ -10,6 +10,7 @@
 #include <thrift/lib/cpp2/gen/module_constants_cpp.h>
 
 
+
 namespace test::fixtures::enumstrict {
 namespace module_constants {
 
@@ -19,6 +20,8 @@ namespace module_constants {
   {  ::test::fixtures::enumstrict::MyEnum::TWO, apache::thrift::StringTraits<std::string>::fromStringLiteral("two") } } };
   return *instance;
 }
+
+
 
 } // namespace module_constants
 } // namespace test::fixtures::enumstrict

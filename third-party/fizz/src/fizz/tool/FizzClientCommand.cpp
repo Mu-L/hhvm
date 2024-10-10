@@ -148,7 +148,7 @@ class Connection : public AsyncSocket::ConnectCallback,
     if (!proxyTarget_.empty()) {
       auto connectCommand = IOBuf::create(0);
       folly::io::Appender appender(connectCommand.get(), 10);
-      format(
+      folly::format(
           "CONNECT {} HTTP/1.1\r\n"
           "Host: {}\r\n\r\n",
           proxyTarget_,
@@ -472,7 +472,8 @@ class BasicPersistentPskCache : public BasicPskCache {
     if (saveFile_.empty()) {
       return;
     }
-    std::string serializedPsk = serializePsk(psk);
+    std::string serializedPsk =
+        serializePsk(fizz::openssl::certificateSerializer(), psk);
     if (writeFile(serializedPsk, saveFile_.c_str())) {
       LOG(INFO) << "\n Saved PSK to " << saveFile_ << " \n";
     } else {
@@ -488,7 +489,8 @@ class BasicPersistentPskCache : public BasicPskCache {
     std::string serializedPsk;
     readFile(loadFile_.c_str(), serializedPsk);
     try {
-      return deserializePsk(serializedPsk, DefaultFactory());
+      return deserializePsk(
+          fizz::openssl::certificateSerializer(), serializedPsk);
     } catch (const std::exception& e) {
       LOG(ERROR) << "Error deserializing: " << loadFile_ << "\n" << e.what();
       throw;
@@ -770,7 +772,9 @@ int fizzClientCommand(const std::vector<std::string>& args) {
     } else {
       cert = openssl::CertUtils::makeSelfCert(certData, keyData);
     }
-    clientContext->setClientCertificate(std::move(cert));
+    auto certMgr = std::make_shared<fizz::client::CertManager>();
+    certMgr->addCert(std::move(cert));
+    clientContext->setClientCertManager(std::move(certMgr));
   }
 
   std::shared_ptr<ClientExtensions> extensions;

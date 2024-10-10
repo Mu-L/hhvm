@@ -32,7 +32,11 @@ type find_refactor =
   entry:Provider_context.entry -> Pos.t -> Provider_context.t -> refactor list
 
 type find_quickfix =
-  entry:Provider_context.entry -> Pos.t -> Provider_context.t -> quickfix list
+  entry:Provider_context.entry ->
+  Pos.t ->
+  Provider_context.t ->
+  error_filter:Tast_provider.ErrorFilter.t ->
+  quickfix list
 
 module Type_string = struct
   type t = string Lazy.t
@@ -59,7 +63,7 @@ module Type_string = struct
                     lots_of_typing_print_fuel;
                 })
        in
-       Typing_print.full_strip_ns typing_env locl_ty)
+       Typing_print.full_strip_ns ~hide_internals:true typing_env locl_ty)
 
   let to_string = Lazy.force
 end

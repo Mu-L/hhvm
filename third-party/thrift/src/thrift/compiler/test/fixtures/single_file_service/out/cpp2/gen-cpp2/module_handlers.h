@@ -54,6 +54,7 @@ class ServiceHandler<::cpp2::A> : public apache::thrift::ServerInterface {
   typedef ::cpp2::AAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -62,6 +63,7 @@ class IServiceInfoHolder : public apache::thrift::ServiceInfoHolder {
    apache::thrift::ServiceRequestInfoMap const& requestInfoMap() const override;
    static apache::thrift::ServiceRequestInfoMap staticRequestInfoMap();
 };
+
 
 class IIf : public apache::thrift::Tile, public apache::thrift::ServerInterface {
  public:
@@ -106,6 +108,7 @@ class IIf : public apache::thrift::Tile, public apache::thrift::ServerInterface 
 namespace cpp2 {
 using ASvIf [[deprecated("Use apache::thrift::ServiceHandler<A> instead")]] = ::apache::thrift::ServiceHandler<A>;
 } // namespace cpp2
+
 namespace cpp2 {
 class ASvNull : public ::apache::thrift::ServiceHandler<A> {
  public:
@@ -224,6 +227,7 @@ class ServiceHandler<::cpp2::B> : virtual public ::cpp2::ASvIf {
 namespace cpp2 {
 using BSvIf [[deprecated("Use apache::thrift::ServiceHandler<B> instead")]] = ::apache::thrift::ServiceHandler<B>;
 } // namespace cpp2
+
 namespace cpp2 {
 class BSvNull : public ::apache::thrift::ServiceHandler<B>, virtual public ::apache::thrift::ServiceHandler<::cpp2::A> {
  public:
@@ -301,6 +305,7 @@ class ServiceHandler<::cpp2::C> : public apache::thrift::ServerInterface {
   typedef ::cpp2::CAsyncProcessor ProcessorType;
   std::unique_ptr<apache::thrift::AsyncProcessor> getProcessor() override;
   CreateMethodMetadataResult createMethodMetadata() override;
+  bool isThriftGenerated() const override final { return true; }
  private:
   std::optional<std::reference_wrapper<apache::thrift::ServiceRequestInfoMap const>> getServiceRequestInfoMap() const;
  public:
@@ -309,6 +314,7 @@ class IServiceInfoHolder : public apache::thrift::ServiceInfoHolder {
    apache::thrift::ServiceRequestInfoMap const& requestInfoMap() const override;
    static apache::thrift::ServiceRequestInfoMap staticRequestInfoMap();
 };
+
 
 class IIf : public apache::thrift::Tile, public apache::thrift::ServerInterface {
  public:
@@ -343,6 +349,7 @@ class IIf : public apache::thrift::Tile, public apache::thrift::ServerInterface 
 namespace cpp2 {
 using CSvIf [[deprecated("Use apache::thrift::ServiceHandler<C> instead")]] = ::apache::thrift::ServiceHandler<C>;
 } // namespace cpp2
+
 namespace cpp2 {
 class CSvNull : public ::apache::thrift::ServiceHandler<C> {
  public:

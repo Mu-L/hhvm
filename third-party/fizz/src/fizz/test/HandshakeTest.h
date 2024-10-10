@@ -16,13 +16,14 @@
 #include <fizz/client/test/Mocks.h>
 #include <fizz/compression/ZlibCertificateCompressor.h>
 #include <fizz/compression/ZlibCertificateDecompressor.h>
+#include <fizz/crypto/RandomGenerator.h>
 #include <fizz/crypto/Utils.h>
 #include <fizz/crypto/test/TestUtil.h>
 #include <fizz/extensions/tokenbinding/TokenBindingClientExtension.h>
 #include <fizz/extensions/tokenbinding/TokenBindingContext.h>
 #include <fizz/extensions/tokenbinding/TokenBindingServerExtension.h>
+#include <fizz/protocol/test/CertUtil.h>
 #include <fizz/protocol/test/Matchers.h>
-#include <fizz/protocol/test/Utilities.h>
 #include <fizz/server/AsyncFizzServer.h>
 #include <fizz/server/CookieTypes.h>
 #include <fizz/server/TicketTypes.h>
@@ -107,7 +108,9 @@ class HandshakeTest : public Test {
     auto clientSelfCert =
         std::make_shared<openssl::OpenSSLSelfCertImpl<openssl::KeyType::RSA>>(
             std::move(clientKey), std::move(certVec));
-    clientContext_->setClientCertificate(std::move(clientSelfCert));
+    auto certMgr = std::make_shared<fizz::client::CertManager>();
+    certMgr->addCert(std::move(clientSelfCert));
+    clientContext_->setClientCertManager(std::move(certMgr));
 
     auto ticketCipher = std::make_shared<AES128TicketCipher>(
         serverContext_->getFactoryPtr(), std::move(certManager));

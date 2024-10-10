@@ -51,7 +51,6 @@ find_package(fmt CONFIG REQUIRED)
 
 find_package(OpenSSL REQUIRED)
 find_package(Glog REQUIRED)
-find_package(DoubleConversion REQUIRED)
 find_package(Threads REQUIRED)
 find_package(Zstd REQUIRED)
 if (UNIX AND NOT APPLE)
@@ -103,14 +102,20 @@ if (liboqs_FOUND)
   set(FIZZ_HAVE_OQS TRUE)
 endif()
 
-# Fizz build time options
+find_package(aegis CONFIG)
+if(aegis_FOUND)
+    set(FIZZ_HAVE_LIBAEGIS TRUE)
+endif()
+
 include(FizzOptions)
+include(FizzSources)
 
 configure_file(fizz-config.h.in ${CMAKE_CURRENT_BINARY_DIR}/generated/fizz/fizz-config.h)
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/generated/fizz/fizz-config.h DESTINATION ${INCLUDE_INSTALL_DIR}/fizz/)
 
 set(FIZZ_HEADER_DIRS
   backend
+  backend/liboqs
   backend/openssl
   backend/openssl/certificate
   backend/openssl/crypto
@@ -170,98 +175,9 @@ foreach(dir ${FIZZ_TEST_HEADER_DIRS})
     ${headers})
 endforeach()
 
-set(FIZZ_SOURCES
-  compression/CertDecompressionManager.cpp
-  compression/ZlibCertificateCompressor.cpp
-  compression/ZlibCertificateDecompressor.cpp
-  compression/ZstdCertificateCompressor.cpp
-  compression/ZstdCertificateDecompressor.cpp
-  crypto/Utils.cpp
-  crypto/exchange/HybridKeyExchange.cpp
-  crypto/exchange/X25519.cpp
-  backend/openssl/crypto/aead/OpenSSLEVPCipher.cpp
-  crypto/aead/IOBufUtil.cpp
-  crypto/aead/AEGISCipher.cpp
-  backend/openssl/crypto/signature/Signature.cpp
-  crypto/Hasher.cpp
-  crypto/Hmac.cpp
-  crypto/Hkdf.cpp
-  crypto/KeyDerivation.cpp
-  crypto/Crypto.cpp
-  crypto/hpke/Context.cpp
-  crypto/hpke/DHKEM.cpp
-  crypto/hpke/Hkdf.cpp
-  crypto/hpke/Hpke.cpp
-  crypto/hpke/Utils.cpp
-  backend/openssl/crypto/OpenSSLKeyUtils.cpp
-  backend/openssl/crypto/exchange/OpenSSLKeyExchange.cpp
-  record/Types.cpp
-  record/RecordLayer.cpp
-  record/EncryptedRecordLayer.cpp
-  record/PlaintextRecordLayer.cpp
-  record/BufAndPaddingPolicy.cpp
-  server/AeadTokenCipher.cpp
-  server/AeadCookieCipher.cpp
-  server/FizzServerContext.cpp
-  server/ServerProtocol.cpp
-  server/CertManager.cpp
-  server/State.cpp
-  server/FizzServer.cpp
-  server/TicketCodec.cpp
-  server/CookieCipher.cpp
-  server/ReplayCache.cpp
-  server/SlidingBloomReplayCache.cpp
-  protocol/AsyncFizzBase.cpp
-  protocol/Types.cpp
-  protocol/Exporter.cpp
-  protocol/DefaultCertificateVerifier.cpp
-  protocol/Events.cpp
-  protocol/KeyScheduler.cpp
-  protocol/Certificate.cpp
-  protocol/Factory.cpp
-  backend/openssl/certificate/CertUtils.cpp
-  backend/openssl/OpenSSLFactory.cpp
-  protocol/Params.cpp
-  protocol/clock/SystemClock.cpp
-  protocol/ech/Decrypter.cpp
-  protocol/ech/Encryption.cpp
-  extensions/delegatedcred/DelegatedCredentialCertManager.cpp
-  extensions/delegatedcred/DelegatedCredentialClientExtension.cpp
-  extensions/delegatedcred/DelegatedCredentialFactory.cpp
-  extensions/delegatedcred/Serialization.cpp
-  extensions/delegatedcred/DelegatedCredentialUtils.cpp
-  extensions/delegatedcred/Types.cpp
-  extensions/exportedauth/ExportedAuthenticator.cpp
-  extensions/tokenbinding/Types.cpp
-  extensions/tokenbinding/TokenBindingConstructor.cpp
-  extensions/tokenbinding/TokenBindingClientExtension.cpp
-  extensions/tokenbinding/Validator.cpp
-  experimental/client/BatchSignaturePeerCert.cpp
-  experimental/protocol/BatchSignatureTypes.cpp
-  experimental/ktls/AsyncFizzBaseKTLS.cpp
-  experimental/ktls/FizzKTLSCallback.cpp
-  experimental/ktls/AsyncKTLSSocket.cpp
-  experimental/ktls/KTLS.cpp
-  client/FizzClientContext.cpp
-  client/State.cpp
-  client/ClientProtocol.cpp
-  client/CertManager.cpp
-  client/PskSerializationUtils.cpp
-  client/SynchronizedLruPskCache.cpp
-  client/EarlyDataRejectionPolicy.cpp
-  tool/FizzCommandCommon.cpp
-  util/FizzUtil.cpp
-  util/Tracing.cpp
-)
-
-if (liboqs_FOUND)
-  set(FIZZ_SOURCES ${FIZZ_SOURCES}
-    experimental/crypto/exchange/OQSKeyExchange.cpp)
-endif()
 
 add_library(fizz
-  ${FIZZ_HEADERS}
-  ${FIZZ_SOURCES}
+  ${FIZZ_LIBRARY_SOURCES}
 )
 
 if (BUILD_SHARED_LIBS)
@@ -284,7 +200,6 @@ target_include_directories(
   PRIVATE
     ${GLOG_INCLUDE_DIRS}
     ${FIZZ_INCLUDE_DIRECTORIES}
-    ${DOUBLE_CONVERSION_INCLUDE_DIR}
 )
 
 
@@ -300,12 +215,15 @@ target_link_libraries(fizz
     ${GLOG_LIBRARIES}
     ${GFLAGS_LIBRARIES}
     ${FIZZ_LINK_LIBRARIES}
-    ${DOUBLE_CONVERSION_LIBRARY}
     ${CMAKE_DL_LIBS}
     ${LIBRT_LIBRARIES})
 
 if (liboqs_FOUND)
   target_link_libraries(fizz PRIVATE OQS::oqs)
+endif()
+
+if (aegis_FOUND)
+    target_link_libraries(fizz PRIVATE aegis::aegis)
 endif()
 
 if ($FIZZ_SHINY_DEPENDENCIES)
@@ -368,27 +286,13 @@ endif()
 add_library(fizz_test_support
   crypto/aead/test/TestUtil.cpp
   crypto/test/TestUtil.cpp
+  crypto/test/TestKeys.cpp
   protocol/ech/test/TestUtil.cpp
-  ${FIZZ_TEST_HEADERS}
 )
 
 target_link_libraries(fizz_test_support
   PUBLIC
     fizz
-    ${LIBGMOCK_LIBRARIES}
-    ${GLOG_LIBRARY}
-)
-
-target_compile_definitions(fizz_test_support
-  PUBLIC
-    ${LIBGMOCK_DEFINES}
-)
-
-target_include_directories(fizz_test_support
-  SYSTEM
-  PUBLIC
-    ${LIBGMOCK_INCLUDE_DIR}
-    ${LIBGTEST_INCLUDE_DIRS}
 )
 
 # export fizz headers and targets for unit tests utils
@@ -495,7 +399,10 @@ if(BUILD_TESTS)
   add_gtest(server/test/NegotiatorTest.cpp NegotiatorTest)
   add_gtest(server/test/FizzServerTest.cpp FizzServerTest)
   add_gtest(server/test/SlidingBloomReplayCacheTest.cpp SlidingBloomReplayCacheTest)
-  add_gtest(tool/test/FizzCommandCommonTest.cpp FizzCommandCommonTest)
+  add_gtest(
+      "tool/test/FizzCommandCommonTest.cpp;tool/FizzCommandCommon.cpp"
+      FizzCommandCommonTest
+  )
   add_gtest(util/test/FizzUtilTest.cpp FizzUtilTest)
   add_gtest(util/test/FizzVariantTest.cpp FizzVariantTest)
   add_gtest(util/test/KeyLogWriterTest.cpp KeyLogWriterTest)

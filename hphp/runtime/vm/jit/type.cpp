@@ -1049,8 +1049,7 @@ Type typeFromTCImpl(const HPHP::TypeConstraint& tc,
     if (cls) {
       if (isEnum(cls)) {
         assertx(tc.isUnresolved());
-        if (auto const dt = cls->enumBaseTy()) return Type{*dt};
-        return TInt | TStr;
+        return atToType(cls->enumBaseTy().type());
       }
       return Type::SubObj(cls);
     }
@@ -1125,11 +1124,6 @@ Type typeFromPropTC(const HPHP::TypeConstraint& tc,
 
 Type typeFromFuncParam(const Func* func, uint32_t paramId) {
   assertx(paramId < func->numNonVariadicParams());
-
-  if (func->isCPPBuiltin() && RO::EvalCheckBuiltinParamTypeHints <= 1) {
-    // Type unknown if builtin parameter type hints not enforced.
-    return TInitCell;
-  }
 
   auto const getThisType = [&] {
     return func->cls() ? Type::SubObj(func->cls()) : TBottom;

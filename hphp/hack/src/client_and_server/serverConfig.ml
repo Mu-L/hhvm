@@ -39,6 +39,11 @@ type t = {
   ide_fall_back_to_full_index: bool;
   naming_table_compression_level: int;
   naming_table_compression_threads: int;
+  warnings_generated_files: Str.regexp list; [@show.opaque]
+      (** List of regexps for file paths for which any warning will be ignored.
+        Useful to ignore warnings from certain generated files.
+        Passing `-Wgenerated` on the command line will override this behavior
+        and show warnings from those files. *)
 }
 [@@deriving show]
 
@@ -63,7 +68,7 @@ let make_gc_control config =
   in
   { GlobalConfig.gc_control with Gc.Control.minor_heap_size; space_overhead }
 
-let make_sharedmem_config config options local_config =
+let make_sharedmem_config ?ai_options config local_config =
   let { SharedMem.global_size; heap_size; shm_min_avail; _ } =
     SharedMem.default_config
   in
@@ -104,9 +109,12 @@ let make_sharedmem_config config options local_config =
       compression;
     }
   in
-  match ServerArgs.ai_mode options with
-  | None -> config
-  | Some ai_options -> Ai_options.modify_shared_mem ai_options config
+  let config =
+    match ai_options with
+    | None -> config
+    | Some ai_options -> Ai_options.modify_shared_mem ai_options config
+  in
+  config
 
 let config_list_regexp = Str.regexp "[, \t]+"
 
@@ -129,7 +137,8 @@ let config_experimental_stx_features config =
     ~f:(fun str ->
       let json = Hh_json.json_of_string ~strict:true str in
       let pairs = Hh_json.get_object_exn json in
-      List.map ~f:Experimental_features.parse_experimental_feature pairs)
+      SMap.of_list
+        (List.map pairs ~f:Experimental_features.parse_experimental_feature))
 
 let process_migration_flags sl =
   match sl with
@@ -269,6 +278,8 @@ let reasons_config_opt config =
   Option.bind (string_opt "extended_reasons" config) ~f:(fun data_str ->
       if String.equal data_str "debug" then
         Some GlobalOptions.Debug
+      else if String.equal data_str "legacy" then
+        Some GlobalOptions.Legacy
       else
         Option.map ~f:(fun n -> GlobalOptions.Extended n)
         @@ int_of_string_opt data_str)
@@ -276,6 +287,7 @@ let reasons_config_opt config =
 let load_config config options =
   let ( >?? ) x y = Option.value x ~default:y in
   let po_opt = options.GlobalOptions.po in
+  let experimental_features = config_experimental_stx_features config in
   let po =
     ParserOptions.
       {
@@ -288,6 +300,8 @@ let load_config config options =
         no_parser_readonly_check = po_opt.no_parser_readonly_check;
         unwrap_concurrent = po_opt.unwrap_concurrent;
         parser_errors_only = po_opt.parser_errors_only;
+        (* Never use the legacy mode for hh_server *)
+        use_legacy_experimental_feature_config = false;
         (* The remainder are set in the config file *)
         is_systemlib = bool_opt "is_systemlib" config >?? po_opt.is_systemlib;
         disable_lval_as_an_expression =
@@ -328,9 +342,6 @@ let load_config config options =
         disallow_static_constants_in_default_func_args =
           bool_opt "disallow_static_constants_in_default_func_args" config
           >?? po_opt.disallow_static_constants_in_default_func_args;
-        disallow_direct_superglobals_refs =
-          bool_opt "disallow_direct_superglobals_refs" config
-          >?? po_opt.disallow_direct_superglobals_refs;
         auto_namespace_map =
           prepare_auto_namespace_map config >?? po_opt.auto_namespace_map;
         everything_sdt =
@@ -351,11 +362,13 @@ let load_config config options =
         disable_hh_ignore_error =
           int_opt "disable_hh_ignore_error" config
           >?? po_opt.disable_hh_ignore_error;
-        use_legacy_experimental_feature_config = false;
         experimental_features =
-          config_experimental_stx_features config
-          >?? po_opt.experimental_features;
-        consider_unspecified_experimental_features_released = false;
+          experimental_features >?? po_opt.experimental_features;
+        (* If there was no experimental features status list in configuration,
+           consider all existing experimental features to be released and hence
+           usable. *)
+        consider_unspecified_experimental_features_released =
+          Option.is_none experimental_features;
       }
   in
   GlobalOptions.set
@@ -381,6 +394,8 @@ let load_config config options =
       (bool_opt "disallow_toplevel_requires" config)
     ?tco_const_attribute:(bool_opt "const_attribute" config)
     ?tco_check_attribute_locations:(bool_opt "check_attribute_locations" config)
+    ?tco_type_refinement_partition_shapes:
+      (bool_opt "type_refinement_partition_shapes" config)
     ?glean_reponame:(string_opt "glean_reponame" config)
     ?symbol_write_index_inherited_members:
       (bool_opt "symbol_write_index_inherited_members" config)
@@ -458,25 +473,38 @@ let load_config config options =
       (bool_opt "populate_dead_unsafe_cast_heap" config)
     ?tco_log_exhaustivity_check:(bool_opt "log_exhaustivity_check" config)
     ?dump_tast_hashes:(bool_opt "dump_tast_hashes" config)
-    ?hack_warnings:(all_or_some_ints_opt "hack_warnings" config)
+    ?warnings_default_all:(bool_opt "warnings_default_all" config)
     ?tco_strict_switch:(bool_opt "strict_switch" config)
     ?tco_allowed_files_for_ignore_readonly:
       (string_list_opt "allowed_files_for_ignore_readonly" config)
     ?tco_package_v2:(bool_opt "package_v2" config)
+    ?tco_package_v2_support_multifile_tests:
+      (bool_opt "package_v2_support_multifile_tests" config)
     ?tco_package_v2_bypass_package_check_for_class_const:
       (bool_opt "package_v2_bypass_package_check_for_class_const" config)
     ?tco_extended_reasons:(reasons_config_opt config)
+    ?tco_disable_physical_equality:(bool_opt "disable_physical_equality" config)
     ?re_no_cache:(bool_opt "re_no_cache" config)
     ?hh_distc_should_disable_trace_store:
       (bool_opt "hh_distc_should_disable_trace_store" config)
+    ?hh_distc_exponential_backoff_num_retries:
+      (int_opt "hh_distc_exponential_backoff_num_retries" config)
     ?tco_enable_abstract_method_optional_parameters:
       (bool_opt "enable_abstract_method_optional_parameters" config)
+    ?hack_warnings:
+      (bool_opt "hack_warnings" config
+      |> Option.map ~f:(function
+             | true -> GlobalOptions.All_except []
+             | false -> GlobalOptions.NNone))
+    ?recursive_case_types:(bool_opt "recursive_case_types" config)
     options
 
-let load ~silent options : t * ServerLocalConfig.t =
-  let command_line_overrides =
-    Config_file.of_list @@ ServerArgs.config options
-  in
+let load
+    ~silent
+    ~from
+    ~(cli_config_overrides : (string * string) list)
+    ~(ai_options : Ai_options.t option) : t * ServerLocalConfig.t =
+  let command_line_overrides = Config_file.of_list cli_config_overrides in
   let (config_hash, config) =
     Config_file.parse_hhconfig (Relative_path.to_absolute repo_config_path)
   in
@@ -497,16 +525,16 @@ let load ~silent options : t * ServerLocalConfig.t =
     let deactivate_saved_state_rollout =
       bool_ "deactivate_saved_state_rollout" ~default:false config
     in
-    ServerLocalConfig.load
+    ServerLocalConfigLoad.load
       ~silent
       ~current_version:version
       ~current_rolled_out_flag_idx
       ~deactivate_saved_state_rollout
-      ~from:(ServerArgs.from options)
-      command_line_overrides
+      ~from
+      ~overrides:command_line_overrides
   in
   let local_config =
-    if Option.is_some (ServerArgs.ai_mode options) then
+    if Option.is_some ai_options then
       let open ServerLocalConfig in
       {
         local_config with
@@ -540,6 +568,10 @@ let load ~silent options : t * ServerLocalConfig.t =
   let naming_table_compression_threads =
     int_ "naming_table_compression_threads" ~default:1 config
   in
+  let warnings_generated_files =
+    string_list "warnings_generated_files" ~default:[] config
+    |> List.map ~f:Str.regexp
+  in
   let formatter_override =
     Option.map
       (Config_file.Getters.string_opt "formatter_override" config)
@@ -555,9 +587,7 @@ let load ~silent options : t * ServerLocalConfig.t =
               default.po with
               ParserOptions.allow_unstable_features =
                 local_config.ServerLocalConfig.allow_unstable_features;
-              parser_errors_only = Option.is_some (ServerArgs.ai_mode options);
-              ParserOptions.consider_unspecified_experimental_features_released =
-                false;
+              parser_errors_only = Option.is_some ai_options;
             }
         ?so_naming_sqlite_path:local_config.naming_sqlite_path
         ?tco_log_large_fanouts_threshold:
@@ -574,19 +604,26 @@ let load ~silent options : t * ServerLocalConfig.t =
           local_config.ServerLocalConfig.skip_hierarchy_checks
         ~tco_skip_tast_checks:local_config.ServerLocalConfig.skip_tast_checks
         ~tco_saved_state:local_config.ServerLocalConfig.saved_state
-        ~tco_rust_elab:local_config.ServerLocalConfig.rust_elab
         ~tco_log_inference_constraints:
-          (ServerArgs.log_inference_constraints options)
+          local_config.ServerLocalConfig.log_inference_constraints
         ~tco_global_access_check_enabled:
-          (ServerArgs.enable_global_access_check options)
-        ~preexisting_warnings:(ServerArgs.preexisting_warnings options)
+          local_config.ServerLocalConfig.enable_global_access_check
         ~dump_tast_hashes:local_config.dump_tast_hashes
         ~dump_tasts:local_config.dump_tasts
         ~tco_custom_error_config
         ~tco_sticky_quarantine:local_config.lsp_sticky_quarantine
         ~tco_lsp_invalidation:local_config.lsp_invalidation
         ~tco_autocomplete_sort_text:local_config.autocomplete_sort_text
-        ~hack_warnings:local_config.hack_warnings
+        ~hack_warnings:
+          (if local_config.hack_warnings then
+            GlobalOptions.All_except
+              (int_list_opt "disabled_warnings" config
+              |> Option.value ~default:[])
+          else
+            GlobalOptions.NNone)
+        ~warnings_default_all:local_config.warnings_default_all
+        ~hh_distc_exponential_backoff_num_retries:
+          local_config.hh_distc_exponential_backoff_num_retries
         GlobalOptions.default
     in
     load_config config local_config_opts
@@ -600,7 +637,7 @@ let load ~silent options : t * ServerLocalConfig.t =
       version;
       load_script_timeout;
       gc_control = make_gc_control config;
-      sharedmem_config = make_sharedmem_config config options local_config;
+      sharedmem_config = make_sharedmem_config config local_config ?ai_options;
       tc_options = global_opts;
       parser_options = global_opts.GlobalOptions.po;
       glean_options = global_opts;
@@ -613,6 +650,7 @@ let load ~silent options : t * ServerLocalConfig.t =
       ide_fall_back_to_full_index;
       naming_table_compression_level;
       naming_table_compression_threads;
+      warnings_generated_files;
     },
     local_config )
 
@@ -635,6 +673,7 @@ let default_config =
     ide_fall_back_to_full_index = false;
     naming_table_compression_level = 6;
     naming_table_compression_threads = 1;
+    warnings_generated_files = [];
   }
 
 let set_parser_options config popt = { config with parser_options = popt }
@@ -671,3 +710,5 @@ let version config = config.version
 let warn_on_non_opt_build config = config.warn_on_non_opt_build
 
 let ide_fall_back_to_full_index config = config.ide_fall_back_to_full_index
+
+let warnings_generated_files config = config.warnings_generated_files

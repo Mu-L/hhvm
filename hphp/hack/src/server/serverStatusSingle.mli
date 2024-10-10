@@ -10,4 +10,5 @@
 val go :
   ServerCommandTypes.file_input list ->
   Provider_context.t ->
+  error_filter:Tast_provider.ErrorFilter.t ->
   Errors.t * Tast.program Tast_with_dynamic.t Relative_path.Map.t

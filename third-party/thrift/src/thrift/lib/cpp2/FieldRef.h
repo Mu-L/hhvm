@@ -27,13 +27,13 @@
 #include <folly/Function.h>
 #include <folly/Portability.h>
 #include <folly/Traits.h>
+#include <folly/Utility.h>
 #include <folly/synchronization/AtomicUtil.h>
 #include <thrift/lib/cpp2/BoxedValuePtr.h>
 #include <thrift/lib/cpp2/FieldRefTraits.h>
 #include <thrift/lib/cpp2/Thrift.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 namespace detail {
 
 template <typename T>
@@ -50,6 +50,7 @@ struct alias_isset_fn;
 struct move_to_unique_ptr_fn;
 struct assign_from_unique_ptr_fn;
 struct union_value_unsafe_fn;
+struct is_non_optional_field_set_manually_or_by_serializer_fn;
 
 // IntWrapper is a wrapper of integer that's always copy/move assignable
 // even if integer is atomic
@@ -260,6 +261,8 @@ class field_ref {
   template <typename U>
   friend class field_ref;
   friend struct apache::thrift::detail::unset_unsafe_fn;
+  friend struct apache::thrift::detail::
+      is_non_optional_field_set_manually_or_by_serializer_fn;
 
  public:
   using value_type = std::remove_reference_t<T>;
@@ -306,7 +309,6 @@ class field_ref {
     value_ = static_cast<value_type&&>(value);
     bitref_ = true;
     return *this;
-    value.~value_type(); // Force emit destructor...
   }
 
   /// Assignment from field_ref is intentionally not provided to prevent
@@ -319,15 +321,24 @@ class field_ref {
     bitref_ = other.is_set();
   }
 
-  [[deprecated("Use is_set() method instead")]] FOLLY_ERASE bool has_value()
-      const noexcept {
+  [[deprecated(
+      "Avoid using has_value() API for non-optional field since it's often used incorrectly. "
+      "If this is a legit use-case, please migrate to "
+      "apache::thrift::is_non_optional_field_set_manually_or_by_serializer(obj.field_ref()).")]]
+  FOLLY_ERASE bool has_value() const noexcept {
     return bool(bitref_);
   }
 
   /// Returns true iff the field is set. field_ref doesn't provide conversion to
   /// bool to avoid confusion between checking if the field is set and getting
   /// the field's value, particularly for bool fields.
-  FOLLY_ERASE bool is_set() const noexcept { return bool(bitref_); }
+  [[deprecated(
+      "Avoid using is_set() API for non-optional field since it's often used incorrectly. "
+      "If this is a legit use-case, please migrate to "
+      "apache::thrift::is_non_optional_field_set_manually_or_by_serializer(obj.field_ref()).")]]
+  FOLLY_ERASE bool is_set() const noexcept {
+    return bool(bitref_);
+  }
 
   /// Returns a reference to the value.
   FOLLY_ERASE reference_type value() const noexcept {
@@ -557,7 +568,6 @@ class optional_field_ref {
     value_ = static_cast<value_type&&>(value);
     bitref_ = true;
     return *this;
-    value.~value_type(); // Force emit destructor...
   }
 
   // Copies the data (the set flag and the value if available) from another
@@ -1157,6 +1167,8 @@ class intern_boxed_field_ref {
 
   template <typename U>
   friend class intern_boxed_field_ref;
+  friend struct apache::thrift::detail::
+      is_non_optional_field_set_manually_or_by_serializer_fn;
 
   // TODO(dokwon): Consider removing `get_default_t` after resolving
   // dependency issue.
@@ -1208,7 +1220,6 @@ class intern_boxed_field_ref {
     value_.mut() = static_cast<value_type&&>(value);
     bitref_ = true;
     return *this;
-    value.~value_type(); // Force emit destructor...
   }
 
   // If the other field owns the value, it will perform deep copy. If the other
@@ -1227,7 +1238,13 @@ class intern_boxed_field_ref {
   // Returns true iff the field is set. 'intern_boxed_field_ref' doesn't provide
   // conversion to bool to avoid confusion between checking if the field is set
   // and getting the field's value, particularly for bool fields.
-  FOLLY_ERASE bool is_set() const noexcept { return bool(bitref_); }
+  [[deprecated(
+      "Avoid using is_set() API for non-optional field since it's often used incorrectly. "
+      "If this is a legit use-case, please migrate to "
+      "apache::thrift::is_non_optional_field_set_manually_or_by_serializer(obj.field_ref()).")]]
+  FOLLY_ERASE bool is_set() const noexcept {
+    return bool(bitref_);
+  }
 
   FOLLY_ERASE void reset() noexcept {
     // reset to the intern default.
@@ -1435,7 +1452,6 @@ class terse_intern_boxed_field_ref {
       std::is_nothrow_move_assignable<value_type>::value) {
     value_.mut() = static_cast<value_type&&>(value);
     return *this;
-    value.~value_type(); // Force emit destructor...
   }
 
   template <typename U>
@@ -1661,6 +1677,18 @@ struct alias_isset_fn {
   }
 };
 
+struct is_non_optional_field_set_manually_or_by_serializer_fn {
+  template <typename T>
+  bool operator()(field_ref<T> ref) const noexcept {
+    return bool(ref.bitref_);
+  }
+
+  template <typename T>
+  bool operator()(intern_boxed_field_ref<T> ref) const noexcept {
+    return bool(ref.bitref_);
+  }
+};
+
 template <typename T>
 FOLLY_ERASE apache::thrift::optional_field_ref<T&&> make_optional_field_ref(
     T&& ref,
@@ -1734,6 +1762,30 @@ constexpr apache::thrift::detail::move_to_unique_ptr_fn move_to_unique_ptr;
 constexpr apache::thrift::detail::assign_from_unique_ptr_fn
     assign_from_unique_ptr;
 
+//  is_non_optional_field_set_manually_or_by_serializer
+//
+//  Whether the non-optional field is set manually or by the serializer.
+//
+//  When it is set manually, it's true when users use `obj.field_ref() = value`.
+//  If users use `*obj.field_ref() = value` it will still be false.
+//
+//  When it is set by the serializer, it can return false if
+//    1. Thrift struct is not generated by deserializer. (e.g., Users created it
+//    manually).
+//    2. It is actually an optional field in the serializer due to schema
+//    evolution, and the serializer did not set the field.
+//    3. It doesn't exist in the serializer due to schema evolution.
+//
+//  Note that we will always try to serialize this field since it's not an
+//  optional field.
+//
+//  Example:
+//
+//    apache::thrift::is_non_optional_field_set_manually_or_by_serializer(obj.field_ref());
+constexpr apache::thrift::detail::
+    is_non_optional_field_set_manually_or_by_serializer_fn
+        is_non_optional_field_set_manually_or_by_serializer;
+
 [[deprecated("Use `emplace` or `operator=` to set Thrift fields.")]] //
 constexpr apache::thrift::detail::ensure_isset_unsafe_fn ensure_isset_unsafe;
 
@@ -1786,7 +1838,6 @@ class required_field_ref {
       std::is_nothrow_move_assignable<value_type>::value) {
     value_ = static_cast<value_type&&>(value);
     return *this;
-    value.~value_type(); // Force emit destructor...
   }
 
   // Assignment from required_field_ref is intentionally not provided to prevent
@@ -2299,7 +2350,6 @@ class terse_field_ref {
       std::is_nothrow_move_assignable<value_type>::value) {
     value_ = static_cast<value_type&&>(value);
     return *this;
-    value.~value_type(); // Force emit destructor...
   }
 
   template <typename U>
@@ -2455,5 +2505,4 @@ bool operator>=(const T& lhs, terse_field_ref<U> rhs) {
   return lhs >= *rhs;
 }
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift

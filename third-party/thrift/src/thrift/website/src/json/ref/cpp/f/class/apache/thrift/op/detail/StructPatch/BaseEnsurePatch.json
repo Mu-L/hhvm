@@ -15,6 +15,7 @@
       "definition_html": "apache::thrift::op::detail::BaseEnsurePatch&lt; Patch, Derived &gt;::BaseEnsurePatch",
       "argsstring_html": "(const BaseEnsurePatch &amp;)=default",
       "name_html": "BaseEnsurePatch",
+      "qualifiedname_html": "apache::thrift::op::detail::BaseEnsurePatch::BaseEnsurePatch",
       "param": [
         {
           "type_html": "const <a href=\"https://www.internalfb.com/intern/staticdocs/fbcref/ref/cpp/class/apache/thrift/op/detail/BaseEnsurePatch\">BaseEnsurePatch</a> &amp;"
@@ -22,7 +23,7 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/StructPatch.h",
-        "line": "166",
+        "line": "173",
         "column": "3"
       },
       "definition": {
@@ -52,6 +53,7 @@
       "definition_html": "apache::thrift::op::detail::BaseEnsurePatch&lt; Patch, Derived &gt;::BaseEnsurePatch",
       "argsstring_html": "(BaseEnsurePatch &amp;&amp;) noexcept=default",
       "name_html": "BaseEnsurePatch",
+      "qualifiedname_html": "apache::thrift::op::detail::BaseEnsurePatch::BaseEnsurePatch",
       "param": [
         {
           "type_html": "<a href=\"https://www.internalfb.com/intern/staticdocs/fbcref/ref/cpp/class/apache/thrift/op/detail/BaseEnsurePatch\">BaseEnsurePatch</a> &amp;&amp;"
@@ -59,7 +61,7 @@
       ],
       "location": {
         "file": "fbcode/thrift/lib/cpp2/op/detail/StructPatch.h",
-        "line": "167",
+        "line": "174",
         "column": "3"
       },
       "definition": {

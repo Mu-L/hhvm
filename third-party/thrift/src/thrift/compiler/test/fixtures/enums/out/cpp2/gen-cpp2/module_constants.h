@@ -11,8 +11,11 @@
 #include "thrift/compiler/test/fixtures/enums/gen-cpp2/module_types.h"
 
 namespace test::fixtures::enums {
+/** Glean {"file": "thrift/compiler/test/fixtures/enums/src/module.thrift"} */
 namespace module_constants {
 
+  FOLLY_EXPORT ::std::string_view _fbthrift_schema_aee2267ce76e558f();
+  FOLLY_EXPORT ::folly::Range<const ::std::string_view*> _fbthrift_schema_aee2267ce76e558f_includes();
 
 } // namespace module_constants
 } // namespace test::fixtures::enums

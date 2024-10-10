@@ -193,6 +193,7 @@ let go ctx ast result =
     | None -> None
     | Some ast -> ServerFindTypeVar.go ast result.SO.pos result.SO.name)
   | SO.HhFixme -> None
+  | SO.HhIgnore -> None
   | SO.Module ->
     get_module_def_by_name ctx result.SO.name >>= fun md ->
     Some (FileOutline.summarize_module_def md)
@@ -219,6 +220,7 @@ let get_definition_cst_node_from_pos ctx entry kind pos =
         | (SymbolDefinition.ClassConst, SyntaxKind.ConstDeclaration)
         | (SymbolDefinition.GlobalConst, SyntaxKind.ConstDeclaration)
         | (SymbolDefinition.ClassConst, SyntaxKind.EnumClassEnumerator)
+        | (SymbolDefinition.ClassConst, SyntaxKind.Enumerator)
         | (SymbolDefinition.Enum, SyntaxKind.EnumDeclaration)
         | (SymbolDefinition.Enum, SyntaxKind.EnumClassDeclaration)
         | (SymbolDefinition.Interface, SyntaxKind.ClassishDeclaration)

@@ -25,6 +25,22 @@
 namespace apache {
 namespace thrift {
 
+namespace {
+const char* stripServiceNamePrefix(
+    const char* method, const char* serviceName) {
+  const char* unprefixed = method;
+  for (const char* c = serviceName; *c != '\0'; ++c) {
+    if (*unprefixed != *c) {
+      // The method name does not contain the service name as prefix
+      return method;
+    }
+    unprefixed++;
+  }
+  // Almost... missing the dot implies it does not count as a prefix
+  return *unprefixed == '.' ? unprefixed + 1 : method;
+}
+} // namespace
+
 using util::AllocationColocator;
 
 class ContextStack::EmbeddedClientRequestContext
@@ -45,14 +61,16 @@ ContextStack::ContextStack(
     TConnectionContext* connectionContext)
     : handlers_(handlers),
       serviceName_(serviceName),
-      method_(method),
+      methodNamePrefixed_(method),
+      methodNameUnprefixed_(
+          stripServiceNamePrefix(methodNamePrefixed_, serviceName_)),
       serviceContexts_(serviceContexts) {
   if (!handlers_ || handlers_->empty()) {
     return;
   }
   for (size_t i = 0; i < handlers_->size(); ++i) {
     contextAt(i) = (*handlers_)[i]->getServiceContext(
-        serviceName_, method_, connectionContext);
+        serviceName_, methodNamePrefixed_, connectionContext);
   }
 }
 
@@ -81,7 +99,7 @@ ContextStack::ContextStack(
 ContextStack::~ContextStack() {
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->freeContext(contextAt(i), method_);
+      (*handlers_)[i]->freeContext(contextAt(i), methodNamePrefixed_);
     }
   }
 }
@@ -212,52 +230,69 @@ ContextStack::UniquePtr ContextStack::createWithClientContextCopyNames(
 }
 
 void ContextStack::preWrite() {
-  FOLLY_SDT(thrift, thrift_context_stack_pre_write, serviceName_, method_);
+  FOLLY_SDT(
+      thrift,
+      thrift_context_stack_pre_write,
+      serviceName_,
+      methodNamePrefixed_);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->preWrite(contextAt(i), method_);
+      (*handlers_)[i]->preWrite(contextAt(i), methodNamePrefixed_);
     }
   }
 }
 
 void ContextStack::onWriteData(const SerializedMessage& msg) {
-  FOLLY_SDT(thrift, thrift_context_stack_on_write_data, serviceName_, method_);
+  FOLLY_SDT(
+      thrift,
+      thrift_context_stack_on_write_data,
+      serviceName_,
+      methodNamePrefixed_);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->onWriteData(contextAt(i), method_, msg);
+      (*handlers_)[i]->onWriteData(contextAt(i), methodNamePrefixed_, msg);
     }
   }
 }
 
 void ContextStack::postWrite(uint32_t bytes) {
   FOLLY_SDT(
-      thrift, thrift_context_stack_post_write, serviceName_, method_, bytes);
+      thrift,
+      thrift_context_stack_post_write,
+      serviceName_,
+      methodNamePrefixed_,
+      bytes);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->postWrite(contextAt(i), method_, bytes);
+      (*handlers_)[i]->postWrite(contextAt(i), methodNamePrefixed_, bytes);
     }
   }
 }
 
 void ContextStack::preRead() {
-  FOLLY_SDT(thrift, thrift_context_stack_pre_read, serviceName_, method_);
+  FOLLY_SDT(
+      thrift, thrift_context_stack_pre_read, serviceName_, methodNamePrefixed_);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->preRead(contextAt(i), method_);
+      (*handlers_)[i]->preRead(contextAt(i), methodNamePrefixed_);
     }
   }
 }
 
 void ContextStack::onReadData(const SerializedMessage& msg) {
-  FOLLY_SDT(thrift, thrift_context_stack_on_read_data, serviceName_, method_);
+  FOLLY_SDT(
+      thrift,
+      thrift_context_stack_on_read_data,
+      serviceName_,
+      methodNamePrefixed_);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->onReadData(contextAt(i), method_, msg);
+      (*handlers_)[i]->onReadData(contextAt(i), methodNamePrefixed_, msg);
     }
   }
 }
@@ -265,11 +300,16 @@ void ContextStack::onReadData(const SerializedMessage& msg) {
 void ContextStack::postRead(
     apache::thrift::transport::THeader* header, uint32_t bytes) {
   FOLLY_SDT(
-      thrift, thrift_context_stack_post_read, serviceName_, method_, bytes);
+      thrift,
+      thrift_context_stack_post_read,
+      serviceName_,
+      methodNamePrefixed_,
+      bytes);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->postRead(contextAt(i), method_, header, bytes);
+      (*handlers_)[i]->postRead(
+          contextAt(i), methodNamePrefixed_, header, bytes);
     }
   }
 }
@@ -290,11 +330,12 @@ void ContextStack::handlerErrorWrapped(const folly::exception_wrapper& ew) {
       thrift,
       thrift_context_stack_handler_error_wrapped,
       serviceName_,
-      method_);
+      methodNamePrefixed_);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
-      (*handlers_)[i]->handlerErrorWrapped(contextAt(i), method_, ew);
+      (*handlers_)[i]->handlerErrorWrapped(
+          contextAt(i), methodNamePrefixed_, ew);
     }
   }
 }
@@ -305,12 +346,12 @@ void ContextStack::userExceptionWrapped(
       thrift,
       thrift_context_stack_user_exception_wrapped,
       serviceName_,
-      method_);
+      methodNamePrefixed_);
 
   if (handlers_) {
     for (size_t i = 0; i < handlers_->size(); i++) {
       (*handlers_)[i]->userExceptionWrapped(
-          contextAt(i), method_, declared, ew);
+          contextAt(i), methodNamePrefixed_, declared, ew);
     }
   }
 }
@@ -324,15 +365,23 @@ void ContextStack::resetClientRequestContextHeader() {
   connectionContext->resetRequestHeader();
 }
 
-#if FOLLY_HAS_COROUTINES
-folly::coro::Task<void> ContextStack::processClientInterceptorsOnRequest() {
-  DCHECK(shouldProcessClientInterceptors());
-
+folly::Try<void> ContextStack::processClientInterceptorsOnRequest(
+    ClientInterceptorOnRequestArguments arguments,
+    apache::thrift::transport::THeader* headers) noexcept {
+  if (clientInterceptors_ == nullptr) {
+    return {};
+  }
   std::vector<ClientInterceptorException::SingleExceptionInfo> exceptions;
-  for (const auto& clientInterceptor : *clientInterceptors_) {
-    ClientInterceptorBase::RequestInfo requestInfo;
+  for (std::size_t i = 0; i < clientInterceptors_->size(); ++i) {
+    const auto& clientInterceptor = (*clientInterceptors_)[i];
+    ClientInterceptorBase::RequestInfo requestInfo{
+        getStorageForClientInterceptorOnRequestByIndex(i),
+        arguments,
+        headers,
+        serviceName_,
+        methodNameUnprefixed_};
     try {
-      co_await clientInterceptor->internal_onRequest(std::move(requestInfo));
+      clientInterceptor->internal_onRequest(std::move(requestInfo));
     } catch (...) {
       exceptions.emplace_back(ClientInterceptorException::SingleExceptionInfo{
           clientInterceptor->getName(),
@@ -341,20 +390,29 @@ folly::coro::Task<void> ContextStack::processClientInterceptorsOnRequest() {
   }
 
   if (!exceptions.empty()) {
-    co_yield folly::coro::co_error(ClientInterceptorException(
-        ClientInterceptorException::CallbackKind::ON_REQUEST,
-        std::move(exceptions)));
+    return folly::Try<void>(
+        folly::make_exception_wrapper<ClientInterceptorException>(
+            ClientInterceptorException::CallbackKind::ON_REQUEST,
+            std::move(exceptions)));
   }
+  return {};
 }
 
-folly::coro::Task<void> ContextStack::processClientInterceptorsOnResponse() {
-  DCHECK(shouldProcessClientInterceptors());
-
+folly::Try<void> ContextStack::processClientInterceptorsOnResponse(
+    const apache::thrift::transport::THeader* headers) noexcept {
+  if (clientInterceptors_ == nullptr) {
+    return {};
+  }
   std::vector<ClientInterceptorException::SingleExceptionInfo> exceptions;
-  for (const auto& clientInterceptor : *clientInterceptors_) {
-    ClientInterceptorBase::ResponseInfo responseInfo;
+  for (auto i = std::ptrdiff_t(clientInterceptors_->size()) - 1; i >= 0; --i) {
+    const auto& clientInterceptor = (*clientInterceptors_)[i];
+    ClientInterceptorBase::ResponseInfo responseInfo{
+        getStorageForClientInterceptorOnRequestByIndex(i),
+        headers,
+        serviceName_,
+        methodNameUnprefixed_};
     try {
-      co_await clientInterceptor->internal_onResponse(std::move(responseInfo));
+      clientInterceptor->internal_onResponse(std::move(responseInfo));
     } catch (...) {
       exceptions.emplace_back(ClientInterceptorException::SingleExceptionInfo{
           clientInterceptor->getName(),
@@ -363,15 +421,24 @@ folly::coro::Task<void> ContextStack::processClientInterceptorsOnResponse() {
   }
 
   if (!exceptions.empty()) {
-    co_yield folly::coro::co_error(ClientInterceptorException(
-        ClientInterceptorException::CallbackKind::ON_RESPONSE,
-        std::move(exceptions)));
+    return folly::Try<void>(
+        folly::make_exception_wrapper<ClientInterceptorException>(
+            ClientInterceptorException::CallbackKind::ON_RESPONSE,
+            std::move(exceptions)));
   }
+  return {};
 }
-#endif
 
 void*& ContextStack::contextAt(size_t i) {
   return serviceContexts_[i];
+}
+
+detail::ClientInterceptorOnRequestStorage*
+ContextStack::getStorageForClientInterceptorOnRequestByIndex(
+    std::size_t index) {
+  DCHECK(clientInterceptors_);
+  DCHECK_LT(index, clientInterceptors_->size());
+  return &clientInterceptorsStorage_[index];
 }
 
 namespace detail {

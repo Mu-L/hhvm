@@ -65,17 +65,6 @@ let rec of_decl_ty (ty : decl_ty) : string =
   | Twildcard
   | Tany _ ->
     "mixed"
-  | Tnewtype (name, tyl, ty) ->
-    let name = Utils.strip_all_ns name in
-    (match tyl with
-    | [] -> name
-    | args ->
-      let args = List.map args ~f:of_decl_ty in
-      Printf.sprintf
-        "%s<%s> %s"
-        name
-        (String.concat ~sep:", " args)
-        (of_decl_ty ty))
   | Tnonnull -> "nonnull"
   | Tdynamic -> "dynamic"
   | Tthis -> "this"
@@ -104,8 +93,9 @@ let rec of_decl_ty (ty : decl_ty) : string =
     | args ->
       let args = List.map args ~f:of_decl_ty in
       Printf.sprintf "%s<%s>" name (String.concat ~sep:", " args))
-  | Ttuple args ->
-    let args = List.map args ~f:of_decl_ty in
+  (* TODO akenn: open tuples *)
+  | Ttuple { t_required; t_extra = _ } ->
+    let args = List.map t_required ~f:of_decl_ty in
     Printf.sprintf "(%s)" (String.concat ~sep:", " args)
   | Tshape { s_origin = _; s_fields = fields; s_unknown_value = kind } ->
     let fields =
@@ -137,7 +127,7 @@ and of_fun_param fp : string = of_decl_ty fp.fp_type
 and of_shape_field (name : tshape_field_name) sft : string =
   let name_s =
     match name with
-    | TSFlit_int (_, s) -> s
+    | TSFregex_group (_, s) -> s
     | TSFlit_str (_, s) -> Printf.sprintf "\"%s\"" s
     | TSFclass_const ((_, c_name), (_, const_name)) ->
       Printf.sprintf "%s::%s" c_name const_name

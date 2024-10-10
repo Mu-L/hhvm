@@ -66,11 +66,6 @@ trait BadServiceClientBase {
     return $interaction;
   }
 
-}
-
-class BadServiceAsyncClient extends \ThriftClientBase implements BadServiceAsyncClientIf {
-  use BadServiceClientBase;
-
   /**
    * Original thrift definition:-
    * i32
@@ -84,36 +79,24 @@ class BadServiceAsyncClient extends \ThriftClientBase implements BadServiceAsync
     $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
     $args = BadService_bar_args::withDefaultValues();
     await $this->asyncHandler_->genBefore("BadService", "bar", $args);
-    $currentseqid = $this->sendImplHelper($args, "bar", false);
+    $currentseqid = $this->sendImplHelper($args, "bar", false, "BadService" );
     return await $this->genAwaitResponse(BadService_bar_result::class, "bar", false, $currentseqid, $rpc_options);
   }
+
+}
+
+class BadServiceAsyncClient extends \ThriftClientBase implements BadServiceAsyncClientIf {
+  use BadServiceClientBase;
 
 }
 
 class BadServiceClient extends \ThriftClientBase implements BadServiceClientIf {
   use BadServiceClientBase;
 
-  /**
-   * Original thrift definition:-
-   * i32
-   *   bar();
-   */
-  public async function bar(): Awaitable<int> {
-    $hh_frame_metadata = $this->getHHFrameMetadata();
-    if ($hh_frame_metadata !== null) {
-      \HH\set_frame_metadata($hh_frame_metadata);
-    }
-    $rpc_options = $this->getAndResetOptions() ?? \ThriftClientBase::defaultOptions();
-    $args = BadService_bar_args::withDefaultValues();
-    await $this->asyncHandler_->genBefore("BadService", "bar", $args);
-    $currentseqid = $this->sendImplHelper($args, "bar", false);
-    return await $this->genAwaitResponse(BadService_bar_result::class, "bar", false, $currentseqid, $rpc_options);
-  }
-
   /* send and recv functions */
   public function send_bar(): int {
     $args = BadService_bar_args::withDefaultValues();
-    return $this->sendImplHelper($args, "bar", false);
+    return $this->sendImplHelper($args, "bar", false, "BadService" );
   }
   public function recv_bar(?int $expectedsequenceid = null): int {
     return $this->recvImplHelper(BadService_bar_result::class, "bar", false, $expectedsequenceid);
@@ -156,7 +139,7 @@ class BadService_BadInteraction extends \ThriftClientBase {
     $currentseqid = $this->getNextSequenceID();
     $args = BadService_BadInteraction_foo_args::withDefaultValues();
     try {
-      $this->eventHandler_->preSend('BadInteraction.foo', $args, $currentseqid);
+      $this->eventHandler_->preSend('BadInteraction.foo', $args, $currentseqid, 'BadService');
       if ($this->output_ is \TBinaryProtocolAccelerated)
       {
         \thrift_protocol_write_binary($this->output_, 'BadInteraction.foo', \TMessageType::CALL, $args, $currentseqid, $this->output_->isStrictWrite(), false);

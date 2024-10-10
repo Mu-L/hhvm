@@ -19,8 +19,7 @@
 #include <glog/logging.h>
 #include <folly/portability/GTest.h>
 
-namespace apache {
-namespace thrift {
+namespace apache::thrift {
 
 using folly::IOBuf;
 using proxygen::HTTPMessage;
@@ -42,6 +41,11 @@ FakeResponseHandler::FakeResponseHandler(folly::EventBase* evb)
           headers_.insert(make_pair(key, val));
         };
         msg.getHeaders().forEach(copyHeaders);
+      }));
+
+  EXPECT_CALL(txn_, sendHeadersWithOptionalEOM(testing::_, testing::_))
+      .WillRepeatedly(Invoke([this](const HTTPMessage& msg, bool eom) mutable {
+        txn_.HTTPTransaction::sendHeadersWithOptionalEOM(msg, eom);
       }));
   EXPECT_CALL(txn_, sendBody(testing::_))
       .WillRepeatedly(Invoke([this](std::shared_ptr<IOBuf> body) mutable {
@@ -80,5 +84,4 @@ bool FakeResponseHandler::eomReceived() {
   return eomReceived_;
 }
 
-} // namespace thrift
-} // namespace apache
+} // namespace apache::thrift
