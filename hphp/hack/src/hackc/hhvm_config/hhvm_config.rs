@@ -68,5 +68,17 @@ pub fn parser_options(config: &HhvmConfig) -> Result<ParserOptions> {
         "Hack.Lang.EnableXHPClassModifier",
     )?;
 
+    // Disallow <<__Memoize>> (without annotation)
+    init(
+        &mut flags.disallow_non_annotated_memoize,
+        "Hack.Lang.DisallowNonAnnotatedMemoize",
+    )?;
+
+    // Treat non annotated <<__Memoize>> as KeyedByIC
+    init(
+        &mut flags.treat_non_annotated_memoize_as_kbic,
+        "Hack.Lang.TreatNonAnnotatedMemoizeAsKBIC",
+    )?;
+
     Ok(flags)
 }

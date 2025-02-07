@@ -55,7 +55,7 @@ struct ast_visitor {
     scope.println(
         " text {} '{}'",
         location(text.loc),
-        tree_printer::escape(text.content));
+        tree_printer::escape(text.joined()));
   }
   void visit(const ast::newline& newline, tree_printer::scope scope) const {
     scope.println(
@@ -117,16 +117,13 @@ struct ast_visitor {
       visit(else_clause->body_elements, else_scope.open_node());
     }
   }
-  void visit(const ast::partial_apply& partial_apply, tree_printer::scope scope)
-      const {
-    scope.println(
-        " partial-apply {} '{}'",
-        location(partial_apply.loc),
-        partial_apply.path_string());
-    if (const auto& offset = partial_apply.standalone_offset_within_line;
-        offset.has_value()) {
+  void visit(const ast::macro& macro, tree_printer::scope scope) const {
+    scope.println(" macro {} '{}'", location(macro.loc), macro.path_string());
+    if (const auto& indentation = macro.standalone_indentation_within_line;
+        indentation.has_value()) {
       scope.open_property().println(
-          " standalone-offset '{}'", tree_printer::escape(*offset));
+          " standalone-indentation '{}'",
+          tree_printer::escape(indentation->value));
     }
   }
   void visit(const ast::comment& comment, tree_printer::scope scope) const {
@@ -166,6 +163,40 @@ struct ast_visitor {
         pragma_statement.to_string(),
         location(pragma_statement.loc));
   }
+  void visit(const ast::partial_block& partial_block, tree_printer::scope scope)
+      const {
+    scope.println(
+        " partial-block {} '{}'",
+        location(partial_block.loc),
+        partial_block.name.name);
+    for (const auto& argument : partial_block.arguments) {
+      scope.open_property().println(" argument '{}'", argument.name);
+    }
+    for (const auto& capture : partial_block.captures) {
+      scope.open_property().println(" capture '{}'", capture.name);
+    }
+    visit(partial_block.body_elements, scope.open_node());
+  }
+  void visit(
+      const ast::partial_statement& partial_statement,
+      tree_printer::scope scope) const {
+    scope.println(
+        " partial-statement {} '{}'",
+        location(partial_statement.loc),
+        partial_statement.partial.to_string());
+    if (const auto& indentation =
+            partial_statement.standalone_indentation_within_line;
+        indentation.has_value()) {
+      scope.open_property().println(
+          " standalone-indentation '{}'",
+          tree_printer::escape(indentation->value));
+    }
+    for (const auto& [name, arg] : partial_statement.named_arguments) {
+      scope.open_property().println(
+          " argument '{}={}'", name, arg.value.to_string());
+    }
+  }
+
   // Prevent implicit conversion to ast::body. Otherwise, we can silently
   // compile an infinitely recursive visit() chain if there is a missing
   // overload for one of the alternatives in the variant.
@@ -215,7 +246,7 @@ WHISKER_PRINT_AST_INSTANTIATE(ast::comment);
 WHISKER_PRINT_AST_INSTANTIATE(ast::identifier);
 WHISKER_PRINT_AST_INSTANTIATE(ast::variable_lookup);
 WHISKER_PRINT_AST_INSTANTIATE(ast::section_block);
-WHISKER_PRINT_AST_INSTANTIATE(ast::partial_apply);
+WHISKER_PRINT_AST_INSTANTIATE(ast::macro);
 
 #undef WHISKER_PRINT_AST_INSTANTIATE
 

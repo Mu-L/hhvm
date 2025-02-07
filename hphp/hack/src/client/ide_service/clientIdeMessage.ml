@@ -42,11 +42,6 @@ type document = {
   file_contents: string;
 }
 
-type location = {
-  line: int;
-  column: int;
-}
-
 type fullname = Full_name of string
 
 type find_refs_result =
@@ -127,16 +122,16 @@ type _ t =
   | Diagnostics : document -> diagnostic list t
       (** Obtains latest diagnostics for file. *)
   | Verbose_to_file : bool -> unit t
-  | Hover : document * location -> HoverService.result t
+  | Hover : document * File_content.Position.t -> HoverService.result t
   | Definition :
-      document * location
+      document * File_content.Position.t
       -> ServerCommandTypes.Go_to_definition.result t
   | Completion :
-      document * location * completion_request
+      document * File_content.Position.t * completion_request
       -> AutocompleteTypes.ide_result t
       (** Handles "textDocument/completion" LSP messages *)
   | Completion_resolve_location :
-      Path.t * fullname * location * FileInfo.si_kind
+      Path.t * fullname * File_content.Position.t * FileInfo.si_kind
       -> Completion_resolve.result t
       (** "completionItem/resolve" LSP messages - if we have file/line/column.
       The scenario is that VSCode requests textDocument/completion in A.PHP line 5 col 6,
@@ -148,16 +143,22 @@ type _ t =
       Completion_resolve.request
       -> Completion_resolve.result t
       (** "completionItem/resolve" LSP messages - if we have symbol name, and [Completion_resolve_location] failed *)
-  | Document_highlight : document * location -> Ide_api_types.range list t
+  | Document_highlight :
+      document * File_content.Position.t
+      -> Ide_api_types.range list t
       (** Handles "textDocument/documentHighlight" LSP messages *)
   | Document_symbol : document -> FileOutline.outline t
       (** Handles "textDocument/documentSymbol" LSP messages *)
   | Workspace_symbol : string -> SearchUtils.result t
   | Go_to_implementation :
-      document * location * document list
+      document * File_content.Position.t * document list
       -> go_to_impl_result t
-  | Find_references : document * location * document list -> find_refs_result t
-  | Rename : document * location * string * document list -> rename_result t
+  | Find_references :
+      document * File_content.Position.t * document list
+      -> find_refs_result t
+  | Rename :
+      document * File_content.Position.t * string * document list
+      -> rename_result t
       (** The result of Rename is one of:
        - Not_renameable_position, indicating an attempt to rename something that isn't a valid symbol
        - Rename_success, where we return a record containing two fields:
@@ -167,11 +168,16 @@ type _ t =
             in the input document list
           *)
   | Type_definition :
-      document * location
+      document * File_content.Position.t
       -> ServerCommandTypes.Go_to_type_definition.result t
       (** Handles "textDocument/typeDefinition" LSP messages *)
-  | Signature_help : document * location -> Lsp.SignatureHelp.result t
+  | Signature_help :
+      document * File_content.Position.t
+      -> Lsp.SignatureHelp.result t
       (** Handles "textDocument/signatureHelp" LSP messages *)
+  | Top_level_def_name_at_pos :
+      document * File_content.Position.t
+      -> Lsp.TopLevelDefNameAtPos.result t
   | Code_action :
       document * Ide_api_types.range
       -> (Lsp.CodeAction.command_or_action list
@@ -202,7 +208,7 @@ type _ t =
       use_snippet_edits: bool;
     }
       -> Lsp.CodeActionResolve.result t
-  | AutoClose : document * location -> string option t
+  | AutoClose : document * File_content.Position.t -> string option t
 
 let t_to_string : type a. a t -> string = function
   | Initialize_from_saved_state _ -> "Initialize_from_saved_state"
@@ -248,6 +254,8 @@ let t_to_string : type a. a t -> string = function
     Printf.sprintf "Type_definition(%s)" (Path.to_string file_path)
   | Signature_help ({ file_path; _ }, _) ->
     Printf.sprintf "Signature_help(%s)" (Path.to_string file_path)
+  | Top_level_def_name_at_pos ({ file_path; _ }, _) ->
+    Printf.sprintf "Top_level_def_name_at_pos(%s)" (Path.to_string file_path)
   | Code_action ({ file_path; _ }, _) ->
     Printf.sprintf "Code_action(%s)" (Path.to_string file_path)
   | Code_action_resolve { document = { file_path; _ }; resolve_title; _ } ->

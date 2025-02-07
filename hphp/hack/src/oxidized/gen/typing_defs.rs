@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<c54eb6b6a7167c588c19ddefd9f90a84>>
+// @generated SignedSource<<32775031f330ddb2b26f181e89d91f31>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -279,9 +279,33 @@ pub struct ModuleDefType {
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving show")]
+#[rust_to_ocaml(attr = "deriving (eq, show)")]
 #[repr(C)]
 pub struct Requirement(pub pos_or_decl::PosOrDecl, pub Ty);
+
+#[derive(
+    Clone,
+    Debug,
+    Deserialize,
+    Eq,
+    EqModuloPos,
+    FromOcamlRep,
+    Hash,
+    NoPosHash,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    Serialize,
+    ToOcamlRep
+)]
+#[rust_to_ocaml(attr = "deriving (eq, show)")]
+#[repr(C, u8)]
+pub enum ConstraintRequirement {
+    #[rust_to_ocaml(name = "CR_Equal")]
+    CREqual(Requirement),
+    #[rust_to_ocaml(name = "CR_Subtype")]
+    CRSubtype(Requirement),
+}
 
 #[derive(
     Clone,
@@ -465,7 +489,6 @@ pub struct TypedefCaseTypeVariant(pub Ty, pub Vec<WhereConstraint>);
 
 #[derive(
     Clone,
-    Debug,
     Deserialize,
     Eq,
     EqModuloPos,

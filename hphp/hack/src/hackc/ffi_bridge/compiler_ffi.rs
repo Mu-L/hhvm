@@ -70,6 +70,8 @@ mod ffi {
         hhvm_compat_mode: bool,
         include_assignment_values: bool,
         enable_class_pointer_hint: bool,
+        disallow_non_annotated_memoize: bool,
+        treat_non_annotated_memoize_as_kbic: bool,
     }
 
     pub struct DeclsAndBlob {
@@ -647,6 +649,8 @@ pub fn parse_decls(
         hhvm_compat_mode: config.hhvm_compat_mode,
         include_assignment_values: config.include_assignment_values,
         enable_class_pointer_hint: config.enable_class_pointer_hint,
+        disallow_non_annotated_memoize: config.disallow_non_annotated_memoize,
+        treat_non_annotated_memoize_as_kbic: config.treat_non_annotated_memoize_as_kbic,
         keep_user_attributes: true,
         ..Default::default()
     };
@@ -656,7 +660,7 @@ pub fn parse_decls(
     let alloc: &'static bumpalo::Bump =
         unsafe { std::mem::transmute::<&'_ bumpalo::Bump, &'static bumpalo::Bump>(&arena) };
     let parsed_file: ParsedFile<'static> =
-        direct_decl_parser::parse_decls_for_bytecode(&decl_opts, relpath, text, alloc);
+        direct_decl_parser::parse_decls_for_bytecode_obr(&decl_opts, relpath, text, alloc);
     let holder = Box::new(DeclsHolder {
         parsed_file,
         _arena: arena,

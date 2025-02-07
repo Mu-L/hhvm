@@ -28,20 +28,12 @@ final class UpdateUniverseContextHandler implements IContextHandler {
     ThriftFrameworkMetadata $mutable_tfm,
     ImmutableThriftContextPropState $immutable_ctx,
   ): void {
-    $raw_thrift_class_name = Shapes::idx($params, 'thrift_class');
-    $client = Shapes::idx($params, 'client');
+    $service_interface = Shapes::idx($params, 'service_interface');
     $function_name = Shapes::idx($params, 'fn_name');
-    if (
-      $raw_thrift_class_name is null ||
-      $function_name is null ||
-      $client is null
-    ) {
+    if ($service_interface is null || $function_name is null) {
       return;
     }
-
-    $thrift_name = HH\class_to_classname($raw_thrift_class_name);
-
-    $thrift_name = self::getTransformedThriftClientName($thrift_name, $client);
+    $thrift_name = ThriftServiceHelper::extractServiceName($service_interface);
 
     if (self::isServiceNameOptedOut($thrift_name)) {
       return;
@@ -81,30 +73,6 @@ final class UpdateUniverseContextHandler implements IContextHandler {
           Causes::the('Universe')->to('not update')
             ->document('fail to update thrift context prop universe'),
         );
-    }
-  }
-
-  public static function getTransformedThriftClientName(
-    string $thrift_name,
-    IThriftClient $client,
-  )[zoned_local]: string {
-    try {
-      $thrift_name = Str\split($thrift_name, '\\') |> C\lastx($$);
-      if ($client is IThriftSyncIf) {
-        return Str\strip_suffix($thrift_name, 'Client');
-      } else if ($client is IThriftAsyncIf) {
-        return Str\strip_suffix($thrift_name, 'AsyncClient');
-      } else {
-        return $thrift_name;
-      }
-    } catch (Exception $e) {
-      FBLogger('privacylib', 'thrift_client_naming_transform')
-        ->handle(
-          $e,
-          Causes::the('Thrift client name')->to('not transform')
-            ->document('fail to transform existing Thrift client name'),
-        );
-      return $thrift_name;
     }
   }
 

@@ -77,7 +77,7 @@ void verifyPieces(std::unique_ptr<IOBuf> original,
 std::unique_ptr<folly::IOBuf> compress(
     const std::unique_ptr<folly::IOBuf>& in) {
   auto codec = std::make_unique<ZstdStreamCompressor>(
-      folly::io::COMPRESSION_LEVEL_DEFAULT);
+      folly::compression::COMPRESSION_LEVEL_DEFAULT);
   auto out = codec->compress(in.get());
   return out;
 }
@@ -89,15 +89,15 @@ void compressThenDecompress(unique_ptr<IOBuf> buf, bool reuseBuf) {
 
 void compressThenDecompressPieces(
     std::vector<std::unique_ptr<folly::IOBuf>> input_pieces, bool reuseBuf) {
-  auto codec = folly::io::getStreamCodec(folly::io::CodecType::ZSTD);
+  auto codec = folly::compression::getStreamCodec(folly::io::CodecType::ZSTD);
 
   std::vector<std::unique_ptr<folly::IOBuf>> compressed_pieces;
 
   size_t i = 0;
   for (const auto& piece : input_pieces) {
     const auto end = ++i == input_pieces.size();
-    const auto op = end ? folly::io::StreamCodec::FlushOp::END
-                        : folly::io::StreamCodec::FlushOp::FLUSH;
+    const auto op = end ? folly::compression::StreamCodec::FlushOp::END
+                        : folly::compression::StreamCodec::FlushOp::FLUSH;
     auto irange = piece->coalesce();
     if (!end && irange.size() == 0) {
       continue;
@@ -128,7 +128,7 @@ void compressDecompressPiecesProxygenCodec(
     bool independent,
     bool reuseBuf) {
   auto codec = std::make_unique<ZstdStreamCompressor>(
-      folly::io::COMPRESSION_LEVEL_DEFAULT, independent);
+      folly::compression::COMPRESSION_LEVEL_DEFAULT, independent);
 
   std::vector<std::unique_ptr<folly::IOBuf>> compressed_pieces;
 

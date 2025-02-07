@@ -310,6 +310,17 @@ cdef class GeneratedError(Error):
             )
         self._fbthrift_populate_field_values()
 
+    @staticmethod
+    def from_python(obj: GeneratedError) -> GeneratedError:
+        if not isinstance(obj, GeneratedError):
+            raise TypeError(f'value {obj} expected to be a thrift-python Exception, was actually of type ' f'{type(obj)}')
+        return obj
+
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     def __iter__(self):
         cdef StructInfo info = self._fbthrift_struct_info
         for name, index in info.name_to_index.items():

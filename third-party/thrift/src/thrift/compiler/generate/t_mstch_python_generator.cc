@@ -145,6 +145,33 @@ bool is_invariant_container_type(const t_type* type) {
   return false;
 }
 
+bool is_invariant_adapter(
+    const t_const* adapter_annotation, const t_type* true_type) {
+  if (true_type->is_primitive_type() || !adapter_annotation) {
+    return false;
+  }
+
+  auto type_hint = get_annotation_property(adapter_annotation, "typeHint");
+  return boost::algorithm::ends_with(type_hint, "[]");
+}
+
+bool field_has_invariant_type(const t_field* field) {
+  if (is_invariant_adapter(
+          find_structured_adapter_annotation(*field),
+          field->get_type()->get_true_type())) {
+    return true;
+  }
+
+  if (is_invariant_adapter(
+          find_structured_adapter_annotation(*field->type()->get_true_type()),
+          field->get_type()->get_true_type())) {
+    return true;
+  }
+
+  return ::apache::thrift::compiler::is_invariant_container_type(
+      field->get_type());
+}
+
 class python_mstch_program : public mstch_program {
  public:
   python_mstch_program(
@@ -207,6 +234,7 @@ class python_mstch_program : public mstch_program {
 
   mstch::node include_namespaces() {
     std::vector<const Namespace*> namespaces;
+    namespaces.reserve(include_namespaces_.size());
     for (const auto& it : include_namespaces_) {
       namespaces.push_back(&it.second);
     }
@@ -216,7 +244,7 @@ class python_mstch_program : public mstch_program {
         });
     mstch::array a;
     for (const auto& it : namespaces) {
-      a.push_back(mstch::map{
+      a.emplace_back(mstch::map{
           {"included_module_path", it->ns},
           {"included_module_mangle", it->ns_mangle},
           {"has_services?", it->has_services},
@@ -471,7 +499,7 @@ class python_mstch_program : public mstch_program {
       const std::unordered_set<std::string_view>& modules) {
     mstch::array a;
     for (const auto& m : modules) {
-      a.push_back(mstch::map{{"module_path", m}});
+      a.emplace_back(mstch::map{{"module_path", m}});
     }
     return a;
   }
@@ -513,7 +541,7 @@ class python_mstch_service : public mstch_service {
   mstch::node program_name() { return service_->program()->name(); }
 
   std::vector<t_function*> get_supported_functions(
-      std::function<bool(const t_function*)> func_filter) {
+      const std::function<bool(const t_function*)>& func_filter) {
     std::vector<t_function*> funcs;
     for (auto func : service_->get_functions()) {
       if (func_filter(func)) {
@@ -870,9 +898,7 @@ class python_mstch_struct : public mstch_struct {
     return std::any_of(
         struct_->fields().begin(),
         struct_->fields().end(),
-        [](const auto& field) {
-          return is_invariant_container_type(field.get_type());
-        });
+        [](const auto& field) { return field_has_invariant_type(&field); });
   }
 
   mstch::node has_exception_message() {
@@ -921,8 +947,8 @@ class python_mstch_field : public mstch_field {
              &python_mstch_field::user_default_value},
             {"field:has_adapter?", &python_mstch_field::adapter},
             {"field:is_container_type", &python_mstch_field::is_container_type},
-            {"field:is_invariant_container_type?",
-             &python_mstch_field::is_invariant_container_type},
+            {"field:is_invariant_type?",
+             &python_mstch_field::is_invariant_type},
         });
   }
 
@@ -981,10 +1007,7 @@ class python_mstch_field : public mstch_field {
         type->get_true_type()->is_map() || type->get_true_type()->is_set();
   }
 
-  mstch::node is_invariant_container_type() {
-    return ::apache::thrift::compiler::is_invariant_container_type(
-        field_->get_type());
-  }
+  mstch::node is_invariant_type() { return field_has_invariant_type(field_); }
 
  private:
   const std::string py_name_;
@@ -1265,6 +1288,7 @@ class python_mstch_const_value : public mstch_const_value {
             {"value:py3_enum_value_name",
              &python_mstch_const_value::py3_enum_value_name},
             {"value:py3_binary?", &python_mstch_const_value::is_binary},
+            {"value:unicode_value", &python_mstch_const_value::unicode_value},
             {"value:const_enum_type",
              &python_mstch_const_value::const_enum_type},
             {"value:value_for_bool?",
@@ -1276,6 +1300,14 @@ class python_mstch_const_value : public mstch_const_value {
             {"value:map_key_type", &python_mstch_const_value::map_key_type},
             {"value:map_val_type", &python_mstch_const_value::map_val_type},
         });
+  }
+
+  mstch::node unicode_value() {
+    if (type_ != cv::CV_STRING) {
+      return {};
+    }
+    return get_escaped_string<nonascii_handling::no_escape>(
+        const_value_->get_string());
   }
 
   mstch::node is_binary() {

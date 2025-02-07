@@ -92,6 +92,13 @@ type module_def_type = { mdt_pos: Pos_or_decl.t } [@@deriving show]
 
 type requirement = Pos_or_decl.t * decl_ty [@@deriving show]
 
+type constraint_requirement =
+  | CR_Equal of requirement
+  | CR_Subtype of requirement
+[@@deriving eq, show]
+
+val to_requirement : constraint_requirement -> requirement
+
 type abstract_typeconst = {
   atc_as_constraint: decl_ty option;
   atc_super_constraint: decl_ty option;
@@ -378,6 +385,8 @@ val get_ce_xhp_attr : class_elt -> xhp_attr option
 
 val get_ce_safe_global_variable : class_elt -> bool
 
+val get_ce_no_auto_likes : class_elt -> bool
+
 val make_ce_flags :
   xhp_attr:xhp_attr option ->
   abstract:bool ->
@@ -392,6 +401,7 @@ val make_ce_flags :
   support_dynamic_type:bool ->
   needs_init:bool ->
   safe_global_variable:bool ->
+  no_auto_likes:bool ->
   Typing_defs_flags.ClassElt.t
 
 val class_elt_is_private_not_lsb : class_elt -> bool

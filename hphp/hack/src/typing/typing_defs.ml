@@ -148,7 +148,19 @@ type module_def_type = { mdt_pos: Pos_or_decl.t } [@@deriving show]
  * }
  * ```
  *)
-type requirement = Pos_or_decl.t * decl_ty [@@deriving show]
+type requirement = Pos_or_decl.t * decl_ty [@@deriving eq, show]
+
+(* Representation for `require class` and `require this as` constraints *)
+type constraint_requirement =
+  | CR_Equal of requirement
+  | CR_Subtype of requirement
+[@@deriving eq, show]
+
+let to_requirement cr =
+  match cr with
+  | CR_Equal r
+  | CR_Subtype r ->
+    r
 
 type abstract_typeconst = {
   atc_as_constraint: decl_ty option;
@@ -646,6 +658,8 @@ let get_ce_xhp_attr ce = Typing_defs_flags.ClassElt.get_xhp_attr ce.ce_flags
 
 let get_ce_safe_global_variable ce =
   ClassElt.is_safe_global_variable ce.ce_flags
+
+let get_ce_no_auto_likes ce = ClassElt.is_no_auto_likes ce.ce_flags
 
 let make_ce_flags = Typing_defs_flags.ClassElt.make
 

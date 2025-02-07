@@ -20,6 +20,8 @@
 
 #include <fmt/core.h>
 
+#include <iterator>
+
 namespace w = whisker::make;
 
 namespace whisker {
@@ -110,13 +112,116 @@ map::value_type create_array_functions() {
         auto index = ctx.argument<i64>(1);
 
         if (index < 0 || std::size_t(index) >= a.size()) {
-          ctx.error(
+          throw ctx.make_error(
               "Index '{}' is out of bounds (size is {}).", index, a.size());
         }
         return a.at(index);
       });
 
   return map::value_type{"array", std::move(array_functions)};
+}
+
+map::value_type create_map_functions() {
+  map map_functions;
+
+  /**
+   * Returns a view of the provided map's items. The output is an array where
+   * each element is a map with "key" and "value" properties.
+   *
+   * This function fails if the provided map is not enumerable:
+   * - whisker::map objects are enumerable.
+   * - map-like native objects are enumerable iff map_like::keys() is provided.
+   *
+   * The order of items in the produced array matches the enumeration above.
+   * For whisker::map, properties are sorted lexicographically by name.
+   *
+   * Name: map.items
+   *
+   * Arguments:
+   *   - [map] — The map to enumerate
+   *
+   * Returns:
+   *   [array] items (key-value pairs) of the provided map.
+   */
+  map_functions["items"] = dsl::make_function(
+      "map.items", [](dsl::function::context ctx) -> object::ptr {
+        ctx.declare_named_arguments({});
+        ctx.declare_arity(1);
+
+        dsl::map_like m = ctx.argument<map>(0);
+
+        class items_view
+            : public native_object,
+              public native_object::array_like,
+              public std::enable_shared_from_this<native_object::array_like> {
+         public:
+          explicit items_view(
+              dsl::map_like&& m, std::vector<std::string>&& keys)
+              : map_like_(std::move(m)), keys_(std::move(keys)) {}
+
+          native_object::array_like::ptr as_array_like() const override {
+            return shared_from_this();
+          }
+
+          std::size_t size() const final { return keys_.size(); }
+          object::ptr at(std::size_t index) const final {
+            const std::string& property_name = keys_.at(index);
+            auto value = map_like_.lookup_property(property_name);
+            // The name is guaranteed to exist because it was enumerated
+            assert(value != nullptr);
+            return manage_owned<object>(w::map({
+                {"key", w::string(property_name)},
+                {"value", w::proxy(value)},
+            }));
+          }
+
+          void print_to(
+              tree_printer::scope scope,
+              const object_print_options& options) const final {
+            default_print_to("<map.items view>", std::move(scope), options);
+          }
+
+         private:
+          dsl::map_like map_like_;
+          std::vector<std::string> keys_;
+        };
+
+        auto keys = m.keys();
+        if (!keys.has_value()) {
+          throw ctx.make_error(
+              "map-like object does not have enumerable properties.");
+        }
+        auto view = w::make_native_object<items_view>(
+            std::move(m),
+            std::vector<std::string>(
+                std::make_move_iterator(keys->begin()),
+                std::make_move_iterator(keys->end())));
+        return manage_owned<object>(std::move(view));
+      });
+
+  /**
+   * Determines if the provided map contains a given key.
+   *
+   * Name: map.has_key?
+   *
+   * Arguments:
+   *   - [map] — The map to check for key
+   *   - [string] — The key to check in the map
+   *
+   * Returns:
+   *   [boolean] if the provided key is in the map.
+   */
+  map_functions["has_key?"] = dsl::make_function(
+      "map.has_key?", [](dsl::function::context ctx) -> boolean {
+        ctx.declare_named_arguments({});
+        ctx.declare_arity(2);
+
+        dsl::map_like m = ctx.argument<map>(0);
+        managed_ptr<std::string> key = ctx.argument<string>(1);
+        return m.lookup_property(*key) != nullptr;
+      });
+
+  return map::value_type{"map", std::move(map_functions)};
 }
 
 map::value_type create_string_functions() {
@@ -138,6 +243,45 @@ map::value_type create_string_functions() {
         ctx.declare_named_arguments({});
         ctx.declare_arity(1);
         return i64(ctx.argument<string>(0)->length());
+      });
+
+  /**
+   * Checks a string for emptiness.
+   *
+   * Name: string.empty?
+   *
+   * Arguments:
+   *   - [string] — The string to check for emptiness.
+   *
+   * Returns:
+   *   [boolean] indicating whether the string is empty.
+   */
+  string_functions["empty?"] = dsl::make_function(
+      "string.empty?", [](dsl::function::context ctx) -> boolean {
+        ctx.declare_named_arguments({});
+        ctx.declare_arity(1);
+        return ctx.argument<string>(0)->empty();
+      });
+
+  /**
+   * Produces the provided string concatenated together.
+   *
+   * Name: string.concat
+   *
+   * Arguments:
+   *   - [string...] — The strings to concatenate together (variadic).
+   *
+   * Returns:
+   *   [string] the combined string
+   */
+  string_functions["concat"] = dsl::make_function(
+      "string.concat", [](dsl::function::context ctx) -> string {
+        ctx.declare_named_arguments({});
+        std::string result;
+        for (std::size_t i = 0; i < ctx.arity(); ++i) {
+          result += *ctx.argument<string>(i);
+        }
+        return result;
       });
 
   return map::value_type{"string", std::move(string_functions)};
@@ -320,12 +464,65 @@ map::value_type create_int_functions() {
   return map::value_type{"int", std::move(int_functions)};
 }
 
+map::value_type create_object_functions() {
+  map object_functions;
+
+  /**
+   * Returns true if two objects are equal in value, otherwise false.
+   *
+   * Value equality between two (unordered) pair of objects is defined as
+   * follows:
+   *   - {null, null} → equal
+   *   - {i64, i64} → equal if same value
+   *   - {f64, f64} → equal if same value
+   *   - {string, string} → equal if same value
+   *   - {boolean, boolean} → equal if same value
+   *   - {array, array}
+   *        → equal if all corresponding elements are equal (recursive)
+   *   - {array, native_object::array_like}
+   *        → equal if all corresponding elements are equal (recursive)
+   *   - {map, map}
+   *        → equal if all key-value pairs are equal between the two maps
+   *          (recursive)
+   *   - {map, native_object::map_like}
+   *        → true if native_object::keys() presents enumerable property keys
+   *          and each key-value pairs are equal between the two maps
+   *          (recursive)
+   *   - {native_object, native_object}
+   *        → equal if both are equivalent array-like or equivalent map-like
+   *   - {native_function, native_function} → equal if same pointer to function
+   *   - {native_handle, native_handle} → equal if same pointer to handle
+   *   - all other pair of objects are NOT equal
+   *
+   * Name: object.eq?
+   *
+   * Arguments:
+   *   - [object] — The left-hand side of the comparison.
+   *   - [object] — The right-hand side of the comparison.
+   *
+   * Returns:
+   *   [boolean] if the two objects are equal.
+   */
+  object_functions["eq?"] = dsl::make_function(
+      "object.eq?", [](dsl::function::context ctx) -> boolean {
+        ctx.declare_named_arguments({});
+        ctx.declare_arity(2);
+        const object::ptr& lhs = ctx.raw().positional_arguments()[0];
+        const object::ptr& rhs = ctx.raw().positional_arguments()[1];
+        return *lhs == *rhs;
+      });
+
+  return map::value_type{"object", std::move(object_functions)};
+}
+
 } // namespace
 
 void load_standard_library(map& module) {
   module.emplace(create_array_functions());
+  module.emplace(create_map_functions());
   module.emplace(create_string_functions());
   module.emplace(create_int_functions());
+  module.emplace(create_object_functions());
 }
 
 } // namespace whisker

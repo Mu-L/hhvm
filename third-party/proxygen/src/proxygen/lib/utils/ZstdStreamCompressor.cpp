@@ -19,10 +19,10 @@ ZstdStreamCompressor::ZstdStreamCompressor(int compressionLevel,
       independent_(independentChunks) {
 }
 
-folly::io::StreamCodec& ZstdStreamCompressor::getCodec() {
+folly::compression::StreamCodec& ZstdStreamCompressor::getCodec() {
   if (!codec_) {
-    codec_ = folly::io::getStreamCodec(folly::io::CodecType::ZSTD,
-                                       compressionLevel_);
+    codec_ = folly::compression::getStreamCodec(folly::io::CodecType::ZSTD,
+                                                compressionLevel_);
   }
   return *codec_;
 }
@@ -45,8 +45,9 @@ std::unique_ptr<folly::IOBuf> ZstdStreamCompressor::compress(
       in = &clone;
     }
 
-    auto op = last || independent_ ? folly::io::StreamCodec::FlushOp::END
-                                   : folly::io::StreamCodec::FlushOp::FLUSH;
+    auto op = last || independent_
+                  ? folly::compression::StreamCodec::FlushOp::END
+                  : folly::compression::StreamCodec::FlushOp::FLUSH;
     auto& codec = getCodec();
     if (independent_) {
       codec.resetStream(in->length());
@@ -70,7 +71,7 @@ std::unique_ptr<folly::IOBuf> ZstdStreamCompressor::compress(
 
     out->append(outrange.begin() - out->tail());
 
-    if (op == folly::io::StreamCodec::FlushOp::END) {
+    if (op == folly::compression::StreamCodec::FlushOp::END) {
       codec_.reset();
     }
 

@@ -22,6 +22,8 @@ type t = {
   package_v2: bool;
   package_v2_support_multifile_tests: bool;
   enable_class_pointer_hint: bool;
+  disallow_non_annotated_memoize: bool;
+  treat_non_annotated_memoize_as_kbic: bool;
 }
 [@@deriving show]
 
@@ -43,4 +45,7 @@ let from_parser_options (popt : ParserOptions.t) =
     package_v2 = popt.package_v2;
     package_v2_support_multifile_tests = popt.package_v2_support_multifile_tests;
     enable_class_pointer_hint = popt.enable_class_pointer_hint;
+    disallow_non_annotated_memoize = popt.disallow_non_annotated_memoize;
+    treat_non_annotated_memoize_as_kbic =
+      popt.treat_non_annotated_memoize_as_kbic;
   }

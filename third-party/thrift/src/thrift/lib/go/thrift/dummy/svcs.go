@@ -27,59 +27,32 @@ type Dummy interface {
     OnewayRPC(ctx context.Context, value string) (error)
 }
 
-type DummyChannelClientInterface interface {
+type DummyClientInterface interface {
     thrift.ClientInterface
     Dummy
 }
 
-type DummyClientInterface interface {
-    thrift.ClientInterface
-    Echo(value string) (string, error)
-    OnewayRPC(value string) (error)
-}
-
-type DummyContextClientInterface interface {
-    DummyClientInterface
-    EchoContext(ctx context.Context, value string) (string, error)
-    OnewayRPCContext(ctx context.Context, value string) (error)
-}
-
-type DummyChannelClient struct {
+type DummyClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ DummyChannelClientInterface = (*DummyChannelClient)(nil)
+var _ DummyClientInterface = (*DummyClient)(nil)
 
-func NewDummyChannelClient(channel thrift.RequestChannel) *DummyChannelClient {
-    return &DummyChannelClient{
+func NewDummyChannelClient(channel thrift.RequestChannel) *DummyClient {
+    return &DummyClient{
         ch: channel,
     }
 }
 
-func (c *DummyChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type DummyClient struct {
-    chClient *DummyChannelClient
-}
-// Compile time interface enforcer
-var _ DummyClientInterface = (*DummyClient)(nil)
-var _ DummyContextClientInterface = (*DummyClient)(nil)
-
 func NewDummyClient(prot thrift.Protocol) *DummyClient {
-    return &DummyClient{
-        chClient: NewDummyChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewDummyChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *DummyClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *DummyChannelClient) Echo(ctx context.Context, value string) (string, error) {
+func (c *DummyClient) Echo(ctx context.Context, value string) (string, error) {
     in := &reqDummyEcho{
         Value: value,
     }
@@ -91,27 +64,11 @@ func (c *DummyChannelClient) Echo(ctx context.Context, value string) (string, er
     return out.GetSuccess(), nil
 }
 
-func (c *DummyClient) Echo(value string) (string, error) {
-    return c.chClient.Echo(context.Background(), value)
-}
-
-func (c *DummyClient) EchoContext(ctx context.Context, value string) (string, error) {
-    return c.chClient.Echo(ctx, value)
-}
-
-func (c *DummyChannelClient) OnewayRPC(ctx context.Context, value string) (error) {
+func (c *DummyClient) OnewayRPC(ctx context.Context, value string) (error) {
     in := &reqDummyOnewayRPC{
         Value: value,
     }
     return c.ch.Oneway(ctx, "OnewayRPC", in)
-}
-
-func (c *DummyClient) OnewayRPC(value string) (error) {
-    return c.chClient.OnewayRPC(context.Background(), value)
-}
-
-func (c *DummyClient) OnewayRPCContext(ctx context.Context, value string) (error) {
-    return c.chClient.OnewayRPC(ctx, value)
 }
 
 

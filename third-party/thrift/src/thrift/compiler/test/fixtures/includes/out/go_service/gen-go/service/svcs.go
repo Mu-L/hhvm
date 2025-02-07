@@ -31,59 +31,32 @@ type MyService interface {
     HasArgDocs(ctx context.Context, s *module.MyStruct, i *includes.Included) (error)
 }
 
-type MyServiceChannelClientInterface interface {
+type MyServiceClientInterface interface {
     thrift.ClientInterface
     MyService
 }
 
-type MyServiceClientInterface interface {
-    thrift.ClientInterface
-    Query(s *module.MyStruct, i *includes.Included) (error)
-    HasArgDocs(s *module.MyStruct, i *includes.Included) (error)
-}
-
-type MyServiceContextClientInterface interface {
-    MyServiceClientInterface
-    QueryContext(ctx context.Context, s *module.MyStruct, i *includes.Included) (error)
-    HasArgDocsContext(ctx context.Context, s *module.MyStruct, i *includes.Included) (error)
-}
-
-type MyServiceChannelClient struct {
+type MyServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ MyServiceChannelClientInterface = (*MyServiceChannelClient)(nil)
+var _ MyServiceClientInterface = (*MyServiceClient)(nil)
 
-func NewMyServiceChannelClient(channel thrift.RequestChannel) *MyServiceChannelClient {
-    return &MyServiceChannelClient{
+func NewMyServiceChannelClient(channel thrift.RequestChannel) *MyServiceClient {
+    return &MyServiceClient{
         ch: channel,
     }
 }
 
-func (c *MyServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type MyServiceClient struct {
-    chClient *MyServiceChannelClient
-}
-// Compile time interface enforcer
-var _ MyServiceClientInterface = (*MyServiceClient)(nil)
-var _ MyServiceContextClientInterface = (*MyServiceClient)(nil)
-
 func NewMyServiceClient(prot thrift.Protocol) *MyServiceClient {
-    return &MyServiceClient{
-        chClient: NewMyServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewMyServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *MyServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *MyServiceChannelClient) Query(ctx context.Context, s *module.MyStruct, i *includes.Included) (error) {
+func (c *MyServiceClient) Query(ctx context.Context, s *module.MyStruct, i *includes.Included) (error) {
     in := &reqMyServiceQuery{
         S: s,
         I: i,
@@ -96,15 +69,7 @@ func (c *MyServiceChannelClient) Query(ctx context.Context, s *module.MyStruct, 
     return nil
 }
 
-func (c *MyServiceClient) Query(s *module.MyStruct, i *includes.Included) (error) {
-    return c.chClient.Query(context.Background(), s, i)
-}
-
-func (c *MyServiceClient) QueryContext(ctx context.Context, s *module.MyStruct, i *includes.Included) (error) {
-    return c.chClient.Query(ctx, s, i)
-}
-
-func (c *MyServiceChannelClient) HasArgDocs(ctx context.Context, s *module.MyStruct, i *includes.Included) (error) {
+func (c *MyServiceClient) HasArgDocs(ctx context.Context, s *module.MyStruct, i *includes.Included) (error) {
     in := &reqMyServiceHasArgDocs{
         S: s,
         I: i,
@@ -115,14 +80,6 @@ func (c *MyServiceChannelClient) HasArgDocs(ctx context.Context, s *module.MyStr
         return err
     }
     return nil
-}
-
-func (c *MyServiceClient) HasArgDocs(s *module.MyStruct, i *includes.Included) (error) {
-    return c.chClient.HasArgDocs(context.Background(), s, i)
-}
-
-func (c *MyServiceClient) HasArgDocsContext(ctx context.Context, s *module.MyStruct, i *includes.Included) (error) {
-    return c.chClient.HasArgDocs(ctx, s, i)
 }
 
 

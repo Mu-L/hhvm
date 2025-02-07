@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<6e3d324f4e4d87116c6633ee778cbf1d>>
+// @generated SignedSource<<8b9c9014a3ec5cd49ac756fa2d5ad3f8>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -279,7 +279,7 @@ arena_deserializer::impl_deserialize_in_arena!(UserAttribute<'arena>);
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, show)")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, show, map)")]
 #[rust_to_ocaml(prefix = "tp_")]
 #[repr(C)]
 pub struct Tparam<'a> {
@@ -312,7 +312,7 @@ arena_deserializer::impl_deserialize_in_arena!(Tparam<'arena>);
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, show)")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, show, map)")]
 #[repr(C)]
 pub struct WhereConstraint<'a>(
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)] pub &'a Ty<'a>,
@@ -340,7 +340,7 @@ pub use oxidized::typing_defs_core::Enforcement;
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[repr(C, u8)]
 pub enum Capability<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
@@ -368,7 +368,7 @@ arena_deserializer::impl_deserialize_in_arena!(Capability<'arena>);
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[repr(C)]
 pub struct FunImplicitParams<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
@@ -392,7 +392,7 @@ arena_deserializer::impl_deserialize_in_arena!(FunImplicitParams<'arena>);
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[rust_to_ocaml(prefix = "fp_")]
 #[repr(C)]
 pub struct FunParam<'a> {
@@ -411,7 +411,7 @@ pub struct FunParam<'a> {
 impl<'a> TrivialDrop for FunParam<'a> {}
 arena_deserializer::impl_deserialize_in_arena!(FunParam<'arena>);
 
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 pub type FunParams<'a> = [&'a FunParam<'a>];
 
 /// The type of a function AND a method.
@@ -430,7 +430,7 @@ pub type FunParams<'a> = [&'a FunParam<'a>];
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[rust_to_ocaml(prefix = "ft_")]
 #[repr(C)]
 pub struct FunType<'a> {
@@ -771,6 +771,7 @@ pub enum Ty_<'a> {
     ///   Tunion [int;float] is the same as num
     ///   Tunion [null;t] is the same as Toption t
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    #[rust_to_ocaml(attr = "transform.explicit")]
     Tunion(&'a [&'a Ty<'a>]),
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     Tintersection(&'a [&'a Ty<'a>]),
@@ -1025,11 +1026,11 @@ arena_deserializer::impl_deserialize_in_arena!(RefinedConstBounds<'arena>);
     ToOcamlRep
 )]
 #[rust_to_ocaml(and)]
-#[rust_to_ocaml(attr = "deriving hash")]
 #[rust_to_ocaml(prefix = "s_")]
 #[repr(C)]
 pub struct ShapeType<'a> {
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
+    #[rust_to_ocaml(attr = "transform.opaque")]
     pub origin: TypeOrigin<'a>,
     #[serde(deserialize_with = "arena_deserializer::arena", borrow)]
     pub unknown_value: &'a Ty<'a>,
@@ -1064,7 +1065,6 @@ arena_deserializer::impl_deserialize_in_arena!(ShapeType<'arena>);
     ToOcamlRep
 )]
 #[rust_to_ocaml(and)]
-#[rust_to_ocaml(attr = "deriving hash")]
 #[rust_to_ocaml(prefix = "t_")]
 #[repr(C)]
 pub struct TupleType<'a> {
@@ -1093,7 +1093,7 @@ arena_deserializer::impl_deserialize_in_arena!(TupleType<'arena>);
     ToOcamlRep
 )]
 #[rust_to_ocaml(and)]
-#[rust_to_ocaml(attr = "deriving hash")]
+#[rust_to_ocaml(attr = "deriving (hash, transform)")]
 #[repr(C, u8)]
 pub enum TupleExtra<'a> {
     #[rust_to_ocaml(prefix = "t_")]

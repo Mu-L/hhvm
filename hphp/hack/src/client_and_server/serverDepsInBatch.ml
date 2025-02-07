@@ -9,7 +9,12 @@ let references
     (occ : Relative_path.t SymbolOccurrence.t) :
     ServerCommandTypes.Find_refs.result_or_retry =
   let (line, column, _) = Pos.info_pos occ.SymbolOccurrence.pos in
-  match ServerFindRefs.go_from_file_ctx ~ctx ~entry ~line ~column with
+  match
+    ServerFindRefs.go_from_file_ctx
+      ~ctx
+      ~entry
+      (File_content.Position.from_one_based line column)
+  with
   | None -> ServerCommandTypes.Done_or_retry.Done []
   | Some (_, action) ->
     ServerFindRefs.(go ctx action false ~stream_file:None ~hints:[] genv env)
@@ -47,7 +52,8 @@ let go
     (*Other files can only depend on things declared in this one*)
     let declarations =
       IdentifySymbolService.all_symbols_ctx ~ctx:acc_ctx_out ~entry
-      |> List.filter ~f:(fun s -> s.SymbolOccurrence.is_declaration)
+      |> List.filter ~f:(fun s ->
+             Option.is_some s.SymbolOccurrence.is_declaration)
     in
     let target_symbols = List.filter declarations ~f:(is_target line column) in
     let deps =

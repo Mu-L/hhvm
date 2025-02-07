@@ -19,8 +19,8 @@
 #include <thrift/compiler/ast/ast_visitor.h>
 #include <thrift/compiler/ast/t_program_bundle.h>
 #include <thrift/compiler/ast/t_struct.h>
+#include <thrift/compiler/codemod/codemod.h>
 #include <thrift/compiler/codemod/file_manager.h>
-#include <thrift/compiler/compiler.h>
 #include <thrift/compiler/generate/cpp/util.h>
 
 using namespace apache::thrift::compiler;
@@ -75,23 +75,16 @@ static void cppref_to_structured(
 }
 
 int main(int argc, char** argv) {
-  auto source_mgr = source_manager();
-  auto program_bundle = parse_and_get_program(
-      source_mgr, std::vector<std::string>(argv, argv + argc));
+  return apache::thrift::compiler::run_codemod(
+      argc, argv, [](source_manager& sm, t_program_bundle& pb) {
+        t_program& program = *pb.get_root_program();
+        codemod::file_manager fm(sm, program);
 
-  if (!program_bundle) {
-    return 0;
-  }
+        const_ast_visitor visitor;
+        visitor.add_field_visitor(
+            folly::partial(cppref_to_structured, std::ref(fm)));
+        visitor(program);
 
-  auto program = program_bundle->root_program();
-
-  codemod::file_manager fm(source_mgr, *program);
-
-  const_ast_visitor visitor;
-  visitor.add_field_visitor(folly::partial(cppref_to_structured, std::ref(fm)));
-  visitor(*program);
-
-  fm.apply_replacements();
-
-  return 0;
+        fm.apply_replacements();
+      });
 }

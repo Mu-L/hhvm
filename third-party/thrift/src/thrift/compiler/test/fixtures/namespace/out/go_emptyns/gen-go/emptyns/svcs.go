@@ -26,57 +26,32 @@ type TestService interface {
     Init(ctx context.Context, int1 int64) (int64, error)
 }
 
-type TestServiceChannelClientInterface interface {
+type TestServiceClientInterface interface {
     thrift.ClientInterface
     TestService
 }
 
-type TestServiceClientInterface interface {
-    thrift.ClientInterface
-    Init(int1 int64) (int64, error)
-}
-
-type TestServiceContextClientInterface interface {
-    TestServiceClientInterface
-    InitContext(ctx context.Context, int1 int64) (int64, error)
-}
-
-type TestServiceChannelClient struct {
+type TestServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ TestServiceChannelClientInterface = (*TestServiceChannelClient)(nil)
+var _ TestServiceClientInterface = (*TestServiceClient)(nil)
 
-func NewTestServiceChannelClient(channel thrift.RequestChannel) *TestServiceChannelClient {
-    return &TestServiceChannelClient{
+func NewTestServiceChannelClient(channel thrift.RequestChannel) *TestServiceClient {
+    return &TestServiceClient{
         ch: channel,
     }
 }
 
-func (c *TestServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type TestServiceClient struct {
-    chClient *TestServiceChannelClient
-}
-// Compile time interface enforcer
-var _ TestServiceClientInterface = (*TestServiceClient)(nil)
-var _ TestServiceContextClientInterface = (*TestServiceClient)(nil)
-
 func NewTestServiceClient(prot thrift.Protocol) *TestServiceClient {
-    return &TestServiceClient{
-        chClient: NewTestServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewTestServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *TestServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *TestServiceChannelClient) Init(ctx context.Context, int1 int64) (int64, error) {
+func (c *TestServiceClient) Init(ctx context.Context, int1 int64) (int64, error) {
     in := &reqTestServiceInit{
         Int1: int1,
     }
@@ -86,14 +61,6 @@ func (c *TestServiceChannelClient) Init(ctx context.Context, int1 int64) (int64,
         return 0, err
     }
     return out.GetSuccess(), nil
-}
-
-func (c *TestServiceClient) Init(int1 int64) (int64, error) {
-    return c.chClient.Init(context.Background(), int1)
-}
-
-func (c *TestServiceClient) InitContext(ctx context.Context, int1 int64) (int64, error) {
-    return c.chClient.Init(ctx, int1)
 }
 
 

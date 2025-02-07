@@ -23,7 +23,9 @@
 #include <exception>
 #include <functional>
 #include <iterator>
+#include <list>
 #include <ostream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -51,7 +53,10 @@ class outputter {
 
   void write(const ast::text& text) {
     // ast::text is guaranteed to have no newlines
-    current_line().buffer += text.content;
+    for (const ast::text::content& c : text.parts) {
+      detail::variant_match(
+          c, [&](const auto& s) { current_line().buffer += s.value; });
+    }
   }
 
   void write(const ast::newline& newline) {
@@ -99,7 +104,7 @@ class outputter {
    * buffered output. This is needed for indentation of standalone partial
    * applications.
    */
-  auto make_indent_guard(const std::optional<std::string>& indent) {
+  auto make_indent_guard(const std::optional<ast::text::whitespace>& indent) {
     // This implementation assumes that indent_guard lifetimes are nested.
     //
     // That is, if guard A was created before guard B, then guard B must be
@@ -110,9 +115,9 @@ class outputter {
     // for the stack.
     class indent_guard {
      public:
-      explicit indent_guard(outputter& out, const std::string& indent)
+      explicit indent_guard(outputter& out, const ast::text::whitespace& indent)
           : out_(out) {
-        out_.next_indent_.emplace_back(indent);
+        out_.next_indent_.emplace_back(&indent);
       }
       ~indent_guard() { out_.next_indent_.pop_back(); }
 
@@ -150,8 +155,8 @@ class outputter {
   current_line_info& current_line() {
     if (!current_line_.has_value()) {
       std::string indent;
-      for (const auto& stack : next_indent_) {
-        indent += stack;
+      for (const auto& part : next_indent_) {
+        indent += part->value;
       }
       current_line_ = {{}, std::move(indent)};
     }
@@ -159,14 +164,41 @@ class outputter {
   }
 
   std::ostream& sink_;
-  std::vector<std::string> next_indent_;
+  // The pointers are never null. The AST nodes outlive the renderer so a
+  // non-owning reference is safe here.
+  std::vector<const ast::text::whitespace*> next_indent_;
+};
+
+/**
+ * A class defining a partial block as created by `{{#let partial}}` blocks.
+ *
+ * When the renderer encounters a `{{#let partial}}` block, it produces a
+ * `native_handle<partial_definition>` object and binds it to the name provided
+ * in the partial block definition.
+ *
+ * When a partial is applied via `{{#partial ...}}` statement, the renderer will
+ * assert that the provided object is actually a
+ * `native_handle<partial_definition>`.
+ */
+class partial_definition final {
+ public:
+  using ptr = managed_ptr<partial_definition>;
+
+  source_range loc;
+  std::string name;
+  std::set<std::string> arguments;
+  std::map<ast::identifier, object::ptr, ast::identifier::compare_by_name>
+      captures;
+  // The AST's lifetime is managed by the renderer.
+  std::reference_wrapper<const ast::bodies> bodies;
 };
 
 /**
  * A class that keeps track of the stack of partial applications, including the
  * locations in the source file where partials have been applied.
  *
- * This is useful for pragmas and debugging.
+ * This is necessary for partial applications, and aids with pragmas and
+ * debugging.
  */
 class source_stack {
  public:
@@ -175,6 +207,22 @@ class source_stack {
    * each partial application's source location.
    */
   struct frame {
+    /**
+     * The frame from which the current frame was jumped to. This is
+     * nullptr for the root frame.
+     */
+    frame* prev;
+    /**
+     * The evaluation context of the source frame. When a new frame is pushed:
+     *   - macros — retain the context from the previous frame.
+     *   - partials — derive a new context from the previous frame.
+     */
+    eval_context context;
+    /**
+     * The currently active partial application, or nullptr if the frame
+     * originated from the root, or is a macro.
+     */
+    partial_definition::ptr partial;
     /**
      * For all elements except the top of the stack, this is the location of the
      * partial application within that source that led to the current stack.
@@ -185,39 +233,59 @@ class source_stack {
      * saved before the new source is pushed to the stack. After the partial
      * application completes, the saved location is dropped.
      */
-    source_location apply_location;
+    source_location jumped_from;
+    /**
+     * For `{{#pragma ignore-newlines}}`.
+     */
     bool ignore_newlines = false;
+
+    std::optional<std::string> name() const {
+      return partial == nullptr ? std::nullopt : std::optional{partial->name};
+    }
+
+    explicit frame(
+        frame* prev, eval_context ctx, partial_definition::ptr partial)
+        : prev(prev), context(std::move(ctx)), partial(std::move(partial)) {}
   };
 
   /**
    * Returns the current source stack frame, or nullptr if the stack is empty.
    */
-  frame* top() {
-    if (frames_.empty()) {
-      return nullptr;
-    }
-    return &frames_.back();
+  frame* top() { return frames_.empty() ? nullptr : &frames_.back(); }
+  const frame* top() const {
+    return frames_.empty() ? nullptr : &frames_.back();
   }
 
   /**
    * An RAII guard that pushes and pops sources from the stack of partial
    * applications.
    */
-  auto make_frame_guard(source_location apply_location) {
+  auto make_frame_guard(
+      eval_context eval_ctx,
+      partial_definition::ptr partial,
+      source_location jumped_from) {
     class frame_guard {
      public:
-      explicit frame_guard(source_stack& stack, source_location apply_location)
+      explicit frame_guard(
+          source_stack& stack,
+          eval_context eval_ctx,
+          partial_definition::ptr&& partial,
+          source_location jumped_from)
           : stack_(stack) {
         if (auto* frame = stack_.top()) {
-          frame->apply_location = std::move(apply_location);
+          // Save the jump location since we're jumping to a new frame. This
+          // allows collecting a backtrace.
+          frame->jumped_from = jumped_from;
         }
-        stack.frames_.emplace_back();
+        stack.frames_.emplace_back(
+            stack_.top(), std::move(eval_ctx), std::move(partial));
       }
       ~frame_guard() noexcept {
         assert(!stack_.frames_.empty());
         stack_.frames_.pop_back();
         if (auto* source = stack_.top()) {
-          source->apply_location = source_location();
+          // Reset the jump location since we've return to its origin.
+          source->jumped_from = source_location();
         }
       }
       frame_guard(frame_guard&& other) = delete;
@@ -228,10 +296,23 @@ class source_stack {
      private:
       source_stack& stack_;
     };
-    return frame_guard{*this, std::move(apply_location)};
+    return frame_guard{
+        *this, std::move(eval_ctx), std::move(partial), jumped_from};
   }
 
-  using backtrace = std::vector<resolved_location>;
+  struct backtrace_frame {
+    /**
+     * The resolved source location where a jump happened, or the origin of
+     * the backtrace for the top-most frame.
+     */
+    resolved_location location;
+    /**
+     * The name of the partial application (if present) from which the jump
+     * happened.
+     */
+    std::optional<std::string> name;
+  };
+  using backtrace = std::vector<backtrace_frame>;
   /**
    * Creates a back trace for debugging that contains the chain of partial
    * applications within the source.
@@ -240,16 +321,22 @@ class source_stack {
    * caller.
    */
   backtrace make_backtrace_at(const source_location& current) const {
-    assert(!frames_.empty());
     assert(current != source_location());
+    const frame* frame = top();
+    assert(frame != nullptr);
 
-    std::vector<resolved_location> result;
-    result.emplace_back(resolved_location(current, diags_.source_mgr()));
-    for (auto frame = std::next(frames_.rbegin()); frame != frames_.rend();
-         ++frame) {
-      assert(frame->apply_location != source_location());
-      result.emplace_back(
-          resolved_location(frame->apply_location, diags_.source_mgr()));
+    std::vector<backtrace_frame> result;
+    result.emplace_back(backtrace_frame{
+        resolved_location(current, diags_.source_mgr()),
+        frame->name(),
+    });
+    frame = frame->prev;
+    for (; frame != nullptr; frame = frame->prev) {
+      assert(frame->jumped_from != source_location());
+      result.emplace_back(backtrace_frame{
+          resolved_location(frame->jumped_from, diags_.source_mgr()),
+          frame->name(),
+      });
     }
     return result;
   }
@@ -257,8 +344,8 @@ class source_stack {
   explicit source_stack(diagnostics_engine& diags) : diags_(diags) {}
 
  private:
-  // Using std::vector as a stack so we can iterate over it
-  std::vector<frame> frames_;
+  // Doubly linked list provides stable iterators / pointers for backtraces.
+  std::list<frame> frames_;
   diagnostics_engine& diags_;
 };
 
@@ -321,12 +408,11 @@ class render_engine {
  public:
   explicit render_engine(
       std::ostream& out,
-      const object& root_context,
+      object::ptr root_context,
       diagnostics_engine& diags,
       render_options opts)
       : out_(out),
-        eval_context_(eval_context::with_root_scope(
-            root_context, std::exchange(opts.globals, {}))),
+        root_context_(std::move(root_context)),
         diags_(diags),
         source_stack_(diags_),
         opts_(std::move(opts)) {}
@@ -334,8 +420,12 @@ class render_engine {
   bool visit(const ast::root& root) {
     try {
       auto flush_guard = out_.make_flush_guard();
-      auto source_frame_guard =
-          source_stack_.make_frame_guard(source_location());
+      auto eval_ctx = eval_context::with_root_scope(
+          std::move(root_context_), std::exchange(opts_.globals, {}));
+      auto source_frame_guard = source_stack_.make_frame_guard(
+          std::move(eval_ctx),
+          nullptr /* the root node is not a partial */,
+          source_location());
       visit(root.body_elements);
       return true;
     } catch (const render_error& err) {
@@ -349,14 +439,17 @@ class render_engine {
       auto source_trace = [&]() -> std::string {
         std::string result;
         for (std::size_t i = 0; i < backtrace.size(); ++i) {
-          const auto& frame = backtrace[i];
+          const source_stack::backtrace_frame& frame = backtrace[i];
+          const std::string location = frame.name.has_value()
+              ? fmt::format("{} @ {}", *frame.name, frame.location.file_name())
+              : fmt::format("{}", frame.location.file_name());
           fmt::format_to(
               std::back_inserter(result),
               "#{} {} <line:{}, col:{}>\n",
               i,
-              frame.file_name(),
-              frame.line(),
-              frame.column());
+              location,
+              frame.location.line(),
+              frame.location.column());
         }
         return result;
       }();
@@ -370,6 +463,20 @@ class render_engine {
   }
 
  private:
+  using frame = source_stack::frame;
+  /**
+   * Returns the current frame of the source stack. The frame holds necessary
+   * information such as the current evaluation context.
+   *
+   * The first frame is pushed when rendering begins (ast::root) so the source
+   * stack is (almost) never empty.
+   */
+  frame& current_frame() {
+    assert(source_stack_.top() != nullptr);
+    return *source_stack_.top();
+  }
+  eval_context& eval_ctx() { return current_frame().context; }
+
   // Reports a diagnostic but avoids generating the diagnostic message unless
   // the diagnostic is actually reported. This can avoid expensive computation
   // which is then thrown away without being used.
@@ -441,7 +548,7 @@ class render_engine {
     auto undefined_diag_level = opts_.strict_undefined_variables;
 
     return whisker::visit(
-        eval_context_.lookup_object(path),
+        eval_ctx().lookup_object(path),
         [](const object::ptr& value) -> object::ptr { return value; },
         [&](const eval_scope_lookup_error& err) -> object::ptr {
           auto scope_trace = [&]() -> std::string {
@@ -599,19 +706,30 @@ class render_engine {
         });
   }
 
-  void visit(const ast::let_statement& let_statement) {
+  void bind_local(
+      eval_context& ctx,
+      source_location loc,
+      std::string name,
+      object::ptr value) {
     whisker::visit(
-        eval_context_.bind_local(
-            let_statement.id.name, evaluate(let_statement.value)),
+        ctx.bind_local(std::move(name), value),
         [](std::monostate) {
           // The binding was successful
         },
         [&](const eval_name_already_bound_error& err) {
           report_fatal_error(
-              let_statement.loc.begin,
+              loc,
               "Name '{}' is already bound in the current scope.",
               err.name());
         });
+  }
+
+  void visit(const ast::let_statement& let_statement) {
+    bind_local(
+        eval_ctx(),
+        let_statement.loc.begin,
+        let_statement.id.name,
+        evaluate(let_statement.value));
   }
 
   void visit(const ast::pragma_statement& pragma_statement) {
@@ -706,9 +824,9 @@ class render_engine {
     };
 
     const auto do_visit = [&](object::ptr scope) {
-      eval_context_.push_scope(std::move(scope));
+      eval_ctx().push_scope(std::move(scope));
       visit(section.body_elements);
-      eval_context_.pop_scope();
+      eval_ctx().pop_scope();
     };
 
     const auto do_conditional_visit = [&](bool condition) {
@@ -790,9 +908,9 @@ class render_engine {
 
   void visit(const ast::conditional_block& conditional_block) {
     const auto do_visit = [&](const ast::bodies& body_elements) {
-      eval_context_.push_scope(manage_as_static(whisker::make::null));
+      eval_ctx().push_scope(manage_as_static(whisker::make::null));
       visit(body_elements);
-      eval_context_.pop_scope();
+      eval_ctx().pop_scope();
     };
 
     // Returns whether the else clause should be evaluated.
@@ -840,9 +958,9 @@ class render_engine {
               expr.to_string(),
               to_string(*result));
         });
-    eval_context_.push_scope(std::move(result));
+    eval_ctx().push_scope(std::move(result));
     visit(with_block.body_elements);
-    eval_context_.pop_scope();
+    eval_ctx().pop_scope();
   }
 
   void visit(const ast::each_block& each_block) {
@@ -851,29 +969,35 @@ class render_engine {
 
     const auto do_visit = [this, &each_block](i64 index, object::ptr scope) {
       if (const auto& captured = each_block.captured) {
-        eval_context_.push_scope(manage_as_static(whisker::make::null));
-        eval_context_.bind_local(captured->element.name, std::move(scope));
+        eval_ctx().push_scope(manage_as_static(whisker::make::null));
+        bind_local(
+            eval_ctx(),
+            captured->element.loc.begin,
+            captured->element.name,
+            std::move(scope));
         if (captured->index.has_value()) {
-          eval_context_.bind_local(
+          bind_local(
+              eval_ctx(),
+              captured->index->loc.begin,
               captured->index->name,
               manage_owned<object>(whisker::make::i64(index)));
         }
       } else {
         // When captures are not present, each element becomes the implicit
         // context object (`{{.}}`).
-        eval_context_.push_scope(std::move(scope));
+        eval_ctx().push_scope(std::move(scope));
       }
       visit(each_block.body_elements);
-      eval_context_.pop_scope();
+      eval_ctx().pop_scope();
     };
 
     const auto do_visit_else = [this, &each_block]() {
       if (!each_block.else_clause.has_value()) {
         return;
       }
-      eval_context_.push_scope(manage_as_static(whisker::make::null));
+      eval_ctx().push_scope(manage_as_static(whisker::make::null));
       visit(each_block.else_clause->body_elements);
-      eval_context_.pop_scope();
+      eval_ctx().pop_scope();
     };
 
     result->visit(
@@ -914,42 +1038,152 @@ class render_engine {
         });
   }
 
-  void visit(const ast::partial_apply& partial_apply) {
+  void visit(const ast::partial_block& partial_block) {
+    std::string name = partial_block.name.name;
+
+    std::set<std::string> arguments;
+    for (const ast::identifier& id : partial_block.arguments) {
+      auto [_, inserted] = arguments.insert(id.name);
+      if (!inserted) {
+        report_fatal_error(
+            id.loc.begin,
+            "Duplicate capture name in partial block definition '{}'",
+            name);
+      }
+    }
+
+    std::map<ast::identifier, object::ptr, ast::identifier::compare_by_name>
+        captures;
+    for (const ast::identifier& capture : partial_block.captures) {
+      object::ptr captured_object = lookup_variable(
+          ast::variable_lookup{capture.loc, std::vector{capture}});
+      captures.emplace(std::pair{capture, std::move(captured_object)});
+    }
+
+    partial_definition::ptr definition =
+        manage_owned<partial_definition>(partial_definition{
+            partial_block.loc,
+            name,
+            std::move(arguments),
+            std::move(captures),
+            std::cref(partial_block.body_elements),
+        });
+    bind_local(
+        eval_ctx(),
+        partial_block.name.loc.begin,
+        std::move(name),
+        manage_owned<object>(native_handle<>(std::move(definition))));
+  }
+
+  void visit(const ast::partial_statement& partial_statement) {
+    object::ptr lookup = evaluate(partial_statement.partial);
+
+    partial_definition::ptr partial = std::invoke([&] {
+      if (lookup->is_native_handle()) {
+        if (std::optional<native_handle<partial_definition>> handle =
+                lookup->as_native_handle().try_as<partial_definition>()) {
+          return handle->ptr();
+        }
+      }
+      report_fatal_error(
+          partial_statement.partial.loc.begin,
+          "Expression '{}' does not evaluate to a partial. The encountered value is:\n{}",
+          partial_statement.partial.to_string(),
+          to_string(*lookup));
+    });
+
+    const auto& named_arguments = partial_statement.named_arguments;
+    auto [missing, extras] = std::invoke([&] {
+      std::set<std::string> not_provided = partial->arguments;
+      std::set<std::string> leftovers;
+      for (const auto& [name, _] : named_arguments) {
+        if (not_provided.erase(name) == 0) {
+          leftovers.insert(name);
+        }
+      }
+      return std::pair{std::move(not_provided), std::move(leftovers)};
+    });
+    if (!missing.empty()) {
+      report_fatal_error(
+          partial_statement.loc.begin,
+          "Partial '{}' is missing named arguments: {}",
+          partial->name,
+          fmt::join(missing, ", "));
+    }
+    if (!extras.empty()) {
+      report_fatal_error(
+          partial_statement.loc.begin,
+          "Partial '{}' received unexpected named arguments: {}",
+          partial->name,
+          fmt::join(extras, ", "));
+    }
+
+    // Partials get a new evaluation context derived from the current one.
+    auto derived_ctx = eval_ctx().make_derived();
+    // Make the partial itself available in the derived context
+    bind_local(
+        derived_ctx,
+        partial_statement.partial.loc.begin,
+        partial->name,
+        lookup);
+
+    for (const std::string& argument : partial->arguments) {
+      auto arg = named_arguments.find(argument);
+      // We checked against argument mismatches above
+      assert(arg != named_arguments.end());
+      const ast::identifier& id = arg->second.name;
+      const ast::expression& expr = arg->second.value;
+      bind_local(derived_ctx, id.loc.begin, argument, evaluate(expr));
+    }
+
+    for (const auto& [capture, value] : partial->captures) {
+      bind_local(derived_ctx, capture.loc.begin, capture.name, value);
+    }
+
+    auto source_frame_guard = source_stack_.make_frame_guard(
+        std::move(derived_ctx), partial, partial_statement.loc.begin);
+    auto indent_guard = out_.make_indent_guard(
+        partial_statement.standalone_indentation_within_line);
+    visit(partial->bodies);
+  }
+
+  void visit(const ast::macro& macro) {
     std::vector<std::string> path;
-    path.reserve(partial_apply.path.parts.size());
-    for (const ast::path_component& component : partial_apply.path.parts) {
+    path.reserve(macro.path.parts.size());
+    for (const ast::path_component& component : macro.path.parts) {
       path.push_back(component.value);
     }
 
-    auto* partial_resolver = opts_.partial_resolver.get();
-    if (partial_resolver == nullptr) {
+    auto* macro_resolver = opts_.macro_resolver.get();
+    if (macro_resolver == nullptr) {
       report_fatal_error(
-          partial_apply.loc.begin,
-          "No partial resolver was provided. Cannot resolve partial with path '{}'",
-          partial_apply.path_string());
+          macro.loc.begin,
+          "No macro resolver was provided. Cannot resolve macro with path '{}'",
+          macro.path_string());
     }
 
-    auto resolved_partial =
-        partial_resolver->resolve(path, partial_apply.loc.begin, diags_);
-    if (!resolved_partial.has_value()) {
+    auto resolved_macro =
+        macro_resolver->resolve(path, macro.loc.begin, diags_);
+    if (!resolved_macro.has_value()) {
       report_fatal_error(
-          partial_apply.loc.begin,
-          "Partial with path '{}' was not found",
-          partial_apply.path_string());
+          macro.loc.begin,
+          "Macro with path '{}' was not found",
+          macro.path_string());
     }
 
-    // Partial applications stored in a stack for pragmas and debugging reasons.
-    auto source_frame_guard =
-        source_stack_.make_frame_guard(partial_apply.loc.begin);
-    // Partials are "inlined" into their invocation site. In other words, they
+    // Macros are "inlined" into their invocation site. In other words, they
     // execute within the scope where they are invoked.
+    auto source_frame_guard = source_stack_.make_frame_guard(
+        current_frame().context,
+        nullptr /* no partial definition because macros are at root scope */,
+        macro.loc.begin);
     auto indent_guard =
-        out_.make_indent_guard(partial_apply.standalone_offset_within_line);
-    visit(resolved_partial->body_elements);
+        out_.make_indent_guard(macro.standalone_indentation_within_line);
+    visit(resolved_macro->body_elements);
   }
 
   outputter out_;
-  eval_context eval_context_;
+  object::ptr root_context_;
   diagnostics_engine& diags_;
   source_stack source_stack_;
   render_options opts_;
@@ -963,7 +1197,8 @@ bool render(
     const object& root_context,
     diagnostics_engine& diags,
     render_options opts) {
-  render_engine engine{out, root_context, diags, std::move(opts)};
+  render_engine engine{
+      out, manage_as_static(root_context), diags, std::move(opts)};
   return engine.visit(root);
 }
 

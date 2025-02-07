@@ -3,6 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 
+#![feature(box_patterns)]
 use std::fmt;
 use std::hash::Hash;
 
@@ -19,9 +20,11 @@ use serde::Serialize;
 mod relative_path;
 mod symbol;
 mod to_oxidized;
+mod to_oxidized_by_ref;
 pub use oxidized::file_pos_large::FilePosLarge;
 pub use symbol::*;
 pub use to_oxidized::ToOxidized;
+pub use to_oxidized_by_ref::ToOxidizedByRef;
 
 pub use crate::relative_path::*;
 
@@ -32,9 +35,11 @@ pub trait Pos:
     + std::fmt::Debug
     + Serialize
     + DeserializeOwned
+    + for<'a> From<oxidized::pos::Pos>
     + for<'a> From<&'a oxidized::pos::Pos>
     + for<'a> From<&'a oxidized_by_ref::pos::Pos<'a>>
-    + for<'a> ToOxidized<'a, Output = &'a oxidized_by_ref::pos::Pos<'a>>
+    + for<'a> ToOxidizedByRef<'a, Output = &'a oxidized_by_ref::pos::Pos<'a>>
+    + for<'a> ToOxidized<Output = oxidized::pos::Pos>
     + ToOcamlRep
     + FromOcamlRep
     + EqModuloPos
@@ -247,6 +252,12 @@ impl From<BPos> for oxidized::pos::Pos {
     }
 }
 
+impl From<oxidized::pos::Pos> for BPos {
+    fn from(pos: oxidized::pos::Pos) -> Self {
+        Self::from_ast(&pos)
+    }
+}
+
 impl<'a> From<&'a oxidized::pos::Pos> for BPos {
     fn from(pos: &'a oxidized::pos::Pos) -> Self {
         Self::from_ast(pos)
@@ -259,11 +270,11 @@ impl<'a> From<&'a oxidized_by_ref::pos::Pos<'a>> for BPos {
     }
 }
 
-impl<'a> ToOxidized<'a> for BPos {
+impl<'a> ToOxidizedByRef<'a> for BPos {
     type Output = &'a oxidized_by_ref::pos::Pos<'a>;
 
-    fn to_oxidized(&self, arena: &'a bumpalo::Bump) -> Self::Output {
-        let file = self.file().to_oxidized(arena);
+    fn to_oxidized_by_ref(&self, arena: &'a bumpalo::Bump) -> Self::Output {
+        let file = self.file().to_oxidized_by_ref(arena);
         arena.alloc(match &self.0 {
             PosImpl::Small { span, .. } => {
                 let (start, end) = **span;
@@ -285,6 +296,34 @@ impl<'a> ToOxidized<'a> for BPos {
                 oxidized_by_ref::pos::Pos::from_raw_span(arena, file, span)
             }
         })
+    }
+}
+
+impl ToOxidized for BPos {
+    type Output = oxidized::pos::Pos;
+
+    fn to_oxidized(self) -> Self::Output {
+        let file = self.file().to_oxidized();
+        match self.0 {
+            PosImpl::Small { box span, .. } => {
+                let (start, end) = span;
+                oxidized::pos::Pos::from_raw_span(
+                    file.into(),
+                    PosSpanRaw {
+                        start: start.into(),
+                        end: end.into(),
+                    },
+                )
+            }
+            PosImpl::Large { box span, .. } => {
+                let (start, end) = span;
+                oxidized::pos::Pos::from_raw_span(file.into(), PosSpanRaw { start, end })
+            }
+            PosImpl::Tiny { span, .. } => {
+                let span = span.to_raw_span();
+                oxidized::pos::Pos::from_raw_span(file.into(), span)
+            }
+        }
     }
 }
 
@@ -411,6 +450,12 @@ impl EqModuloPos for NPos {
     }
 }
 
+impl From<oxidized::pos::Pos> for NPos {
+    fn from(pos: oxidized::pos::Pos) -> Self {
+        Self::from_ast(&pos)
+    }
+}
+
 impl<'a> From<&'a oxidized::pos::Pos> for NPos {
     fn from(pos: &'a oxidized::pos::Pos) -> Self {
         Self::from_ast(pos)
@@ -423,11 +468,19 @@ impl<'a> From<&'a oxidized_by_ref::pos::Pos<'a>> for NPos {
     }
 }
 
-impl<'a> ToOxidized<'a> for NPos {
+impl<'a> ToOxidizedByRef<'a> for NPos {
     type Output = &'a oxidized_by_ref::pos::Pos<'a>;
 
-    fn to_oxidized(&self, _arena: &'a bumpalo::Bump) -> Self::Output {
+    fn to_oxidized_by_ref(&self, _arena: &'a bumpalo::Bump) -> Self::Output {
         oxidized_by_ref::pos::Pos::none()
+    }
+}
+
+impl ToOxidized for NPos {
+    type Output = oxidized::pos::Pos;
+
+    fn to_oxidized(self) -> Self::Output {
+        oxidized::pos::Pos::NONE
     }
 }
 
@@ -487,6 +540,13 @@ impl<S: Copy, P> Positioned<S, P> {
     }
 }
 
+impl<S: From<String>, P: Pos> From<oxidized::ast_defs::Id> for Positioned<S, P> {
+    fn from(pos_id: oxidized::ast_defs::Id) -> Self {
+        let oxidized::ast_defs::Id(pos, id) = pos_id;
+        Self::new(Pos::from_ast(&pos), S::from(id))
+    }
+}
+
 impl<'a, S: From<&'a str>, P: Pos> From<&'a oxidized::ast_defs::Id> for Positioned<S, P> {
     fn from(pos_id: &'a oxidized::ast_defs::Id) -> Self {
         let oxidized::ast_defs::Id(pos, id) = pos_id;
@@ -501,6 +561,13 @@ impl<'a, S: From<&'a str>, P: Pos> From<oxidized_by_ref::ast_defs::Id<'a>> for P
     }
 }
 
+impl<S: From<String>, P: Pos> From<oxidized::typing_defs::PosId> for Positioned<S, P> {
+    fn from(pos_id: oxidized::typing_defs::PosId) -> Self {
+        let (pos, id) = pos_id;
+        Self::new(Pos::from_ast(&pos), S::from(id))
+    }
+}
+
 impl<'a, S: From<&'a str>, P: Pos> From<oxidized_by_ref::typing_defs::PosId<'a>>
     for Positioned<S, P>
 {
@@ -510,10 +577,23 @@ impl<'a, S: From<&'a str>, P: Pos> From<oxidized_by_ref::typing_defs::PosId<'a>>
     }
 }
 
-impl<'a, S: ToOxidized<'a, Output = &'a str>, P: Pos> ToOxidized<'a> for Positioned<S, P> {
+impl<'a, S: ToOxidizedByRef<'a, Output = &'a str>, P: Pos> ToOxidizedByRef<'a>
+    for Positioned<S, P>
+{
     type Output = oxidized_by_ref::typing_reason::PosId<'a>;
 
-    fn to_oxidized(&self, arena: &'a bumpalo::Bump) -> Self::Output {
-        (self.pos.to_oxidized(arena), self.id.to_oxidized(arena))
+    fn to_oxidized_by_ref(&self, arena: &'a bumpalo::Bump) -> Self::Output {
+        (
+            self.pos.to_oxidized_by_ref(arena),
+            self.id.to_oxidized_by_ref(arena),
+        )
+    }
+}
+
+impl<S: ToOxidized<Output = String>, P: Pos> ToOxidized for Positioned<S, P> {
+    type Output = oxidized::typing_reason::PosId;
+
+    fn to_oxidized(self) -> Self::Output {
+        (self.pos.to_oxidized(), self.id.to_oxidized())
     }
 }

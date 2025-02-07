@@ -3,7 +3,9 @@
 <<file:__EnableUnstableFeatures('require_constraint')>>
 
 class C {
-    public function bar(): void { echo "bar\n"; }
+    use T;
+
+    public function bar(): void {}
 }
 
 trait T {

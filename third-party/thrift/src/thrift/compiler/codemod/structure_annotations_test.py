@@ -167,6 +167,7 @@ class StructureAnnotations(unittest.TestCase):
                     void f() (thread = "eb", priority = "HIGH")
                     void j() (thread = "tm", priority = "ZUCK-LEVEL")
                 } (priority = "BEST_EFFORT")
+                struct MyStructWithUri {} (thrift.uri="my/path/here")
 
                 """
             ),
@@ -237,6 +238,8 @@ class StructureAnnotations(unittest.TestCase):
                     void f()
                     void j()
                 } (priority = "BEST_EFFORT")
+                @thrift.Uri{value = "my/path/here"}
+                struct MyStructWithUri {}
                 """
             ),
         )
@@ -443,6 +446,16 @@ class StructureAnnotations(unittest.TestCase):
                     1: i32 (rust.type = "u32") f (rust.name = "foo", rust.box, rust.type = "foo");
                 } (rust.arc, rust.copy, rust.exhaustive, rust.ord, rust.serde = "true", rust.mod = "foo", rust.derive = "Foo, Bar")
 
+                struct SerdeOptOut {} (rust.serde = "false")
+
+                enum E {
+                  UNKNOWN = 0,
+                } (rust.copy, rust.exhaustive, rust.name = "E2")
+
+                service S {} (rust.request_context)
+
+                typedef binary Sha256 (rust.newtype, rust.type = "SmallVec<[u8; 32]>")
+
                 """
             ),
         )
@@ -458,17 +471,32 @@ class StructureAnnotations(unittest.TestCase):
 
                 @rust.Arc
                 @rust.Copy
-                @rust.Derive{derive = ["Foo","Bar"]}
+                @rust.Derive{derives = ["Foo","Bar"]}
                 @rust.Exhaustive
                 @rust.Mod{name = "foo"}
                 @rust.Ord
-                @rust.Serde{enabled = true}
+                @rust.Serde
                 struct S {
                   @rust.Box
                   @rust.Name{name = "foo"}
                   @rust.Type{name = "u32"}
                   1: i32  f ;
                 }
+
+                @rust.Serde{enabled = false}
+                struct SerdeOptOut {}
+
+                @rust.Name{name = "E2"}
+                enum E {
+                  UNKNOWN = 0,
+                }
+
+                @rust.RequestContext
+                service S {}
+
+                @rust.NewType
+                @rust.Type{name = "SmallVec<[u8; 32]>"}
+                typedef binary Sha256
                 """
             ),
         )
@@ -481,7 +509,7 @@ class StructureAnnotations(unittest.TestCase):
                 include "thrift.thrift"
 
                 struct S {
-                    1: i32 field1 (foo);
+                    1: i32 field1 (foo, quote = '"', both_quotes = "'\\"'");
                 }(foo, bar = "baz")
 
                 typedef i32 (foo, hs.type = "hs") T (bar = "baz", hs.category = "value")
@@ -493,6 +521,10 @@ class StructureAnnotations(unittest.TestCase):
                     @DeprecatedUnvalidatedAnnotations{items = {"bar": "baz", "foo": "1"}}
                     1: i32 f;
                 }
+
+                service S {
+                    void f(1: i32 a (annot))
+                } 
 
                 """
             ),
@@ -522,7 +554,7 @@ class StructureAnnotations(unittest.TestCase):
 
                 @thrift.DeprecatedUnvalidatedAnnotations{items = {"bar": "baz", "foo": "1"}}
                 struct S {
-                    @thrift.DeprecatedUnvalidatedAnnotations{items = {"foo": "1"}}
+                    @thrift.DeprecatedUnvalidatedAnnotations{items = {"both_quotes": "'\\"'", "foo": "1", "quote": '"'}}
                     1: i32 field1 ;
                 }
 
@@ -536,6 +568,11 @@ class StructureAnnotations(unittest.TestCase):
                 struct AlreadyVisited {
                     @DeprecatedUnvalidatedAnnotations{items = {"bar": "baz", "foo": "1"}}
                     1: i32 f;
+                }
+
+                service S {
+                    void f(@thrift.DeprecatedUnvalidatedAnnotations{items = {"annot": "1"}}
+                    1: i32 a )
                 }
                 """
             ),

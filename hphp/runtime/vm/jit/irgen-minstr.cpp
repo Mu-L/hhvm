@@ -113,7 +113,7 @@ Type knownTypeForProp(const Class::Prop& prop,
                       bool ignoreLateInit) {
   auto knownType = TCell;
   if (Cfg::Eval::CheckPropTypeHints >= 3) {
-    knownType = typeFromPropTC(prop.typeConstraints.main(), propCls, ctx, false);
+    knownType = typeFromPropTC(prop.typeConstraints, propCls, ctx, false);
     if (!(prop.attrs & AttrNoImplicitNullable)) knownType |= TInitNull;
   }
   knownType &= typeFromRAT(prop.repoAuthType, ctx);
@@ -1805,8 +1805,6 @@ bool propertyMayBeCountable(const Class::Prop& prop) {
   // here because the classes they refer to may not yet be defined. We return
   // `true` for these cases. Doing so doesn't cause unnecessary pessimization,
   // because subtypes of Object are going to be countable anyway.
-  auto const& tc = prop.typeConstraints.main();
-  if (tc.isSubObject() || tc.isThis() || tc.isUnresolved()) return true;
   if (prop.repoAuthType.name()) return true;
   auto const type = knownTypeForProp(prop, nullptr, nullptr, true);
   return type.maybe(jit::TCounted);
@@ -2121,12 +2119,12 @@ SSATmp* setOpPropImpl(IRGS& env, SetOpOp op, SSATmp* base,
     auto const fast = [&]{
       if (Cfg::Eval::CheckPropTypeHints <= 0) return true;
       if (!propInfo->typeConstraints ||
-          !propInfo->typeConstraints->main().isCheckable()) {
+          !propInfo->typeConstraints->isCheckable()) {
         return true;
       }
       if (op != SetOpOp::ConcatEqual) return false;
       if (propInfo->knownType <= TStr) return true;
-      return propInfo->typeConstraints->main().alwaysPasses(KindOfString);
+      return propInfo->typeConstraints->alwaysPasses(KindOfString);
     }();
 
     if (!fast) {

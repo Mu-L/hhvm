@@ -28,24 +28,6 @@
   }
 
 namespace apache::thrift::test {
-namespace detail {
-
-template <typename Expected, typename Actual>
-struct SameType;
-template <typename T>
-struct SameType<T, T> : std::true_type {};
-} // namespace detail
-
-template <typename Expected, typename Actual>
-constexpr bool same_type = detail::SameType<Expected, Actual>::value;
-
-// Helper that produces a compile time error (with the types of the tags) if the
-// tags do not match. For example:
-//   static_assert(same_tag<bool_t, void_t>);
-// Will produce an error message similar to:
-//   implicit instantiation of undefined template 'SameTag<bool_t, void_t>'
-template <typename Expected, typename Actual>
-constexpr bool same_tag = same_type<Expected, Actual>;
 
 template <typename T>
 struct TestValue {

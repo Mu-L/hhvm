@@ -23,7 +23,6 @@
 #include <fmt/core.h>
 
 #include <cassert>
-#include <cstddef>
 #include <iterator>
 #include <map>
 #include <optional>
@@ -219,12 +218,23 @@ bool try_consume_tokens(
   return true;
 }
 
-/**
- * Creates an identifier AST node from identifier token.
- */
+// Creates AST nodes that are derived from exactly one textual lexer token.
+template <typename T, tok Kind>
+T make_textual_node(const token& t) {
+  assert(t.kind == Kind);
+  return T{t.range, std::string(t.string_value())};
+}
 ast::identifier make_identifier(const token& t) {
-  assert(t.kind == tok::identifier);
-  return ast::identifier{t.range, std::string(t.string_value())};
+  return make_textual_node<ast::identifier, tok::identifier>(t);
+}
+ast::path_component make_path_component(const token& t) {
+  return make_textual_node<ast::path_component, tok::path_component>(t);
+}
+ast::text::whitespace make_whitespace_text(const token& t) {
+  return make_textual_node<ast::text::whitespace, tok::whitespace>(t);
+}
+ast::text::non_whitespace make_non_whitespace_text(const token& t) {
+  return make_textual_node<ast::text::non_whitespace, tok::text>(t);
 }
 
 /**
@@ -305,7 +315,7 @@ class standalone_lines_scanner {
      * should be replicated for subsequent lines in multi-line partial
      * applications.
      */
-    std::string preceding_whitespace;
+    ast::text::whitespace preceding_whitespace;
   };
   using standalone_marking =
       std::variant<removed, standalone_block, partial_apply>;
@@ -322,7 +332,7 @@ class standalone_lines_scanner {
   /**
    * Returns a result containing the cursors of the tokens that are "involved"
    * in standalone constructs. The cursors can be used by the parser to remove
-   * whitespace or add partial standalone offset information.
+   * whitespace or add partial standalone indentation information.
    */
   static result mark(const std::vector<token>& tokens) {
     assert(!tokens.empty());
@@ -437,11 +447,16 @@ class standalone_lines_scanner {
               drain_current_line();
               continue;
             }
-            std::string preceding_whitespace;
-            for (cursor c = current_line.start; c != scan_start; ++c) {
-              assert(c->kind == tok::whitespace);
-              preceding_whitespace += c->string_value();
-            }
+            auto preceding_whitespace =
+                std::invoke([&]() -> ast::text::whitespace {
+                  if (current_line.start == scan_start) {
+                    return {};
+                  }
+                  // There should be exactly one whitespace token on the line
+                  assert(current_line.start->kind == tok::whitespace);
+                  assert(std::next(current_line.start) == scan_start);
+                  return make_whitespace_text(*current_line.start);
+                });
             current_line.markings.emplace_back(
                 scan_start, partial_apply{std::move(preceding_whitespace)});
             // Do not strip the left side
@@ -479,8 +494,8 @@ class standalone_lines_scanner {
   // stripped when standalone.
   enum class standalone_compatible_kind {
     comment, // "{{!"
-    block_or_statement, // "{{#", "{{^", or "{{"/"}
-    partial_apply, // "{{>"
+    block_or_statement, // "{{#" (except "{{#partial"), "{{^", or "{{"/"}
+    partial_apply, // "{{>", "{{#partial"
     ineligible // "{{variable}} for example
   };
   static parse_result<standalone_compatible_kind> parse_standalone_compatible(
@@ -498,7 +513,9 @@ class standalone_lines_scanner {
       case tok::pound:
       case tok::caret:
       case tok::slash:
-        kind = standalone_compatible_kind::block_or_statement;
+        kind = scan.peek().kind == tok::kw_partial
+            ? standalone_compatible_kind::partial_apply
+            : standalone_compatible_kind::block_or_statement;
         break;
       case tok::gt:
         kind = standalone_compatible_kind::partial_apply;
@@ -553,6 +570,13 @@ class parser {
   std::vector<token> tokens_;
   diagnostics_engine& diags_;
   standalone_lines_scanner::result standalone_markings_;
+  /**
+   * Whether the parser has encountered non-fatal errors. This is used to signal
+   * that the parsing should eventually fail but the parser has made an attempt
+   * to recover from the error in order to provide other potentially useful
+   * diagnostics that arise from parsing.
+   */
+  bool has_non_fatal_errors_ = false;
 
   // Reports an error without failing the parse.
   template <typename... T>
@@ -560,6 +584,7 @@ class parser {
       const parser_scan_window& scan,
       fmt::format_string<T...> msg,
       T&&... args) {
+    has_non_fatal_errors_ = true;
     diags_.error(scan.head_location(), msg, std::forward<T>(args)...);
   }
 
@@ -592,7 +617,7 @@ class parser {
     return standalone_markings_.find(pos) != standalone_markings_.end();
   }
 
-  std::optional<std::string> standalone_partial_offset(
+  std::optional<ast::text::whitespace> standalone_partial_indentation(
       parser_scan_window::cursor pos) const {
     assert(pos->kind == tok::open);
     if (auto marking = standalone_markings_.find(pos);
@@ -624,6 +649,11 @@ class parser {
         } else {
           report_fatal_expected(scan, expected_types);
         }
+      }
+      if (has_non_fatal_errors_) {
+        // Even though parsing continued after failure, the error-recovered AST
+        // is not valid.
+        return std::nullopt;
       }
       return ast::root{original_scan.start_location(), std::move(bodies)};
     } catch (const parse_error&) {
@@ -771,19 +801,20 @@ class parser {
   //
   // Returns the ast::text found otherwise with a non-empty string.
   //
-  // text → { (tok::text | whitespace)+ }
+  // text → { (tok::text | tok::whitespace)+ }
   parse_result<std::optional<ast::text>> parse_text(parser_scan_window scan) {
     assert(scan.empty());
-    std::string result;
+    std::vector<ast::text::content> parts;
     while (scan.can_advance()) {
       const token& t = scan.peek();
-      if (t.kind != tok::text && t.kind != tok::whitespace) {
+      if (t.kind == tok::text) {
+        parts.emplace_back(make_non_whitespace_text(t));
+      } else if (t.kind == tok::whitespace) {
+        if (!is_standalone_whitespace(scan.head)) {
+          parts.emplace_back(make_whitespace_text(t));
+        }
+      } else {
         break;
-      }
-      bool is_stripped =
-          t.kind == tok::whitespace && is_standalone_whitespace(scan.head);
-      if (!is_stripped) {
-        result += t.string_value();
       }
       scan.advance();
     }
@@ -791,13 +822,13 @@ class parser {
       // No text was scanned. Not even standalone whitespace.
       return no_parse_result();
     }
-    if (result.empty()) {
+    if (parts.empty()) {
       // Text was scanned but they were all stripped. We still need to advance
       // the scan window.
       return {std::nullopt, scan};
     }
     return parse_result{
-        std::optional{ast::text{scan.range(), std::move(result)}}, scan};
+        std::optional{ast::text{scan.range(), std::move(parts)}}, scan};
   }
 
   // Returns an empty parse result if no newline was found.
@@ -856,10 +887,12 @@ class parser {
       ast::conditional_block,
       ast::with_block,
       ast::each_block,
+      ast::partial_block,
+      ast::partial_statement,
       ast::let_statement,
       ast::pragma_statement,
-      ast::partial_apply>;
-  // template → { interpolation | block | statement | partial-apply }
+      ast::macro>;
+  // template → { interpolation | block | statement | macro }
   // block → { section-block | conditional-block }
   // statement → { let-statement | pragma-statement }
   parse_result<template_body> parse_template(parser_scan_window scan) {
@@ -890,19 +923,22 @@ class parser {
       templ = std::move(with_block).consume_and_advance(&scan);
     } else if (parse_result each_block = parse_each_block(scan)) {
       templ = std::move(each_block).consume_and_advance(&scan);
+    } else if (parse_result partial_block = parse_partial_block(scan)) {
+      templ = std::move(partial_block).consume_and_advance(&scan);
     } else if (parse_result let_statement = parse_let_statement(scan)) {
       templ = std::move(let_statement).consume_and_advance(&scan);
     } else if (parse_result pragma_statement = parse_pragma_statement(scan)) {
       templ = std::move(pragma_statement).consume_and_advance(&scan);
+    } else if (parse_result partial_statement = parse_partial_statement(scan)) {
+      templ = std::move(partial_statement).consume_and_advance(&scan);
     } else if (parse_result section_block = parse_section_block(scan)) {
       templ = std::move(section_block).consume_and_advance(&scan);
-    } else if (parse_result partial_apply = parse_partial_apply(scan)) {
-      templ = std::move(partial_apply).consume_and_advance(&scan);
+    } else if (parse_result macro = parse_macro(scan)) {
+      templ = std::move(macro).consume_and_advance(&scan);
     }
     if (!templ.has_value()) {
       report_fatal_expected(
-          scan,
-          "interpolation, block, statement, or partial-apply in template");
+          scan, "interpolation, block, statement, or macro in template");
     }
     return {std::move(*templ), scan};
   }
@@ -928,7 +964,7 @@ class parser {
         // this is a block closing
         return no_parse_result();
       case tok::gt:
-        // this is a partial-apply
+        // this is a macro
         return no_parse_result();
       default:
         // continue parsing as a variable (and fail if it's not!)
@@ -1042,9 +1078,7 @@ class parser {
     ast::variable_lookup close =
         std::move(lookup_at_close).consume_and_advance(&scan);
 
-    bool should_fail = false;
     if (open != close) {
-      should_fail = true;
       report_error(
           scan,
           "section-block opening '{}' does not match closing '{}'",
@@ -1052,15 +1086,11 @@ class parser {
           close.chain_string());
     }
     if (!try_consume_token(&scan, tok::close)) {
-      should_fail = true;
       report_error(
           scan,
           "expected {} to close section-block '{}'",
           tok::close,
           open.chain_string());
-    }
-    if (should_fail) {
-      throw parse_error();
     }
 
     return {
@@ -1150,7 +1180,7 @@ class parser {
         if (parse_result expr = parse_expression(scan.make_fresh())) {
           return {
               named_argument_entry{
-                  id.string_value(),
+                  std::string(id.string_value()),
                   function_call::named_argument{
                       make_identifier(id),
                       std::make_unique<expression>(
@@ -1262,6 +1292,11 @@ class parser {
     const auto scan_start = scan.start;
 
     if (!try_consume_tokens(&scan, {tok::open, tok::pound, tok::kw_let})) {
+      return no_parse_result();
+    }
+
+    if (try_consume_token(&scan, tok::kw_partial)) {
+      // This is actually a partial-block
       return no_parse_result();
     }
 
@@ -1387,7 +1422,7 @@ class parser {
     }
     ast::expression close = {std::move(condition).consume_and_advance(&scan)};
     if (close != open) {
-      report_fatal_error(
+      report_error(
           scan,
           "conditional-block opening '{}' does not match closing '{}'",
           open.to_string(),
@@ -1543,9 +1578,235 @@ class parser {
         scan};
   }
 
-  // partial-apply → { "{{" ~ ">" ~ partial-lookup ~ "}}" }
-  parse_result<ast::partial_apply> parse_partial_apply(
+  // partial-block →
+  //   { partial-block-open ~ body* ~ partial-block-close }
+  // partial-block-open →
+  //   { "{{#" ~ "let" ~ "partial" ~ identifier ~
+  //      partial-block-args? ~ partial-block-captures? ~ "}}" }
+  // partial-block-args →
+  //   { "|" ~ identifier+ ~ "|" }
+  // partial-block-captures →
+  //   { "captures" ~ "|" ~ identifier+ ~ "|" }
+  // partial-block-close →
+  //   { "{{/" ~ "let" ~ "partial" ~ "}}" }
+  parse_result<ast::partial_block> parse_partial_block(
       parser_scan_window scan) {
+    assert(scan.empty());
+    const auto scan_start = scan.start;
+
+    if (!try_consume_tokens(
+            &scan, {tok::open, tok::pound, tok::kw_let, tok::kw_partial})) {
+      return no_parse_result();
+    }
+
+    ast::identifier id = std::invoke([&] {
+      const token* component = try_consume_token(&scan, tok::identifier);
+      if (component == nullptr) {
+        report_fatal_expected(scan, "identifier in partial-block");
+      }
+      return make_identifier(*component);
+    });
+
+    const auto expect_on_open = [&](tok kind) {
+      if (!try_consume_token(&scan, kind)) {
+        report_fatal_expected(
+            scan, "{} to open partial-block '{}'", kind, id.name);
+      }
+    };
+    const auto expect_on_close = [&](tok kind) {
+      if (!try_consume_token(&scan, kind)) {
+        report_fatal_expected(
+            scan, "{} to close partial-block '{}'", kind, id.name);
+      }
+    };
+
+    std::set<ast::identifier, ast::identifier::compare_by_name> arguments;
+    if (try_consume_token(&scan, tok::pipe)) {
+      const token* first_argument = try_consume_token(&scan, tok::identifier);
+      if (first_argument == nullptr) {
+        report_fatal_error(
+            scan,
+            "expected at least one argument in partial-block '{}' but found none",
+            id.name);
+      }
+      arguments.insert(make_identifier(*first_argument));
+      while (const token* argument =
+                 try_consume_token(&scan, tok::identifier)) {
+        auto [_, inserted] = arguments.insert(make_identifier(*argument));
+        if (!inserted) {
+          report_fatal_error(
+              scan,
+              "duplicate argument '{}' in partial-block '{}'",
+              argument->string_value(),
+              id.name);
+        }
+      }
+      expect_on_open(tok::pipe);
+    }
+
+    std::set<ast::identifier, ast::identifier::compare_by_name> captures;
+    if (try_consume_token(&scan, tok::kw_captures)) {
+      expect_on_open(tok::pipe);
+      const auto insert_capture = [&](ast::identifier capture) {
+        if (arguments.find(capture) != arguments.end()) {
+          report_fatal_error(
+              scan,
+              "capture '{}' conflicts with an argument in partial-block '{}'",
+              capture.name,
+              id.name);
+        }
+        auto [_, inserted] = captures.insert(std::move(capture));
+        if (!inserted) {
+          report_fatal_error(
+              scan,
+              "duplicate capture '{}' in partial-block '{}'",
+              // std::map<...>::insert takes in its argument as an r-value
+              // reference and performs a conditional move.
+              //
+              // From https://en.cppreference.com/w/cpp/container/map/insert:
+              //   If the insertion succeeds, `nh` is moved from, otherwise it
+              //   retains ownership of the element.
+              //
+              // Therefore, if `inserted` is false, `capture` is safe to use.
+              // Unfortunately, clang-tidy fundamentally cannot reason about
+              // conditional moves — this is a limitation of C++.
+              //
+              // @lint-ignore CLANGTIDY bugprone-use-after-move
+              capture.name,
+              id.name);
+        }
+      };
+
+      const token* first_capture = try_consume_token(&scan, tok::identifier);
+      if (first_capture == nullptr) {
+        report_fatal_error(
+            scan,
+            "expected at least one capture in partial-block '{}' but found none",
+            id.name);
+      }
+      insert_capture(make_identifier(*first_capture));
+      while (const token* capture = try_consume_token(&scan, tok::identifier)) {
+        insert_capture(make_identifier(*capture));
+      }
+      expect_on_open(tok::pipe);
+    }
+
+    expect_on_open(tok::close);
+    scan = scan.make_fresh();
+
+    ast::bodies bodies = parse_bodies(scan).consume_and_advance(&scan);
+
+    expect_on_close(tok::open);
+    expect_on_close(tok::slash);
+    expect_on_close(tok::kw_let);
+    expect_on_close(tok::kw_partial);
+    expect_on_close(tok::close);
+
+    return {
+        ast::partial_block{
+            scan.with_start(scan_start).range(),
+            std::move(id),
+            std::move(arguments),
+            std::move(captures),
+            std::move(bodies),
+        },
+        scan};
+  }
+
+  // partial-statement →
+  //   { "{{" ~ "#" ~ "partial" ~ expression ~ partial-argument* ~ "}}" }
+  // partial-argument → { identifier ~ "=" ~ expression }
+  parse_result<ast::partial_statement> parse_partial_statement(
+      parser_scan_window scan) {
+    assert(scan.empty());
+    const auto scan_start = scan.start;
+
+    if (!try_consume_tokens(&scan, {tok::open, tok::pound, tok::kw_partial})) {
+      return no_parse_result();
+    }
+
+    parse_result lookup = parse_expression(scan.make_fresh());
+    if (!lookup.has_value()) {
+      report_fatal_expected(
+          scan, "partial name (expression) in partial-statement");
+    }
+    ast::expression partial = std::move(lookup).consume_and_advance(&scan);
+
+    decltype(ast::partial_statement::named_arguments) named_arguments;
+    using named_argument_entry = decltype(named_arguments)::value_type;
+    const auto parse_argument =
+        [&](parser_scan_window scan) -> parse_result<named_argument_entry> {
+      assert(scan.empty());
+
+      const token* id = try_consume_token(&scan, tok::identifier);
+      if (id == nullptr) {
+        return no_parse_result();
+      }
+
+      if (!try_consume_token(&scan, tok::eq)) {
+        report_fatal_expected(
+            scan, "{} in partial-statement argument", tok::eq);
+      }
+
+      if (parse_result expr = parse_expression(scan.make_fresh())) {
+        return {
+            named_argument_entry{
+                std::string(id->string_value()),
+                ast::partial_statement::named_argument{
+                    make_identifier(*id),
+                    std::move(expr).consume_and_advance(&scan)}},
+            scan};
+      }
+      report_fatal_expected(scan, "expression in partial-statement argument");
+    };
+    while (parse_result arg = parse_argument(scan)) {
+      auto [_, inserted] =
+          named_arguments.emplace(std::move(arg).consume_and_advance(&scan));
+      if (!inserted) {
+        report_error(scan, "duplicate argument name in partial-statement");
+      }
+    }
+
+    if (named_arguments.empty()) {
+      // Arguments could missing because of a failed parse. Let's check the
+      // common user errors.
+      if (scan.peek().kind == tok::eq) {
+        // This case probably means that the user forgot to provide the partial
+        // name. Something like:
+        //
+        //   {{#partial arg1=... arg2=...}}
+        //
+        // Here, `arg1` will be parsed the partial's name. parse_arguments(...)
+        // will see `=...` and fail to parsed.
+        report_fatal_expected(
+            scan, "partial name (expression) in partial-statement");
+      }
+      if (parse_expression(scan)) {
+        // This case probably means that the user forgot to name an argument.
+        // Something like:
+        //
+        //   {{#partial partial_name arg1 arg2}}
+        //
+        report_fatal_expected(scan, "argument name in partial-statement");
+      }
+    }
+
+    if (!try_consume_token(&scan, tok::close)) {
+      report_fatal_expected(scan, "{} to close partial-statement", tok::close);
+    }
+
+    return {
+        ast::partial_statement{
+            scan.with_start(scan_start).range(),
+            std::move(partial),
+            std::move(named_arguments),
+            standalone_partial_indentation(scan_start),
+        },
+        scan};
+  }
+
+  // macro → { "{{" ~ ">" ~ macro-lookup ~ "}}" }
+  parse_result<ast::macro> parse_macro(parser_scan_window scan) {
     assert(scan.empty());
     const auto scan_start = scan.start;
 
@@ -1554,32 +1815,28 @@ class parser {
     }
     scan = scan.make_fresh();
 
-    parse_result partial_lookup = parse_partial_lookup(scan.make_fresh());
-    if (!partial_lookup.has_value()) {
-      report_fatal_expected(scan, "partial-lookup in partial-apply");
+    parse_result macro_lookup = parse_macro_lookup(scan.make_fresh());
+    if (!macro_lookup.has_value()) {
+      report_fatal_expected(scan, "macro-lookup in macro");
     }
-    ast::partial_lookup lookup =
-        std::move(partial_lookup).consume_and_advance(&scan);
+    ast::macro_lookup lookup =
+        std::move(macro_lookup).consume_and_advance(&scan);
 
     if (!try_consume_token(&scan, tok::close)) {
       report_fatal_expected(
-          scan,
-          "{} to close partial-apply '{}'",
-          tok::close,
-          lookup.as_string());
+          scan, "{} to close macro '{}'", tok::close, lookup.as_string());
     }
 
     return {
-        ast::partial_apply{
+        ast::macro{
             scan.with_start(scan_start).range(),
             std::move(lookup),
-            standalone_partial_offset(scan_start)},
+            standalone_partial_indentation(scan_start)},
         scan};
   }
 
-  // partial-lookup → { path-component ~ ("/" ~ path-component)* }
-  parse_result<ast::partial_lookup> parse_partial_lookup(
-      parser_scan_window scan) {
+  // macro-lookup → { path-component ~ ("/" ~ path-component)* }
+  parse_result<ast::macro_lookup> parse_macro_lookup(parser_scan_window scan) {
     assert(scan.empty());
     const auto scan_start = scan.start;
 
@@ -1589,21 +1846,18 @@ class parser {
       return no_parse_result();
     }
     std::vector<ast::path_component> path;
-    path.emplace_back(ast::path_component{
-        first_component->range, std::string(first_component->string_value())});
+    path.emplace_back(make_path_component(*first_component));
 
     while (try_consume_token(&scan, tok::slash)) {
       const token* component_part =
           try_consume_token(&scan, tok::path_component);
       if (component_part == nullptr) {
-        report_fatal_expected(scan, "path-component in partial-lookup");
+        report_fatal_expected(scan, "path-component in macro-lookup");
       }
-      path.emplace_back(ast::path_component{
-          component_part->range, std::string(component_part->string_value())});
+      path.emplace_back(make_path_component(*component_part));
     }
     return {
-        ast::partial_lookup{
-            scan.with_start(scan_start).range(), std::move(path)},
+        ast::macro_lookup{scan.with_start(scan_start).range(), std::move(path)},
         scan};
   }
 

@@ -18,6 +18,33 @@ struct STACK_OF_X509_deleter {
   }
 };
 
+static AlertDescription toTLSAlert(int opensslVerifyErr) {
+  switch (opensslVerifyErr) {
+    case X509_V_ERR_CERT_REVOKED:
+      return AlertDescription::certificate_revoked;
+    case X509_V_ERR_CERT_NOT_YET_VALID:
+    case X509_V_ERR_CERT_HAS_EXPIRED:
+      /**
+       * "A certificate has expired or is not currently valid."
+       */
+      return AlertDescription::certificate_expired;
+    case X509_V_ERR_CERT_CHAIN_TOO_LONG:
+    case X509_V_ERR_DEPTH_ZERO_SELF_SIGNED_CERT:
+    case X509_V_ERR_PATH_LENGTH_EXCEEDED:
+    case X509_V_ERR_INVALID_CA:
+    case X509_V_ERR_SELF_SIGNED_CERT_IN_CHAIN:
+    case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT:
+    case X509_V_ERR_UNABLE_TO_GET_ISSUER_CERT_LOCALLY:
+      /**
+       * All of these conditions indicate that building a path to a trusted
+       * anchor failed.
+       */
+      return AlertDescription::unknown_ca;
+    default:
+      return AlertDescription::bad_certificate;
+  }
+}
+
 /* static */ std::unique_ptr<DefaultCertificateVerifier>
 DefaultCertificateVerifier::createFromCAFile(
     VerificationContext context,
@@ -120,9 +147,11 @@ DefaultCertificateVerifier::verifyWithX509StoreCtx(
 
   if (ret != 1) {
     const auto errorInt = X509_STORE_CTX_get_error(ctx.get());
-    std::string errorText =
-        std::string(X509_verify_cert_error_string(errorInt));
-    throw std::runtime_error("certificate verification failed: " + errorText);
+    throw FizzVerificationException(
+        fmt::format(
+            "certificate verification failed: {}",
+            X509_verify_cert_error_string(errorInt)),
+        toTLSAlert(errorInt));
   }
 
   return ctx;

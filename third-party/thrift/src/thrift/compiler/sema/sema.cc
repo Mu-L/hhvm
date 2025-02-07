@@ -435,8 +435,53 @@ void update_annotations(
   node.reset_annotations(std::move(annotations));
 }
 
+// Updates field or typedef's type field to hold annotations
+template <typename Node>
+void add_annotations_to_node_type(
+    Node& node,
+    std::map<std::string, std::string> annotations,
+    t_program& program) {
+  const t_type* node_type = node.get_type();
+
+  if (annotations.empty()) {
+    if (!node_type->annotations().empty()) {
+      update_annotations(const_cast<t_type&>(*node_type));
+    }
+    return;
+  }
+
+  if (node_type->is_container() ||
+      (node_type->is_typedef() &&
+       static_cast<const t_typedef*>(node_type)->typedef_kind() !=
+           t_typedef::kind::defined) ||
+      (node_type->is_primitive_type() && !node_type->annotations().empty())) {
+    // This is a new type we can modify in place
+    update_annotations(const_cast<t_type&>(*node_type), std::move(annotations));
+  } else if (node_type->is_primitive_type()) {
+    // Copy type as we don't handle unnamed typedefs to base types :(
+    auto unnamed = std::make_unique<t_primitive_type>(
+        *static_cast<const t_primitive_type*>(node_type));
+    for (auto& pair : annotations) {
+      unnamed->set_annotation(pair.first, pair.second);
+    }
+    node.set_type(t_type_ref::from_ptr(unnamed.get()));
+    program.add_unnamed_type(std::move(unnamed));
+  } else {
+    // Wrap in an unnamed typedef :(
+    auto unnamed = t_typedef::make_unnamed(
+        const_cast<t_program*>(node_type->get_program()),
+        node_type->get_name(),
+        t_type_ref::from_ptr(node_type));
+    for (auto& pair : annotations) {
+      unnamed->set_annotation(pair.first, pair.second);
+    }
+    node.set_type(t_type_ref::from_ptr(unnamed.get()));
+    program.add_unnamed_typedef(std::move(unnamed));
+  }
+}
+
 void lower_deprecated_annotations(
-    sema_context& ctx, mutator_context&, t_named& node) {
+    sema_context& ctx, mutator_context& mCtx, t_named& node) {
   if (auto cnst = node.find_structured_annotation_or_null(
           kDeprecatedUnvalidatedAnnotationsUri)) {
     ctx.check(
@@ -456,6 +501,53 @@ void lower_deprecated_annotations(
       for (auto& [k, v] : val->get_map()) {
         map[k->get_string()] = {{}, v->get_string()};
       }
+
+      // The java generator has some interesting logic due to limitations in
+      // mustache that are being fixed in whisker. Until that lands, we
+      // propagate the affected annotations to the type of a typedef in order to
+      // unblock deprecating unstructured annotations.
+      if (map.count("java.swift.type") ||
+          map.count("java.swift.binary_string")) {
+        auto annot = map.count("java.swift.type") ? "java.swift.type"
+                                                  : "java.swift.binary_string";
+        auto* type = dynamic_cast<t_typedef*>(&node);
+        if (!type) {
+          ctx.error("Annotation {} is only supported on typedefs.", annot);
+          return;
+        }
+
+        auto* inner_type = const_cast<t_type*>(type->get_type());
+        if (inner_type->is_typedef()) {
+          ctx.error("Cannot use {} on typedefs of typedefs", annot);
+        } else if (
+            !inner_type->is_container() && !inner_type->is_primitive_type()) {
+          ctx.error(
+              "Annotation {} is only supported on typedefs of primitive or container types.",
+              annot);
+        } else {
+          // Ensure annotations can be added to inner type
+          if (inner_type->is_primitive_type() &&
+              inner_type->annotations().empty()) {
+            auto new_type = std::make_unique<t_primitive_type>(
+                static_cast<const t_primitive_type&>(*inner_type));
+            inner_type = new_type.get();
+            type->set_type(t_type_ref::from_ptr(inner_type));
+            mCtx.program().add_unnamed_type(std::move(new_type));
+          }
+
+          inner_type->set_annotation(annot, map[annot].value);
+        }
+      }
+
+      // cpp.indirection does not handle typedefs correctly
+      if (auto* typedf = dynamic_cast<t_typedef*>(&node);
+          typedf && map.count("cpp.indirection")) {
+        add_annotations_to_node_type(
+            *typedf,
+            {{"cpp.indirection", map.at("cpp.indirection").value}},
+            mCtx.program());
+      }
+
       node.reset_annotations(std::move(map));
     } else {
       update_annotations(node);
@@ -502,46 +594,7 @@ void lower_type_annotations(
     }
   }
 
-  const t_type* node_type = node.get_type();
-
-  if (unstructured.empty()) {
-    if (!node_type->annotations().empty()) {
-      update_annotations(const_cast<t_type&>(*node_type));
-    }
-    return;
-  }
-
-  if (node_type->is_container() ||
-      (node_type->is_typedef() &&
-       static_cast<const t_typedef*>(node_type)->typedef_kind() !=
-           t_typedef::kind::defined) ||
-      (node_type->is_primitive_type() && !node_type->annotations().empty())) {
-    // This is a new type we can modify in place
-    update_annotations(
-        const_cast<t_type&>(*node_type), std::move(unstructured));
-  } else if (node_type->is_primitive_type()) {
-    // Copy type as we don't handle unnamed typedefs to base types :(
-    auto& program = mctx.program();
-    auto unnamed = std::make_unique<t_primitive_type>(
-        *static_cast<const t_primitive_type*>(node_type));
-    for (auto& pair : unstructured) {
-      unnamed->set_annotation(pair.first, pair.second);
-    }
-    node.set_type(t_type_ref::from_ptr(unnamed.get()));
-    program.add_unnamed_type(std::move(unnamed));
-  } else {
-    // Wrap in an unnamed typedef :(
-    auto& program = mctx.program();
-    auto unnamed = t_typedef::make_unnamed(
-        const_cast<t_program*>(node_type->get_program()),
-        node_type->get_name(),
-        t_type_ref::from_ptr(node_type));
-    for (auto& pair : unstructured) {
-      unnamed->set_annotation(pair.first, pair.second);
-    }
-    node.set_type(t_type_ref::from_ptr(unnamed.get()));
-    program.add_unnamed_typedef(std::move(unnamed));
-  }
+  add_annotations_to_node_type(node, std::move(unstructured), mctx.program());
 }
 
 void inject_schema_const(sema_context& ctx, mutator_context&, t_program& prog) {

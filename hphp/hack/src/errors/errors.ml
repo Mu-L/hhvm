@@ -199,6 +199,7 @@ let try_with_result (f1 : unit -> 'res) (f2 : 'res -> error -> 'res) : 'res =
           quickfixes;
           custom_msgs;
           flags;
+          function_pos;
           is_fixmed = _;
         } ->
     (* Remove bad position sentinel if present: we might be about to add a new primary
@@ -223,6 +224,7 @@ let try_with_result (f1 : unit -> 'res) (f2 : 'res -> error -> 'res) : 'res =
          ~quickfixes
          ~custom_msgs
          ~flags
+         ?function_pos
 
 let try_with_result_pure ~fail f g =
   let error_map_copy = !error_map in
@@ -326,6 +328,7 @@ let compare_internal (x : ('a, 'b) User_error.t) (y : ('a, 'b) User_error.t) :
           quickfixes = _;
           is_fixmed = _;
           flags = _;
+          function_pos = _;
         } =
     x
   in
@@ -340,6 +343,7 @@ let compare_internal (x : ('a, 'b) User_error.t) (y : ('a, 'b) User_error.t) :
           quickfixes = _;
           is_fixmed = _;
           flags = _;
+          function_pos = _;
         } =
     y
   in
@@ -552,9 +556,7 @@ let format_summary
     else
       None
 
-let report_pos_from_reason = ref false
-
-let to_string error = User_error.to_string !report_pos_from_reason error
+let to_string error = User_error.to_string error
 
 let log_unexpected error path desc =
   HackEventLogger.invariant_violation_bug
@@ -707,6 +709,7 @@ let add_error_with_fixme_error error explanation ~fixme_pos =
           quickfixes;
           custom_msgs;
           flags;
+          function_pos;
           is_fixmed = _;
         } =
     error
@@ -722,6 +725,7 @@ let add_error_with_fixme_error error explanation ~fixme_pos =
        ~quickfixes
        ~custom_msgs
        ~flags
+       ?function_pos
 
 let add_applied_fixme error =
   let error = { error with User_error.is_fixmed = true } in
@@ -781,11 +785,6 @@ let try_apply_fixme pos code severity : fixme_outcome =
         Not_fixmed (Some { explanation; fixme_pos })
       else if Relative_path.(is_hhi (prefix (Pos.filename pos))) then
         Fixmed
-      else if !report_pos_from_reason && Pos.get_from_reason pos then
-        let explanation =
-          "You cannot use `HH_FIXME` or `HH_IGNORE_ERROR` comments to suppress an error whose position was derived from reason information"
-        in
-        Not_fixmed (Some { explanation; fixme_pos })
       else if forbidden_decl_fixme then
         let explanation =
           Printf.sprintf
@@ -841,6 +840,7 @@ let add_error (error : error) =
           quickfixes;
           custom_msgs;
           flags;
+          function_pos;
           is_fixmed = _;
         } =
     error
@@ -856,6 +856,7 @@ let add_error (error : error) =
       ~quickfixes
       ~custom_msgs
       ~flags
+      ?function_pos
   in
 
   let pos = fst claim in
@@ -1334,6 +1335,7 @@ let convert_errors_to_string ?(include_filename = false) (errors : error list) :
               quickfixes = _;
               is_fixmed = _;
               flags = _;
+              function_pos = _;
             } =
         err
       in

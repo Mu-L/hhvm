@@ -1068,10 +1068,15 @@ pub fn policy_sharded_memoized_without_policied(kind: &str) -> Error {
     ))
 }
 
-pub fn memoize_make_ic_inaccessible_without_defaults(kind: &str) -> Error {
+pub fn memoize_make_ic_inaccessible_without_defaults(kind: &str, is_special_case: bool) -> Error {
+    let context = if is_special_case {
+        "#NotKeyedByICAndLeakIC__DO_NOT_USE"
+    } else {
+        "#MakeICInaccessible"
+    };
     Cow::Owned(format!(
-        "This {} requires the defaults, leak_safe_shallow, or leak_safe_local context to be memoized using #MakeICInaccessible",
-        kind
+        "This {} requires the defaults, leak_safe_shallow, or leak_safe_local context to be memoized using {}",
+        kind, context
     ))
 }
 
@@ -1102,6 +1107,13 @@ pub fn memoize_invalid_label(attr: &str) -> Error {
 pub fn memoize_requires_label(attr: &str) -> Error {
     Cow::Owned(format!(
         "The first argument to `{}` must be a label, e.g. `#KeyedByIC`.",
+        attr
+    ))
+}
+
+pub fn memoize_without_annotation_disabled(attr: &str) -> Error {
+    Cow::Owned(format!(
+        "`{}` without a label (e.g. `#KeyedByIC`) is disabled with DisallowNonAnnotatedMemoize.",
         attr
     ))
 }

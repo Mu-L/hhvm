@@ -25,14 +25,20 @@ from folly.cast cimport down_cast_ptr
 from folly.iobuf import IOBuf
 from types import MappingProxyType
 
-from thrift.py3.exceptions cimport GeneratedError
+from thrift.python.exceptions cimport GeneratedError as _fbthrift_python_GeneratedError
 from thrift.py3.serializer import deserialize, serialize
-from thrift.python.types cimport BadEnum as _fbthrift_python_BadEnum
+from thrift.python.types cimport (
+    BadEnum as _fbthrift_python_BadEnum,
+    _fbthrift_struct_update_nested_field as _fbthrift_python_struct_update_nested_field,
+)
 from thrift.python.types import (
     Enum as _fbthrift_python_Enum,
     EnumMeta as _fbthrift_python_EnumMeta,
     Flag as _fbthrift_python_Flag,
+    Struct as _fbthrift_python_Struct,
     StructOrUnion as _fbthrift_python_StructOrUnion,
+    isset as _fbthrift_python_isset,
+    Union as _fbthrift_python_Union,
 )
 
 # ensures that common classes can be reliably imported from thrift.py3.types
@@ -43,10 +49,6 @@ __all__ = ['Struct', 'BadEnum', 'Union', 'Enum', 'Flag', 'EnumMeta']
 
 
 _fbthrift__module_name__ = "thrift.py3.types"
-
-# This isn't exposed to the module dict
-Object = cython.fused_type(Struct, GeneratedError)
-
 
 cdef list_eq(List self, object other):
     if (
@@ -80,22 +82,35 @@ cdef class StructMeta(type):
     We set helper functions here since they can't possibly confict with field names
     """
     @staticmethod
-    def isset(Object struct):
-        return struct._fbthrift_isset()
+    def isset(struct):
+        if isinstance(struct, (_fbthrift_python_Struct, _fbthrift_python_GeneratedError, _fbthrift_python_Union)):
+            return _IsSet(type(struct).__name__, _fbthrift_python_isset(struct))
+        elif isinstance(struct, Struct):
+            return (<Struct>struct)._fbthrift_isset()
+        elif isinstance(struct, GeneratedError):
+            return (<GeneratedError>struct)._fbthrift_isset()
 
     @staticmethod
-    def update_nested_field(Struct obj, path_to_values):
-        # There is some optimzation opportunity here for cases like this:
+    def update_nested_field(obj, path_to_values):
+        # There is an optimization opportunity here for cases like this:
         # { "a.b.c": foo, "a.b.d": var }
         try:
-            obj = _fbthrift_struct_update_nested_field(
-                obj,
-                [(p.split("."), v) for p, v in path_to_values.items()]
-            )
-            return obj
+            if isinstance(obj, _fbthrift_python_Struct):
+                return _fbthrift_python_struct_update_nested_field(
+                    obj,
+                    [(p.split("."), v) for p, v in path_to_values.items()]
+                )
+            elif isinstance(obj, Struct):
+                return _fbthrift_struct_update_nested_field(
+                    obj,
+                    [(p.split("."), v) for p, v in path_to_values.items()]
+                )
         except (AttributeError, TypeError) as e:
             # Unify different exception types to ValueError
             raise ValueError(e)
+
+        # obj is not a py3 or python Struct
+        raise TypeError("`update_nested_field` requires thrift.py3.Struct or thrift.python.Struct")
 
     # make the __module__ customizable
     # this just enables the slot; impl here is ignored
@@ -108,6 +123,16 @@ cdef class StructMeta(type):
 
     def __dir__(cls):
         return tuple(name for name, _ in cls) + ("__iter__", )
+
+    def __instancecheck__(cls, inst):
+        if isinstance(inst, _fbthrift_python_StructOrUnion):
+            return inst._fbthrift_auto_migrate_enabled()
+        return super().__instancecheck__(inst)
+
+    def __subclasscheck__(cls, sub):
+        if issubclass(sub, _fbthrift_python_StructOrUnion):
+            return sub._fbthrift_auto_migrate_enabled()
+        return super().__subclasscheck__(sub)
 
 
 cdef Struct _fbthrift_struct_update_nested_field(Struct obj, list path_and_vals):
@@ -288,6 +313,17 @@ cdef class UnionMeta(type):
     # this just enables the slot; impl here is ignored
     def __module__(cls):
         pass
+
+    def __instancecheck__(cls, inst):
+        if isinstance(inst, _fbthrift_python_Union):
+            return inst._fbthrift_auto_migrate_enabled()
+        return super().__instancecheck__(inst)
+
+    def __subclasscheck__(cls, sub):
+        if issubclass(sub, _fbthrift_python_Union):
+            return sub._fbthrift_auto_migrate_enabled()
+        return super().__subclasscheck__(sub)
+
 
 
 SetMetaClass(<PyTypeObject*> Union, <PyTypeObject*> UnionMeta)

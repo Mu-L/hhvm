@@ -6,10 +6,9 @@
        sc_name = ([3:11-15], "\\IFoo"); sc_tparams = []; sc_extends = [];
        sc_uses = []; sc_xhp_attr_uses = []; sc_xhp_enum_values = {};
        sc_xhp_marked_empty = false; sc_req_extends = [];
-       sc_req_implements = []; sc_req_class = []; sc_req_this_as = [];
-       sc_implements = []; sc_support_dynamic_type = false; sc_consts = [];
-       sc_typeconsts = []; sc_props = []; sc_sprops = [];
-       sc_constructor = None;
+       sc_req_implements = []; sc_req_constraints = []; sc_implements = [];
+       sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
+       sc_props = []; sc_sprops = []; sc_constructor = None;
        sc_static_methods =
        [{ Shallow_decl_defs.sm_name = ([6:26-32], "getFoo");
           sm_type =
@@ -29,7 +28,8 @@
           sm_flags =
           { Shallow_decl_defs.MethodFlags.abstract = true; final = false;
             override = false; dynamicallycallable = false;
-            php_std_lib = false; support_dynamic_type = false };
+            php_std_lib = false; support_dynamic_type = false;
+            no_auto_likes = false };
           sm_attributes = []; sm_sort_text = (Some "2getFoo") };
          { Shallow_decl_defs.sm_name = ([9:26-32], "getBar");
            sm_type =
@@ -50,7 +50,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = true; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = (Some "1getBar") }
          ];
        sc_methods = []; sc_user_attributes = []; sc_enum_type = None;
@@ -63,10 +64,9 @@
         sc_name = ([13:11-15], "\\IBaz"); sc_tparams = []; sc_extends = [];
         sc_uses = []; sc_xhp_attr_uses = []; sc_xhp_enum_values = {};
         sc_xhp_marked_empty = false; sc_req_extends = [];
-        sc_req_implements = []; sc_req_class = []; sc_req_this_as = [];
-        sc_implements = []; sc_support_dynamic_type = false; sc_consts = [];
-        sc_typeconsts = []; sc_props = []; sc_sprops = [];
-        sc_constructor = None;
+        sc_req_implements = []; sc_req_constraints = []; sc_implements = [];
+        sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
+        sc_props = []; sc_sprops = []; sc_constructor = None;
         sc_static_methods =
         [{ Shallow_decl_defs.sm_name = ([15:26-32], "getFoo");
            sm_type =
@@ -87,7 +87,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = true; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None };
           { Shallow_decl_defs.sm_name = ([17:26-32], "getBar");
             sm_type =
@@ -108,7 +109,8 @@
             sm_flags =
             { Shallow_decl_defs.MethodFlags.abstract = true; final = false;
               override = false; dynamicallycallable = false;
-              php_std_lib = false; support_dynamic_type = false };
+              php_std_lib = false; support_dynamic_type = false;
+              no_auto_likes = false };
             sm_attributes = []; sm_sort_text = None }
           ];
         sc_methods = []; sc_user_attributes = []; sc_enum_type = None;
@@ -121,8 +123,7 @@
         sc_module = None; sc_name = ([21:16-19], "\\ABC"); sc_tparams = [];
         sc_extends = []; sc_uses = []; sc_xhp_attr_uses = [];
         sc_xhp_enum_values = {}; sc_xhp_marked_empty = false;
-        sc_req_extends = []; sc_req_implements = []; sc_req_class = [];
-        sc_req_this_as = [];
+        sc_req_extends = []; sc_req_implements = []; sc_req_constraints = [];
         sc_implements =
         [(Rhint ([21:31-35]), (Tapply (([21:31-35], "\\IFoo"), [])));
           (Rhint ([21:37-41]), (Tapply (([21:37-41], "\\IBaz"), [])))];
@@ -148,7 +149,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None };
           { Shallow_decl_defs.sm_name = ([27:26-32], "getBar");
             sm_type =
@@ -169,7 +171,8 @@
             sm_flags =
             { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
               override = false; dynamicallycallable = false;
-              php_std_lib = false; support_dynamic_type = false };
+              php_std_lib = false; support_dynamic_type = false;
+              no_auto_likes = false };
             sm_attributes = []; sm_sort_text = None }
           ];
         sc_methods = []; sc_user_attributes = []; sc_enum_type = None;
@@ -182,8 +185,7 @@
         sc_module = None; sc_name = ([33:16-19], "\\DEF"); sc_tparams = [];
         sc_extends = []; sc_uses = []; sc_xhp_attr_uses = [];
         sc_xhp_enum_values = {}; sc_xhp_marked_empty = false;
-        sc_req_extends = []; sc_req_implements = []; sc_req_class = [];
-        sc_req_this_as = [];
+        sc_req_extends = []; sc_req_implements = []; sc_req_constraints = [];
         sc_implements =
         [(Rhint ([33:31-35]), (Tapply (([33:31-35], "\\IBaz"), [])));
           (Rhint ([33:37-41]), (Tapply (([33:37-41], "\\IFoo"), [])))];
@@ -209,7 +211,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None };
           { Shallow_decl_defs.sm_name = ([39:26-32], "getBar");
             sm_type =
@@ -230,7 +233,8 @@
             sm_flags =
             { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
               override = false; dynamicallycallable = false;
-              php_std_lib = false; support_dynamic_type = false };
+              php_std_lib = false; support_dynamic_type = false;
+              no_auto_likes = false };
             sm_attributes = []; sm_sort_text = None }
           ];
         sc_methods =
@@ -253,7 +257,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None }
           ];
         sc_user_attributes = []; sc_enum_type = None; sc_docs_url = None;

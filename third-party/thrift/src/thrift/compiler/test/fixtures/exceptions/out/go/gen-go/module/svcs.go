@@ -29,63 +29,32 @@ type Raiser interface {
     Get500(ctx context.Context) (string, error)
 }
 
-type RaiserChannelClientInterface interface {
+type RaiserClientInterface interface {
     thrift.ClientInterface
     Raiser
 }
 
-type RaiserClientInterface interface {
-    thrift.ClientInterface
-    DoBland() (error)
-    DoRaise() (error)
-    Get200() (string, error)
-    Get500() (string, error)
-}
-
-type RaiserContextClientInterface interface {
-    RaiserClientInterface
-    DoBlandContext(ctx context.Context) (error)
-    DoRaiseContext(ctx context.Context) (error)
-    Get200Context(ctx context.Context) (string, error)
-    Get500Context(ctx context.Context) (string, error)
-}
-
-type RaiserChannelClient struct {
+type RaiserClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ RaiserChannelClientInterface = (*RaiserChannelClient)(nil)
+var _ RaiserClientInterface = (*RaiserClient)(nil)
 
-func NewRaiserChannelClient(channel thrift.RequestChannel) *RaiserChannelClient {
-    return &RaiserChannelClient{
+func NewRaiserChannelClient(channel thrift.RequestChannel) *RaiserClient {
+    return &RaiserClient{
         ch: channel,
     }
 }
 
-func (c *RaiserChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type RaiserClient struct {
-    chClient *RaiserChannelClient
-}
-// Compile time interface enforcer
-var _ RaiserClientInterface = (*RaiserClient)(nil)
-var _ RaiserContextClientInterface = (*RaiserClient)(nil)
-
 func NewRaiserClient(prot thrift.Protocol) *RaiserClient {
-    return &RaiserClient{
-        chClient: NewRaiserChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewRaiserChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *RaiserClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *RaiserChannelClient) DoBland(ctx context.Context) (error) {
+func (c *RaiserClient) DoBland(ctx context.Context) (error) {
     in := &reqRaiserDoBland{
     }
     out := newRespRaiserDoBland()
@@ -96,15 +65,7 @@ func (c *RaiserChannelClient) DoBland(ctx context.Context) (error) {
     return nil
 }
 
-func (c *RaiserClient) DoBland() (error) {
-    return c.chClient.DoBland(context.Background())
-}
-
-func (c *RaiserClient) DoBlandContext(ctx context.Context) (error) {
-    return c.chClient.DoBland(ctx)
-}
-
-func (c *RaiserChannelClient) DoRaise(ctx context.Context) (error) {
+func (c *RaiserClient) DoRaise(ctx context.Context) (error) {
     in := &reqRaiserDoRaise{
     }
     out := newRespRaiserDoRaise()
@@ -121,15 +82,7 @@ func (c *RaiserChannelClient) DoRaise(ctx context.Context) (error) {
     return nil
 }
 
-func (c *RaiserClient) DoRaise() (error) {
-    return c.chClient.DoRaise(context.Background())
-}
-
-func (c *RaiserClient) DoRaiseContext(ctx context.Context) (error) {
-    return c.chClient.DoRaise(ctx)
-}
-
-func (c *RaiserChannelClient) Get200(ctx context.Context) (string, error) {
+func (c *RaiserClient) Get200(ctx context.Context) (string, error) {
     in := &reqRaiserGet200{
     }
     out := newRespRaiserGet200()
@@ -140,15 +93,7 @@ func (c *RaiserChannelClient) Get200(ctx context.Context) (string, error) {
     return out.GetSuccess(), nil
 }
 
-func (c *RaiserClient) Get200() (string, error) {
-    return c.chClient.Get200(context.Background())
-}
-
-func (c *RaiserClient) Get200Context(ctx context.Context) (string, error) {
-    return c.chClient.Get200(ctx)
-}
-
-func (c *RaiserChannelClient) Get500(ctx context.Context) (string, error) {
+func (c *RaiserClient) Get500(ctx context.Context) (string, error) {
     in := &reqRaiserGet500{
     }
     out := newRespRaiserGet500()
@@ -163,14 +108,6 @@ func (c *RaiserChannelClient) Get500(ctx context.Context) (string, error) {
         return "", out.S
     }
     return out.GetSuccess(), nil
-}
-
-func (c *RaiserClient) Get500() (string, error) {
-    return c.chClient.Get500(context.Background())
-}
-
-func (c *RaiserClient) Get500Context(ctx context.Context) (string, error) {
-    return c.chClient.Get500(ctx)
 }
 
 

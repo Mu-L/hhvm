@@ -11,8 +11,8 @@ from __future__ import annotations
 
 import abc as _abc
 import typing as _typing
+import builtins as _fbthrift_builtins
 
-_fbthrift_property = property
 
 
 import folly.iobuf as _fbthrift_iobuf
@@ -24,17 +24,10 @@ import typeshed_two
 import typeshed_one
 
 class MyStruct(_abc.ABC):
-    @_fbthrift_property
-    @_abc.abstractmethod
-    def a(self) -> typeshed_one.AdapterOneType[_fbthrift__b__thrift_abstract_types.B]: ...
-    @_fbthrift_property
-    @_abc.abstractmethod
-    def b(self) -> typeshed_three.AdapterThreeType[_fbthrift__c__thrift_abstract_types.C1]: ...
-    @_fbthrift_property
+    # pyre-ignore[16]: Module `_fbthrift_builtins` has no attribute `property`.
+    @_fbthrift_builtins.property
     @_abc.abstractmethod
     def c(self) -> typeshed_two.AdapterTwoType[_fbthrift__c__thrift_abstract_types.C2]: ...
-    @_abc.abstractmethod
-    def __iter__(self) -> _typing.Iterator[_typing.Tuple[str, _typing.Union[typeshed_one.AdapterOneType[_fbthrift__b__thrift_abstract_types.B], typeshed_three.AdapterThreeType[_fbthrift__c__thrift_abstract_types.C1], typeshed_two.AdapterTwoType[_fbthrift__c__thrift_abstract_types.C2]]]]: ...
     @_abc.abstractmethod
     def _to_mutable_python(self) -> "a.thrift_mutable_types.MyStruct": ...  # type: ignore
     @_abc.abstractmethod

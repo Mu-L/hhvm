@@ -17,6 +17,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -24,6 +25,16 @@
 #include <thrift/compiler/parse/parse_ast.h> // parsing_params
 
 namespace apache::thrift::compiler {
+namespace detail {
+
+// Parses command-line arguments and returns the input file name if successful;
+// otherwise returns an empty optional.
+[[nodiscard]] std::optional<std::string> parse_command_line_args(
+    const std::vector<std::string>& args,
+    parsing_params& parsing_params,
+    sema_params& sema_params);
+
+} // namespace detail
 
 class t_program_bundle;
 
@@ -60,15 +71,6 @@ parse_and_mutate_program(
     const std::string& filename,
     parsing_params params,
     diagnostic_params dparams = {});
-
-/**
- * Runs the Thrift parser with the specified (command-line) arguments and
- * returns the program bundle.
- * This does not run mutators and allows missing includes, as it is intended for
- * use by tooling like codemods and thrift2ast.
- */
-std::unique_ptr<t_program_bundle> parse_and_get_program(
-    source_manager& sm, const std::vector<std::string>& arguments);
 
 /**
  * Runs the Thrift compiler with the specified (command-line) arguments.

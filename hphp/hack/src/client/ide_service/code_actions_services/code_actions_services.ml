@@ -21,11 +21,17 @@ open Hh_prelude
 
 let lsp_range_of_ide_range (ide_range : Ide_api_types.range) : Lsp.range =
   let lsp_pos_of_ide_pos ide_pos =
-    Lsp.
-      {
-        line = ide_pos.Ide_api_types.line;
-        character = ide_pos.Ide_api_types.column;
-      }
+    let (line, character) =
+      (* Explanation for WTF: Lsp.position is zero-based, so theoretically this should be
+         `File_content.Position.line_column_zero_based`.
+         Yet we fail to show code actions correctly if we switch to zero-based.
+         There is likely a bug somewhere else that this compensates.
+         Good (current behavior, using one-based): https://pxl.cl/6rGmJ
+         Bad: https://pxl.cl/6rGmz
+         Relevant tests: https://www.internalfb.com/code/fbsource/[01c48061456e]/fbcode/hphp/hack/test/ide_code_actions/extract_method *)
+      File_content.Position.line_column_one_based ide_pos
+    in
+    Lsp.{ line; character }
   in
   Lsp.
     {
@@ -70,8 +76,8 @@ let workspace_edit_of_code_action_edits
   in
   Lsp.WorkspaceEdit.{ changes }
 
-let to_action
-    Code_action_types.{ title; edits; kind; selection; trigger_inline_suggest }
+let edit_to_code_action
+    Code_action_types.{ title; edits; selection; trigger_inline_suggest } ~kind
     =
   let workspace_edit = Lazy.map edits ~f:workspace_edit_of_code_action_edits in
   let trigger_inline_suggest_command =
@@ -102,25 +108,27 @@ let to_action
       lazy
         (Lsp.CodeAction.BothEditThenCommand (Lazy.force workspace_edit, command))
   in
-  let lsp_kind =
-    match kind with
-    | `Refactor -> Lsp.CodeActionKind.refactor
-    | `Quickfix -> Lsp.CodeActionKind.quickfix
-  in
   Lsp.CodeAction.Action
     {
       Lsp.CodeAction.title;
-      kind = lsp_kind;
+      kind;
       diagnostics = [];
       action = Lsp.CodeAction.UnresolvedEdit action;
       isAI = None;
     }
 
+let to_action code_action =
+  match code_action with
+  | Code_action_types.Refactor_action edit ->
+    edit_to_code_action edit ~kind:Lsp.CodeActionKind.refactor
+  | Code_action_types.Quickfix_action edit ->
+    edit_to_code_action edit ~kind:Lsp.CodeActionKind.quickfix
+
 let find
     ~(ctx : Provider_context.t)
     ~error_filter
     ~(entry : Provider_context.entry)
-    ~(range : Lsp.range) : [ `Refactor | `Quickfix ] Code_action_types.t list =
+    ~(range : Lsp.range) =
   let pos =
     let source_text = Ast_provider.compute_source_text ~entry in
     let line_to_offset line =
@@ -130,18 +138,25 @@ let find
     Lsp_helpers.lsp_range_to_pos ~line_to_offset path range
   in
   let quickfixes = Code_actions_quickfixes.find ~entry pos ctx ~error_filter in
-  let quickfix_titles =
-    SSet.of_list @@ List.map quickfixes ~f:(fun q -> q.Code_action_types.title)
+  let (quickfix_titles, quickfixes) =
+    List.fold_map
+      quickfixes
+      ~init:SSet.empty
+      ~f:(fun acc (Code_action_types.Quickfix edit) ->
+        ( SSet.add edit.Code_action_types.title acc,
+          Code_action_types.Quickfix_action edit ))
   in
-  let refactors =
-    Code_actions_refactors.find ~entry pos ctx
-    (* Ensure no duplicates with quickfixes generated from Quickfixes_to_refactors_config. *)
-    |> List.filter ~f:(fun Code_action_types.{ title; _ } ->
-           not (SSet.mem title quickfix_titles))
-  in
-  let quickfixes :> Code_action_types.any list = quickfixes in
-  let refactors :> Code_action_types.any list = refactors in
-  quickfixes @ refactors
+  (* Accumulate refactors then reverse the entire list so that quickfixes come first *)
+  List.rev
+  @@ List.fold_left
+       (Code_actions_refactors.find ~entry pos ctx)
+       ~init:quickfixes
+       ~f:(fun acc Code_action_types.(Refactor edit) ->
+         (* Ensure no duplicates with quickfixes generated from Quickfixes_to_refactors_config. *)
+         if SSet.mem edit.Code_action_types.title quickfix_titles then
+           acc
+         else
+           Code_action_types.Refactor_action edit :: acc)
 
 let map_edit_and_or_command ~f :
     Lsp.CodeAction.resolved_marker Lsp.CodeAction.edit_and_or_command ->
@@ -192,6 +207,13 @@ the same title, so cannot resolve the code action.
       data = None;
     }
 
+let code_action_title t =
+  let open Code_action_types in
+  match t with
+  | Refactor_action { title; _ }
+  | Quickfix_action { title; _ } ->
+    title
+
 let resolve
     ~(ctx : Provider_context.t)
     ~error_filter
@@ -212,7 +234,7 @@ let resolve
   in
   find ~ctx ~entry ~range:(lsp_range_of_ide_range range) ~error_filter
   |> List.find ~f:(fun code_action ->
-         String.equal code_action.Code_action_types.title resolve_title)
+         String.equal (code_action_title code_action) resolve_title)
   (* When we can't find a matching code action, ContentModified is the right error
      per https://github.com/microsoft/language-server-protocol/issues/1738 *)
   |> Result.of_option ~error:content_modified

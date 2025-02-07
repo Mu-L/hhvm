@@ -68,6 +68,8 @@ final class UpdateUniverseContextHandlerTest
       'thrift_class' => ThriftClientBase::class,
       'client' =>
         new ThriftShimClient(new TBinaryProtocol(new TNullTransport())),
+      'service_interface' =>
+        "service_name_holder_to_be_updated_for_universe_propagation",
     );
 
     $immutable_ctx =
@@ -103,7 +105,12 @@ final class UpdateUniverseContextHandlerTest
     $client_handler = new TContextPropV2ClientHandler($transport, $params);
 
     $client_handler->addHandler($handler);
-    $client_handler->preSend($thrift_method_name, null, 0);
+    $client_handler->preSend(
+      $thrift_method_name,
+      null,
+      0,
+      $thrift_service_name,
+    );
 
     $write_headers = $transport->getWriteHeaders();
     expect($write_headers)->toContainKey(
@@ -138,6 +145,8 @@ final class UpdateUniverseContextHandlerTest
       'thrift_class' => ThriftClientBase::class,
       'client' =>
         new ThriftShimClient(new TBinaryProtocol(new TNullTransport())),
+      'service_interface' =>
+        "service_name_holder_to_be_updated_for_universe_propagation",
     );
     $immutable_ctx =
       new ImmutableThriftContextPropState(ThriftContextPropState::get());
@@ -164,6 +173,8 @@ final class UpdateUniverseContextHandlerTest
       'thrift_class' => ThriftClientBase::class,
       'client' =>
         new ThriftShimClient(new TBinaryProtocol(new TNullTransport())),
+      'service_interface' =>
+        "service_name_holder_to_be_updated_for_universe_propagation",
     );
     $immutable_ctx =
       new ImmutableThriftContextPropState(ThriftContextPropState::get());

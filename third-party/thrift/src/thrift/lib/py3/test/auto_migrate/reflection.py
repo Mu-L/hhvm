@@ -41,8 +41,6 @@ from thrift.py3.reflection import (
 
 
 class ReflectionTests(unittest.TestCase):
-    # Fails due to containers not working
-    @brokenInAutoMigrate()
     def test_struct(self) -> None:
         x = easy(val=1, an_int=Integers(small=300), name="foo", val_list=[1, 2, 3, 4])
         self.assertTrue(inspectable(x))
@@ -105,7 +103,6 @@ class ReflectionTests(unittest.TestCase):
         self.assertEqual(r.kind, StructType.EXCEPTION)
         self.assertEqual(r.annotations, {})
 
-    @brokenInAutoMigrate()
     def test_list_element(self) -> None:
         x = List__i32([1, 2, 3])
         self.assertTrue(inspectable(x))
@@ -114,7 +111,6 @@ class ReflectionTests(unittest.TestCase):
         self.assertEqual(r.value, int)
         self.assertEqual(r.kind, NumberType.I32)
 
-    @brokenInAutoMigrate()
     def test_set_element(self) -> None:
         x = Set__Color({Color.red, Color.blue})
         self.assertTrue(inspectable(x))

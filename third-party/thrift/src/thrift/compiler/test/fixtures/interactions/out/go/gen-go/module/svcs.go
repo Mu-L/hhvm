@@ -28,57 +28,32 @@ type MyService interface {
     Foo(ctx context.Context) (error)
 }
 
-type MyServiceChannelClientInterface interface {
+type MyServiceClientInterface interface {
     thrift.ClientInterface
     MyService
 }
 
-type MyServiceClientInterface interface {
-    thrift.ClientInterface
-    Foo() (error)
-}
-
-type MyServiceContextClientInterface interface {
-    MyServiceClientInterface
-    FooContext(ctx context.Context) (error)
-}
-
-type MyServiceChannelClient struct {
+type MyServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ MyServiceChannelClientInterface = (*MyServiceChannelClient)(nil)
+var _ MyServiceClientInterface = (*MyServiceClient)(nil)
 
-func NewMyServiceChannelClient(channel thrift.RequestChannel) *MyServiceChannelClient {
-    return &MyServiceChannelClient{
+func NewMyServiceChannelClient(channel thrift.RequestChannel) *MyServiceClient {
+    return &MyServiceClient{
         ch: channel,
     }
 }
 
-func (c *MyServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type MyServiceClient struct {
-    chClient *MyServiceChannelClient
-}
-// Compile time interface enforcer
-var _ MyServiceClientInterface = (*MyServiceClient)(nil)
-var _ MyServiceContextClientInterface = (*MyServiceClient)(nil)
-
 func NewMyServiceClient(prot thrift.Protocol) *MyServiceClient {
-    return &MyServiceClient{
-        chClient: NewMyServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewMyServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *MyServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *MyServiceChannelClient) Foo(ctx context.Context) (error) {
+func (c *MyServiceClient) Foo(ctx context.Context) (error) {
     in := &reqMyServiceFoo{
     }
     out := newRespMyServiceFoo()
@@ -87,14 +62,6 @@ func (c *MyServiceChannelClient) Foo(ctx context.Context) (error) {
         return err
     }
     return nil
-}
-
-func (c *MyServiceClient) Foo() (error) {
-    return c.chClient.Foo(context.Background())
-}
-
-func (c *MyServiceClient) FooContext(ctx context.Context) (error) {
-    return c.chClient.Foo(ctx)
 }
 
 
@@ -199,57 +166,32 @@ type Factories interface {
     Foo(ctx context.Context) (error)
 }
 
-type FactoriesChannelClientInterface interface {
+type FactoriesClientInterface interface {
     thrift.ClientInterface
     Factories
 }
 
-type FactoriesClientInterface interface {
-    thrift.ClientInterface
-    Foo() (error)
-}
-
-type FactoriesContextClientInterface interface {
-    FactoriesClientInterface
-    FooContext(ctx context.Context) (error)
-}
-
-type FactoriesChannelClient struct {
+type FactoriesClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ FactoriesChannelClientInterface = (*FactoriesChannelClient)(nil)
+var _ FactoriesClientInterface = (*FactoriesClient)(nil)
 
-func NewFactoriesChannelClient(channel thrift.RequestChannel) *FactoriesChannelClient {
-    return &FactoriesChannelClient{
+func NewFactoriesChannelClient(channel thrift.RequestChannel) *FactoriesClient {
+    return &FactoriesClient{
         ch: channel,
     }
 }
 
-func (c *FactoriesChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type FactoriesClient struct {
-    chClient *FactoriesChannelClient
-}
-// Compile time interface enforcer
-var _ FactoriesClientInterface = (*FactoriesClient)(nil)
-var _ FactoriesContextClientInterface = (*FactoriesClient)(nil)
-
 func NewFactoriesClient(prot thrift.Protocol) *FactoriesClient {
-    return &FactoriesClient{
-        chClient: NewFactoriesChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewFactoriesChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *FactoriesClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *FactoriesChannelClient) Foo(ctx context.Context) (error) {
+func (c *FactoriesClient) Foo(ctx context.Context) (error) {
     in := &reqFactoriesFoo{
     }
     out := newRespFactoriesFoo()
@@ -258,14 +200,6 @@ func (c *FactoriesChannelClient) Foo(ctx context.Context) (error) {
         return err
     }
     return nil
-}
-
-func (c *FactoriesClient) Foo() (error) {
-    return c.chClient.Foo(context.Background())
-}
-
-func (c *FactoriesClient) FooContext(ctx context.Context) (error) {
-    return c.chClient.Foo(ctx)
 }
 
 
@@ -370,57 +304,32 @@ type Perform interface {
     Foo(ctx context.Context) (error)
 }
 
-type PerformChannelClientInterface interface {
+type PerformClientInterface interface {
     thrift.ClientInterface
     Perform
 }
 
-type PerformClientInterface interface {
-    thrift.ClientInterface
-    Foo() (error)
-}
-
-type PerformContextClientInterface interface {
-    PerformClientInterface
-    FooContext(ctx context.Context) (error)
-}
-
-type PerformChannelClient struct {
+type PerformClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ PerformChannelClientInterface = (*PerformChannelClient)(nil)
+var _ PerformClientInterface = (*PerformClient)(nil)
 
-func NewPerformChannelClient(channel thrift.RequestChannel) *PerformChannelClient {
-    return &PerformChannelClient{
+func NewPerformChannelClient(channel thrift.RequestChannel) *PerformClient {
+    return &PerformClient{
         ch: channel,
     }
 }
 
-func (c *PerformChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type PerformClient struct {
-    chClient *PerformChannelClient
-}
-// Compile time interface enforcer
-var _ PerformClientInterface = (*PerformClient)(nil)
-var _ PerformContextClientInterface = (*PerformClient)(nil)
-
 func NewPerformClient(prot thrift.Protocol) *PerformClient {
-    return &PerformClient{
-        chClient: NewPerformChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewPerformChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *PerformClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *PerformChannelClient) Foo(ctx context.Context) (error) {
+func (c *PerformClient) Foo(ctx context.Context) (error) {
     in := &reqPerformFoo{
     }
     out := newRespPerformFoo()
@@ -429,14 +338,6 @@ func (c *PerformChannelClient) Foo(ctx context.Context) (error) {
         return err
     }
     return nil
-}
-
-func (c *PerformClient) Foo() (error) {
-    return c.chClient.Foo(context.Background())
-}
-
-func (c *PerformClient) FooContext(ctx context.Context) (error) {
-    return c.chClient.Foo(ctx)
 }
 
 
@@ -541,57 +442,32 @@ type InteractWithShared interface {
     DoSomeSimilarThings(ctx context.Context) (*shared.DoSomethingResult, error)
 }
 
-type InteractWithSharedChannelClientInterface interface {
+type InteractWithSharedClientInterface interface {
     thrift.ClientInterface
     InteractWithShared
 }
 
-type InteractWithSharedClientInterface interface {
-    thrift.ClientInterface
-    DoSomeSimilarThings() (*shared.DoSomethingResult, error)
-}
-
-type InteractWithSharedContextClientInterface interface {
-    InteractWithSharedClientInterface
-    DoSomeSimilarThingsContext(ctx context.Context) (*shared.DoSomethingResult, error)
-}
-
-type InteractWithSharedChannelClient struct {
+type InteractWithSharedClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ InteractWithSharedChannelClientInterface = (*InteractWithSharedChannelClient)(nil)
+var _ InteractWithSharedClientInterface = (*InteractWithSharedClient)(nil)
 
-func NewInteractWithSharedChannelClient(channel thrift.RequestChannel) *InteractWithSharedChannelClient {
-    return &InteractWithSharedChannelClient{
+func NewInteractWithSharedChannelClient(channel thrift.RequestChannel) *InteractWithSharedClient {
+    return &InteractWithSharedClient{
         ch: channel,
     }
 }
 
-func (c *InteractWithSharedChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type InteractWithSharedClient struct {
-    chClient *InteractWithSharedChannelClient
-}
-// Compile time interface enforcer
-var _ InteractWithSharedClientInterface = (*InteractWithSharedClient)(nil)
-var _ InteractWithSharedContextClientInterface = (*InteractWithSharedClient)(nil)
-
 func NewInteractWithSharedClient(prot thrift.Protocol) *InteractWithSharedClient {
-    return &InteractWithSharedClient{
-        chClient: NewInteractWithSharedChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewInteractWithSharedChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *InteractWithSharedClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *InteractWithSharedChannelClient) DoSomeSimilarThings(ctx context.Context) (*shared.DoSomethingResult, error) {
+func (c *InteractWithSharedClient) DoSomeSimilarThings(ctx context.Context) (*shared.DoSomethingResult, error) {
     in := &reqInteractWithSharedDoSomeSimilarThings{
     }
     out := newRespInteractWithSharedDoSomeSimilarThings()
@@ -600,14 +476,6 @@ func (c *InteractWithSharedChannelClient) DoSomeSimilarThings(ctx context.Contex
         return nil, err
     }
     return out.GetSuccess(), nil
-}
-
-func (c *InteractWithSharedClient) DoSomeSimilarThings() (*shared.DoSomethingResult, error) {
-    return c.chClient.DoSomeSimilarThings(context.Background())
-}
-
-func (c *InteractWithSharedClient) DoSomeSimilarThingsContext(ctx context.Context) (*shared.DoSomethingResult, error) {
-    return c.chClient.DoSomeSimilarThings(ctx)
 }
 
 
@@ -712,52 +580,29 @@ func (p *procFuncInteractWithSharedDoSomeSimilarThings) RunContext(ctx context.C
 type BoxService interface {
 }
 
-type BoxServiceChannelClientInterface interface {
+type BoxServiceClientInterface interface {
     thrift.ClientInterface
     BoxService
 }
 
-type BoxServiceClientInterface interface {
-    thrift.ClientInterface
-}
-
-type BoxServiceContextClientInterface interface {
-    BoxServiceClientInterface
-}
-
-type BoxServiceChannelClient struct {
+type BoxServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ BoxServiceChannelClientInterface = (*BoxServiceChannelClient)(nil)
+var _ BoxServiceClientInterface = (*BoxServiceClient)(nil)
 
-func NewBoxServiceChannelClient(channel thrift.RequestChannel) *BoxServiceChannelClient {
-    return &BoxServiceChannelClient{
+func NewBoxServiceChannelClient(channel thrift.RequestChannel) *BoxServiceClient {
+    return &BoxServiceClient{
         ch: channel,
     }
 }
 
-func (c *BoxServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type BoxServiceClient struct {
-    chClient *BoxServiceChannelClient
-}
-// Compile time interface enforcer
-var _ BoxServiceClientInterface = (*BoxServiceClient)(nil)
-var _ BoxServiceContextClientInterface = (*BoxServiceClient)(nil)
-
 func NewBoxServiceClient(prot thrift.Protocol) *BoxServiceClient {
-    return &BoxServiceClient{
-        chClient: NewBoxServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewBoxServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *BoxServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
 

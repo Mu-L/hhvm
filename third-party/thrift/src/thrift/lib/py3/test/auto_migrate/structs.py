@@ -51,7 +51,6 @@ from thrift.py3.types import Struct
 
 
 class StructTests(unittest.TestCase):
-    @brokenInAutoMigrate()
     def test_isset_Struct(self) -> None:
         serialized = b'{"name":"/dev/null","type":8}'
         file = deserialize(File, serialized, protocol=Protocol.JSON)
@@ -73,7 +72,6 @@ class StructTests(unittest.TestCase):
         #  param but got `File`.
         self.assertFalse(Struct.isset(file).type)
 
-    @brokenInAutoMigrate()
     def test_isset_repr(self) -> None:
         serialized = b'{"name":"/dev/null","type":8}'
         file = deserialize(File, serialized, protocol=Protocol.JSON)
@@ -97,7 +95,6 @@ class StructTests(unittest.TestCase):
             #  1st param but got `Integers`.
             Struct.isset(i).large
 
-    @brokenInAutoMigrate()
     def test_isset_Error(self) -> None:
         e = UnusedError()
         # pyre-fixme[6]: Expected `HasIsSet[Variable[thrift.py3.types._T]]` for 1st
@@ -327,13 +324,11 @@ class StructTests(unittest.TestCase):
         self.assertEqual(expected, dir(easy))
         self.assertEqual(["__iter__"], dir(Struct))
 
-    @brokenInAutoMigrate()
     def test_update_nested_fields(self) -> None:
         n = Nested1(a=Nested2(b=Nested3(c=easy(val=42, name="foo"))))
         n = Struct.update_nested_field(n, {"a.b.c": easy(val=128)})
         self.assertEqual(n.a.b.c.val, 128)
 
-    @brokenInAutoMigrate()
     def test_update_multiple_nested_fields(self) -> None:
         n = Nested1(a=Nested2(b=Nested3(c=easy(val=42, name="foo"))))
         n = Struct.update_nested_field(
@@ -346,7 +341,6 @@ class StructTests(unittest.TestCase):
         self.assertEqual(n.a.b.c.name, "bar")
         self.assertEqual(n.a.b.c.val, 256)
 
-    @brokenInAutoMigrate()
     def test_update_invalid_nested_fields(self) -> None:
         n = Nested1(a=Nested2(b=Nested3(c=easy(val=42, name="foo"))))
         with self.assertRaises(ValueError):
@@ -358,7 +352,6 @@ class StructTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Struct.update_nested_field(n, {"a.e.f": 0})
 
-    @brokenInAutoMigrate()
     def test_update_conflicting_nested_fields(self) -> None:
         n = Nested1(a=Nested2(b=Nested3(c=easy(val=42, name="foo"))))
         with self.assertRaises(ValueError):
@@ -490,7 +483,14 @@ class NumericalConversionsTests(unittest.TestCase):
             {IncludedColour.red: Basic(), IncludedColour.blue: Basic(nom="b")},
         )
 
-    @brokenInAutoMigrate()
     def test_instance_base_class(self) -> None:
-        self.assertTrue(issubclass(Nested1, Struct))
         self.assertIsInstance(Nested1(), Struct)
+        self.assertIsInstance(Nested1(), Nested1)
+        self.assertNotIsInstance(Nested1(), Nested2)
+        self.assertNotIsInstance(3, Nested1)
+        self.assertNotIsInstance(3, Struct)
+        self.assertTrue(issubclass(Nested1, Struct))
+        self.assertFalse(issubclass(int, Struct))
+        self.assertFalse(issubclass(int, Nested1))
+        self.assertFalse(issubclass(Struct, Nested1))
+        self.assertFalse(issubclass(Nested1, Nested2))

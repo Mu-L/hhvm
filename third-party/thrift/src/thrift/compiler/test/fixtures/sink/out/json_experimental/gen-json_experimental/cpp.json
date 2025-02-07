@@ -646,6 +646,40 @@
         "is_exception" : false,
         "is_union" : false,
         "lineno" : 391
+      },
+      "DeprecatedTerseWrite" : {
+        "name" : "DeprecatedTerseWrite",
+        "structured_annotations": {
+          "scope.Field" : {
+            "type" : {
+          "type" : "struct",
+          "name" : "Field",
+          "path" : "thrift/annotation/scope.thrift"
+        },
+            "value" : {}
+          }
+        },
+        "docstring" : "Changes the serialization behavior of the field to skip serialization if its value is equal to standard default\nfor bool, integers, enums, and floating points, and intrinsic default for string, binary, and containers.\nIf an unqualified field with structured type has @cpp.Ref, the serilaization skips the field if the pointer is empty.\n\nThis annotation is only applicable to an unqualified field with bool, integers, enums, floating points, string, binary, and containers\nbut not for structs, unions, and exceptions.\n\nNote, this is a deprecated feature. Use @thrift.TerseWrite instead.\n",
+        "is_exception" : false,
+        "is_union" : false,
+        "lineno" : 404
+      },
+      "AllowLegacyDeprecatedTerseWritesRef" : {
+        "name" : "AllowLegacyDeprecatedTerseWritesRef",
+        "structured_annotations": {
+          "scope.Field" : {
+            "type" : {
+          "type" : "struct",
+          "name" : "Field",
+          "path" : "thrift/annotation/scope.thrift"
+        },
+            "value" : {}
+          }
+        },
+        "docstring" : "Allows the field to be annotated @cpp.Ref (or cpp[2].ref[_type]) even if it\nis deprecated_terse_writes field.\n\nThis annotation is provided for a limited time, to exempt pre-existing fields\nwhile rolling out a stricter enforcement of the condition above.\n",
+        "is_exception" : false,
+        "is_union" : false,
+        "lineno" : 414
       }
   },
   "source_path" : "thrift/annotation/cpp",

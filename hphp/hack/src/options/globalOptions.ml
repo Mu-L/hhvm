@@ -141,7 +141,6 @@ type t = {
   tco_error_php_lambdas: bool;
   tco_disallow_discarded_nullable_awaitables: bool;
   tco_higher_kinded_types: bool;
-  tco_report_pos_from_reason: bool;
   tco_typecheck_sample_rate: float;
   tco_enable_sound_dynamic: bool;
   tco_pessimise_builtins: bool;
@@ -177,6 +176,7 @@ type t = {
   tco_log_exhaustivity_check: bool;
   tco_sticky_quarantine: bool;
   tco_lsp_invalidation: bool;
+  invalidate_all_folded_decls_upon_file_change: bool;
   tco_autocomplete_sort_text: bool;
   tco_extended_reasons: extended_reasons_config option;
   tco_disable_physical_equality: bool;
@@ -251,7 +251,6 @@ let default =
     tco_error_php_lambdas = false;
     tco_disallow_discarded_nullable_awaitables = false;
     tco_higher_kinded_types = false;
-    tco_report_pos_from_reason = false;
     tco_typecheck_sample_rate = 1.0;
     tco_enable_sound_dynamic = false;
     tco_pessimise_builtins = false;
@@ -287,6 +286,7 @@ let default =
     tco_log_exhaustivity_check = false;
     tco_sticky_quarantine = false;
     tco_lsp_invalidation = false;
+    invalidate_all_folded_decls_upon_file_change = false;
     tco_autocomplete_sort_text = false;
     tco_extended_reasons = None;
     tco_disable_physical_equality = false;
@@ -359,7 +359,6 @@ let set
     ?tco_error_php_lambdas
     ?tco_disallow_discarded_nullable_awaitables
     ?tco_higher_kinded_types
-    ?tco_report_pos_from_reason
     ?tco_typecheck_sample_rate
     ?tco_enable_sound_dynamic
     ?tco_pessimise_builtins
@@ -395,6 +394,7 @@ let set
     ?tco_log_exhaustivity_check
     ?tco_sticky_quarantine
     ?tco_lsp_invalidation
+    ?invalidate_all_folded_decls_upon_file_change
     ?tco_autocomplete_sort_text
     ?tco_extended_reasons
     ?tco_disable_physical_equality
@@ -552,8 +552,6 @@ let set
         options.tco_disallow_discarded_nullable_awaitables;
     tco_higher_kinded_types =
       setting tco_higher_kinded_types options.tco_higher_kinded_types;
-    tco_report_pos_from_reason =
-      setting tco_report_pos_from_reason options.tco_report_pos_from_reason;
     tco_typecheck_sample_rate =
       setting tco_typecheck_sample_rate options.tco_typecheck_sample_rate;
     tco_enable_sound_dynamic =
@@ -656,6 +654,10 @@ let set
       setting tco_sticky_quarantine options.tco_sticky_quarantine;
     tco_lsp_invalidation =
       setting tco_lsp_invalidation options.tco_lsp_invalidation;
+    invalidate_all_folded_decls_upon_file_change =
+      setting
+        invalidate_all_folded_decls_upon_file_change
+        options.invalidate_all_folded_decls_upon_file_change;
     tco_autocomplete_sort_text =
       setting tco_autocomplete_sort_text options.tco_autocomplete_sort_text;
     tco_extended_reasons =

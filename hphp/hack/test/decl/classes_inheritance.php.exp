@@ -6,11 +6,10 @@
        sc_module = None; sc_name = ([3:7-8], "\\A"); sc_tparams = [];
        sc_extends = []; sc_uses = []; sc_xhp_attr_uses = [];
        sc_xhp_enum_values = {}; sc_xhp_marked_empty = false;
-       sc_req_extends = []; sc_req_implements = []; sc_req_class = [];
-       sc_req_this_as = []; sc_implements = [];
-       sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
-       sc_props = []; sc_sprops = []; sc_constructor = None;
-       sc_static_methods = [];
+       sc_req_extends = []; sc_req_implements = []; sc_req_constraints = [];
+       sc_implements = []; sc_support_dynamic_type = false; sc_consts = [];
+       sc_typeconsts = []; sc_props = []; sc_sprops = [];
+       sc_constructor = None; sc_static_methods = [];
        sc_methods =
        [{ Shallow_decl_defs.sm_name = ([4:19-20], "a");
           sm_type =
@@ -30,7 +29,8 @@
           sm_flags =
           { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
             override = false; dynamicallycallable = false;
-            php_std_lib = false; support_dynamic_type = false };
+            php_std_lib = false; support_dynamic_type = false;
+            no_auto_likes = false };
           sm_attributes = []; sm_sort_text = None };
          { Shallow_decl_defs.sm_name = ([5:19-20], "b");
            sm_type =
@@ -51,7 +51,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None }
          ];
        sc_user_attributes = []; sc_enum_type = None; sc_docs_url = None;
@@ -65,10 +66,10 @@
         sc_extends = [(Rhint ([8:17-18]), (Tapply (([8:17-18], "\\A"), [])))];
         sc_uses = []; sc_xhp_attr_uses = []; sc_xhp_enum_values = {};
         sc_xhp_marked_empty = false; sc_req_extends = [];
-        sc_req_implements = []; sc_req_class = []; sc_req_this_as = [];
-        sc_implements = []; sc_support_dynamic_type = false; sc_consts = [];
-        sc_typeconsts = []; sc_props = []; sc_sprops = [];
-        sc_constructor = None; sc_static_methods = [];
+        sc_req_implements = []; sc_req_constraints = []; sc_implements = [];
+        sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
+        sc_props = []; sc_sprops = []; sc_constructor = None;
+        sc_static_methods = [];
         sc_methods =
         [{ Shallow_decl_defs.sm_name = ([9:19-20], "b");
            sm_type =
@@ -89,7 +90,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None };
           { Shallow_decl_defs.sm_name = ([10:19-20], "c");
             sm_type =
@@ -110,7 +112,8 @@
             sm_flags =
             { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
               override = false; dynamicallycallable = false;
-              php_std_lib = false; support_dynamic_type = false };
+              php_std_lib = false; support_dynamic_type = false;
+              no_auto_likes = false };
             sm_attributes = []; sm_sort_text = None }
           ];
         sc_user_attributes = []; sc_enum_type = None; sc_docs_url = None;
@@ -123,10 +126,10 @@
         sc_name = ([13:11-12], "\\C"); sc_tparams = []; sc_extends = [];
         sc_uses = []; sc_xhp_attr_uses = []; sc_xhp_enum_values = {};
         sc_xhp_marked_empty = false; sc_req_extends = [];
-        sc_req_implements = []; sc_req_class = []; sc_req_this_as = [];
-        sc_implements = []; sc_support_dynamic_type = false; sc_consts = [];
-        sc_typeconsts = []; sc_props = []; sc_sprops = [];
-        sc_constructor = None; sc_static_methods = [];
+        sc_req_implements = []; sc_req_constraints = []; sc_implements = [];
+        sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
+        sc_props = []; sc_sprops = []; sc_constructor = None;
+        sc_static_methods = [];
         sc_methods =
         [{ Shallow_decl_defs.sm_name = ([14:19-20], "c");
            sm_type =
@@ -147,7 +150,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = true; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None }
           ];
         sc_user_attributes = []; sc_enum_type = None; sc_docs_url = None;
@@ -162,10 +166,10 @@
         [(Rhint ([17:21-22]), (Tapply (([17:21-22], "\\C"), [])))];
         sc_uses = []; sc_xhp_attr_uses = []; sc_xhp_enum_values = {};
         sc_xhp_marked_empty = false; sc_req_extends = [];
-        sc_req_implements = []; sc_req_class = []; sc_req_this_as = [];
-        sc_implements = []; sc_support_dynamic_type = false; sc_consts = [];
-        sc_typeconsts = []; sc_props = []; sc_sprops = [];
-        sc_constructor = None; sc_static_methods = [];
+        sc_req_implements = []; sc_req_constraints = []; sc_implements = [];
+        sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
+        sc_props = []; sc_sprops = []; sc_constructor = None;
+        sc_static_methods = [];
         sc_methods =
         [{ Shallow_decl_defs.sm_name = ([18:19-20], "d");
            sm_type =
@@ -186,7 +190,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = true; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None }
           ];
         sc_user_attributes = []; sc_enum_type = None; sc_docs_url = None;
@@ -199,8 +204,7 @@
         sc_module = None; sc_name = ([21:7-8], "\\E"); sc_tparams = [];
         sc_extends = []; sc_uses = []; sc_xhp_attr_uses = [];
         sc_xhp_enum_values = {}; sc_xhp_marked_empty = false;
-        sc_req_extends = []; sc_req_implements = []; sc_req_class = [];
-        sc_req_this_as = [];
+        sc_req_extends = []; sc_req_implements = []; sc_req_constraints = [];
         sc_implements =
         [(Rhint ([21:20-21]), (Tapply (([21:20-21], "\\C"), [])))];
         sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
@@ -226,7 +230,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None }
           ];
         sc_user_attributes = []; sc_enum_type = None; sc_docs_url = None;
@@ -241,7 +246,7 @@
         [(Rhint ([25:17-18]), (Tapply (([25:17-18], "\\E"), [])))];
         sc_uses = []; sc_xhp_attr_uses = []; sc_xhp_enum_values = {};
         sc_xhp_marked_empty = false; sc_req_extends = [];
-        sc_req_implements = []; sc_req_class = []; sc_req_this_as = [];
+        sc_req_implements = []; sc_req_constraints = [];
         sc_implements =
         [(Rhint ([25:30-31]), (Tapply (([25:30-31], "\\D"), [])))];
         sc_support_dynamic_type = false; sc_consts = []; sc_typeconsts = [];
@@ -267,7 +272,8 @@
            sm_flags =
            { Shallow_decl_defs.MethodFlags.abstract = false; final = false;
              override = false; dynamicallycallable = false;
-             php_std_lib = false; support_dynamic_type = false };
+             php_std_lib = false; support_dynamic_type = false;
+             no_auto_likes = false };
            sm_attributes = []; sm_sort_text = None }
           ];
         sc_user_attributes = []; sc_enum_type = None; sc_docs_url = None;

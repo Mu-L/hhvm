@@ -89,7 +89,7 @@ let override_method_refactorings_at classish_positions ~cursor_line ~cursor_col
     @@ SMap.filter_map
          (fun _cls posl ->
            List.find posl ~f:(fun whitespace_range ->
-               Pos.inside whitespace_range cursor_line cursor_col))
+               Pos.inside_one_based whitespace_range cursor_line cursor_col))
          inbetween_positions
   in
 
@@ -115,7 +115,7 @@ let override_method_refactorings_at classish_positions ~cursor_line ~cursor_col
         match c.Aast.c_kind with
         | Ast_defs.Cclass _ ->
           List.map c.Aast.c_extends ~f:(fun h ->
-              if Pos.inside (fst h) cursor_line cursor_col then
+              if Pos.inside_one_based (fst h) cursor_line cursor_col then
                 match parent_name_of_class_hint h with
                 | Some parent_name ->
                   override_method_quickfixes
@@ -185,14 +185,14 @@ let refactor_action
     Code_action_types.refactor =
   let (edits, selection) = to_edits_and_selection classish_positions quickfix in
   let edits = lazy (Relative_path.Map.singleton path edits) in
-  Code_action_types.
-    {
-      title = quickfix.title;
-      edits;
-      kind = `Refactor;
-      selection;
-      trigger_inline_suggest = Option.is_some selection;
-    }
+  Code_action_types.(
+    Refactor
+      {
+        title = quickfix.title;
+        edits;
+        selection;
+        trigger_inline_suggest = Option.is_some selection;
+      })
 
 let find ~entry pos ctx =
   let (cursor_line, cursor_col) = Pos.line_column pos in

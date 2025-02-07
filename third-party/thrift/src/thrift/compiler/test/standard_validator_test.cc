@@ -121,3 +121,138 @@ TEST(StandardValidatorTest, ValidatePy3EnableCppAdapter) {
     typedef i32 MyInt2
   )");
 }
+
+TEST(StandardValidatorTest, ConstKeyCollision) {
+  check_compile(R"(
+    enum FooBar {
+      Foo = 1,
+      Bar = 2,
+    }
+
+    const map<FooBar, string> ENUM_OK = {
+      FooBar.Foo: "Foo",
+      FooBar.Bar: "Bar"
+    }
+
+    const map<FooBar, string> ENUM_DUPE = {
+      FooBar.Foo: "Foo",
+      FooBar.Bar: "Bar",
+      FooBar.Bar: "Bar"
+    # expected-warning@-1: Duplicate key in map literal: `Bar`
+    }
+
+    const map<i32, string> ENUM_DUPE_COERCE = {
+    FooBar.Bar: "Bar",
+    FooBar.Foo: "Foo",
+    1: "Bar2",
+    # expected-warning@-1: Duplicate key in map literal: `1`
+    2: "Foo2",
+    # expected-warning@-1: Duplicate key in map literal: `2`
+}
+
+    const map<i64, string> USEFUL_DATA = {
+      1: "a",
+      2: "b",
+      1: "c",
+    # expected-warning@-1: Duplicate key in map literal: `1`
+    };
+
+    const string GREETING = "hey";
+    const string HELLO = "hello";
+    const string SALUTATION = "hey";
+
+    const map<string, string> ARTIFICIAL_INTELLIGENCE = {
+      GREETING: "a",
+      HELLO: "b",
+      SALUTATION: "c",
+    # expected-warning@-1: Duplicate key in map literal: `hey`
+    };
+
+    const list<map<string, i64>> LIST_NESTING = [
+      {"str": 1},
+      {"foo": 1, "bar": 2, "foo": 3},
+    # expected-warning@-1: Duplicate key in map literal: `foo`
+      {"str": 1},
+    ];
+
+    const list<map<i64, string>> CASCADING = [
+      {1: "str"},
+      // Verify no duplicate error on USEFUL_DATA 
+      USEFUL_DATA,
+      {1: "str"},
+    ];
+
+    struct Building {
+      1: map<i64, string> int_str;
+    }
+
+    const Building B = Building {
+      int_str = {4: "a", 5: "b", 4: "c"},
+    # expected-warning@-1: Duplicate key in map literal: `4`
+    };
+
+    const Building C = Building {
+      // Verify no duplicate error on USEFUL_DATA 
+      int_str = USEFUL_DATA,
+    };
+
+
+  )");
+}
+
+TEST(StandardValidatorTest, FieldDefaultKeyCollision) {
+  check_compile(R"(
+    enum FooBar {
+      Foo = 1,
+      Bar = 2,
+    }
+
+    const map<i64, string> INT_DUPE = {
+      2: "Foo",
+      4: "Bar",
+      2: "Bar"
+    # expected-warning@-1: Duplicate key in map literal: `2`
+    }
+
+    struct S {
+      1: map<FooBar, string> ok_init = {};
+      2: map<i64, string> bad_init_no_err = INT_DUPE;
+      3: map<FooBar, string> bad_init_should_err = {
+        FooBar.Foo: "Foo", FooBar.Bar: "Bar", FooBar.Bar: "Bar"
+    # expected-warning@-1: Duplicate key in map literal: `Bar`
+      };
+      4: map<list<i64>, i64> bad_init_list_key = {
+        [1, 1, 2]: 1, [1, 1, 2]: 2
+    # expected-warning@-1: Duplicate key in map literal: `[1, ..., 2]`
+      };
+    }
+  )");
+}
+
+TEST(StandardValidatorTest, SetKeyCollision) {
+  check_compile(R"(
+    const set<i64> SET_DUPE = [
+      2,
+      4,
+      2,
+    # expected-warning@-1: Duplicate key in set literal: `2`
+      4,
+    # expected-warning@-1: Duplicate key in set literal: `4`
+    ];
+
+    const list<i64> LIST_DUPE = [2, 2, 2, 4, 2, 4];
+
+    const set<set<i64>> NESTED_SET = [[2], [4], [2]];
+    # expected-warning@-1: Duplicate key in set literal: `[2]`
+
+    const list<set<i64>> NESTED_IDENTIFIER = [[2], SET_DUPE];
+
+    struct S {
+      1: set<string> ok_init = [];
+      2: set<string> dupe_init_set = ["a", "b", "a"];
+    # expected-warning@-1: Duplicate key in set literal: `a`
+      3: list<string> dupe_init_list = ["a", "b", "a"];
+      4: set<i64> set_from_named_const = SET_DUPE;
+    }
+  )");
+}

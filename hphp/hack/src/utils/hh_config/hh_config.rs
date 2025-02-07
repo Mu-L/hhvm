@@ -320,6 +320,14 @@ impl HhConfig {
                 "enable_class_pointer_hint",
                 default.enable_class_pointer_hint,
             )?,
+            disallow_non_annotated_memoize: hhconfig.get_bool_or(
+                "disallow_non_annotated_memoize",
+                default.disallow_non_annotated_memoize,
+            )?,
+            treat_non_annotated_memoize_as_kbic: hhconfig.get_bool_or(
+                "treat_non_annotated_memoize_as_kbic",
+                default.treat_non_annotated_memoize_as_kbic,
+            )?,
         };
         let default = GlobalOptions::default();
         let opts = GlobalOptions {
@@ -402,7 +410,6 @@ impl HhConfig {
             tco_disallow_discarded_nullable_awaitables: default
                 .tco_disallow_discarded_nullable_awaitables,
             tco_higher_kinded_types: default.tco_higher_kinded_types,
-            tco_report_pos_from_reason: default.tco_report_pos_from_reason,
             tco_typecheck_sample_rate: hhconfig
                 .get_float_or("typecheck_sample_rate", default.tco_typecheck_sample_rate)?,
             tco_enable_sound_dynamic: hhconfig.get_bool_or(
@@ -503,6 +510,8 @@ impl HhConfig {
                 .get_bool_or("log_exhaustivity_check", default.tco_log_exhaustivity_check)?,
             tco_sticky_quarantine: default.tco_sticky_quarantine,
             tco_lsp_invalidation: default.tco_lsp_invalidation,
+            invalidate_all_folded_decls_upon_file_change: default
+                .invalidate_all_folded_decls_upon_file_change,
             tco_autocomplete_sort_text: default.tco_autocomplete_sort_text,
             tco_extended_reasons: hhconfig.get_either_int_or_str("extended_reasons").and_then(
                 |res| match res {

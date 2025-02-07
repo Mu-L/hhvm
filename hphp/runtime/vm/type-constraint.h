@@ -790,6 +790,33 @@ struct TypeIntersectionConstraint {
   }
 
   template<typename T>
+  bool alwaysPasses(T value) const {
+    return std::all_of(
+        range().begin(),
+        range().end(),
+        [&](const TypeConstraint& tc) {return tc.alwaysPasses(value);}
+    );
+  }
+
+  MaybeDataType underlyingDataType() const {
+    for (auto const& tc : range()) {
+      if (tc.underlyingDataType() != std::nullopt) {
+        return tc.underlyingDataType();
+      }
+    }
+    return std::nullopt;
+  }
+
+  MaybeDataType asSystemlibType() const {
+    for (auto const& tc : range()) {
+      if (tc.asSystemlibType() != std::nullopt) {
+        return tc.asSystemlibType();
+      }
+    }
+    return std::nullopt;
+  }
+
+  template<typename T>
   static std::vector<TypeConstraint> ubs(const T& tcs) {
     std::vector<TypeConstraint> ubs;
     if (tcs.size() > 1) {
@@ -893,6 +920,63 @@ struct TypeIntersectionConstraint {
 
   HPHP::Optional<TypedValue> defaultValue() const;
 
+  #define isX(name) \
+  bool is##name() const { \
+    return std::all_of(range().begin(), range().end(), [&](const TypeConstraint& tc) {return tc.is##name(); }); \
+  }
+  isX(String)
+  isX(Int)
+  isX(Vec)
+  #undef isX
+
+  bool validForProp() const {
+    return std::all_of(
+      range().begin(),
+      range().end(),
+      [&](const TypeConstraint& tc) {
+        return tc.validForProp();
+      }
+    );
+  }
+
+  void validForPropResolved(const Class* declCls,
+                            const StringData* propName) const {
+    for (auto const& tc : range()) {
+      tc.validForPropResolved(declCls, propName);
+    }
+  }
+
+  bool isTypeVar() const {
+    return std::any_of(
+      range().begin(),
+      range().end(),
+      [&](const TypeConstraint& tc) {
+        return tc.isTypeVar();
+      }
+    );
+  }
+
+  bool isNullable() const {
+    return std::all_of(
+        range().begin(),
+        range().end(),
+        [&](const TypeConstraint& tc) {
+          return tc.isNullable();
+        }
+    );
+  }
+
+  bool isCheckable() const {
+    // If any constraint is checkable, then the whole intersection is checkable
+    return std::any_of(
+      range().begin(),
+      range().end(),
+      [&](const TypeConstraint& tc) {
+        return tc.isCheckable();
+      }
+    );
+  }
+
   private:
   folly::Range<TypeConstraint*> mutableRange() {
     if (isSimple()) {
@@ -912,7 +996,6 @@ struct TypeIntersectionConstraint {
     ~TypeConstraints() {}
   } m_u;
 };
-
 
 static_assert(CheckSize<TypeIntersectionConstraint, use_lowptr ? 16 : 32>(), "");
 
@@ -971,10 +1054,10 @@ bool tcCouldBeReified(const Func*, uint32_t);
  * will trigger a COW. This can be a major performance hit if the target is
  * large.
  */
-inline bool setOpNeedsTypeCheck(const TypeConstraint& tc,
+inline bool setOpNeedsTypeCheck(const TypeIntersectionConstraint& tic,
                                 SetOpOp op,
                                 tv_rval lhs) {
-  if (Cfg::Eval::CheckPropTypeHints <= 0 || !tc.isCheckable()) {
+  if (Cfg::Eval::CheckPropTypeHints <= 0 || !tic.isCheckable()) {
     return false;
   }
   if (op != SetOpOp::ConcatEqual) return true;
@@ -982,7 +1065,7 @@ inline bool setOpNeedsTypeCheck(const TypeConstraint& tc,
   // allows a string, we don't need a check because the concat will always
   // produce a string, regardless of the rhs.
   if (LIKELY(isStringType(type(lhs)))) return false;
-  return !tc.alwaysPasses(KindOfString);
+  return !tic.alwaysPasses(KindOfString);
 }
 
 // Add all flags in tc (except TypeVar) to ub.

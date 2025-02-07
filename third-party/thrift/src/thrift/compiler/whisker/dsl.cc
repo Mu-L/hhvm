@@ -68,18 +68,17 @@ object::ptr map_like::lookup_property(std::string_view identifier) const {
       });
 }
 
-std::optional<std::vector<std::string>> map_like::keys() const {
-  using result = std::optional<std::vector<std::string>>;
+std::optional<std::set<std::string>> map_like::keys() const {
+  using result = std::optional<std::set<std::string>>;
   return whisker::detail::variant_match(
       which_,
       [&](const native_object::map_like::ptr& m) -> result {
         return m->keys();
       },
       [&](const managed_ptr<map>& m) -> result {
-        std::vector<std::string> keys;
-        keys.reserve(m->size());
+        std::set<std::string> keys;
         for (const auto& [key, _] : *m) {
-          keys.push_back(key);
+          keys.insert(key);
         }
         return keys;
       });
@@ -104,7 +103,7 @@ object::ptr function::context::named_argument(
     if (presence == named_argument_presence::optional) {
       return nullptr;
     }
-    error("Missing named argument '{}'.", name);
+    throw make_error("Missing named argument '{}'.", name);
   }
   return arg->second;
 }
@@ -115,7 +114,7 @@ void function::context::do_warning(std::string msg) const {
 
 void function::context::declare_arity(std::size_t expected) const {
   if (arity() != expected) {
-    error("Expected {} argument(s) but got {}", expected, arity());
+    throw make_error("Expected {} argument(s) but got {}", expected, arity());
   }
 }
 
@@ -130,7 +129,8 @@ void function::context::declare_named_arguments(
     names.erase(name);
   }
   if (!names.empty()) {
-    error("Unknown named argument(s) provided: {}.", fmt::join(names, ", "));
+    throw make_error(
+        "Unknown named argument(s) provided: {}.", fmt::join(names, ", "));
   }
 }
 

@@ -38,6 +38,7 @@
 #include <thrift/compiler/sema/ast_validator.h>
 #include <thrift/compiler/sema/schematizer.h>
 #include <thrift/compiler/sema/sema_context.h>
+#include <thrift/compiler/sema/standard_validator.h>
 
 using apache::thrift::compiler::detail::schematizer;
 
@@ -1620,6 +1621,8 @@ class cpp_mstch_struct : public mstch_struct {
              has_option("deprecated_terse_writes")](auto& field) {
           return (!enabled_terse_write ||
                   !cpp2::deprecated_terse_writes(&field)) &&
+              field.find_structured_annotation_or_null(
+                  kCppDeprecatedTerseWriteUri) == nullptr &&
               field.get_req() != t_field::e_req::optional &&
               field.get_req() != t_field::e_req::terse;
         });
@@ -1861,6 +1864,9 @@ class cpp_mstch_field : public mstch_field {
             {"field:enum_has_value", &cpp_mstch_field::enum_has_value},
             {"field:deprecated_terse_writes?",
              &cpp_mstch_field::deprecated_terse_writes},
+            {"field:deprecated_terse_writes_with_non_redundant_custom_default?",
+             &cpp_mstch_field::
+                 deprecated_terse_writes_with_non_redundant_custom_default},
             {"field:fatal_annotations?",
              &cpp_mstch_field::has_fatal_annotations},
             {"field:fatal_annotations", &cpp_mstch_field::fatal_annotations},
@@ -2069,8 +2075,16 @@ class cpp_mstch_field : public mstch_field {
         : mstch::node("");
   }
   mstch::node deprecated_terse_writes() {
-    return has_option("deprecated_terse_writes") &&
-        cpp2::deprecated_terse_writes(field_);
+    return field_->find_structured_annotation_or_null(
+               kCppDeprecatedTerseWriteUri) != nullptr ||
+        (has_option("deprecated_terse_writes") &&
+         cpp2::deprecated_terse_writes(field_));
+  }
+  mstch::node deprecated_terse_writes_with_non_redundant_custom_default() {
+    return std::get<bool>(deprecated_terse_writes()) &&
+        field_->default_value() &&
+        !detail::is_initializer_default_value(
+               field_->type().deref(), *field_->default_value());
   }
   mstch::node zero_copy_arg() {
     switch (field_->get_type()->get_type_value()) {
@@ -2879,6 +2893,52 @@ class validate_splits {
   }
 };
 
+void forbid_deprecated_terse_writes_ref(
+    sema_context& ctx,
+    const t_struct& strct,
+    const std::map<std::string, std::string>& options) {
+  for (auto& field : strct.fields()) {
+    const bool isUniqueRef =
+        gen::cpp::find_ref_type(field) == gen::cpp::reference_type::unique;
+    const bool isDeprecatedTerseWrites =
+        field.qualifier() == t_field_qualifier::none &&
+        (options.count("deprecated_terse_writes") ||
+         field.find_structured_annotation_or_null(kCppDeprecatedTerseWriteUri));
+
+    if (field.find_structured_annotation_or_null(
+            kCppAllowLegacyDeprecatedTerseWritesRefUri)) {
+      if (!isUniqueRef) {
+        ctx.report(
+            field,
+            diagnostic_level::error,
+            "@cpp.AllowLegacyDeprecatedTerseWritesRef can not be applied to `{}`"
+            " since it's not cpp.Ref{{Unique}} field.",
+            field.name());
+      }
+      if (!isDeprecatedTerseWrites) {
+        ctx.report(
+            field,
+            diagnostic_level::error,
+            "@cpp.AllowLegacyDeprecatedTerseWritesRef can not be applied to `{}`"
+            " since it's not cpp.DeprecatedTerseWrite field.",
+            field.name());
+      }
+      continue;
+    }
+
+    if (!isUniqueRef || !isDeprecatedTerseWrites) {
+      continue;
+    }
+
+    ctx.report(
+        field,
+        diagnostic_level::error,
+        "@cpp.Ref{{Unique}} can not be applied to `{}`"
+        " since it's cpp.DeprecatedTerseWrite field.",
+        field.name());
+  }
+}
+
 void validate_lazy_fields(sema_context& ctx, const t_field& field) {
   if (cpp2::is_lazy(&field)) {
     auto t = field.get_type()->get_true_type();
@@ -2902,6 +2962,20 @@ void validate_lazy_fields(sema_context& ctx, const t_field& field) {
   }
 }
 
+// TODO(dokwon): Remove this validation once `deprecated_terse_writes` cpp2
+// options are completely removed.
+void validate_deprecated_terse_writes(
+    sema_context& ctx,
+    const t_field& field,
+    const std::map<std::string, std::string>& options) {
+  if (options.count("deprecated_terse_writes") != 0 &&
+      field.find_structured_annotation_or_null(kCppDeprecatedTerseWriteUri) !=
+          nullptr) {
+    ctx.error(
+        "Cannot use thrift_cpp2_options `deprecated_terse_writes` with @cpp.DeprecatedTerseWrite.");
+  }
+}
+
 void t_mstch_cpp2_generator::fill_validator_visitors(
     ast_validator& validator) const {
   validator.add_structured_definition_visitor(std::bind(
@@ -2909,9 +2983,19 @@ void t_mstch_cpp2_generator::fill_validator_visitors(
       std::placeholders::_1,
       std::placeholders::_2,
       options()));
+  validator.add_struct_visitor(std::bind(
+      forbid_deprecated_terse_writes_ref,
+      std::placeholders::_1,
+      std::placeholders::_2,
+      options()));
   validator.add_program_visitor(
       validate_splits(get_split_count(options()), client_name_to_split_count_));
   validator.add_field_visitor(validate_lazy_fields);
+  validator.add_field_visitor(std::bind(
+      validate_deprecated_terse_writes,
+      std::placeholders::_1,
+      std::placeholders::_2,
+      options()));
 }
 
 THRIFT_REGISTER_GENERATOR(

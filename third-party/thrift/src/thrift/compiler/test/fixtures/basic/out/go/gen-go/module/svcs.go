@@ -26,57 +26,32 @@ type FooService interface {
     SimpleRPC(ctx context.Context) (error)
 }
 
-type FooServiceChannelClientInterface interface {
+type FooServiceClientInterface interface {
     thrift.ClientInterface
     FooService
 }
 
-type FooServiceClientInterface interface {
-    thrift.ClientInterface
-    SimpleRPC() (error)
-}
-
-type FooServiceContextClientInterface interface {
-    FooServiceClientInterface
-    SimpleRPCContext(ctx context.Context) (error)
-}
-
-type FooServiceChannelClient struct {
+type FooServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ FooServiceChannelClientInterface = (*FooServiceChannelClient)(nil)
+var _ FooServiceClientInterface = (*FooServiceClient)(nil)
 
-func NewFooServiceChannelClient(channel thrift.RequestChannel) *FooServiceChannelClient {
-    return &FooServiceChannelClient{
+func NewFooServiceChannelClient(channel thrift.RequestChannel) *FooServiceClient {
+    return &FooServiceClient{
         ch: channel,
     }
 }
 
-func (c *FooServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type FooServiceClient struct {
-    chClient *FooServiceChannelClient
-}
-// Compile time interface enforcer
-var _ FooServiceClientInterface = (*FooServiceClient)(nil)
-var _ FooServiceContextClientInterface = (*FooServiceClient)(nil)
-
 func NewFooServiceClient(prot thrift.Protocol) *FooServiceClient {
-    return &FooServiceClient{
-        chClient: NewFooServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewFooServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *FooServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *FooServiceChannelClient) SimpleRPC(ctx context.Context) (error) {
+func (c *FooServiceClient) SimpleRPC(ctx context.Context) (error) {
     in := &reqFooServiceSimpleRPC{
     }
     out := newRespFooServiceSimpleRPC()
@@ -85,14 +60,6 @@ func (c *FooServiceChannelClient) SimpleRPC(ctx context.Context) (error) {
         return err
     }
     return nil
-}
-
-func (c *FooServiceClient) SimpleRPC() (error) {
-    return c.chClient.SimpleRPC(context.Background())
-}
-
-func (c *FooServiceClient) SimpleRPCContext(ctx context.Context) (error) {
-    return c.chClient.SimpleRPC(ctx)
 }
 
 
@@ -197,57 +164,32 @@ type FB303Service interface {
     SimpleRPC(ctx context.Context, intParameter int32) (*ReservedKeyword, error)
 }
 
-type FB303ServiceChannelClientInterface interface {
+type FB303ServiceClientInterface interface {
     thrift.ClientInterface
     FB303Service
 }
 
-type FB303ServiceClientInterface interface {
-    thrift.ClientInterface
-    SimpleRPC(intParameter int32) (*ReservedKeyword, error)
-}
-
-type FB303ServiceContextClientInterface interface {
-    FB303ServiceClientInterface
-    SimpleRPCContext(ctx context.Context, intParameter int32) (*ReservedKeyword, error)
-}
-
-type FB303ServiceChannelClient struct {
+type FB303ServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ FB303ServiceChannelClientInterface = (*FB303ServiceChannelClient)(nil)
+var _ FB303ServiceClientInterface = (*FB303ServiceClient)(nil)
 
-func NewFB303ServiceChannelClient(channel thrift.RequestChannel) *FB303ServiceChannelClient {
-    return &FB303ServiceChannelClient{
+func NewFB303ServiceChannelClient(channel thrift.RequestChannel) *FB303ServiceClient {
+    return &FB303ServiceClient{
         ch: channel,
     }
 }
 
-func (c *FB303ServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type FB303ServiceClient struct {
-    chClient *FB303ServiceChannelClient
-}
-// Compile time interface enforcer
-var _ FB303ServiceClientInterface = (*FB303ServiceClient)(nil)
-var _ FB303ServiceContextClientInterface = (*FB303ServiceClient)(nil)
-
 func NewFB303ServiceClient(prot thrift.Protocol) *FB303ServiceClient {
-    return &FB303ServiceClient{
-        chClient: NewFB303ServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewFB303ServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *FB303ServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *FB303ServiceChannelClient) SimpleRPC(ctx context.Context, intParameter int32) (*ReservedKeyword, error) {
+func (c *FB303ServiceClient) SimpleRPC(ctx context.Context, intParameter int32) (*ReservedKeyword, error) {
     in := &reqFB303ServiceSimpleRPC{
         IntParameter: intParameter,
     }
@@ -257,14 +199,6 @@ func (c *FB303ServiceChannelClient) SimpleRPC(ctx context.Context, intParameter 
         return nil, err
     }
     return out.GetSuccess(), nil
-}
-
-func (c *FB303ServiceClient) SimpleRPC(intParameter int32) (*ReservedKeyword, error) {
-    return c.chClient.SimpleRPC(context.Background(), intParameter)
-}
-
-func (c *FB303ServiceClient) SimpleRPCContext(ctx context.Context, intParameter int32) (*ReservedKeyword, error) {
-    return c.chClient.SimpleRPC(ctx, intParameter)
 }
 
 
@@ -380,75 +314,32 @@ type MyService interface {
     RpcSkippedCodegen(ctx context.Context) (error)
 }
 
-type MyServiceChannelClientInterface interface {
+type MyServiceClientInterface interface {
     thrift.ClientInterface
     MyService
 }
 
-type MyServiceClientInterface interface {
-    thrift.ClientInterface
-    Ping() (error)
-    GetRandomData() (string, error)
-    Sink(sink int64) (error)
-    PutDataById(id int64, data string) (error)
-    HasDataById(id int64) (bool, error)
-    GetDataById(id int64) (string, error)
-    DeleteDataById(id int64) (error)
-    LobDataById(id int64, data string) (error)
-    InvalidReturnForHack() ([]float32, error)
-    RpcSkippedCodegen() (error)
-}
-
-type MyServiceContextClientInterface interface {
-    MyServiceClientInterface
-    PingContext(ctx context.Context) (error)
-    GetRandomDataContext(ctx context.Context) (string, error)
-    SinkContext(ctx context.Context, sink int64) (error)
-    PutDataByIdContext(ctx context.Context, id int64, data string) (error)
-    HasDataByIdContext(ctx context.Context, id int64) (bool, error)
-    GetDataByIdContext(ctx context.Context, id int64) (string, error)
-    DeleteDataByIdContext(ctx context.Context, id int64) (error)
-    LobDataByIdContext(ctx context.Context, id int64, data string) (error)
-    InvalidReturnForHackContext(ctx context.Context) ([]float32, error)
-    RpcSkippedCodegenContext(ctx context.Context) (error)
-}
-
-type MyServiceChannelClient struct {
+type MyServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ MyServiceChannelClientInterface = (*MyServiceChannelClient)(nil)
+var _ MyServiceClientInterface = (*MyServiceClient)(nil)
 
-func NewMyServiceChannelClient(channel thrift.RequestChannel) *MyServiceChannelClient {
-    return &MyServiceChannelClient{
+func NewMyServiceChannelClient(channel thrift.RequestChannel) *MyServiceClient {
+    return &MyServiceClient{
         ch: channel,
     }
 }
 
-func (c *MyServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type MyServiceClient struct {
-    chClient *MyServiceChannelClient
-}
-// Compile time interface enforcer
-var _ MyServiceClientInterface = (*MyServiceClient)(nil)
-var _ MyServiceContextClientInterface = (*MyServiceClient)(nil)
-
 func NewMyServiceClient(prot thrift.Protocol) *MyServiceClient {
-    return &MyServiceClient{
-        chClient: NewMyServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewMyServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *MyServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *MyServiceChannelClient) Ping(ctx context.Context) (error) {
+func (c *MyServiceClient) Ping(ctx context.Context) (error) {
     in := &reqMyServicePing{
     }
     out := newRespMyServicePing()
@@ -459,15 +350,7 @@ func (c *MyServiceChannelClient) Ping(ctx context.Context) (error) {
     return nil
 }
 
-func (c *MyServiceClient) Ping() (error) {
-    return c.chClient.Ping(context.Background())
-}
-
-func (c *MyServiceClient) PingContext(ctx context.Context) (error) {
-    return c.chClient.Ping(ctx)
-}
-
-func (c *MyServiceChannelClient) GetRandomData(ctx context.Context) (string, error) {
+func (c *MyServiceClient) GetRandomData(ctx context.Context) (string, error) {
     in := &reqMyServiceGetRandomData{
     }
     out := newRespMyServiceGetRandomData()
@@ -478,15 +361,7 @@ func (c *MyServiceChannelClient) GetRandomData(ctx context.Context) (string, err
     return out.GetSuccess(), nil
 }
 
-func (c *MyServiceClient) GetRandomData() (string, error) {
-    return c.chClient.GetRandomData(context.Background())
-}
-
-func (c *MyServiceClient) GetRandomDataContext(ctx context.Context) (string, error) {
-    return c.chClient.GetRandomData(ctx)
-}
-
-func (c *MyServiceChannelClient) Sink(ctx context.Context, sink int64) (error) {
+func (c *MyServiceClient) Sink(ctx context.Context, sink int64) (error) {
     in := &reqMyServiceSink{
         Sink: sink,
     }
@@ -498,15 +373,7 @@ func (c *MyServiceChannelClient) Sink(ctx context.Context, sink int64) (error) {
     return nil
 }
 
-func (c *MyServiceClient) Sink(sink int64) (error) {
-    return c.chClient.Sink(context.Background(), sink)
-}
-
-func (c *MyServiceClient) SinkContext(ctx context.Context, sink int64) (error) {
-    return c.chClient.Sink(ctx, sink)
-}
-
-func (c *MyServiceChannelClient) PutDataById(ctx context.Context, id int64, data string) (error) {
+func (c *MyServiceClient) PutDataById(ctx context.Context, id int64, data string) (error) {
     in := &reqMyServicePutDataById{
         Id: id,
         Data: data,
@@ -519,15 +386,7 @@ func (c *MyServiceChannelClient) PutDataById(ctx context.Context, id int64, data
     return nil
 }
 
-func (c *MyServiceClient) PutDataById(id int64, data string) (error) {
-    return c.chClient.PutDataById(context.Background(), id, data)
-}
-
-func (c *MyServiceClient) PutDataByIdContext(ctx context.Context, id int64, data string) (error) {
-    return c.chClient.PutDataById(ctx, id, data)
-}
-
-func (c *MyServiceChannelClient) HasDataById(ctx context.Context, id int64) (bool, error) {
+func (c *MyServiceClient) HasDataById(ctx context.Context, id int64) (bool, error) {
     in := &reqMyServiceHasDataById{
         Id: id,
     }
@@ -539,15 +398,7 @@ func (c *MyServiceChannelClient) HasDataById(ctx context.Context, id int64) (boo
     return out.GetSuccess(), nil
 }
 
-func (c *MyServiceClient) HasDataById(id int64) (bool, error) {
-    return c.chClient.HasDataById(context.Background(), id)
-}
-
-func (c *MyServiceClient) HasDataByIdContext(ctx context.Context, id int64) (bool, error) {
-    return c.chClient.HasDataById(ctx, id)
-}
-
-func (c *MyServiceChannelClient) GetDataById(ctx context.Context, id int64) (string, error) {
+func (c *MyServiceClient) GetDataById(ctx context.Context, id int64) (string, error) {
     in := &reqMyServiceGetDataById{
         Id: id,
     }
@@ -559,15 +410,7 @@ func (c *MyServiceChannelClient) GetDataById(ctx context.Context, id int64) (str
     return out.GetSuccess(), nil
 }
 
-func (c *MyServiceClient) GetDataById(id int64) (string, error) {
-    return c.chClient.GetDataById(context.Background(), id)
-}
-
-func (c *MyServiceClient) GetDataByIdContext(ctx context.Context, id int64) (string, error) {
-    return c.chClient.GetDataById(ctx, id)
-}
-
-func (c *MyServiceChannelClient) DeleteDataById(ctx context.Context, id int64) (error) {
+func (c *MyServiceClient) DeleteDataById(ctx context.Context, id int64) (error) {
     in := &reqMyServiceDeleteDataById{
         Id: id,
     }
@@ -579,15 +422,7 @@ func (c *MyServiceChannelClient) DeleteDataById(ctx context.Context, id int64) (
     return nil
 }
 
-func (c *MyServiceClient) DeleteDataById(id int64) (error) {
-    return c.chClient.DeleteDataById(context.Background(), id)
-}
-
-func (c *MyServiceClient) DeleteDataByIdContext(ctx context.Context, id int64) (error) {
-    return c.chClient.DeleteDataById(ctx, id)
-}
-
-func (c *MyServiceChannelClient) LobDataById(ctx context.Context, id int64, data string) (error) {
+func (c *MyServiceClient) LobDataById(ctx context.Context, id int64, data string) (error) {
     in := &reqMyServiceLobDataById{
         Id: id,
         Data: data,
@@ -595,15 +430,7 @@ func (c *MyServiceChannelClient) LobDataById(ctx context.Context, id int64, data
     return c.ch.Oneway(ctx, "lobDataById", in)
 }
 
-func (c *MyServiceClient) LobDataById(id int64, data string) (error) {
-    return c.chClient.LobDataById(context.Background(), id, data)
-}
-
-func (c *MyServiceClient) LobDataByIdContext(ctx context.Context, id int64, data string) (error) {
-    return c.chClient.LobDataById(ctx, id, data)
-}
-
-func (c *MyServiceChannelClient) InvalidReturnForHack(ctx context.Context) ([]float32, error) {
+func (c *MyServiceClient) InvalidReturnForHack(ctx context.Context) ([]float32, error) {
     in := &reqMyServiceInvalidReturnForHack{
     }
     out := newRespMyServiceInvalidReturnForHack()
@@ -614,15 +441,7 @@ func (c *MyServiceChannelClient) InvalidReturnForHack(ctx context.Context) ([]fl
     return out.GetSuccess(), nil
 }
 
-func (c *MyServiceClient) InvalidReturnForHack() ([]float32, error) {
-    return c.chClient.InvalidReturnForHack(context.Background())
-}
-
-func (c *MyServiceClient) InvalidReturnForHackContext(ctx context.Context) ([]float32, error) {
-    return c.chClient.InvalidReturnForHack(ctx)
-}
-
-func (c *MyServiceChannelClient) RpcSkippedCodegen(ctx context.Context) (error) {
+func (c *MyServiceClient) RpcSkippedCodegen(ctx context.Context) (error) {
     in := &reqMyServiceRpcSkippedCodegen{
     }
     out := newRespMyServiceRpcSkippedCodegen()
@@ -631,14 +450,6 @@ func (c *MyServiceChannelClient) RpcSkippedCodegen(ctx context.Context) (error) 
         return err
     }
     return nil
-}
-
-func (c *MyServiceClient) RpcSkippedCodegen() (error) {
-    return c.chClient.RpcSkippedCodegen(context.Background())
-}
-
-func (c *MyServiceClient) RpcSkippedCodegenContext(ctx context.Context) (error) {
-    return c.chClient.RpcSkippedCodegen(ctx)
 }
 
 
@@ -1221,59 +1032,32 @@ type DbMixedStackArguments interface {
     GetDataByKey1(ctx context.Context, key string) ([]byte, error)
 }
 
-type DbMixedStackArgumentsChannelClientInterface interface {
+type DbMixedStackArgumentsClientInterface interface {
     thrift.ClientInterface
     DbMixedStackArguments
 }
 
-type DbMixedStackArgumentsClientInterface interface {
-    thrift.ClientInterface
-    GetDataByKey0(key string) ([]byte, error)
-    GetDataByKey1(key string) ([]byte, error)
-}
-
-type DbMixedStackArgumentsContextClientInterface interface {
-    DbMixedStackArgumentsClientInterface
-    GetDataByKey0Context(ctx context.Context, key string) ([]byte, error)
-    GetDataByKey1Context(ctx context.Context, key string) ([]byte, error)
-}
-
-type DbMixedStackArgumentsChannelClient struct {
+type DbMixedStackArgumentsClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ DbMixedStackArgumentsChannelClientInterface = (*DbMixedStackArgumentsChannelClient)(nil)
+var _ DbMixedStackArgumentsClientInterface = (*DbMixedStackArgumentsClient)(nil)
 
-func NewDbMixedStackArgumentsChannelClient(channel thrift.RequestChannel) *DbMixedStackArgumentsChannelClient {
-    return &DbMixedStackArgumentsChannelClient{
+func NewDbMixedStackArgumentsChannelClient(channel thrift.RequestChannel) *DbMixedStackArgumentsClient {
+    return &DbMixedStackArgumentsClient{
         ch: channel,
     }
 }
 
-func (c *DbMixedStackArgumentsChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type DbMixedStackArgumentsClient struct {
-    chClient *DbMixedStackArgumentsChannelClient
-}
-// Compile time interface enforcer
-var _ DbMixedStackArgumentsClientInterface = (*DbMixedStackArgumentsClient)(nil)
-var _ DbMixedStackArgumentsContextClientInterface = (*DbMixedStackArgumentsClient)(nil)
-
 func NewDbMixedStackArgumentsClient(prot thrift.Protocol) *DbMixedStackArgumentsClient {
-    return &DbMixedStackArgumentsClient{
-        chClient: NewDbMixedStackArgumentsChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewDbMixedStackArgumentsChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *DbMixedStackArgumentsClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *DbMixedStackArgumentsChannelClient) GetDataByKey0(ctx context.Context, key string) ([]byte, error) {
+func (c *DbMixedStackArgumentsClient) GetDataByKey0(ctx context.Context, key string) ([]byte, error) {
     in := &reqDbMixedStackArgumentsGetDataByKey0{
         Key: key,
     }
@@ -1285,15 +1069,7 @@ func (c *DbMixedStackArgumentsChannelClient) GetDataByKey0(ctx context.Context, 
     return out.GetSuccess(), nil
 }
 
-func (c *DbMixedStackArgumentsClient) GetDataByKey0(key string) ([]byte, error) {
-    return c.chClient.GetDataByKey0(context.Background(), key)
-}
-
-func (c *DbMixedStackArgumentsClient) GetDataByKey0Context(ctx context.Context, key string) ([]byte, error) {
-    return c.chClient.GetDataByKey0(ctx, key)
-}
-
-func (c *DbMixedStackArgumentsChannelClient) GetDataByKey1(ctx context.Context, key string) ([]byte, error) {
+func (c *DbMixedStackArgumentsClient) GetDataByKey1(ctx context.Context, key string) ([]byte, error) {
     in := &reqDbMixedStackArgumentsGetDataByKey1{
         Key: key,
     }
@@ -1303,14 +1079,6 @@ func (c *DbMixedStackArgumentsChannelClient) GetDataByKey1(ctx context.Context, 
         return nil, err
     }
     return out.GetSuccess(), nil
-}
-
-func (c *DbMixedStackArgumentsClient) GetDataByKey1(key string) ([]byte, error) {
-    return c.chClient.GetDataByKey1(context.Background(), key)
-}
-
-func (c *DbMixedStackArgumentsClient) GetDataByKey1Context(ctx context.Context, key string) ([]byte, error) {
-    return c.chClient.GetDataByKey1(ctx, key)
 }
 
 

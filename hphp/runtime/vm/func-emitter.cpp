@@ -209,6 +209,7 @@ const StaticString
   s_MemoizeLSB("__MemoizeLSB"),
   s_KeyedByIC("KeyedByIC"),
   s_MakeICInaccessible("MakeICInaccessible"),
+  s_NotKeyedByICAndLeakIC("NotKeyedByICAndLeakIC__DO_NOT_USE"),
   s_SoftInternal("__SoftInternal");
 
 namespace {
@@ -303,6 +304,8 @@ Func* FuncEmitter::create(Unit& unit, PreClass* preClass /* = NULL */) const {
             icType = Func::MemoizeICType::KeyedByIC;
           } else if (elem.m_data.pstr->same(s_MakeICInaccessible.get())) {
             icType = Func::MemoizeICType::MakeICInaccessible;
+          } else if (elem.m_data.pstr->same(s_NotKeyedByICAndLeakIC.get())) {
+            icType = Func::MemoizeICType::NotKeyedByICAndLeakIC;
           } else {
             assertx(false && "invalid string");
           }

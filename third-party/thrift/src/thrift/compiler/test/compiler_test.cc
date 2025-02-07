@@ -615,7 +615,6 @@ TEST(CompilerTest, struct_fields_wrong_type) {
       1: i32 badInt = "str";
         # expected-error@-1: cannot convert string to `i32` in initialization of `badInt`
       2: F badStruct = G{}; # expected-error: type mismatch: expected test.F, got test.G
-        # expected-warning@-1: Explicit default value is redundant for field: `badStruct` (in `BadFields`).
     }
   )");
 }
@@ -700,6 +699,8 @@ TEST(CompilerTest, annotation_positions) {
     service S {
       i32 (annot) foo() # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
       void bar(1: i32 (annot) p) # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
+      void qux() throws (1: E (annot) e) # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
+      void baz() throws (1: E e (annot)) # expected-error: Annotations are not allowed in this position. Extract the type into a named typedef instead.
     }
     struct Foo {
       1: i32 (annot) f
@@ -707,6 +708,7 @@ TEST(CompilerTest, annotation_positions) {
       @Type{name="foo"}
       2: i32 g
     }
+    exception E {}
   )");
 }
 
@@ -1199,7 +1201,6 @@ TEST(CompilerTest, boxed_ref_and_optional) {
     include "thrift/annotation/cpp.thrift"
     include "thrift/annotation/thrift.thrift"
 
-    @thrift.Experimental
     package "apache.org/thrift/test"
 
     struct MyStruct {
@@ -1287,62 +1288,6 @@ TEST(CompilerTest, unique_ref) {
 
     struct Foo {}
   )");
-}
-
-TEST(CompilerTest, non_optional_ref_and_box) {
-  check_compile(
-      R"(
-    include "thrift/annotation/cpp.thrift"
-    include "thrift/annotation/thrift.thrift"
-
-    struct Bar {
-      1: Foo field1 (cpp.ref);
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field1` (in `Bar`).
-
-      2: Foo field2 (cpp2.ref);
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field2` (in `Bar`).
-
-      @cpp.Ref{type = cpp.RefType.Unique}
-      3: Foo field3;
-        # expected-warning@-2: Field with @cpp.Ref (or similar) annotation should be optional: `field3` (in `Bar`).
-
-      @cpp.Ref{type = cpp.RefType.Shared}
-      4: Foo field4;
-        # expected-warning@-2: Field with @cpp.Ref (or similar) annotation should be optional: `field4` (in `Bar`).
-
-      @cpp.Ref{type = cpp.RefType.SharedMutable}
-      5: Foo field5;
-        # expected-warning@-2: Field with @cpp.Ref (or similar) annotation should be optional: `field5` (in `Bar`).
-
-      6: Foo field6 (cpp.ref_type = "unique");
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field6` (in `Bar`).
-
-      7: Foo field7 (cpp2.ref_type = "unique");
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field7` (in `Bar`).
-
-      8: Foo field8 (cpp.ref_type = "shared");
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field8` (in `Bar`).
-
-      9: Foo field9 (cpp2.ref_type = "shared");
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field9` (in `Bar`).
-
-      10: Foo field10 (cpp.ref = "true");
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field10` (in `Bar`).
-
-      11: Foo field11 (cpp2.ref = "true");
-        # expected-warning@-1: Field with @cpp.Ref (or similar) annotation should be optional: `field11` (in `Bar`).
-
-      12: Foo field12;
-
-      @thrift.Box
-      13: Foo field13;
-        # expected-error@-2: The `thrift.box` annotation can only be used with optional fields. Make sure `field13` is optional.
-    }
-
-    struct Foo {}
-  )",
-
-      {"--extra-validation", "-forbid_non_optional_cpp_ref_fields"});
 }
 
 TEST(CompilerTest, non_optional_ref_and_box_forbidden) {
@@ -1942,8 +1887,7 @@ TEST(CompilerTest, terse_write_outside_experimental_mode) {
     struct MyStruct {
         @thrift.TerseWrite
         1: i32 field1 = 1;
-          # expected-error@-2: Using @thrift.TerseWrite on field `field1` is only allowed in the experimental mode.
-          # expected-warning@-3: Terse field should not have custom default value: `field1` (in `MyStruct`).
+        # expected-warning@-2: Terse field should not have custom default value: `field1` (in `MyStruct`).
     }
   )");
 }
@@ -2302,13 +2246,14 @@ TEST(CompilerTest, combining_unstructured_annotations) {
     struct Foo {} (hs.foo)
 
     @thrift.DeprecatedUnvalidatedAnnotations{items = {"foo": "bar"}}
-    struct Bar {} (rust.foo) 
+    struct Bar {} (rust.foo)
     # expected-error@-2: Cannot combine @thrift.DeprecatedUnvalidatedAnnotations with legacy annotation syntax.
   )");
 }
 
 TEST(Compilertest, custom_default_values) {
-  check_compile(R"(
+  check_compile(
+      R"(
     include "thrift/annotation/thrift.thrift"
 
     union TestUnion {}
@@ -2322,27 +2267,110 @@ TEST(Compilertest, custom_default_values) {
       1: i32 a = 42;
 
       2: bool b = false;
-        # expected-warning@-1: Explicit default value is redundant for field: `b` (in `Widget`).
+        # expected-warning@-1: Explicit default value is redundant for (unqualified) field: `b` (in `Widget`).
 
       3: i32 c = 0;
-        # expected-warning@-1: Explicit default value is redundant for field: `c` (in `Widget`).
+        # expected-warning@-1: Explicit default value is redundant for (unqualified) field: `c` (in `Widget`).
 
       4: optional bool d = true;
         # expected-warning@-1: Optional field should not have custom default value: `d` (in `Widget`).
 
-      @thrift.Experimental
       @thrift.TerseWrite
       5: i32 e = 43;
-        # expected-warning@-3: Terse field should not have custom default value: `e` (in `Widget`).
+        # expected-warning@-2: Terse field should not have custom default value: `e` (in `Widget`).
 
       6: TestUnion f = {};
-        # expected-warning@-1: Explicit default value is redundant for field: `f` (in `Widget`).
+        # expected-warning@-1: Explicit default value is redundant for (unqualified) field: `f` (in `Widget`).
 
       7: TestStruct g = {};
-        # expected-warning@-1: Explicit default value is redundant for field: `g` (in `Widget`).
+        # expected-warning@-1: Explicit default value is redundant for (unqualified) field: `g` (in `Widget`).
 
       8: TestException h = {};
-        # expected-warning@-1: Explicit default value is redundant for field: `h` (in `Widget`).
+        # expected-warning@-1: Explicit default value is redundant for (unqualified) field: `h` (in `Widget`).
+
+      @thrift.TerseWrite
+      9: i32 i = 0;
+        # expected-warning@-2: Terse field should not have custom default value: `i` (in `Widget`).
+        # expected-warning@-3: Explicit default value is redundant for (terse) field: `i` (in `Widget`).
+
+      10: optional bool j = false;
+        # expected-warning@-1: Explicit default value is redundant for (optional) field: `j` (in `Widget`).
+        # expected-warning@-2: Optional field should not have custom default value: `j` (in `Widget`).
+    }
+  )",
+      {"--extra-validation", "warn_on_redundant_custom_default_values"});
+}
+
+TEST(CompilerTest, cpp_deprecated_terse_write) {
+  check_compile(R"(
+    include "thrift/annotation/cpp.thrift"
+    include "thrift/annotation/thrift.thrift"
+
+    struct Bar {}
+
+    struct Foo {
+      @cpp.DeprecatedTerseWrite
+      1: i32 field1;
+
+      @cpp.DeprecatedTerseWrite
+      2: optional i32 field2;
+        # expected-error@-2: @cpp.DeprecatedTerseWrite can be only used on unqualified field.
+
+      @cpp.DeprecatedTerseWrite
+      3: required i32 field3;
+        # expected-warning@-2: The 'required' qualifier is deprecated and ignored by most language implementations. Leave the field unqualified instead.
+        # expected-error@-3: @cpp.DeprecatedTerseWrite can be only used on unqualified field.
+
+      @thrift.TerseWrite
+      @cpp.DeprecatedTerseWrite
+      4: i32 field4;
+        # expected-error@-3: @cpp.DeprecatedTerseWrite can be only used on unqualified field.
+
+      @cpp.DeprecatedTerseWrite
+      5: Bar field5;
+        # expected-error@-2: @cpp.DeprecatedTerseWrite is not supported for structured types.
+
+      @cpp.AllowLegacyNonOptionalRef
+      @cpp.DeprecatedTerseWrite
+      @cpp.AllowLegacyDeprecatedTerseWritesRef
+      @cpp.Ref{type = cpp.RefType.Unique}
+      6: Bar field6;
+        # expected-warning@-5: Field with @cpp.Ref (or similar) annotation should be optional: `field6` (in `Foo`).
+    }
+  )");
+}
+
+TEST(CompilerTest, cpp_deprecated_terse_write_ref) {
+  check_compile(R"(
+    include "thrift/annotation/cpp.thrift"
+    include "thrift/annotation/thrift.thrift"
+
+    struct Foo {
+      @cpp.AllowLegacyNonOptionalRef
+      @cpp.DeprecatedTerseWrite
+      @cpp.Ref{type = cpp.RefType.Unique}
+      1: string field1;
+        # expected-warning@-4: Field with @cpp.Ref (or similar) annotation should be optional: `field1` (in `Foo`).
+        # expected-error@-5: @cpp.Ref{Unique} can not be applied to `field1` since it's cpp.DeprecatedTerseWrite field.
+
+      @cpp.AllowLegacyNonOptionalRef
+      @cpp.DeprecatedTerseWrite
+      @cpp.AllowLegacyDeprecatedTerseWritesRef
+      @cpp.Ref{type = cpp.RefType.Unique}
+      2: string field2;
+        # expected-warning@-5: Field with @cpp.Ref (or similar) annotation should be optional: `field2` (in `Foo`).
+
+      @cpp.DeprecatedTerseWrite
+      @cpp.AllowLegacyDeprecatedTerseWritesRef
+      3: string field3;
+        # expected-error@-3: @cpp.AllowLegacyDeprecatedTerseWritesRef can not be applied to `field3` since it's not cpp.Ref{Unique} field.
+
+      @cpp.AllowLegacyNonOptionalRef
+      @cpp.AllowLegacyDeprecatedTerseWritesRef
+      @cpp.Ref{type = cpp.RefType.Unique}
+      4: string field4;
+        # expected-warning@-4: Field with @cpp.Ref (or similar) annotation should be optional: `field4` (in `Foo`).
+        # expected-error@-5: @cpp.AllowLegacyDeprecatedTerseWritesRef can not be applied to `field4` since it's not cpp.DeprecatedTerseWrite field.
     }
   )");
 }

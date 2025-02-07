@@ -1010,17 +1010,18 @@ let lsp_uri_to_path = Lsp_helpers.lsp_uri_to_path
 
 let path_string_to_lsp_uri = Lsp_helpers.path_string_to_lsp_uri
 
-let lsp_position_to_ide (position : Lsp.position) : Ide_api_types.position =
-  { Ide_api_types.line = position.line + 1; column = position.character + 1 }
+let lsp_position_to_ide ({ Lsp.line; character } : Lsp.position) :
+    File_content.Position.t =
+  File_content.Position.from_zero_based line character
 
 let lsp_file_position_to_hack (params : Lsp.TextDocumentPositionParams.t) :
-    string * int * int =
+    string * File_content.Position.t =
   let open Lsp.TextDocumentPositionParams in
-  let { Ide_api_types.line; column } = lsp_position_to_ide params.position in
+  let pos = lsp_position_to_ide params.position in
   let filename =
     Lsp_helpers.lsp_textDocumentIdentifier_to_filename params.textDocument
   in
-  (filename, line, column)
+  (filename, pos)
 
 let rename_params_to_document_position (params : Lsp.Rename.params) :
     Lsp.TextDocumentPositionParams.t =
@@ -1051,18 +1052,19 @@ let hack_pos_to_lsp_location (pos : Pos.absolute) ~(default_path : string) :
       range = Lsp_helpers.hack_pos_to_lsp_range ~equal:String.equal pos;
     }
 
-let ide_range_to_lsp (range : Ide_api_types.range) : Lsp.range =
+let ide_range_to_lsp ({ Ide_api_types.st; ed } : Ide_api_types.range) :
+    Lsp.range =
   {
     Lsp.start =
-      {
-        Lsp.line = range.Ide_api_types.st.Ide_api_types.line - 1;
-        character = range.Ide_api_types.st.Ide_api_types.column - 1;
-      };
+      (let (line, character) =
+         File_content.Position.line_column_zero_based st
+       in
+       { Lsp.line; character });
     end_ =
-      {
-        Lsp.line = range.Ide_api_types.ed.Ide_api_types.line - 1;
-        character = range.Ide_api_types.ed.Ide_api_types.column - 1;
-      };
+      (let (line, character) =
+         File_content.Position.line_column_zero_based ed
+       in
+       { Lsp.line; character });
   }
 
 let lsp_range_to_ide (range : Lsp.range) : Ide_api_types.range =
@@ -1162,6 +1164,7 @@ let ide_diagnostics_to_lsp_diagnostics
       is_fixmed = _;
       flags = _;
       quickfixes = _;
+      function_pos = _;
     } =
       diagnostic_error
     in
@@ -1286,15 +1289,14 @@ Raises an LSP [InvalidRequest] exception if the file isn't currently open. *)
 let get_document_location
     (editor_open_files : Lsp.TextDocumentItem.t UriMap.t)
     (params : Lsp.TextDocumentPositionParams.t) :
-    ClientIdeMessage.document * ClientIdeMessage.location =
-  let (file_path, line, column) = lsp_file_position_to_hack params in
+    ClientIdeMessage.document * File_content.Position.t =
+  let (file_path, pos) = lsp_file_position_to_hack params in
   let uri =
     params.TextDocumentPositionParams.textDocument.TextDocumentIdentifier.uri
   in
   let file_path = Path.make file_path in
   let file_contents = get_document_contents editor_open_files uri in
-  ( { ClientIdeMessage.file_path; file_contents },
-    { ClientIdeMessage.line; column } )
+  ({ ClientIdeMessage.file_path; file_contents }, pos)
 
 (** Parses output of "hh --ide-find-references" and "hh --ide-go-to-impl".
 If the output is malformed, raises an exception. *)
@@ -2506,11 +2508,12 @@ let do_resolve
           let ranking_detail = Jget.string_opt data "ranking_detail" in
           let ranking_source = Jget.int_opt data "ranking_source" in
           if line = 0 && column = 0 then failwith "NoFileLineColumnData";
+          let pos = File_content.Position.from_one_based line column in
           let request =
             ClientIdeMessage.Completion_resolve_location
               ( file_path,
                 ClientIdeMessage.Full_name fullname,
-                { ClientIdeMessage.line; column },
+                pos,
                 resolve_ranking_source kind ranking_source )
           in
           let%lwt raw_docblock =
@@ -3188,6 +3191,22 @@ let do_signatureHelp
       (ClientIdeMessage.Signature_help (document, location))
   in
   Lwt.return signatures
+
+let do_topLevelDefNameAtPos
+    ide_service
+    tracking_id
+    ref_unblocked_time
+    editor_open_files
+    (params : TopLevelDefNameAtPos.params) =
+  let (document, location) = get_document_location editor_open_files params in
+  let%lwt result =
+    ide_rpc
+      ide_service
+      ~tracking_id
+      ~ref_unblocked_time
+      (ClientIdeMessage.Top_level_def_name_at_pos (document, location))
+  in
+  Lwt.return result
 
 let patch_to_workspace_edit_change (patch : ServerRenameTypes.patch) :
     Lsp.DocumentUri.t * TextEdit.t =
@@ -4282,7 +4301,8 @@ let handle_client_message
       else
         exit_fail ()
     (* setTrace notification *)
-    | (_, NotificationMessage (SetTraceNotification params)) ->
+    | (_, NotificationMessage (SetTraceNotification params))
+    | (_, NotificationMessage (SetTrace params)) ->
       let value =
         match params with
         | SetTraceNotification.Verbose -> true
@@ -4610,6 +4630,21 @@ let handle_client_message
         | Some { SignatureHelp.signatures; _ } -> List.length signatures
       in
       Lwt.return_some (make_result_telemetry result_count)
+    | (_, RequestMessage (id, TopLevelDefNameAtPosRequest params)) ->
+      let%lwt () = cancel_if_stale client timestamp short_timeout in
+      let%lwt result =
+        do_topLevelDefNameAtPos
+          ide_service
+          tracking_id
+          ref_unblocked_time
+          editor_open_files
+          params
+      in
+      respond_jsonrpc
+        ~powered_by:Serverless_ide
+        id
+        (TopLevelDefNameAtPosResult result);
+      Lwt.return_none
     (* textDocument/codeAction request *)
     | (Running renv, RequestMessage (id, CodeActionRequest params)) ->
       let%lwt () = cancel_if_stale client timestamp short_timeout in
@@ -4737,7 +4772,7 @@ let handle_client_message
            {
              Error.code = Error.MethodNotFound;
              message =
-               "not implemented: " ^ Lsp_fmt.message_name_to_string message;
+               "not implemented: " ^ Lsp_fmt.denorm_message_to_string message;
              data = None;
            })
   in

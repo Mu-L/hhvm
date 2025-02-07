@@ -1783,7 +1783,7 @@ OPTBLD_INLINE void iopClassHasReifiedGenerics() {
     auto const cls = vmStack().topC();
     if (LIKELY(tvIsClass(cls))) return cls->m_data.pclass;
     if (tvIsLazyClass(cls)) return Class::load(cls->m_data.plazyclass.name());
-    raise_error("ClassHasReified generics called on non-class object");
+    raise_error("ClassHasReifiedGenerics called on non-class object");
   }();
   vmStack().replaceC<KindOfBoolean>(class_->hasReifiedGenerics());
 }
@@ -1805,7 +1805,7 @@ OPTBLD_INLINE void iopHasReifiedParent() {
     auto const cls = vmStack().topC();
     if (tvIsClass(cls)) return cls->m_data.pclass;
     if (tvIsLazyClass(cls)) return Class::load(cls->m_data.plazyclass.name());
-    raise_error("ClassHasReified generics called on non-class object");
+    raise_error("HasReifiedParent called on non-class object");
   }();
   vmStack().replaceC<KindOfBoolean>(class_->hasReifiedParent());
 }
@@ -3435,7 +3435,7 @@ OPTBLD_INLINE void iopSetOpS(SetOpOp op) {
     throw_cannot_modify_static_const_prop(cls->name()->data(), name->data());
   }
   auto const& sprop = cls->staticProperties()[slot];
-  if (setOpNeedsTypeCheck(sprop.typeConstraints.main(), op, val)) {
+  if (setOpNeedsTypeCheck(sprop.typeConstraints, op, val)) {
     TypedValue temp;
     tvDup(*val, temp);
     SCOPE_FAIL { tvDecRefGen(&temp); };
@@ -3493,7 +3493,7 @@ OPTBLD_INLINE void iopIncDecS(IncDecOp op) {
   auto const checkable_sprop = [&]() -> const Class::SProp* {
     if (Cfg::Eval::CheckPropTypeHints <= 0) return nullptr;
     auto const& sprop = ss.cls->staticProperties()[ss.slot];
-    return sprop.typeConstraints.main().isCheckable() ? &sprop : nullptr;
+    return sprop.typeConstraints.isCheckable() ? &sprop : nullptr;
   }();
 
   auto const val = ss.val;

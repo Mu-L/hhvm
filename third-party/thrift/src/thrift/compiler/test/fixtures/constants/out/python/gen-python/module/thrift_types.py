@@ -95,6 +95,10 @@ class Internship(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return None
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_Internship()
@@ -161,6 +165,10 @@ class Range(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return None
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_Range()
@@ -226,6 +234,10 @@ class struct1(metaclass=_fbthrift_python_types.StructMeta):
     @staticmethod
     def __get_thrift_uri__():
         return None
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -315,6 +327,10 @@ class struct2(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return None
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_struct2()
@@ -391,6 +407,10 @@ class struct3(metaclass=_fbthrift_python_types.StructMeta):
     @staticmethod
     def __get_thrift_uri__():
         return None
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -469,6 +489,10 @@ class struct4(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return None
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_struct4()
@@ -537,6 +561,10 @@ class union1(metaclass=_fbthrift_python_types.UnionMeta):
     @staticmethod
     def __get_thrift_uri__():
         return None
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -628,6 +656,10 @@ class union2(metaclass=_fbthrift_python_types.UnionMeta):
     @staticmethod
     def __get_thrift_uri__():
         return None
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -804,7 +836,9 @@ escaped_a = "a"
 
 char2ascii = _fbthrift_python_types.Map(_fbthrift_python_types.typeinfo_string, _fbthrift_python_types.typeinfo_i32, { "'": 39, "\"": 34, "\\": 92, "a": 97})
 
-escaped_strings = _fbthrift_python_types.List(_fbthrift_python_types.typeinfo_string, ("\001", "\037", " ", "'", "\"", "\n", "\r", "\011", "a", "\302\253", "j", "\302\246", "ayyy", "\302\253yyy", "jyyy", "\302\246yyy", "zzza", "zzz\302\253", "zzzj", "zzz\302\246", "zzzayyy", "zzz\302\253yyy", "zzzjyyy", "zzz\302\246yyy", ))
+escaped_strings = _fbthrift_python_types.List(_fbthrift_python_types.typeinfo_string, ("\001", "\037", " ", "'", "\"", "\n", "\r", "\011", "a", "«", "j", "¦", "ayyy", "«yyy", "jyyy", "¦yyy", "zzza", "zzz«", "zzzj", "zzz¦", "zzzayyy", "zzz«yyy", "zzzjyyy", "zzz¦yyy", ))
+
+unicode_list = _fbthrift_python_types.List(_fbthrift_python_types.typeinfo_string, ("Bulgaria", "Benin", "Saint Barthélemy", ))
 
 false_c = False
 
@@ -837,6 +871,8 @@ empty_int_string_map = _fbthrift_python_types.Map(_fbthrift_python_types.typeinf
 empty_string_int_map = _fbthrift_python_types.Map(_fbthrift_python_types.typeinfo_string, _fbthrift_python_types.typeinfo_i32, { })
 
 empty_string_string_map = _fbthrift_python_types.Map(_fbthrift_python_types.typeinfo_string, _fbthrift_python_types.typeinfo_string, { })
+
+unicode_map = _fbthrift_python_types.Map(_fbthrift_python_types.typeinfo_string, _fbthrift_python_types.typeinfo_string, { "BG": "Bulgaria", "BH": "Bahrain", "BÉ": "Saint Barthélemy"})
 
 maxIntDec = 9223372036854775807
 

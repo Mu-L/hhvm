@@ -31,69 +31,35 @@ type ExtendTestService interface {
     Check(ctx context.Context, struct1 *test0.HsFoo) (bool, error)
 }
 
-type ExtendTestServiceChannelClientInterface interface {
-    thrift.ClientInterface
-    ExtendTestService
-}
-
 type ExtendTestServiceClientInterface interface {
     thrift.ClientInterface
-    // Inherited/extended service
-    test0.HsTestServiceClientInterface
-
-    Check(struct1 *test0.HsFoo) (bool, error)
-}
-
-type ExtendTestServiceContextClientInterface interface {
-    ExtendTestServiceClientInterface
-    // Inherited/extended service
-    test0.HsTestServiceContextClientInterface
-
-    CheckContext(ctx context.Context, struct1 *test0.HsFoo) (bool, error)
-}
-
-type ExtendTestServiceChannelClient struct {
-    // Inherited/extended service
-    *test0.HsTestServiceChannelClient
-    ch thrift.RequestChannel
-}
-// Compile time interface enforcer
-var _ ExtendTestServiceChannelClientInterface = (*ExtendTestServiceChannelClient)(nil)
-
-func NewExtendTestServiceChannelClient(channel thrift.RequestChannel) *ExtendTestServiceChannelClient {
-    return &ExtendTestServiceChannelClient{
-        HsTestServiceChannelClient: test0.NewHsTestServiceChannelClient(channel),
-        ch: channel,
-    }
-}
-
-func (c *ExtendTestServiceChannelClient) Close() error {
-    return c.ch.Close()
+    ExtendTestService
 }
 
 type ExtendTestServiceClient struct {
     // Inherited/extended service
     *test0.HsTestServiceClient
-    chClient *ExtendTestServiceChannelClient
+    ch thrift.RequestChannel
 }
 // Compile time interface enforcer
 var _ ExtendTestServiceClientInterface = (*ExtendTestServiceClient)(nil)
-var _ ExtendTestServiceContextClientInterface = (*ExtendTestServiceClient)(nil)
 
-func NewExtendTestServiceClient(prot thrift.Protocol) *ExtendTestServiceClient {
+func NewExtendTestServiceChannelClient(channel thrift.RequestChannel) *ExtendTestServiceClient {
     return &ExtendTestServiceClient{
-        HsTestServiceClient: test0.NewHsTestServiceClient(prot),
-        chClient: NewExtendTestServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
+        HsTestServiceClient: test0.NewHsTestServiceChannelClient(channel),
+        ch: channel,
     }
 }
 
-func (c *ExtendTestServiceClient) Close() error {
-    return c.chClient.Close()
+func NewExtendTestServiceClient(prot thrift.Protocol) *ExtendTestServiceClient {
+    return NewExtendTestServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
-func (c *ExtendTestServiceChannelClient) Check(ctx context.Context, struct1 *test0.HsFoo) (bool, error) {
+func (c *ExtendTestServiceClient) Close() error {
+    return c.ch.Close()
+}
+
+func (c *ExtendTestServiceClient) Check(ctx context.Context, struct1 *test0.HsFoo) (bool, error) {
     in := &reqExtendTestServiceCheck{
         Struct1: struct1,
     }
@@ -103,14 +69,6 @@ func (c *ExtendTestServiceChannelClient) Check(ctx context.Context, struct1 *tes
         return false, err
     }
     return out.GetSuccess(), nil
-}
-
-func (c *ExtendTestServiceClient) Check(struct1 *test0.HsFoo) (bool, error) {
-    return c.chClient.Check(context.Background(), struct1)
-}
-
-func (c *ExtendTestServiceClient) CheckContext(ctx context.Context, struct1 *test0.HsFoo) (bool, error) {
-    return c.chClient.Check(ctx, struct1)
 }
 
 

@@ -547,13 +547,11 @@ void validate_boxed_field_attributes(sema_context& ctx, const t_field& node) {
           "Make sure `{}` is optional.",
           node.name());
     } else if (ref) {
-      // For @cpp.Ref (and cpp[2].ref[_type]), optional fields result in either
-      // a warning on an error, depending on the validation parameters (see
-      // `forbid_non_optional_cpp_ref_fields`) and whether the field is
+      // For @cpp.Ref (and cpp[2].ref[_type]), non-optional fields result in
+      // either a warning or an error, depending on whether the field is
       // annotated with `@cpp.AllowLegacyNonOptionalRef`.
 
       const bool report_error =
-          ctx.sema_parameters().forbid_non_optional_cpp_ref_fields &&
           node.find_structured_annotation_or_null(
               kCppAllowLegacyNonOptionalRefUri) == nullptr;
 
@@ -656,6 +654,20 @@ void validate_const_type_and_value(sema_context& ctx, const t_const& node) {
           has_experimental_annotation(ctx, node),
       "Using adapters on const `{}` is only allowed in the experimental mode.",
       node.name());
+  detail::check_map_keys(ctx, node);
+}
+
+std::string_view field_qualifier_to_string(t_field_qualifier qualifier) {
+  switch (qualifier) {
+    case t_field_qualifier::none:
+      return "unqualified";
+    case t_field_qualifier::required:
+      return "required";
+    case t_field_qualifier::optional:
+      return "optional";
+    case t_field_qualifier::terse:
+      return "terse";
+  }
 }
 
 void validate_field_default_value(sema_context& ctx, const t_field& field) {
@@ -668,21 +680,26 @@ void validate_field_default_value(sema_context& ctx, const t_field& field) {
     // If initializer is not valid to begin with, stop checks and return error.
     return;
   }
+  detail::check_map_keys(ctx, field);
 
   const t_structured& parent_node =
       dynamic_cast<const t_structured&>(*ctx.parent());
 
-  if (detail::is_initializer_default_value(
+  const t_field_qualifier field_qualifier = field.qualifier();
+
+  if (ctx.sema_parameters().warn_on_redundant_custom_default_values &&
+      detail::is_initializer_default_value(
           field.type().deref(), *field.default_value())) {
     ctx.warning(
         field,
-        "Explicit default value is redundant for field: "
+        "Explicit default value is redundant for ({}) field: "
         "`{}` (in `{}`).",
+        field_qualifier_to_string(field_qualifier),
         field.name(),
         parent_node.name());
   }
 
-  switch (field.qualifier()) {
+  switch (field_qualifier) {
     case t_field_qualifier::optional:
       ctx.warning(
           field,
@@ -758,15 +775,6 @@ void validate_uri_uniqueness(sema_context& ctx, const t_program& prog) {
     visit(*p);
   }
   visit(prog);
-}
-
-void limit_terse_write_on_experimental_mode(
-    sema_context& ctx, const t_named& node) {
-  ctx.check(
-      !node.find_structured_annotation_or_null(kTerseWriteUri) ||
-          has_experimental_annotation(ctx, node),
-      "Using @thrift.TerseWrite on field `{}` is only allowed in the experimental mode.",
-      node.name());
 }
 
 void validate_field_id(sema_context& ctx, const t_field& node) {
@@ -999,6 +1007,29 @@ void validate_interaction_annotations(
             !node.find_structured_annotation_or_null(kSerialUri),
         "EB interactions are already serial");
   }
+}
+
+void validate_cpp_deprecated_terse_write_annotation(
+    sema_context& ctx, const t_field& field) {
+  if (field.find_structured_annotation_or_null(kCppDeprecatedTerseWriteUri) ==
+      nullptr) {
+    return;
+  }
+  if (field.qualifier() != t_field_qualifier::none) {
+    ctx.error(
+        field,
+        "@cpp.DeprecatedTerseWrite can be only used on unqualified field.");
+  }
+  if (gen::cpp::find_ref_type(field) == gen::cpp::reference_type::unique) {
+    return;
+  }
+  const t_type* type = field.get_type()->get_true_type();
+  if (type->is_struct() || type->is_exception() || type->is_union()) {
+    ctx.error(
+        field,
+        "@cpp.DeprecatedTerseWrite is not supported for structured types.");
+  }
+  return;
 }
 
 void validate_cpp_field_interceptor_annotation(
@@ -1298,6 +1329,17 @@ struct ValidateAnnotationPositions {
         err(ctx);
       }
     }
+
+    if (auto* exs = node.exceptions()) {
+      for (auto& ex : exs->fields()) {
+        if (owns_annotations(ex.type())) {
+          err(ctx);
+        }
+        if (!ex.annotations().empty()) {
+          err(ctx);
+        }
+      }
+    }
   }
   void operator()(sema_context& ctx, const t_container& type) {
     switch (type.get_type_value()) {
@@ -1532,6 +1574,7 @@ ast_validator standard_validator() {
   validator.add_field_visitor(&validate_hack_field_adapter_annotation);
   validator.add_field_visitor(&validate_java_field_adapter_annotation);
   validator.add_field_visitor(&validate_cpp_field_interceptor_annotation);
+  validator.add_field_visitor(&validate_cpp_deprecated_terse_write_annotation);
   validator.add_field_visitor(&validate_required_field);
   validator.add_field_visitor(&validate_cpp_type_annotation<t_field>);
   validator.add_field_visitor(&validate_field_name);
@@ -1551,7 +1594,6 @@ ast_validator standard_validator() {
   validator.add_named_visitor(&validate_java_adapter_annotation);
   validator.add_named_visitor(&validate_java_wrapper_annotation);
   validator.add_named_visitor(&validate_java_wrapper_and_adapter_annotation);
-  validator.add_named_visitor(&limit_terse_write_on_experimental_mode);
   validator.add_named_visitor(&validate_custom_cpp_type_annotations);
   validator.add_named_visitor(&deprecate_annotations);
 

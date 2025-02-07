@@ -364,7 +364,7 @@ std::string_view get_type(const t_type* type) {
   return value_or_empty(cpp_name_resolver::find_type(*type));
 }
 
-bool is_implicit_ref(const t_type* type) {
+bool is_binary_iobuf_unique_ptr(const t_type* type) {
   auto const* resolved_typedef = type->get_true_type();
   return resolved_typedef != nullptr && resolved_typedef->is_binary() &&
       contains(get_type(resolved_typedef), "std::unique_ptr") &&
@@ -390,7 +390,7 @@ bool field_transitively_refers_to_unique(const t_field* field) {
   while (!queue.empty()) {
     auto type = queue.front()->get_true_type();
     queue.pop();
-    if (cpp2::is_implicit_ref(type)) {
+    if (cpp2::is_binary_iobuf_unique_ptr(type)) {
       return true;
     }
     switch (type->get_type_value()) {
@@ -617,17 +617,12 @@ std::string sha256_hex(std::string const& in) {
   return out;
 }
 
-bool is_cpp_ref_unique_either(const t_field* f) {
-  return cpp2::is_unique_ref(f) || cpp2::is_implicit_ref(f->get_type());
-}
-
 bool deprecated_terse_writes(const t_field* field) {
   // Add terse writes for unqualified fields when comparison is cheap:
   // (e.g. i32/i64, empty strings/list/map)
   auto t = field->get_type()->get_true_type();
   return field->get_req() == t_field::e_req::opt_in_req_out &&
-      (is_cpp_ref_unique_either(field) ||
-       (!t->is_struct() && !t->is_exception()));
+      (cpp2::is_unique_ref(field) || (!t->is_struct() && !t->is_exception()));
 }
 
 t_field_id get_internal_injected_field_id(t_field_id id) {

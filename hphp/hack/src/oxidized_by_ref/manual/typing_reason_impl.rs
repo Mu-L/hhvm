@@ -137,13 +137,10 @@ impl<'a> Reason<'a> {
             | SDTCall((p, _))
             | LikeCall((p, _))
             | OpaqueTypeFromModule((p, _, _)) => Some(p),
-            LostInfo((_, r, _)) | TypeAccess((r, _)) | InvariantGeneric((r, _)) => r.pos(),
+            LostInfo((_, r, _)) | TypeAccess((r, _)) => r.pos(),
 
             DynamicCoercion(r) => r.pos(),
-            ContravariantGeneric((r, _))
-            | ExprDepType((r, _, _))
-            | Typeconst((r, _, _, _))
-            | Instantiate((_, _, r)) => r.pos(),
+            ExprDepType((r, _, _)) | Typeconst((r, _, _, _)) | Instantiate((_, _, r)) => r.pos(),
             _ => None,
         }
     }
@@ -156,7 +153,7 @@ impl<'a> std::fmt::Debug for T_<'a> {
             NoReason => f.debug_tuple("Rnone").finish(),
             MissingField => f.debug_tuple("RmissingField").finish(),
             FromWitnessLocl(witness) => witness.fmt(f),
-            FromWitnessDecl(witness) => witness.fmt(f),
+            FromWitnessDecl(witness) => f.debug_tuple("FromWitnessDecl").field(witness).finish(),
             Idx((p, t)) => f.debug_tuple("Ridx").field(p).field(t).finish(),
             ArithRetFloat((p, t, ap)) => f
                 .debug_tuple("RarithRetFloat")
@@ -176,8 +173,6 @@ impl<'a> std::fmt::Debug for T_<'a> {
             Typeconst(p) => f.debug_tuple("Rtypeconst").field(p).finish(),
             TypeAccess(p) => f.debug_tuple("RtypeAccess").field(p).finish(),
             ExprDepType(p) => f.debug_tuple("RexprDepType").field(p).finish(),
-            ContravariantGeneric(p) => f.debug_tuple("RcontravariantGeneric").field(p).finish(),
-            InvariantGeneric(p) => f.debug_tuple("RinvariantGeneric").field(p).finish(),
             LambdaParam(p) => f.debug_tuple("RlambdaParam").field(p).finish(),
             DynamicPartialEnforcement((p, s, t)) => f
                 .debug_tuple("RdynamicPartialEnforcement")

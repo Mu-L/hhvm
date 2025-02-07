@@ -109,6 +109,10 @@ inline constexpr auto kCppGenerateDeprecatedHeaderClientMethodsUri =
     "facebook.com/thrift/annotation/cpp/GenerateDeprecatedHeaderClientMethods";
 inline constexpr auto kCppAllowLegacyNonOptionalRefUri =
     "facebook.com/thrift/annotation/cpp/AllowLegacyNonOptionalRef";
+inline constexpr auto kCppAllowLegacyDeprecatedTerseWritesRefUri =
+    "facebook.com/thrift/annotation/cpp/AllowLegacyDeprecatedTerseWritesRef";
+inline constexpr auto kCppDeprecatedTerseWriteUri =
+    "facebook.com/thrift/annotation/cpp/DeprecatedTerseWrite";
 
 // Java:
 inline constexpr auto kJavaMutableUri =
@@ -141,6 +145,8 @@ inline constexpr auto kPythonUseCAPIUri =
     "facebook.com/thrift/annotation/python/UseCAPI";
 inline constexpr auto kPythonPy3EnableCppAdapterUri =
     "facebook.com/thrift/annotation/python/Py3EnableCppAdapter";
+inline constexpr auto kPythonMigrationBlockingAllowInheritanceUri =
+    "facebook.com/thrift/annotation/python/MigrationBlockingAllowInheritance";
 
 // Hack:
 inline constexpr auto kHackAdapterUri =

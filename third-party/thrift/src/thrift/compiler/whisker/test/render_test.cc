@@ -20,6 +20,7 @@
 #include <thrift/compiler/whisker/diagnostic.h>
 #include <thrift/compiler/whisker/dsl.h>
 #include <thrift/compiler/whisker/object.h>
+#include <thrift/compiler/whisker/standard_library.h>
 #include <thrift/compiler/whisker/test/render_test_helpers.h>
 
 namespace w = whisker::make;
@@ -27,50 +28,6 @@ namespace w = whisker::make;
 namespace whisker {
 
 namespace {
-
-class empty_native_object : public native_object {};
-
-class array_like_native_object
-    : public native_object,
-      public native_object::array_like,
-      public std::enable_shared_from_this<array_like_native_object> {
- public:
-  explicit array_like_native_object(array values)
-      : values_(std::move(values)) {}
-
-  native_object::array_like::ptr as_array_like() const override {
-    return shared_from_this();
-  }
-  std::size_t size() const override { return values_.size(); }
-  object::ptr at(std::size_t index) const override {
-    return manage_as_static(values_.at(index));
-  }
-
- private:
-  array values_;
-};
-
-class map_like_native_object
-    : public native_object,
-      public native_object::map_like,
-      public std::enable_shared_from_this<map_like_native_object> {
- public:
-  explicit map_like_native_object(map values) : values_(std::move(values)) {}
-
-  native_object::map_like::ptr as_map_like() const override {
-    return shared_from_this();
-  }
-
-  object::ptr lookup_property(std::string_view id) const override {
-    if (auto value = values_.find(id); value != values_.end()) {
-      return manage_as_static(value->second);
-    }
-    return nullptr;
-  }
-
- private:
-  map values_;
-};
 
 /**
  * When looking up a property, always returns a whisker::string that is the
@@ -778,7 +735,7 @@ class map_get : public dsl::function {
     if (object::ptr result = m.lookup_property(*key)) {
       return result;
     }
-    ctx.error("Key '{}' not found.", *key);
+    throw ctx.make_error("Key '{}' not found.", *key);
   }
 };
 
@@ -1089,6 +1046,21 @@ struct RenderTestMyCppType {
   std::string description;
 };
 
+struct RenderTestPolyBase {
+  virtual ~RenderTestPolyBase() = default;
+
+  virtual std::string description() const = 0;
+};
+struct RenderTestPolyMid : RenderTestPolyBase {
+  std::string description() const override { return "Mid"; }
+};
+struct RenderTestPolyDerived : RenderTestPolyMid {
+  std::string description() const override { return "Derived"; }
+};
+struct RenderTestPolyAlternate : RenderTestPolyBase {
+  std::string description() const override { return "Alternate"; }
+};
+
 TEST_F(RenderTest, user_defined_function_native_ref_argument) {
   const RenderTestMyCppType native_instance{"Hello from C++!"};
 
@@ -1130,6 +1102,77 @@ TEST_F(RenderTest, user_defined_function_native_ref_argument) {
             diagnostic_level::error,
             "Function 'describe' threw an error:\n"
             "Expected type of argument at index 0 to be `<native_handle type='whisker::RenderTestMyCppType'>`, but found `<native_handle type='whisker::RenderTestUnknownCppType'>`.",
+            path_to_file,
+            1)));
+  }
+}
+
+TEST_F(RenderTest, user_defined_function_polymorphic_native_ref_argument) {
+  const auto describe =
+      dsl::make_function([](dsl::function::context ctx) -> string {
+        using base_handle = dsl::polymorphic_native_handle<
+            RenderTestPolyBase,
+            RenderTestPolyMid,
+            RenderTestPolyDerived>;
+        ctx.declare_arity(1);
+        ctx.declare_named_arguments({});
+        auto base = ctx.argument<base_handle>(0);
+        return base->description();
+      });
+
+  {
+    auto result = render(
+        "{{ (describe mid) }}\n"
+        "{{ (describe derived) }}\n",
+        w::map({
+            {"mid", w::native_handle(manage_owned<RenderTestPolyMid>())},
+            {"derived",
+             w::native_handle(manage_owned<RenderTestPolyDerived>())},
+            {"describe", w::native_function(describe)},
+        }));
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "Mid\n"
+        "Derived\n");
+  }
+
+  {
+    auto result = render(
+        "{{ (describe wrong_native_instance) }}\n",
+        w::map({
+            {"wrong_native_instance",
+             w::native_handle(manage_owned<RenderTestUnknownCppType>())},
+            {"describe", w::native_function(describe)},
+        }));
+    EXPECT_FALSE(result.has_value());
+    EXPECT_THAT(
+        diagnostics(),
+        testing::ElementsAre(diagnostic(
+            diagnostic_level::error,
+            "Function 'describe' threw an error:\n"
+            "Expected type of argument at index 0 to be `<native_handle type='whisker::RenderTestPolyBase'>` (polymorphic), but found `<native_handle type='whisker::RenderTestUnknownCppType'>`.",
+            path_to_file,
+            1)));
+  }
+
+  {
+    // Although the type is a subclass, it was not listed as an alternative in
+    // describe(...)
+    auto result = render(
+        "{{ (describe alternate) }}\n",
+        w::map({
+            {"alternate",
+             w::native_handle(manage_owned<RenderTestPolyAlternate>())},
+            {"describe", w::native_function(describe)},
+        }));
+    EXPECT_FALSE(result.has_value());
+    EXPECT_THAT(
+        diagnostics(),
+        testing::ElementsAre(diagnostic(
+            diagnostic_level::error,
+            "Function 'describe' threw an error:\n"
+            "Expected type of argument at index 0 to be `<native_handle type='whisker::RenderTestPolyBase'>` (polymorphic), but found `<native_handle type='whisker::RenderTestPolyAlternate'>`.",
             path_to_file,
             1)));
   }
@@ -1676,6 +1719,333 @@ TEST_F(RenderTest, undefined_variables_allowed) {
 
 TEST_F(RenderTest, partials) {
   auto result = render(
+      "{{#let partial foo}}\n"
+      "  indented\n"
+      "{{/let partial}}\n"
+      "  {{#partial foo}}\n"
+      "{{#let bar = foo}}\n"
+      "{{#partial bar}}\n",
+      w::map({}));
+  EXPECT_THAT(diagnostics(), testing::IsEmpty());
+  EXPECT_EQ(
+      *result,
+      "    indented\n"
+      "  indented\n");
+}
+
+TEST_F(RenderTest, partials_with_arguments) {
+  auto result = render(
+      "{{#let partial println |txt|}}\n"
+      "{{txt}}\n"
+      "{{/let partial}}\n"
+      "{{#partial println txt=\"hello\"}}\n"
+      "{{#let another-name = println}}\n"
+      "{{#partial another-name txt=5}}\n",
+      w::map({}));
+  EXPECT_THAT(diagnostics(), testing::IsEmpty());
+  EXPECT_EQ(
+      *result,
+      "hello\n"
+      "5\n");
+}
+
+TEST_F(RenderTest, partials_with_arguments_out_of_order) {
+  auto result = render(
+      "{{#let partial foo |arg1 arg2|}}\n"
+      "{{arg1}} {{arg2}}\n"
+      "{{/let partial}}\n"
+      "{{#partial foo arg2=2 arg1=1}}\n",
+      w::map({}));
+  EXPECT_THAT(diagnostics(), testing::IsEmpty());
+  EXPECT_EQ(*result, "1 2\n");
+}
+
+TEST_F(RenderTest, partials_with_missing_arguments) {
+  show_source_backtrace_on_failure(true);
+
+  auto result = render(
+      "{{#let partial foo |arg1 arg2|}}\n"
+      "{{arg1}} {{arg2}}\n"
+      "{{/let partial}}\n"
+      "{{#partial foo arg1=\"hello\"}}\n",
+      w::map({}));
+  EXPECT_THAT(
+      diagnostics(),
+      testing::ElementsAre(
+          diagnostic(
+              diagnostic_level::error,
+              "Partial 'foo' is missing named arguments: arg2",
+              path_to_file,
+              4),
+          error_backtrace("#0 path/to/test.whisker <line:4, col:1>\n")));
+  EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(RenderTest, partials_with_extra_arguments) {
+  show_source_backtrace_on_failure(true);
+
+  auto result = render(
+      "{{#let partial foo |arg1|}}\n"
+      "{{arg1}}\n"
+      "{{/let partial}}\n"
+      "{{#partial foo arg1=\"hello\" arg2=null}}\n",
+      w::map({}));
+  EXPECT_THAT(
+      diagnostics(),
+      testing::ElementsAre(
+          diagnostic(
+              diagnostic_level::error,
+              "Partial 'foo' received unexpected named arguments: arg2",
+              path_to_file,
+              4),
+          error_backtrace("#0 path/to/test.whisker <line:4, col:1>\n")));
+  EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(RenderTest, partials_with_wrong_type) {
+  show_source_backtrace_on_failure(true);
+
+  auto result = render("{{#partial true}}\n", w::map({}));
+  EXPECT_THAT(
+      diagnostics(),
+      testing::ElementsAre(
+          diagnostic(
+              diagnostic_level::error,
+              "Expression 'true' does not evaluate to a partial. The encountered value is:\n"
+              "true\n",
+              path_to_file,
+              1),
+          error_backtrace("#0 path/to/test.whisker <line:1, col:12>\n")));
+  EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(RenderTest, partials_nested) {
+  auto result = render(
+      "{{#let partial foo |arg|}}\n"
+      "  {{#let partial bar |arg|}}\n"
+      "    {{arg}}\n"
+      "  {{/let partial}}\n"
+      "  {{#partial bar arg=arg}}\n"
+      "{{/let partial}}\n"
+      "{{#partial foo arg=\"hello\"}}\n",
+      w::map({}));
+  EXPECT_THAT(diagnostics(), testing::IsEmpty());
+  EXPECT_EQ(*result, "      hello\n");
+}
+
+TEST_F(RenderTest, partials_recursive) {
+  use_library(load_standard_library);
+
+  const auto is_even =
+      dsl::make_function([](dsl::function::context ctx) -> boolean {
+        ctx.declare_arity(1);
+        ctx.declare_named_arguments({});
+        auto n = ctx.argument<i64>(0);
+        return n % 2 == 0;
+      });
+  const auto mul = dsl::make_function([](dsl::function::context ctx) -> i64 {
+    ctx.declare_arity(2);
+    ctx.declare_named_arguments({});
+    auto lhs = ctx.argument<i64>(0);
+    auto rhs = ctx.argument<i64>(1);
+    return lhs * rhs;
+  });
+  const auto div = dsl::make_function([](dsl::function::context ctx) -> i64 {
+    ctx.declare_arity(2);
+    ctx.declare_named_arguments({});
+    auto numerator = ctx.argument<i64>(0);
+    auto denominator = ctx.argument<i64>(1);
+    assert(numerator % denominator == 0);
+    return numerator / denominator;
+  });
+
+  // https://en.wikipedia.org/wiki/Collatz_conjecture
+  auto result = render(
+      "{{#let partial collatz |n|}}\n"
+      "{{n}}\n"
+      "  {{#if (int.ne? n 1)}}\n"
+      "    {{#if (even? n)}}\n"
+      "{{#partial collatz n=(div n 2)}}\n"
+      "    {{#else}}\n"
+      "{{#partial collatz n=(int.add (mul 3 n) 1)}}\n"
+      "    {{/if (even? n)}}\n"
+      "  {{/if (int.ne? n 1)}}\n"
+      "{{/let partial}}\n"
+      "{{#partial collatz n=6}}\n",
+      w::map({}),
+      macros({}),
+      globals({
+          {"even?", w::native_function(is_even)},
+          {"mul", w::native_function(mul)},
+          {"div", w::native_function(div)},
+      }));
+  EXPECT_THAT(diagnostics(), testing::IsEmpty());
+  EXPECT_EQ(
+      *result,
+      "6\n"
+      "3\n"
+      "10\n"
+      "5\n"
+      "16\n"
+      "8\n"
+      "4\n"
+      "2\n"
+      "1\n");
+}
+
+TEST_F(RenderTest, partials_mutually_recursive) {
+  use_library(load_standard_library);
+
+  auto result = render(
+      "{{#let partial even-helper |n odd|}}\n"
+      "even: {{n}}\n"
+      "{{#if (int.gt? n 1)}}\n"
+      "{{#partial odd n=(int.sub n 1)}}\n"
+      "{{/if (int.gt? n 1)}}\n"
+      "{{/let partial}}\n"
+      ""
+      "{{#let partial odd |n| captures |even-helper|}}\n"
+      "odd: {{n}}\n"
+      "{{#partial even-helper n=(int.sub n 1) odd=odd}}\n"
+      "{{/let partial}}\n"
+      ""
+      "{{#let partial even |n| captures |even-helper odd|}}\n"
+      "{{#partial even-helper n=n odd=odd}}\n"
+      "{{/let partial}}\n"
+      ""
+      "{{#partial even n=6}}\n"
+      "{{#partial odd n=5}}\n",
+      w::map({}));
+  EXPECT_THAT(diagnostics(), testing::IsEmpty());
+  EXPECT_EQ(
+      *result,
+      "even: 6\n"
+      "odd: 5\n"
+      "even: 4\n"
+      "odd: 3\n"
+      "even: 2\n"
+      "odd: 1\n"
+      "even: 0\n"
+      "odd: 5\n"
+      "even: 4\n"
+      "odd: 3\n"
+      "even: 2\n"
+      "odd: 1\n"
+      "even: 0\n");
+}
+
+TEST_F(RenderTest, partial_derived_context) {
+  show_source_backtrace_on_failure(true);
+
+  auto result = render(
+      "{{#let x = 1}}\n"
+      "{{#let partial foo}}\n"
+      "{{x}}\n"
+      "{{/let partial}}\n"
+      "{{#partial foo}}\n",
+      w::map({}),
+      macros({}),
+      globals({{"global", w::i64(42)}}));
+  EXPECT_THAT(
+      diagnostics(),
+      testing::ElementsAre(
+          diagnostic(
+              diagnostic_level::error,
+              "Name 'x' was not found in the current scope. Tried to search through the following scopes:\n"
+              "#0 <global scope> (size=1)\n"
+              "`-'global'\n"
+              "  |-i64(42)\n",
+              path_to_file,
+              3),
+          error_backtrace("#0 foo @ path/to/test.whisker <line:3, col:3>\n"
+                          "#1 path/to/test.whisker <line:5, col:1>\n")));
+  EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(RenderTest, partial_derived_context_no_leak) {
+  show_source_backtrace_on_failure(true);
+
+  auto result = render(
+      "{{#let partial foo}}\n"
+      "{{#let x = 1}}\n"
+      "{{x}}\n"
+      "{{/let partial}}\n"
+      "{{#partial foo}}\n"
+      "{{x}}\n",
+      w::map({}),
+      macros({}),
+      globals({{"global", w::i64(42)}}));
+  EXPECT_THAT(
+      diagnostics(),
+      testing::ElementsAre(
+          diagnostic(
+              diagnostic_level::error,
+              "Name 'x' was not found in the current scope. Tried to search through the following scopes:\n"
+              "#0 map (size=0)\n"
+              "\n"
+              "#1 <global scope> (size=1)\n"
+              "`-'global'\n"
+              "  |-i64(42)\n",
+              path_to_file,
+              6),
+          error_backtrace("#0 path/to/test.whisker <line:6, col:3>\n")));
+  EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(RenderTest, partial_nested_backtrace) {
+  show_source_backtrace_on_failure(true);
+
+  auto result = render(
+      "{{#let partial foo}}\n"
+      "  {{#let partial bar}}\n"
+      "    {{#let partial baz}}\n"
+      "      {{undefined}}\n"
+      "    {{/let partial}}\n"
+      "    {{#partial baz}}\n"
+      "  {{/let partial}}\n"
+      "  {{#partial bar}}\n"
+      "{{/let partial}}\n"
+      "{{#partial foo}}\n",
+      w::map({}));
+  EXPECT_THAT(
+      diagnostics(),
+      testing::ElementsAre(
+          diagnostic(
+              diagnostic_level::error,
+              "Name 'undefined' was not found in the current scope. Tried to search through the following scopes:\n"
+              "#0 <global scope> (size=0)\n",
+              path_to_file,
+              4),
+          error_backtrace("#0 baz @ path/to/test.whisker <line:4, col:9>\n"
+                          "#1 bar @ path/to/test.whisker <line:6, col:5>\n"
+                          "#2 foo @ path/to/test.whisker <line:8, col:3>\n"
+                          "#3 path/to/test.whisker <line:10, col:1>\n")));
+  EXPECT_FALSE(result.has_value());
+}
+
+TEST_F(RenderTest, partials_capture_error) {
+  show_source_backtrace_on_failure(true);
+
+  auto result = render(
+      "{{#let partial foo captures |bar|}}\n"
+      "{{/let partial}}\n",
+      w::map({}));
+  EXPECT_THAT(
+      diagnostics(),
+      testing::ElementsAre(
+          diagnostic(
+              diagnostic_level::error,
+              "Name 'bar' was not found in the current scope. Tried to search through the following scopes:\n"
+              "#0 map (size=0)\n"
+              "\n"
+              "#1 <global scope> (size=0)\n",
+              path_to_file,
+              1),
+          error_backtrace("#0 path/to/test.whisker <line:1, col:30>\n")));
+}
+
+TEST_F(RenderTest, macros) {
+  auto result = render(
       "{{> some/file /path}}\n"
       "{{#array}}\n"
       "{{>some / file/path }}\n"
@@ -1687,43 +2057,43 @@ TEST_F(RenderTest, partials) {
                 {w::map({{"value", w::i64(2)}}),
                  w::map({{"value", w::string("foo")}}),
                  w::map({{"value", w::string("bar")}})})}}),
-      partials({{"some/file/path", "{{value}} (from partial)\n"}}));
+      macros({{"some/file/path", "{{value}} (from macro)\n"}}));
   EXPECT_EQ(
       *result,
-      "1 (from partial)\n"
-      "2 (from partial)\n"
-      "foo (from partial)\n"
-      "bar (from partial)\n");
+      "1 (from macro)\n"
+      "2 (from macro)\n"
+      "foo (from macro)\n"
+      "bar (from macro)\n");
 }
 
-TEST_F(RenderTest, partials_missing) {
+TEST_F(RenderTest, macros_missing) {
   auto result = render(
       "{{> some/other/path}}",
       w::map({}),
-      partials({{"some/file/path", "{{value}} (from partial)"}}));
+      macros({{"some/file/path", "{{value}} (from macro)"}}));
   EXPECT_THAT(
       diagnostics(),
       testing::ElementsAre(diagnostic(
           diagnostic_level::error,
-          "Partial with path 'some/other/path' was not found",
+          "Macro with path 'some/other/path' was not found",
           path_to_file,
           1)));
   EXPECT_FALSE(result.has_value());
 }
 
-TEST_F(RenderTest, partials_no_resolver) {
+TEST_F(RenderTest, macros_no_resolver) {
   auto result = render("{{> some/file/path}}", w::map({}));
   EXPECT_THAT(
       diagnostics(),
       testing::ElementsAre(diagnostic(
           diagnostic_level::error,
-          "No partial resolver was provided. Cannot resolve partial with path 'some/file/path'",
+          "No macro resolver was provided. Cannot resolve macro with path 'some/file/path'",
           path_to_file,
           1)));
   EXPECT_FALSE(result.has_value());
 }
 
-TEST_F(RenderTest, partials_indentation) {
+TEST_F(RenderTest, macros_indentation) {
   auto result = render(
       "{{#array}}\n"
       "before\n"
@@ -1736,31 +2106,31 @@ TEST_F(RenderTest, partials_indentation) {
                 {w::map({{"value", w::i64(2)}}),
                  w::map({{"value", w::string("foo")}}),
                  w::map({{"value", w::string("bar")}})})}}),
-      partials(
+      macros(
           {{"some/file/path",
-            "{{value}} (from partial)\n"
+            "{{value}} (from macro)\n"
             "A second line\n"}}));
   EXPECT_EQ(
       *result,
       "before\n"
-      "  2 (from partial)\n"
+      "  2 (from macro)\n"
       "  A second line\n"
       "after\n"
       "before\n"
-      "  foo (from partial)\n"
+      "  foo (from macro)\n"
       "  A second line\n"
       "after\n"
       "before\n"
-      "  bar (from partial)\n"
+      "  bar (from macro)\n"
       "  A second line\n"
       "after\n");
 }
 
-TEST_F(RenderTest, partials_indentation_nested) {
+TEST_F(RenderTest, macros_indentation_nested) {
   auto result = render(
       "{{#array}}\n"
       "before\n"
-      "  {{>partial-1 }}\n"
+      "  {{>macro-1 }}\n"
       "after\n"
       "{{/array}}",
       w::map(
@@ -1769,39 +2139,39 @@ TEST_F(RenderTest, partials_indentation_nested) {
                 w::map({{"value", w::i64(2)}}),
                 w::map({{"value", w::string("foo")}}),
             })}}),
-      partials(
-          {{"partial-1",
-            "{{value}} (from partial-1)\n"
-            "  nested: {{> partial-2}}\n"},
-           {"partial-2",
-            "{{value}} (from partial-2)\n"
-            "second line from partial-2"}}));
+      macros(
+          {{"macro-1",
+            "{{value}} (from macro-1)\n"
+            "  nested: {{> macro-2}}\n"},
+           {"macro-2",
+            "{{value}} (from macro-2)\n"
+            "second line from macro-2"}}));
   EXPECT_EQ(
       *result,
       "before\n"
-      "  2 (from partial-1)\n"
-      "    nested: 2 (from partial-2)\n"
-      "  second line from partial-2\n"
+      "  2 (from macro-1)\n"
+      "    nested: 2 (from macro-2)\n"
+      "  second line from macro-2\n"
       "after\n"
       "before\n"
-      "  foo (from partial-1)\n"
-      "    nested: foo (from partial-2)\n"
-      "  second line from partial-2\n"
+      "  foo (from macro-1)\n"
+      "    nested: foo (from macro-2)\n"
+      "  second line from macro-2\n"
       "after\n");
 }
 
-TEST_F(RenderTest, partial_apply_preserves_whitespace_offset) {
+TEST_F(RenderTest, macro_preserves_whitespace_indentation) {
   auto result = render(
-      " \t {{> partial-1}} \t \n",
+      " \t {{> macro-1}} \t \n",
       w::map({{"value", w::i64(42)}}),
-      partials(
-          {{"partial-1",
+      macros(
+          {{"macro-1",
             "\t 1\n"
-            " \t {{>partial-2}} \n"},
-           {"partial-2",
+            " \t {{>macro-2}} \n"},
+           {"macro-2",
             "\t 2\n"
-            " \t {{>partial-3}}! \n"},
-           {"partial-3", "\t{{value}}"}}));
+            " \t {{>macro-3}}! \n"},
+           {"macro-3", "\t{{value}}"}}));
   EXPECT_EQ(
       *result,
       " \t \t 1\n"
@@ -1809,18 +2179,18 @@ TEST_F(RenderTest, partial_apply_preserves_whitespace_offset) {
       " \t  \t  \t \t42! \n");
 }
 
-TEST_F(RenderTest, partial_nested_undefined_variable_trace) {
+TEST_F(RenderTest, macro_nested_undefined_variable_trace) {
   show_source_backtrace_on_failure(true);
   auto result = render(
       "\n"
-      "{{> partial-1}}\n",
+      "{{> macro-1}}\n",
       w::map({}),
-      partials(
-          {{"partial-1",
+      macros(
+          {{"macro-1",
             "\n"
-            "\t {{>partial-2}}\n"},
-           {"partial-2", "foo {{>partial-3}}\n"},
-           {"partial-3", "{{undefined}}"}}));
+            "\t {{>macro-2}}\n"},
+           {"macro-2", "foo {{>macro-3}}\n"},
+           {"macro-3", "{{undefined}}"}}));
   EXPECT_FALSE(result.has_value());
   EXPECT_THAT(
       diagnostics(),
@@ -1831,11 +2201,11 @@ TEST_F(RenderTest, partial_nested_undefined_variable_trace) {
               "#0 map (size=0)\n"
               "\n"
               "#1 <global scope> (size=0)\n",
-              "partial-3", // file name
+              "macro-3", // file name
               1),
-          error_backtrace("#0 partial-3 <line:1, col:3>\n"
-                          "#1 partial-2 <line:1, col:5>\n"
-                          "#2 partial-1 <line:2, col:3>\n"
+          error_backtrace("#0 macro-3 <line:1, col:3>\n"
+                          "#1 macro-2 <line:1, col:5>\n"
+                          "#2 macro-1 <line:2, col:3>\n"
                           "#3 path/to/test.whisker <line:2, col:1>\n")));
 }
 
@@ -1949,11 +2319,11 @@ TEST_F(
       w::map(
           {{"value", w::i64(5)},
            {"boolean", w::map({{"condition", w::true_}})}}),
-      partials({{"ineligible", "{{value}} (from partial)\n"}}));
+      macros({{"ineligible", "{{value}} (from macro)\n"}}));
   EXPECT_EQ(
       *result,
       "| This Is\n"
-      "   5 (from partial)\n"
+      "   5 (from macro)\n"
       " \n"
       "|\n"
       "| A Line\n");
@@ -1966,7 +2336,7 @@ TEST_F(RenderTest, globals) {
       "{{.}} — {{global-2}}\n"
       "{{/array}}\n",
       w::map({{"array", w::array({w::i64(1), w::i64(2)})}}),
-      partials({}),
+      macros({}),
       globals(
           {{"global", w::string("hello")}, {"global-2", w::string("hello!")}}));
   EXPECT_EQ(
@@ -1980,7 +2350,7 @@ TEST_F(RenderTest, globals_shadowing) {
   auto result = render(
       "{{global}}\n",
       w::map({{"global", w::string("good")}}),
-      partials({}),
+      macros({}),
       globals({{"global", w::string("bad")}}));
   EXPECT_EQ(*result, "good\n");
 }
@@ -1998,17 +2368,17 @@ TEST_F(RenderTest, pragma_ignore_newlines) {
   EXPECT_THAT(diagnostics(), testing::IsEmpty());
   EXPECT_EQ(*result, "This is all one line");
 
-  // Test that the pragma is scoped to the active partial/template.
+  // Test that the pragma is scoped to the active macro/template.
   result = render(
       "{{#pragma ignore-newlines}}\n"
       "This\n"
       " is\n"
-      "{{> partial }}\n"
+      "{{> macro }}\n"
       " all\n"
       " one\n"
       " line\n",
       w::map({}),
-      partials({{"partial", "\nnot\n!\n"}}));
+      macros({{"macro", "\nnot\n!\n"}}));
   EXPECT_THAT(diagnostics(), testing::IsEmpty());
   EXPECT_EQ(*result, "This is\nnot\n!\n all one line");
 }

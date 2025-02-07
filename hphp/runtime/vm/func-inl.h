@@ -76,7 +76,7 @@ inline bool Func::ParamInfo::hasScalarDefaultValue() const {
 
 inline bool Func::ParamInfo::hasTrivialDefaultValue() const {
   return hasScalarDefaultValue()
-    && typeConstraints.main().alwaysPasses(&defaultValue);
+    && typeConstraints.alwaysPasses(&defaultValue);
 }
 
 inline bool Func::ParamInfo::isInOut() const {
@@ -112,7 +112,7 @@ inline void Func::ParamInfo::setFlag(Func::ParamInfo::Flags flag) {
 }
 
 inline MaybeDataType Func::ParamInfo::builtinType() const {
-  return isVariadic() ? KindOfVec : typeConstraints.main().asSystemlibType();
+  return isVariadic() ? KindOfVec : typeConstraints.asSystemlibType();
 }
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -575,10 +575,6 @@ inline bool Func::isNoICMemoize() const {
 
 inline bool Func::isKeyedByImplicitContextMemoize() const {
   return memoizeICType() == MemoizeICType::KeyedByIC;
-}
-
-inline bool Func::isMakeICInaccessibleMemoize() const {
-  return memoizeICType() == MemoizeICType::MakeICInaccessible;
 }
 
 

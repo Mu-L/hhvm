@@ -21,6 +21,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 #include <variant>
 #include <vector>
@@ -34,7 +35,9 @@ struct section_block;
 struct conditional_block;
 struct with_block;
 struct each_block;
-struct partial_apply;
+struct macro;
+struct partial_block;
+struct partial_statement;
 struct interpolation;
 struct let_statement;
 struct pragma_statement;
@@ -51,9 +54,11 @@ using body = std::variant<
     conditional_block,
     with_block,
     each_block,
+    partial_block,
+    partial_statement,
     let_statement,
     pragma_statement,
-    partial_apply>;
+    macro>;
 using bodies = std::vector<body>;
 
 // Defines operator!= in terms of operator==
@@ -77,7 +82,31 @@ struct root {
  */
 struct text {
   source_range loc;
-  std::string content;
+
+  /**
+   * Whitespace characters except newlines. One or more repetitions of:
+   *   - " "
+   *   - "\t"
+   *   - "\v"
+   */
+  struct whitespace {
+    source_range loc;
+    std::string value;
+  };
+  /**
+   * A sequence of non-whitespace characters.
+   */
+  struct non_whitespace {
+    source_range loc;
+    std::string value;
+  };
+  using content = std::variant<whitespace, non_whitespace>;
+  std::vector<content> parts;
+
+  /**
+   * A concatenation of all composed whitespace and non-whitespace nodes.
+   */
+  std::string joined() const;
 };
 
 /**
@@ -118,6 +147,17 @@ struct identifier {
   }
   // Remove in C++20 which introduces comparison operator synthesis
   WHISKER_DEFINE_OPERATOR_INEQUALITY(identifier)
+
+  // For std::map and std::set
+  struct compare_by_name {
+    using is_transparent = void;
+    bool operator()(const identifier& lhs, std::string_view rhs) const {
+      return lhs.name < rhs;
+    }
+    bool operator()(const identifier& lhs, const identifier& rhs) const {
+      return operator()(lhs, rhs.name);
+    }
+  };
 };
 
 /**
@@ -252,7 +292,7 @@ struct expression {
      *
      * Using std::map for stable ordering when printing the AST.
      */
-    std::map<std::string_view, named_argument> named_arguments;
+    std::map<std::string, named_argument> named_arguments;
 
     /**
      * The name of the function call lookup as seen in the source code.
@@ -460,8 +500,52 @@ struct each_block {
   std::optional<else_block> else_clause;
 };
 
+/**
+ * A Whisker construct for partially applied (reusable) templates.
+ *
+ * To form text output, a partial block must be applied with a set of arguments
+ * via partial application.
+ */
+struct partial_block {
+  source_range loc;
+  identifier name;
+  std::set<identifier, identifier::compare_by_name> arguments;
+  std::set<identifier, identifier::compare_by_name> captures;
+  bodies body_elements;
+};
+
+/**
+ * A Whisker construct for partial application of a partial block (defined
+ * above).
+ *
+ * The partial block is applied with a set of arguments and the result is
+ * printed to the output.
+ */
+struct partial_statement {
+  source_range loc;
+  /**
+   * An expression that evaluates to an (implemented-defintion) partial block
+   * instance.
+   */
+  expression partial;
+  struct named_argument {
+    identifier name;
+    expression value;
+  };
+  std::map<std::string, named_argument> named_arguments;
+  /**
+   * Standalone partials exhibit different indentation behavior:
+   *   https://github.com/mustache/spec/blob/v1.4.2/specs/partials.yml#L13-L15
+   *
+   * If this is a standalone partial, the value is the preceding whitespace
+   * necessary before the partial interpolation. Otherwise, this is
+   * std::nullopt.
+   */
+  std::optional<ast::text::whitespace> standalone_indentation_within_line;
+};
+
 /*
- * A valid Whisker path component for partial application. See whisker::lexer
+ * A valid Whisker path component for macro application. See whisker::lexer
  * for its definition.
  */
 struct path_component {
@@ -471,9 +555,9 @@ struct path_component {
 
 /**
  * A '/' delimited series of path components representing a POSIX portable file
- * path. This is used for partial applications.
+ * path. This is used for macros.
  */
-struct partial_lookup {
+struct macro_lookup {
   source_range loc;
   std::vector<path_component> parts;
 
@@ -484,20 +568,17 @@ struct partial_lookup {
  * A Whisker construct for partially applied templates. This matches Mustache:
  *   https://mustache.github.io/mustache.5.html#Partials
  */
-struct partial_apply {
+struct macro {
   source_range loc;
-  partial_lookup path;
+  macro_lookup path;
   /**
-   * Standalone partial applications exhibit different indentation behavior:
+   * Standalone macros exhibit different indentation behavior:
    *   https://github.com/mustache/spec/blob/v1.4.2/specs/partials.yml#L13-L15
    *
-   * If this is a standalone partial application, the value is the preceeding
-   * whitespace necessary before the partial application interpolation.
-   * Otherwise, this is std::nullopt.
-   *
-   * The contained string is guaranteed to be whitespace only.
+   * If this is a standalone macro, the value is the preceding whitespace
+   * necessary before the macro interpolation. Otherwise, this is std::nullopt.
    */
-  std::optional<std::string> standalone_offset_within_line;
+  std::optional<ast::text::whitespace> standalone_indentation_within_line;
 
   std::string path_string() const;
 };

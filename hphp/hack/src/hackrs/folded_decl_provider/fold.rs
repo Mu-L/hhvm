@@ -18,8 +18,10 @@ use pos::Symbol;
 use pos::TypeConstName;
 use pos::TypeName;
 use special_names as sn;
+use ty::decl::folded::ConstraintRequirement;
 use ty::decl::folded::Constructor;
 use ty::decl::subst::Subst;
+use ty::decl::ty::DeclConstraintRequirement;
 use ty::decl::AbstractTypeconst;
 use ty::decl::Abstraction;
 use ty::decl::CeVisibility;
@@ -76,8 +78,7 @@ enum Pass {
 pub struct ClassRequirements<R: Reason> {
     req_ancestors: Box<[Requirement<R>]>,
     req_ancestors_extends: IndexSet<TypeName>,
-    req_class_ancestors: Box<[Requirement<R>]>,
-    req_this_as_ancestors: Box<[Requirement<R>]>,
+    req_constraints_ancestors: Box<[ConstraintRequirement<R>]>,
 }
 
 impl<'a, R: Reason> DeclFolder<'a, R> {
@@ -298,6 +299,7 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
             supports_dynamic_type: false,
             needs_init: prop_flags.needs_init(),
             safe_global_variable: false,
+            no_auto_likes: false,
         };
         let elt = FoldedElement {
             origin: self.child.name.id(),
@@ -335,6 +337,7 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
             is_dynamicallycallable: false,
             is_readonly_prop: prop_flags.is_readonly(),
             supports_dynamic_type: false,
+            no_auto_likes: false,
             needs_init: false,
             safe_global_variable: prop_flags.is_safe_global_variable(),
         };
@@ -380,6 +383,12 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
         };
 
         let meth_flags = &sm.flags;
+        let no_auto_likes = meth_flags.is_no_auto_likes()
+            || match methods.get(&meth) {
+                Some(FoldedElement { flags, .. }) => flags.contains(ClassEltFlags::NO_AUTO_LIKES),
+                _ => false,
+            };
+
         let flag_args = ClassEltFlagsArgs {
             xhp_attr: None,
             is_abstract: meth_flags.is_abstract(),
@@ -392,6 +401,7 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
             is_dynamicallycallable: meth_flags.is_dynamicallycallable(),
             is_readonly_prop: false,
             supports_dynamic_type: meth_flags.supports_dynamic_type(),
+            no_auto_likes,
             needs_init: false,
             safe_global_variable: false,
         };
@@ -441,6 +451,7 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
                 supports_dynamic_type: false,
                 needs_init: false,
                 safe_global_variable: false,
+                no_auto_likes: false,
             };
             FoldedElement {
                 origin: self.child.name.id(),
@@ -640,38 +651,25 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
         }
     }
 
-    fn flatten_parent_class_class_reqs(
+    fn flatten_parent_class_constraints_reqs(
         &self,
-        req_class_ancestors: &mut Vec<Requirement<R>>,
+        req_constraints_ancestors: &mut Vec<ConstraintRequirement<R>>,
         parent_ty: &Ty<R>,
     ) {
         let (_, pos_id, parent_params) = parent_ty.unwrap_class_type();
         if let Some(parent_type) = self.parents.get(&pos_id.id()) {
             let subst = Subst::new(&parent_type.tparams, parent_params);
             let substitution = Substitution { subst: &subst };
-            req_class_ancestors.extend(
-                (parent_type.req_class_ancestors.iter())
-                    .map(|req| substitution.instantiate(&req.ty))
-                    .map(|ty| Requirement::new(pos_id.pos().clone(), ty)),
-            );
-        }
-    }
-
-    /* TODO DEDUP */
-    fn flatten_parent_class_this_as_reqs(
-        &self,
-        req_this_as_ancestors: &mut Vec<Requirement<R>>,
-        parent_ty: &Ty<R>,
-    ) {
-        let (_, pos_id, parent_params) = parent_ty.unwrap_class_type();
-        if let Some(parent_type) = self.parents.get(&pos_id.id()) {
-            let subst = Subst::new(&parent_type.tparams, parent_params);
-            let substitution = Substitution { subst: &subst };
-            req_this_as_ancestors.extend(
-                (parent_type.req_this_as_ancestors.iter())
-                    .map(|req| substitution.instantiate(&req.ty))
-                    .map(|ty| Requirement::new(pos_id.pos().clone(), ty)),
-            );
+            req_constraints_ancestors.extend((parent_type.req_constraints_ancestors.iter()).map(
+                |cr| match cr {
+                    ConstraintRequirement::CREqual(req) => ConstraintRequirement::CREqual(
+                        Requirement::new(pos_id.pos().clone(), substitution.instantiate(&req.ty)),
+                    ),
+                    ConstraintRequirement::CRSubtype(req) => ConstraintRequirement::CRSubtype(
+                        Requirement::new(pos_id.pos().clone(), substitution.instantiate(&req.ty)),
+                    ),
+                },
+            ));
         }
     }
 
@@ -776,37 +774,33 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
 
         self.naive_dedup(&mut req_ancestors);
 
-        let mut req_class_ancestors: Vec<_> = (self.child.req_class.iter())
-            .map(|req_ty| {
-                let (_, pos_id, _) = req_ty.unwrap_class_type();
-                Requirement::new(pos_id.pos().clone(), req_ty.clone())
+        let mut req_constraints_ancestors: Vec<_> = (self.child.req_constraints.iter())
+            .map(|cr| match cr {
+                DeclConstraintRequirement::DCREqual(req) => {
+                    let (_, pos_id, _) = req.unwrap_class_type();
+                    ConstraintRequirement::CREqual(Requirement::new(
+                        pos_id.pos().clone(),
+                        req.clone(),
+                    ))
+                }
+                DeclConstraintRequirement::DCRSubtype(req) => {
+                    let (_, pos_id, _) = req.unwrap_class_type();
+                    ConstraintRequirement::CRSubtype(Requirement::new(
+                        pos_id.pos().clone(),
+                        req.clone(),
+                    ))
+                }
             })
             .collect();
 
         for ty in self.child.uses.iter() {
-            self.flatten_parent_class_class_reqs(&mut req_class_ancestors, ty);
+            self.flatten_parent_class_constraints_reqs(&mut req_constraints_ancestors, ty);
         }
-
-        self.naive_dedup(&mut req_class_ancestors);
-
-        let mut req_this_as_ancestors: Vec<_> = (self.child.req_this_as.iter())
-            .map(|req_ty| {
-                let (_, pos_id, _) = req_ty.unwrap_class_type();
-                Requirement::new(pos_id.pos().clone(), req_ty.clone())
-            })
-            .collect();
-
-        for ty in self.child.uses.iter() {
-            self.flatten_parent_class_this_as_reqs(&mut req_this_as_ancestors, ty);
-        }
-
-        self.naive_dedup(&mut req_this_as_ancestors);
 
         ClassRequirements {
             req_ancestors: req_ancestors.into_boxed_slice(),
             req_ancestors_extends,
-            req_class_ancestors: req_class_ancestors.into_boxed_slice(),
-            req_this_as_ancestors: req_this_as_ancestors.into_boxed_slice(),
+            req_constraints_ancestors: req_constraints_ancestors.into_boxed_slice(),
         }
     }
 
@@ -948,8 +942,7 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
         let ClassRequirements {
             req_ancestors,
             req_ancestors_extends,
-            req_class_ancestors,
-            req_this_as_ancestors,
+            req_constraints_ancestors,
         } = self.get_class_requirements();
 
         // TODO(T88552052) can make logic more explicit now, enum members appear to
@@ -1025,8 +1018,7 @@ impl<'a, R: Reason> DeclFolder<'a, R> {
             xhp_marked_empty: self.child.xhp_marked_empty,
             req_ancestors,
             req_ancestors_extends,
-            req_class_ancestors,
-            req_this_as_ancestors,
+            req_constraints_ancestors,
             sealed_whitelist,
             deferred_init_members,
             decl_errors: self.errors.into_boxed_slice(),

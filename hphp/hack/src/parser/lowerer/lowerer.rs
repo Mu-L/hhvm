@@ -4550,6 +4550,10 @@ fn process_attribute_constructor_call<'a>(
     env: &mut Env<'a>,
 ) -> Result<ast::UserAttribute> {
     let name = pos_name(constructor_call_type, env)?;
+    let mut params = could_map(constructor_call_argument_list, env, |n, e| {
+        is_valid_attribute_arg(n, e, &name.1);
+        p_expr(n, e)
+    })?;
     if name.1.eq_ignore_ascii_case("__reified") || name.1.eq_ignore_ascii_case("__hasreifiedparent")
     {
         raise_parsing_error(node, env, &syntax_error::reified_attribute);
@@ -4575,6 +4579,26 @@ fn process_attribute_constructor_call<'a>(
             }
         }
 
+        // If TreatNonAnnotatedMemoizeAsKBIC was supplied by config, add that to empty __Memoize
+        if env.parser_options.treat_non_annotated_memoize_as_kbic && params.is_empty() {
+            params.push(ast::Expr::new(
+                (),
+                env.mk_none_pos(),
+                ast::Expr_::EnumClassLabel(Box::new((
+                    None,
+                    sn::memoize_option::KEYED_BY_IC.to_string(),
+                ))),
+            ));
+        } else if env.parser_options.disallow_non_annotated_memoize && params.is_empty() {
+            // if DisallowNonAnnotatedMemoize was supplied by config, plain <<__Memoize>>
+            // are not allowed. This only matters if TreatNonAnnotatedMemoizeAsKBIC was not supplied
+            raise_parsing_error(
+                node,
+                env,
+                &syntax_error::memoize_without_annotation_disabled(&name.1),
+            );
+        }
+
         if list.len() > 1 {
             let ast::Id(_, first) = pos_name(list[0], env)?;
             raise_parsing_error(
@@ -4584,10 +4608,6 @@ fn process_attribute_constructor_call<'a>(
             );
         }
     }
-    let params = could_map(constructor_call_argument_list, env, |n, e| {
-        is_valid_attribute_arg(n, e, &name.1);
-        p_expr(n, e)
-    })?;
     Ok(ast::UserAttribute { name, params })
 }
 
@@ -5654,9 +5674,12 @@ fn check_effect_memoized<'a>(
             )
         }
     }
-    // #(Soft)?MakeICInaccessible can only be used on functions with defaults
     if let Some(u) = user_attributes.iter().find(|u| {
         is_memoize_attribute_with_flavor(u, Some(sn::memoize_option::MAKE_IC_INACCESSSIBLE))
+            || is_memoize_attribute_with_flavor(
+                u,
+                Some(sn::memoize_option::IC_INACCESSSIBLE_SPECIAL_CASE),
+            )
     }) {
         if !has_any_context(
             contexts,
@@ -5669,7 +5692,13 @@ fn check_effect_memoized<'a>(
             raise_parsing_error_pos(
                 &u.name.0,
                 env,
-                &syntax_error::memoize_make_ic_inaccessible_without_defaults(kind),
+                &syntax_error::memoize_make_ic_inaccessible_without_defaults(
+                    kind,
+                    is_memoize_attribute_with_flavor(
+                        u,
+                        Some(sn::memoize_option::IC_INACCESSSIBLE_SPECIAL_CASE),
+                    ),
+                ),
             )
         }
     }

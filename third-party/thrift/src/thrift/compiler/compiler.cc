@@ -136,19 +136,15 @@ Options:
               values include:
                 unstructured_annotations_on_field_type
 
+                warn_on_redundant_custom_default_values
+                  Issues warnings for struct fields that have custom default
+                  values equal to the intrinsic default for that type (eg. 0
+                  for integers, false for boolean, etc.)
+
                 forbid_non_optional_cpp_ref_fields (IGNORED: set by default).
                   Struct (and exception) fields with a @cpp.Ref (or
                   cpp[2].ref[_type]) annotation must be optional, unless
                   annotated with @cpp.AllowLegacyNonOptionalRef.
-
-                  TEMPORARY NOTE: As of Jan 2025, this is enabled by default.
-                  As a short-term escape hatch, in case we missed any existing
-                  use case, users can specify this validator prefixed with a
-                  "-", to explicitly disable this enforcement, i.e.:
-                  "-forbid_non_optional_cpp_ref_fields"
-                  Note however that this is only a temporary, short-term option:
-                  support for "-forbid_non_optional_cpp_ref_fields" will be
-                  removed soon (and will fail if provided in the future).
 
                 implicit_field_ids (IGNORED: always present, i.e. implicit field
                   IDs are always forbidden).
@@ -424,12 +420,10 @@ std::string parse_args(
       for (const auto& validator : validators) {
         if (validator == "unstructured_annotations_on_field_type") {
           sparams.forbid_unstructured_annotations_on_field_types = true;
+        } else if (validator == "warn_on_redundant_custom_default_values") {
+          sparams.warn_on_redundant_custom_default_values = true;
         } else if (validator == "forbid_non_optional_cpp_ref_fields") {
           // no-op
-        } else if (validator == "-forbid_non_optional_cpp_ref_fields") {
-          // DO_BEFORE(aristidis,20250201): Remove support for escape hatch:
-          // -forbid_non_optional_cpp_ref_fields
-          sparams.forbid_non_optional_cpp_ref_fields = false;
         } else if (validator == "implicit_field_ids") {
           // no-op
         } else {
@@ -839,6 +833,19 @@ std::unique_ptr<t_program_bundle> parse_and_mutate(
 
 } // namespace
 
+std::optional<std::string> detail::parse_command_line_args(
+    const std::vector<std::string>& args,
+    parsing_params& parsing_params,
+    sema_params& sema_params) {
+  gen_params gen_params = {};
+  gen_params.targets.emplace_back(); // Avoid the need to pass --gen.
+  diagnostic_params diag_params = {};
+  auto filename =
+      parse_args(args, parsing_params, gen_params, diag_params, sema_params);
+  return filename.empty() ? std::nullopt
+                          : std::make_optional(std::move(filename));
+}
+
 std::pair<std::unique_ptr<t_program_bundle>, diagnostic_results>
 parse_and_mutate_program(
     source_manager& sm,
@@ -862,29 +869,6 @@ std::unique_ptr<t_program_bundle> parse_and_dump_diagnostics(
     fmt::print(stderr, "{}\n", diag);
   }
   return programs;
-}
-
-std::unique_ptr<t_program_bundle> parse_and_get_program(
-    source_manager& sm, const std::vector<std::string>& arguments) {
-  // Parse arguments.
-  parsing_params pparams;
-  pparams.allow_missing_includes = true;
-  gen_params gparams;
-  diagnostic_params dparams;
-  sema_params sparams;
-  gparams.targets.push_back(""); // Avoid needing to pass --gen
-  std::string filename =
-      parse_args(arguments, pparams, gparams, dparams, sparams);
-  if (filename.empty()) {
-    return {};
-  }
-
-  diagnostics_engine diags(
-      sm,
-      [](const diagnostic& d) { fmt::print(stderr, "{}\n", d); },
-      diagnostic_params::only_errors());
-  sparams.skip_lowering_annotations = true;
-  return parse_ast(sm, diags, filename, std::move(pparams), &sparams);
 }
 
 compile_result compile(

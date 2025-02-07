@@ -377,6 +377,12 @@ let load_config (config : Config_file_common.t) (options : GlobalOptions.t) :
         enable_class_pointer_hint =
           bool_opt "enable_class_pointer_hint" config
           >?? po_opt.enable_class_pointer_hint;
+        disallow_non_annotated_memoize =
+          bool_opt "disallow_non_annotated_memoize" config
+          >?? po_opt.disallow_non_annotated_memoize;
+        treat_non_annotated_memoize_as_kbic =
+          bool_opt "treat_non_annotated_memoize_as_kbic" config
+          >?? po_opt.treat_non_annotated_memoize_as_kbic;
       }
   in
   GlobalOptions.set
@@ -428,7 +434,6 @@ let load_config (config : Config_file_common.t) (options : GlobalOptions.t) :
     ?tco_error_php_lambdas:(bool_opt "error_php_lambdas" config)
     ?tco_disallow_discarded_nullable_awaitables:
       (bool_opt "disallow_discarded_nullable_awaitables" config)
-    ?tco_report_pos_from_reason:(bool_opt "report_pos_from_reason" config)
     ?tco_typecheck_sample_rate:(float_opt "typecheck_sample_rate" config)
     ?tco_enable_sound_dynamic:(bool_opt "enable_sound_dynamic_type" config)
     ?tco_pessimise_builtins:(bool_opt "pessimise_builtins" config)
@@ -635,6 +640,8 @@ let load
         ~tco_custom_error_config
         ~tco_sticky_quarantine:local_config.lsp_sticky_quarantine
         ~tco_lsp_invalidation:local_config.lsp_invalidation
+        ~invalidate_all_folded_decls_upon_file_change:
+          local_config.invalidate_all_folded_decls_upon_file_change
         ~tco_autocomplete_sort_text:local_config.autocomplete_sort_text
         ~hack_warnings:
           (if local_config.hack_warnings then
@@ -652,8 +659,6 @@ let load
   in
   Errors.allowed_fixme_codes_strict :=
     GlobalOptions.allowed_fixme_codes_strict global_opts;
-  Errors.report_pos_from_reason :=
-    TypecheckerOptions.report_pos_from_reason global_opts;
   Errors.code_agnostic_fixme := GlobalOptions.code_agnostic_fixme global_opts;
   ( {
       version;

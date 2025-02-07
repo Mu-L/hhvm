@@ -309,14 +309,6 @@ type file_input =
   | FileContent of string
 [@@deriving show]
 
-type labelled_file =
-  | LabelledFileName of string
-  | LabelledFileContent of {
-      filename: string;
-      content: string;
-    }
-[@@deriving show]
-
 type lint_stdin_input = {
   filename: string;
   contents: string;
@@ -350,9 +342,11 @@ type _ t =
       -> ((Errors.finalized_error list * int)
          * Tast.program Tast_with_dynamic.t Relative_path.Map.t option)
          t
-  | INFER_TYPE : file_input * int * int -> InferAtPosService.result t
+  | INFER_TYPE :
+      file_input * File_content.Position.t
+      -> InferAtPosService.result t
   | INFER_TYPE_BATCH :
-      (string * int * int * (int * int) option) list
+      (string * File_content.Position.t * File_content.Position.t option) list
       -> string list t
   | INFER_TYPE_ERROR : file_input * int * int -> InferErrorAtPosService.result t
   | IS_SUBTYPE : string -> (string, string) result t
@@ -360,7 +354,7 @@ type _ t =
   | TAST_HOLES_BATCH : string list -> TastHolesService.result t
   | IDENTIFY_SYMBOL : string -> string SymbolDefinition.t list t
   | IDENTIFY_FUNCTION :
-      string * file_input * int * int
+      string * file_input * File_content.Position.t
       -> Identify_symbol.result t
   | METHOD_JUMP :
       (string * Method_jumps.filter * bool)
@@ -406,7 +400,6 @@ type _ t =
   | FUN_DEPS_BATCH : (string * int * int) list -> string list t
   | LIST_FILES_WITH_ERRORS : string list t
   | FILE_DEPENDENTS : string list -> string list t
-  | IDENTIFY_TYPES : labelled_file * int * int -> (Pos.absolute * string) list t
   | VERBOSE : bool -> unit t
   | DEPS_OUT_BATCH : (string * int * int) list -> string list t
   | DEPS_IN_BATCH :
@@ -499,7 +492,6 @@ let rpc_command_needs_full_check : type a. a t -> bool =
   | FUN_DEPS_BATCH _ -> false
   | DEPS_OUT_BATCH _ -> false
   | FILE_DEPENDENTS _ -> true
-  | IDENTIFY_TYPES _ -> false
   | VERBOSE _ -> false
   | DEPS_IN_BATCH _ -> true
 

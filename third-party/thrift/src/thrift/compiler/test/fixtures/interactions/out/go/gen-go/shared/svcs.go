@@ -25,52 +25,29 @@ var _ = metadata.GoUnusedProtection__
 type InteractLocally interface {
 }
 
-type InteractLocallyChannelClientInterface interface {
+type InteractLocallyClientInterface interface {
     thrift.ClientInterface
     InteractLocally
 }
 
-type InteractLocallyClientInterface interface {
-    thrift.ClientInterface
-}
-
-type InteractLocallyContextClientInterface interface {
-    InteractLocallyClientInterface
-}
-
-type InteractLocallyChannelClient struct {
+type InteractLocallyClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ InteractLocallyChannelClientInterface = (*InteractLocallyChannelClient)(nil)
+var _ InteractLocallyClientInterface = (*InteractLocallyClient)(nil)
 
-func NewInteractLocallyChannelClient(channel thrift.RequestChannel) *InteractLocallyChannelClient {
-    return &InteractLocallyChannelClient{
+func NewInteractLocallyChannelClient(channel thrift.RequestChannel) *InteractLocallyClient {
+    return &InteractLocallyClient{
         ch: channel,
     }
 }
 
-func (c *InteractLocallyChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type InteractLocallyClient struct {
-    chClient *InteractLocallyChannelClient
-}
-// Compile time interface enforcer
-var _ InteractLocallyClientInterface = (*InteractLocallyClient)(nil)
-var _ InteractLocallyContextClientInterface = (*InteractLocallyClient)(nil)
-
 func NewInteractLocallyClient(prot thrift.Protocol) *InteractLocallyClient {
-    return &InteractLocallyClient{
-        chClient: NewInteractLocallyChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewInteractLocallyChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *InteractLocallyClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
 

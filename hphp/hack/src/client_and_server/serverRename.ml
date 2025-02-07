@@ -294,12 +294,14 @@ let get_deprecated_wrapper_patch
            format our wrapper properly with the correct indent (i.e. we need 0-indexed columns).
 
            However, even though column offsets are already indexed accordingly when
-           stored in positions, `destruct_range` adds 1 in order to
+           stored in positions, `destruct_range_one_based` adds 1 in order to
            return an [inclusive, exclusive) span.
 
            Thus, we subtract 1.
         *)
-        let (_, col_start_plus1, _, _) = Pos.destruct_range definition.span in
+        let (_, col_start_plus1, _, _) =
+          Pos.destruct_range_one_based definition.span
+        in
         let col_start = col_start_plus1 - 1 in
         let (_ctx, entry) =
           Provider_context.add_entry_if_missing ~ctx ~path:filename
@@ -414,8 +416,8 @@ let go
       (Types.Member (class_name, Types.Method old_name), new_name)
     | FunctionRename { old_name; new_name; _ } ->
       (Types.Function old_name, new_name)
-    | LocalVarRename { filename; file_content; line; char; new_name } ->
-      (Types.LocalVar { filename; file_content; line; char }, new_name)
+    | LocalVarRename { filename; file_content; pos; new_name } ->
+      (Types.LocalVar { filename; file_content; pos }, new_name)
   in
   let include_defs = true in
   ServerFindRefs.go

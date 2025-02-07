@@ -61,7 +61,7 @@ impl ocamlrep::ToOcamlRep for OcamlParsedFileWithHashes<'_> {
 }
 
 ocaml_ffi_arena_result! {
-    fn hh_parse_decls_ffi<'a>(
+    fn hh_parse_decls_ffi_obr<'a>(
         arena: &'a Bump,
         opts: DeclParserOptions,
         filename: RelativePath,
@@ -72,7 +72,7 @@ ocaml_ffi_arena_result! {
         // don't call into OCaml within this function scope.
         let text_value: ocamlrep::Value<'a> = unsafe { text.as_value() };
         let text = bytes_from_ocamlrep(text_value).expect("expected string");
-        direct_decl_parser::parse_decls_for_typechecking(&opts, filename, text, arena)
+        direct_decl_parser::parse_decls_for_typechecking_obr(&opts, filename, text, arena)
     }
 
     fn hh_parse_and_hash_decls_ffi<'a>(
@@ -88,9 +88,24 @@ ocaml_ffi_arena_result! {
         // don't call into OCaml within this function scope.
         let text_value: ocamlrep::Value<'a> = unsafe { text.as_value() };
         let text = bytes_from_ocamlrep(text_value).expect("expected string");
-        let parsed_file = direct_decl_parser::parse_decls_for_typechecking(&opts, filename, text, arena);
+        let parsed_file = direct_decl_parser::parse_decls_for_typechecking_obr(&opts, filename, text, arena);
         let with_hashes = ParsedFileWithHashes::new(parsed_file, deregister_php_stdlib_if_hhi, prefix, arena);
         with_hashes.into()
+    }
+}
+
+ocaml_ffi! {
+    fn hh_parse_decls_ffi(
+        opts: DeclParserOptions,
+        filename: RelativePath,
+        text: UnsafeOcamlPtr,
+    ) -> oxidized::direct_decl_parser::ParsedFile {
+        // SAFETY: Borrow the contents of the source file from the value on the
+        // OCaml heap rather than copying it over. This is safe as long as we
+        // don't call into OCaml within this function scope.
+        let text_value: ocamlrep::Value<'_> = unsafe { text.as_value() };
+        let text = bytes_from_ocamlrep(text_value).expect("expected string");
+        direct_decl_parser::parse_decls_for_typechecking(&opts, filename, text)
     }
 }
 
@@ -171,7 +186,7 @@ unsafe impl Send for SendableOcamlPtrPtr {}
 /// parse results back for the entire c.php, it needs to remember which class "C" it was prefetching ancestors for. The metadata
 /// tag provides a place to store this.
 pub struct Concurrent {
-    /// This controls the behavior of `direct_decl_parser::parse_decls_for_typechecking`
+    /// This controls the behavior of `direct_decl_parser::parse_decls_for_typechecking_obr`
     opts: DeclParserOptions,
 
     /// This provides repo-root and hhi-root, which are needed to turn a RelativePath into an abspath.
@@ -255,7 +270,7 @@ impl Concurrent {
                     None => std::fs::read(abspath).unwrap_or_default(),
                 };
                 let arena = bumpalo::Bump::new();
-                let parsed_file = direct_decl_parser::parse_decls_for_typechecking(
+                let parsed_file = direct_decl_parser::parse_decls_for_typechecking_obr(
                     &self.opts,
                     path.clone(),
                     &text,
@@ -319,7 +334,7 @@ impl Concurrent {
                 };
                 let text2 = unsafe { std::mem::transmute::<&'_ [u8], &'static [u8]>(&text) };
                 let parsed_file: ParsedFile<'static> =
-                    direct_decl_parser::parse_decls_for_typechecking(
+                    direct_decl_parser::parse_decls_for_typechecking_obr(
                         &opts,
                         path.clone(),
                         text2,

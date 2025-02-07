@@ -54,7 +54,7 @@ import {{#includeNamespace}}{{value}}.{{/includeNamespace}}types as _{{#includeN
 {{/hasTypes?}}
 {{/program:includeNamespaces}}
 
-import {{#program:py3Namespaces}}{{value}}.{{/program:py3Namespaces}}{{program:name}}.{{> common/auto_migrate_import_prefix }}types as _{{#program:py3Namespaces}}{{value}}_{{/program:py3Namespaces}}{{program:name}}_types
+import {{#program:py3Namespaces}}{{value}}.{{/program:py3Namespaces}}{{program:name}}.types as _{{#program:py3Namespaces}}{{value}}_{{/program:py3Namespaces}}{{program:name}}_types
 
 
 
@@ -107,7 +107,6 @@ def get_reflection__{{struct:name}}() -> __StructSpec:
 {{/struct:py3_fields}}
     return spec
 {{/program:filtered_structs}}
-{{^program:auto_migrate?}}
 {{#program:containerTypes}}
 {{#type:list?}}
 def get_reflection__{{type:flat_name}}() -> __ListSpec :
@@ -138,4 +137,3 @@ def get_reflection__{{type:flat_name}}() -> __MapSpec:
 {{/type:map?}}
 
 {{/program:containerTypes}}
-{{/program:auto_migrate?}}

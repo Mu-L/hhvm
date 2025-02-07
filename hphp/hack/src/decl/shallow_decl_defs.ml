@@ -120,6 +120,7 @@ module MethodFlags = struct
     dynamicallycallable: bool;
     php_std_lib: bool;
     support_dynamic_type: bool;
+    no_auto_likes: bool;
   }
   [@@deriving show]
 
@@ -130,21 +131,24 @@ module MethodFlags = struct
   let override_bit               = 1 lsl 2
   let dynamicallycallable_bit    = 1 lsl 3
   let php_std_lib_bit            = 1 lsl 4
-  let support_dynamic_type_bit = 1 lsl 5
+  let support_dynamic_type_bit   = 1 lsl 5
+  let no_auto_likes_bit          = 1 lsl 6
 
   let get_abstract               = is_set abstract_bit
   let get_final                  = is_set final_bit
   let get_override               = is_set override_bit
   let get_dynamicallycallable    = is_set dynamicallycallable_bit
   let get_php_std_lib            = is_set php_std_lib_bit
-  let get_support_dynamic_type = is_set support_dynamic_type_bit
+  let get_support_dynamic_type   = is_set support_dynamic_type_bit
+  let get_no_auto_likes          = is_set no_auto_likes_bit
 
   let set_abstract               = set_bit abstract_bit
   let set_final                  = set_bit final_bit
   let set_override               = set_bit override_bit
   let set_dynamicallycallable    = set_bit dynamicallycallable_bit
   let set_php_std_lib            = set_bit php_std_lib_bit
-  let set_support_dynamic_type = set_bit support_dynamic_type_bit
+  let set_support_dynamic_type   = set_bit support_dynamic_type_bit
+  let set_no_auto_likes          = set_bit no_auto_likes_bit
 
   let to_record t : record =
   {
@@ -154,6 +158,7 @@ module MethodFlags = struct
     dynamicallycallable = get_dynamicallycallable t;
     php_std_lib = get_php_std_lib t;
     support_dynamic_type     = get_support_dynamic_type t;
+    no_auto_likes = get_no_auto_likes t;
   }
 
   let make
@@ -163,6 +168,7 @@ module MethodFlags = struct
       ~dynamicallycallable
       ~php_std_lib
       ~support_dynamic_type
+      ~no_auto_likes
       =
     empty
     |> set_abstract abstract
@@ -171,6 +177,7 @@ module MethodFlags = struct
     |> set_dynamicallycallable dynamicallycallable
     |> set_php_std_lib php_std_lib
     |> set_support_dynamic_type support_dynamic_type
+    |> set_no_auto_likes no_auto_likes
 
   let pp fmt t =
     pp_record fmt (to_record t)
@@ -228,6 +235,17 @@ type shallow_method = {
 
 type xhp_enum_values = Ast_defs.xhp_enum_value list SMap.t [@@deriving eq, show]
 
+type decl_constraint_requirement =
+  | DCR_Equal of decl_ty
+  | DCR_Subtype of decl_ty
+[@@deriving eq, show]
+
+let to_decl_constraint dcr =
+  match dcr with
+  | DCR_Equal ty
+  | DCR_Subtype ty ->
+    ty
+
 type shallow_class = {
   sc_mode: FileInfo.mode;
   sc_final: bool;
@@ -246,8 +264,7 @@ type shallow_class = {
   sc_xhp_marked_empty: bool;
   sc_req_extends: decl_ty list;
   sc_req_implements: decl_ty list;
-  sc_req_class: decl_ty list;
-  sc_req_this_as: decl_ty list;
+  sc_req_constraints: decl_constraint_requirement list;
   sc_implements: decl_ty list;
   sc_support_dynamic_type: bool;
   sc_consts: shallow_class_const list;
@@ -292,6 +309,8 @@ let sm_php_std_lib sm = MethodFlags.get_php_std_lib sm.sm_flags
 
 let sm_support_dynamic_type sm =
   MethodFlags.get_support_dynamic_type sm.sm_flags
+
+let sm_no_auto_likes sm = MethodFlags.get_no_auto_likes sm.sm_flags
 
 type fun_decl = fun_elt [@@deriving show]
 

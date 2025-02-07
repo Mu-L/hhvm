@@ -20,6 +20,7 @@ pub use oxidized::ast_defs::ClassishKind;
 pub use oxidized::ast_defs::ConstraintKind;
 pub use oxidized::ast_defs::Visibility;
 pub use oxidized::typing_defs::ClassConstKind;
+pub use oxidized::typing_defs::Requirement;
 pub use oxidized::typing_defs_core::ConsistentKind;
 pub use oxidized::typing_defs_core::Enforcement;
 pub use oxidized::typing_defs_core::ParamMode;
@@ -34,6 +35,7 @@ use pos::Bytes;
 use pos::ModuleName;
 use pos::Positioned;
 use pos::Symbol;
+use pos::ToOxidized;
 use pos::TypeConstName;
 use pos::TypeName;
 use serde::de::DeserializeOwned;
@@ -171,6 +173,19 @@ walkable!(impl<R: Reason> for UserAttribute<R::Pos> => [name, params]);
 
 #[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]
 #[derive(ToOcamlRep, FromOcamlRep)]
+#[serde(bound = "R: Reason")]
+pub enum DeclConstraintRequirement<R: Reason> {
+    DCREqual(Ty<R>),
+    DCRSubtype(Ty<R>),
+}
+
+walkable!(impl<R: Reason> for DeclConstraintRequirement<R> => {
+    Self::DCREqual(ty) => [ty],
+    Self::DCRSubtype(ty) => [ty],
+});
+
+#[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]
+#[derive(ToOcamlRep, FromOcamlRep)]
 #[serde(bound = "R: Reason, TY: Serialize + DeserializeOwned")]
 pub struct Tparam<R: Reason, TY> {
     pub variance: ast_defs::Variance,
@@ -292,6 +307,18 @@ impl<R: Reason> Ty<R> {
             }
             _ => (r, Positioned::new(r.pos().clone(), TypeName::from("")), &[]),
         }
+    }
+}
+
+impl<R: Reason> ToOxidized for Ty<R> {
+    type Output = oxidized::typing_defs::Ty;
+
+    // For oxidized types, need an owned, heap-allocated Ty_
+    fn to_oxidized(self) -> Self::Output {
+        oxidized::typing_defs::Ty(
+            self.0.to_oxidized(),
+            Box::new((*self.1).clone().to_oxidized()),
+        )
     }
 }
 
@@ -766,7 +793,7 @@ walkable!(ModuleDefType<R> => []);
 /// When the option is `Some`, it points to the location of the `__Enforceable`
 /// attribute which caused the containing typeconst to be enforceable.
 ///
-/// The newtype allows us to implement ToOxidized and ToOcamlRep in such a way
+/// The newtype allows us to implement ToOxidizedByRef and ToOcamlRep in such a way
 /// that we produce `(Pos, bool)` tuples, which is how this is represented on
 /// the OCaml side.
 #[derive(Clone, Debug, Eq, EqModuloPos, Hash, PartialEq, Serialize, Deserialize)]

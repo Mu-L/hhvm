@@ -692,7 +692,7 @@ class Serde implements \IThriftSyncStruct, \IThriftStructMetadata {
   public bool $enabled;
 
   public function __construct(?bool $enabled = null)[] {
-    $this->enabled = $enabled ?? false;
+    $this->enabled = $enabled ?? true;
   }
 
   public static function withDefaultValues()[]: this {
@@ -735,6 +735,14 @@ class Serde implements \IThriftSyncStruct, \IThriftStructMetadata {
     return shape(
       'struct' => dict[
         '\facebook\thrift\annotation\Struct' => \facebook\thrift\annotation\Struct::fromShape(
+          shape(
+          )
+        ),
+        '\facebook\thrift\annotation\Enum' => \facebook\thrift\annotation\Enum::fromShape(
+          shape(
+          )
+        ),
+        '\facebook\thrift\annotation\Union' => \facebook\thrift\annotation\Union::fromShape(
           shape(
           )
         ),

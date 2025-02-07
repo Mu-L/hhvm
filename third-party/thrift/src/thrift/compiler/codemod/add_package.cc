@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 
-#include <vector>
-
 #include <thrift/compiler/ast/t_program_bundle.h>
+#include <thrift/compiler/codemod/codemod.h>
 #include <thrift/compiler/codemod/file_manager.h>
 #include <thrift/compiler/codemod/package_generator.h>
-#include <thrift/compiler/compiler.h>
 
 using apache::thrift::compiler::source_manager;
 using apache::thrift::compiler::t_program;
+using apache::thrift::compiler::t_program_bundle;
 using apache::thrift::compiler::codemod::file_manager;
 using apache::thrift::compiler::codemod::package_name_generator;
 using apache::thrift::compiler::codemod::package_name_generator_util;
@@ -143,14 +142,8 @@ class add_package {
 } // namespace
 
 int main(int argc, char** argv) {
-  auto source_mgr = source_manager();
-  auto program_bundle = parse_and_get_program(
-      source_mgr, std::vector<std::string>(argv, argv + argc));
-  if (!program_bundle) {
-    return 1;
-  }
-  auto program = program_bundle->root_program();
-  add_package(source_mgr, *program).run();
-
-  return 0;
+  return apache::thrift::compiler::run_codemod(
+      argc, argv, [](source_manager& sm, t_program_bundle& pb) {
+        add_package(sm, *pb.get_root_program()).run();
+      });
 }

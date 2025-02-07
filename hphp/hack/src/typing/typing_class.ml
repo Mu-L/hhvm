@@ -160,6 +160,7 @@ let method_def ~is_disposable env cls m =
   let env = Env.open_tyvars env (fst m.m_name) in
   let env = Env.reinitialize_locals env in
   let env = Env.set_env_callable_pos env pos in
+  let env = Env.set_env_function_pos env m.m_span in
   let (env, user_attributes) =
     Typing.attributes_check_def env SN.AttributeKinds.mthd m.m_user_attributes
   in
@@ -174,7 +175,10 @@ let method_def ~is_disposable env cls m =
       env
   in
   let no_auto_likes =
-    Naming_attributes.mem SN.UserAttributes.uaNoAutoLikes m.m_user_attributes
+    match Cls.get_any_method ~is_static:m.m_static cls method_name with
+    | Some ce -> get_ce_no_auto_likes ce
+    | None ->
+      Naming_attributes.mem SN.UserAttributes.uaNoAutoLikes m.m_user_attributes
   in
   let env =
     if no_auto_likes then
@@ -1051,18 +1055,6 @@ let typeconst_def
       (env, ty_err_opt)
   in
   Option.iter ty_err_opt ~f:(Typing_error_utils.add_typing_error ~env);
-  (* TODO(T88552052): should this check be happening for defaults
-   * Does this belong here at all? *)
-  let env =
-    match c_tconst_kind with
-    | TCConcrete { c_tc_type = (_, Hshape { nsi_field_map; _ }) }
-    | TCAbstract { c_atc_default = Some (_, Hshape { nsi_field_map; _ }); _ } ->
-      let get_name sfi = sfi.sfi_name in
-      Typing_shapes.check_shape_keys_validity
-        env
-        (List.map ~f:get_name nsi_field_map)
-    | _ -> env
-  in
 
   let (env, user_attributes) =
     Typing.attributes_check_def
@@ -1599,8 +1591,8 @@ let check_sealed env c =
   let is_enum = is_enum_or_enum_class c.c_kind in
   sealed_subtype (Env.get_ctx env) c ~is_enum ~hard_error ~env
 
-let check_class_where_require_class_constraints env c =
-  let req_class_constraints =
+let check_class_require_non_strict_constraints env c =
+  let req_non_strict_constraints =
     List.filter_map c.c_reqs ~f:(fun req ->
         match req with
         | (t, RequireClass) ->
@@ -1616,7 +1608,7 @@ let check_class_where_require_class_constraints env c =
       env
       ~ignore_errors:false
       c.c_tparams
-      req_class_constraints
+      req_non_strict_constraints
   in
   Option.iter ty_err_opt1 ~f:(Typing_error_utils.add_typing_error ~env);
   env
@@ -1718,7 +1710,7 @@ let check_class_attributes env ~cls =
 
 (** Check type parameter definition, including variance, and add constraints to the environment. *)
 let check_class_type_parameters_add_constraints env c =
-  let env = check_class_where_require_class_constraints env c in
+  let env = check_class_require_non_strict_constraints env c in
   Typing_variance.class_def env c;
   env
 

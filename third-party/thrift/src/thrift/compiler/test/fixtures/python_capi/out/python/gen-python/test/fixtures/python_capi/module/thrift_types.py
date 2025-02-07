@@ -137,6 +137,10 @@ class MyStruct(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/MyStruct"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_MyStruct()
@@ -192,6 +196,10 @@ class MyDataItem(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/MyDataItem"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_MyDataItem()
@@ -235,6 +243,10 @@ class TransitiveDoubler(metaclass=_fbthrift_python_types.StructMeta):
     @staticmethod
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/TransitiveDoubler"
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -302,6 +314,10 @@ class DoubledPair(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/DoubledPair"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_DoubledPair()
@@ -368,6 +384,10 @@ class StringPair(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/StringPair"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_StringPair()
@@ -411,6 +431,10 @@ class EmptyStruct(metaclass=_fbthrift_python_types.StructMeta):
     @staticmethod
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/EmptyStruct"
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -632,6 +656,10 @@ class PrimitiveStruct(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/PrimitiveStruct"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_PrimitiveStruct()
@@ -719,6 +747,10 @@ class AdaptedFields(metaclass=_fbthrift_python_types.StructMeta):
     @staticmethod
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/AdaptedFields"
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -863,6 +895,10 @@ class ListStruct(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/ListStruct"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_ListStruct()
@@ -983,6 +1019,10 @@ class SetStruct(metaclass=_fbthrift_python_types.StructMeta):
     @staticmethod
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/SetStruct"
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
 
     @staticmethod
     def __get_metadata__():
@@ -1138,6 +1178,10 @@ class MapStruct(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/MapStruct"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_MapStruct()
@@ -1292,6 +1336,10 @@ class ComposeStruct(metaclass=_fbthrift_python_types.StructMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/ComposeStruct"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_ComposeStruct()
@@ -1416,6 +1464,10 @@ class Onion(metaclass=_fbthrift_python_types.UnionMeta):
     def __get_thrift_uri__():
         return "test.dev/fixtures/python_capi/Onion"
 
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
     @staticmethod
     def __get_metadata__():
         return _fbthrift_metadata__struct_Onion()
@@ -1447,6 +1499,90 @@ class Onion(metaclass=_fbthrift_python_types.UnionMeta):
 
 _fbthrift_ABCMeta.register(_fbthrift_abstract_types.Onion, Onion)
 _fbthrift_Onion = Onion
+
+class SomeBinary(metaclass=_fbthrift_python_types.UnionMeta):
+    _fbthrift_SPEC = (
+        _fbthrift_python_types.FieldInfo(
+            1,  # id
+            _fbthrift_python_types.FieldQualifier.Unqualified, # qualifier
+            "iobuf",  # name
+            "iobuf",  # python name (from @python.Name annotation)
+            _fbthrift_python_types.typeinfo_iobuf,  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            True, # field type is primitive
+            9, # IDL type (see BaseTypeEnum)
+        ),
+        _fbthrift_python_types.FieldInfo(
+            2,  # id
+            _fbthrift_python_types.FieldQualifier.Unqualified, # qualifier
+            "iobuf_ptr",  # name
+            "iobuf_ptr",  # python name (from @python.Name annotation)
+            _fbthrift_python_types.typeinfo_iobuf,  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            True, # field type is primitive
+            9, # IDL type (see BaseTypeEnum)
+        ),
+        _fbthrift_python_types.FieldInfo(
+            3,  # id
+            _fbthrift_python_types.FieldQualifier.Unqualified, # qualifier
+            "iobufRef",  # name
+            "iobufRef",  # python name (from @python.Name annotation)
+            _fbthrift_python_types.typeinfo_iobuf,  # typeinfo
+            None,  # default value
+            None,  # adapter info
+            True, # field type is primitive
+            9, # IDL type (see BaseTypeEnum)
+        ),
+    )
+
+    _fbthrift_abstract_base_class = _fbthrift_abstract_types.SomeBinary
+
+
+    @staticmethod
+    def __get_thrift_name__() -> str:
+        return "module.SomeBinary"
+
+    @staticmethod
+    def __get_thrift_uri__():
+        return "test.dev/fixtures/python_capi/SomeBinary"
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
+    @staticmethod
+    def __get_metadata__():
+        return _fbthrift_metadata__struct_SomeBinary()
+
+    def _to_python(self):
+        return self
+
+    def _to_mutable_python(self):
+        import thrift.python.mutable_converter
+        import importlib
+        mutable_types = importlib.import_module("test.fixtures.python_capi.module.thrift_mutable_types")
+        return thrift.python.mutable_converter.to_mutable_python_struct_or_union(mutable_types.SomeBinary, self)
+
+    def _to_py3(self):
+        import importlib
+        py3_types = importlib.import_module("test.fixtures.python_capi.module.types")
+        import thrift.py3.converter
+        return thrift.py3.converter.to_py3_struct(py3_types.SomeBinary, self)
+
+    def _to_py_deprecated(self):
+        import importlib
+        import thrift.util.converter
+        try:
+            py_deprecated_types = importlib.import_module("module.ttypes")
+            return thrift.util.converter.to_py_struct(py_deprecated_types.SomeBinary, self)
+        except ModuleNotFoundError:
+            py_asyncio_types = importlib.import_module("module.ttypes")
+            return thrift.util.converter.to_py_struct(py_asyncio_types.SomeBinary, self)
+
+_fbthrift_ABCMeta.register(_fbthrift_abstract_types.SomeBinary, SomeBinary)
+_fbthrift_SomeBinary = SomeBinary
 
 # This unfortunately has to be down here to prevent circular imports
 import test.fixtures.python_capi.module.thrift_metadata
@@ -1509,6 +1645,10 @@ def _fbthrift_metadata__struct_Onion():
     return test.fixtures.python_capi.module.thrift_metadata.gen_metadata_struct_Onion()
 
 
+def _fbthrift_metadata__struct_SomeBinary():
+    return test.fixtures.python_capi.module.thrift_metadata.gen_metadata_struct_SomeBinary()
+
+
 _fbthrift_all_structs = [
     MyStruct,
     MyDataItem,
@@ -1523,6 +1663,7 @@ _fbthrift_all_structs = [
     MapStruct,
     ComposeStruct,
     Onion,
+    SomeBinary,
 ]
 _fbthrift_python_types.fill_specs(*_fbthrift_all_structs)
 

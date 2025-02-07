@@ -48,23 +48,23 @@ type mode =
       depth: int;
       full_hierarchy: bool;
     }
-  | Identify_symbol of int * int
+  | Identify_symbol of File_content.Position.t
   | Ide_code_actions of {
       title_prefix: string;
       use_snippet_edits: bool;
     }
   | Ide_diagnostics
-  | Find_local of int * int
+  | Find_local of File_content.Position.t
   | Get_member of string
   | Outline
   | Dump_nast
   | Dump_stripped_tast
   | Dump_tast
-  | Find_refs of int * int
-  | Highlight_refs of int * int
+  | Find_refs of File_content.Position.t
+  | Highlight_refs of File_content.Position.t
   | Shallow_class_diff
-  | Go_to_impl of int * int
-  | Hover of (int * int) option
+  | Go_to_impl of File_content.Position.t
+  | Hover of File_content.Position.t option
   | Apply_quickfixes
   | Refactor_sound_dynamic of string * string * string
   | RemoveDeadUnsafeCasts
@@ -310,6 +310,8 @@ let parse_options () =
   let loop_iteration_upper_bound = ref None in
   let get_some_file_deps_full_hierarchy = ref false in
   let enable_class_pointer_hint = ref true in
+  let disallow_non_annotated_memoize = ref false in
+  let treat_non_annotated_memoize_as_kbic = ref false in
   let options =
     [
       ( "--config",
@@ -443,7 +445,11 @@ let parse_options () =
            [
              Arg.Int (( := ) line);
              Arg.Int
-               (fun column -> set_mode (Identify_symbol (!line, column)) ());
+               (fun column ->
+                 set_mode
+                   (Identify_symbol
+                      (File_content.Position.from_one_based !line column))
+                   ());
            ]),
         "<pos> Show info about symbol at given line and column" );
       ( "--find-local",
@@ -451,7 +457,12 @@ let parse_options () =
          Arg.Tuple
            [
              Arg.Int (( := ) line);
-             Arg.Int (fun column -> set_mode (Find_local (!line, column)) ());
+             Arg.Int
+               (fun column ->
+                 set_mode
+                   (Find_local
+                      (File_content.Position.from_one_based !line column))
+                   ());
            ]),
         "<pos> Find all usages of local at given line and column" );
       ( "--max-errors",
@@ -469,7 +480,12 @@ let parse_options () =
          Arg.Tuple
            [
              Arg.Int (( := ) line);
-             Arg.Int (fun column -> set_mode (Find_refs (!line, column)) ());
+             Arg.Int
+               (fun column ->
+                 set_mode
+                   (Find_refs
+                      (File_content.Position.from_one_based !line column))
+                   ());
            ]),
         "<pos> Find all usages of a symbol at given line and column" );
       ( "--go-to-impl",
@@ -477,7 +493,12 @@ let parse_options () =
           (let line = ref 0 in
            [
              Arg.Int (( := ) line);
-             Arg.Int (fun column -> set_mode (Go_to_impl (!line, column)) ());
+             Arg.Int
+               (fun column ->
+                 set_mode
+                   (Go_to_impl
+                      (File_content.Position.from_one_based !line column))
+                   ());
            ]),
         "<pos> Find all implementations of a symbol at given line and column" );
       ( "--highlight-refs",
@@ -486,7 +507,11 @@ let parse_options () =
            [
              Arg.Int (( := ) line);
              Arg.Int
-               (fun column -> set_mode (Highlight_refs (!line, column)) ());
+               (fun column ->
+                 set_mode
+                   (Highlight_refs
+                      (File_content.Position.from_one_based !line column))
+                   ());
            ]),
         "<pos> Highlight all usages of a symbol at given line and column" );
       ( "--shallow-class-diff",
@@ -667,7 +692,12 @@ let parse_options () =
          Arg.Tuple
            [
              Arg.Int (fun x -> line := x);
-             Arg.Int (fun column -> set_mode (Hover (Some (!line, column))) ());
+             Arg.Int
+               (fun column ->
+                 set_mode
+                   (Hover
+                      (Some (File_content.Position.from_one_based !line column)))
+                   ());
            ]),
         "<pos> Display hover tooltip" );
       ( "--hover-at-caret",
@@ -889,6 +919,9 @@ let parse_options () =
         package_v2_support_multifile_tests =
           default.package_v2_support_multifile_tests;
         enable_class_pointer_hint = !enable_class_pointer_hint;
+        disallow_non_annotated_memoize = !disallow_non_annotated_memoize;
+        treat_non_annotated_memoize_as_kbic =
+          !treat_non_annotated_memoize_as_kbic;
       }
   in
 
@@ -918,7 +951,6 @@ let parse_options () =
         !disallow_discarded_nullable_awaitables
       ~glean_reponame:!glean_reponame
       ~tco_higher_kinded_types:!enable_higher_kinded_types
-      ~tco_report_pos_from_reason:!report_pos_from_reason
       ~tco_enable_sound_dynamic:true
       ~tco_skip_check_under_dynamic:!skip_check_under_dynamic
       ~tco_global_access_check_enabled:!enable_global_access_check
@@ -947,8 +979,6 @@ let parse_options () =
 
   Errors.allowed_fixme_codes_strict :=
     GlobalOptions.allowed_fixme_codes_strict tcopt;
-  Errors.report_pos_from_reason :=
-    TypecheckerOptions.report_pos_from_reason tcopt;
 
   let tco_experimental_features =
     tcopt.GlobalOptions.tco_experimental_features
@@ -1157,7 +1187,7 @@ let get_shallow_decls ctx filename file_contents :
     Shallow_decl_defs.shallow_class SMap.t =
   let popt = Provider_context.get_popt ctx in
   let opts = DeclParserOptions.from_parser_options popt in
-  (Direct_decl_parser.parse_decls opts filename file_contents)
+  (Direct_decl_parser.parse_decls_obr opts filename file_contents)
     .Direct_decl_parser.pf_decls
   |> List.fold ~init:SMap.empty ~f:(fun acc (name, decl) ->
          match decl with
@@ -1246,7 +1276,7 @@ let compute_tasts_by_name ?(drop_fixmed = true) ctx files_info interesting_files
   ( List.fold (nast_errors :: tast_errors) ~init:Errors.empty ~f:Errors.merge,
     tasts )
 
-let caret_pos (src : string) (marker : string) : (int * int) option =
+let caret_pos (src : string) (marker : string) : _ option =
   String.split_lines src
   |> List.findi ~f:(fun _ line -> String.is_substring line ~substring:marker)
   |> Option.map ~f:(fun (line_num, line_src) ->
@@ -1256,11 +1286,13 @@ let caret_pos (src : string) (marker : string) : (int * int) option =
                | '^' -> true
                | _ -> false)
          in
-         (line_num, Option.value_exn col_num + 1))
+         File_content.Position.from_one_based
+           line_num
+           (Option.value_exn col_num + 1))
 
 (* Given source code containing a caret marker (e.g. "^ hover-at-caret"), return
    the line and column of the position indicated. *)
-let caret_pos_exn (src : string) (marker : string) : int * int =
+let caret_pos_exn (src : string) (marker : string) =
   caret_pos src marker
   |> Option.value_exn
        ~message:
@@ -1282,20 +1314,19 @@ let find_ide_range_exn src : Ide_api_types.range =
           String.is_substring line ~substring:marker)
     in
     let find_marker marker after_or_before =
-      let+ (line_zero_indexed, start_line_src) = find_line marker in
-      let line = line_zero_indexed + 1 in
+      let+ (line, start_line_src) = find_line marker in
       let column =
         let marker_start =
           Str.search_forward (Str.regexp_string marker) start_line_src 0
         in
         let column_adjustment =
           match after_or_before with
-          | `After -> String.length marker + 1
-          | `Before -> 1
+          | `After -> String.length marker
+          | `Before -> 0
         in
         marker_start + column_adjustment
       in
-      Ide_api_types.{ line; column }
+      File_content.Position.from_zero_based line column
     in
     let* st = find_marker start_marker `After in
     let+ ed = find_marker end_marker `Before in
@@ -1303,10 +1334,7 @@ let find_ide_range_exn src : Ide_api_types.range =
   in
 
   let find_ide_range_from_caret_comment src : Ide_api_types.range option =
-    let find_ide_pos marker =
-      let+ (line, column) = caret_pos src marker in
-      Ide_api_types.{ line; column }
-    in
+    let find_ide_pos marker = caret_pos src marker in
     let+ st = find_ide_pos hover_at_caret_marker in
     Ide_api_types.{ st; ed = st }
   in
@@ -1744,18 +1772,18 @@ end = struct
       ~f:apply_quickfix
 end
 
-let do_hover ~ctx ~filename oc pos_given =
+let do_hover ~ctx ~filename oc (pos_given : File_content.Position.t option) =
   let (ctx, entry) =
     Provider_context.add_entry_if_missing ~ctx ~path:filename
   in
-  let (line, column) =
+  let pos =
     match pos_given with
-    | Some (line, column) -> (line, column)
+    | Some pos -> pos
     | None ->
       let src = Provider_context.read_file_contents_exn entry in
       caret_pos_exn src "^ hover-at-caret"
   in
-  let results = Ide_hover.go_quarantined ~ctx ~entry ~line ~column in
+  let results = Ide_hover.go_quarantined ~ctx ~entry pos in
   let formatted_results =
     List.map
       ~f:(fun r ->
@@ -1961,17 +1989,13 @@ let handle_mode
                 ~find_children:true;
               Printf.printf "\n")
         ))
-  | Identify_symbol (line, column) ->
+  | Identify_symbol pos ->
     let path = expect_single_file () in
     let (ctx, entry) = Provider_context.add_entry_if_missing ~ctx ~path in
     (* TODO(ljw): surely this doesn't need quarantine? *)
     let result =
       Provider_utils.respect_but_quarantine_unsaved_changes ~ctx ~f:(fun () ->
-          ServerIdentifyFunction.go_quarantined_absolute
-            ~ctx
-            ~entry
-            ~line
-            ~column)
+          ServerIdentifyFunction.go_quarantined_absolute ~ctx ~entry pos)
     in
     begin
       match result with
@@ -2001,12 +2025,12 @@ let handle_mode
     let path = expect_single_file () in
     let (ctx, entry) = Provider_context.add_entry_if_missing ~ctx ~path in
     Classish_positions_cli_lib.dump ctx entry path
-  | Find_local (line, char) ->
+  | Find_local pos ->
     let filename = expect_single_file () in
     let (ctx, entry) =
       Provider_context.add_entry_if_missing ~ctx ~path:filename
     in
-    let result = ServerFindLocals.go ~ctx ~entry ~line ~char in
+    let result = ServerFindLocals.go ~ctx ~entry pos in
     let print pos = Printf.printf "%s\n" (Pos.string_no_file pos) in
     List.iter result ~f:print
   | Outline ->
@@ -2052,7 +2076,7 @@ let handle_mode
         ~fold:Relative_path.Map.fold
     in
     codemod ~files_info ~files_contents ctx get_patches
-  | Find_refs (line, column) ->
+  | Find_refs pos ->
     let path = expect_single_file () in
     let naming_table = Naming_table.create files_info in
     let genv = ServerEnvBuild.default_genv in
@@ -2076,7 +2100,7 @@ let handle_mode
     in
     let open ServerCommandTypes.Done_or_retry in
     Provider_utils.respect_but_quarantine_unsaved_changes ~ctx ~f:(fun () ->
-        match ServerFindRefs.go_from_file_ctx ~ctx ~entry ~line ~column with
+        match ServerFindRefs.go_from_file_ctx ~ctx ~entry pos with
         | None -> ()
         | Some (name, action) ->
           let results =
@@ -2095,7 +2119,7 @@ let handle_mode
           in
           Printf.printf "%s\n" name;
           FindRefsWireFormat.CliHumanReadable.print_results (List.rev results))
-  | Go_to_impl (line, column) ->
+  | Go_to_impl pos ->
     let filename = expect_single_file () in
     let naming_table = Naming_table.create files_info in
     let genv = ServerEnvBuild.default_genv in
@@ -2121,7 +2145,7 @@ let handle_mode
     in
     let open ServerCommandTypes.Done_or_retry in
     begin
-      match ServerFindRefs.go_from_file_ctx ~ctx ~entry ~line ~column with
+      match ServerFindRefs.go_from_file_ctx ~ctx ~entry pos with
       | None -> ()
       | Some (name, action) ->
         let results =
@@ -2132,10 +2156,10 @@ let handle_mode
         Printf.printf "%s\n" name;
         FindRefsWireFormat.CliHumanReadable.print_results (List.rev results)
     end
-  | Highlight_refs (line, column) ->
+  | Highlight_refs pos ->
     let path = expect_single_file () in
     let (ctx, entry) = Provider_context.add_entry_if_missing ~ctx ~path in
-    let results = Ide_highlight_refs.go_quarantined ~ctx ~entry ~line ~column in
+    let results = Ide_highlight_refs.go_quarantined ~ctx ~entry pos in
     ClientHighlightRefs.go results ~output_json:false
   | Errors when batch_mode ->
     (* For each file in our batch, run typechecking serially.

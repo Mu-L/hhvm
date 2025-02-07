@@ -21,6 +21,7 @@ use pos::NPos;
 use pos::Pos;
 use pos::Symbol;
 use pos::ToOxidized;
+use pos::ToOxidizedByRef;
 use pos::TypeName;
 use serde::de::DeserializeOwned;
 use serde::Deserialize;
@@ -43,8 +44,10 @@ pub trait Reason:
     + Sync
     + Serialize
     + DeserializeOwned
+    + for<'a> From<oxidized::typing_reason::T_>
     + for<'a> From<oxidized_by_ref::typing_reason::T_<'a>>
-    + for<'a> ToOxidized<'a, Output = oxidized_by_ref::typing_reason::T_<'a>>
+    + for<'a> ToOxidizedByRef<'a, Output = oxidized_by_ref::typing_reason::T_<'a>>
+    + ToOxidized<Output = oxidized::typing_reason::T_>
     + ToOcamlRep
     + FromOcamlRep
     + 'static
@@ -80,7 +83,53 @@ pub trait Reason:
     fn local_ty_conser() -> &'static Conser<local::Ty_<Self, local::Ty<Self>>>;
     fn prop_conser() -> &'static Conser<PropF<Self, Prop<Self>>>;
 
-    fn from_oxidized(reason: oxidized_by_ref::typing_reason::T_<'_>) -> Self {
+    fn from_oxidized(reason: oxidized::typing_reason::T_) -> Self {
+        Self::mk(|| {
+            use oxidized::typing_reason::WitnessDecl as WD;
+            use oxidized::typing_reason::T_ as OR;
+            use ReasonImpl as RI;
+
+            match reason {
+                OR::NoReason => RI::NoReason,
+                OR::FromWitnessDecl(WD::WitnessFromDecl(pos)) => {
+                    RI::FromWitnessDecl(WitnessDecl::WitnessFromDecl(pos.into()))
+                }
+
+                OR::FromWitnessDecl(WD::Hint(pos)) => {
+                    RI::FromWitnessDecl(WitnessDecl::Hint(pos.into()))
+                }
+
+                OR::FromWitnessDecl(WD::ClassClass(pos, s)) => RI::FromWitnessDecl(
+                    WitnessDecl::ClassClass(pos.into(), TypeName(Symbol::new(s))),
+                ),
+
+                OR::FromWitnessDecl(WD::VarParamFromDecl(pos)) => {
+                    RI::FromWitnessDecl(WitnessDecl::VarParamFromDecl(pos.into()))
+                }
+
+                OR::FromWitnessDecl(WD::TupleFromSplat(pos)) => {
+                    RI::FromWitnessDecl(WitnessDecl::TupleFromSplat(pos.into()))
+                }
+
+                OR::FromWitnessDecl(WD::VecOrDictKey(pos)) => {
+                    RI::FromWitnessDecl(WitnessDecl::VecOrDictKey(pos.into()))
+                }
+
+                OR::FromWitnessDecl(WD::RetFunKindFromDecl(pos, fun_kind)) => {
+                    RI::FromWitnessDecl(WitnessDecl::RetFunKindFromDecl(pos.into(), fun_kind))
+                }
+
+                OR::Instantiate(r1, sym, r2) => {
+                    RI::Instantiate((*r1).into(), TypeName(Symbol::new(sym)), (*r2).into())
+                }
+                _ => {
+                    panic!("Error occurred: {:#?}", reason)
+                }
+            }
+        })
+    }
+
+    fn from_oxidized_by_ref(reason: oxidized_by_ref::typing_reason::T_<'_>) -> Self {
         Self::mk(|| {
             use oxidized_by_ref::typing_reason::WitnessDecl as WD;
             use oxidized_by_ref::typing_reason::T_ as OR;
@@ -156,18 +205,18 @@ impl<'a> From<oxidized_by_ref::typing_reason::ExprDepTypeReason<'a>> for ExprDep
     }
 }
 
-impl<'a> ToOxidized<'a> for ExprDepTypeReason {
+impl<'a> ToOxidizedByRef<'a> for ExprDepTypeReason {
     type Output = oxidized_by_ref::typing_reason::ExprDepTypeReason<'a>;
 
-    fn to_oxidized(&self, arena: &'a bumpalo::Bump) -> Self::Output {
+    fn to_oxidized_by_ref(&self, arena: &'a bumpalo::Bump) -> Self::Output {
         use oxidized_by_ref::typing_reason::ExprDepTypeReason as Obr;
         match self {
             ExprDepTypeReason::ERexpr(i) => Obr::ERexpr(*i),
             ExprDepTypeReason::ERstatic => Obr::ERstatic,
-            ExprDepTypeReason::ERclass(s) => Obr::ERclass(s.to_oxidized(arena)),
-            ExprDepTypeReason::ERparent(s) => Obr::ERparent(s.to_oxidized(arena)),
-            ExprDepTypeReason::ERself(s) => Obr::ERself(s.to_oxidized(arena)),
-            ExprDepTypeReason::ERpu(s) => Obr::ERpu(s.to_oxidized(arena)),
+            ExprDepTypeReason::ERclass(s) => Obr::ERclass(s.to_oxidized_by_ref(arena)),
+            ExprDepTypeReason::ERparent(s) => Obr::ERparent(s.to_oxidized_by_ref(arena)),
+            ExprDepTypeReason::ERself(s) => Obr::ERself(s.to_oxidized_by_ref(arena)),
+            ExprDepTypeReason::ERpu(s) => Obr::ERpu(s.to_oxidized_by_ref(arena)),
         }
     }
 }
@@ -241,17 +290,31 @@ impl Reason for BReason {
 
 impl Walkable<BReason> for BReason {}
 
-impl<'a> From<oxidized_by_ref::typing_reason::Reason<'a>> for BReason {
-    fn from(reason: oxidized_by_ref::typing_reason::Reason<'a>) -> Self {
+impl From<oxidized::typing_reason::T_> for BReason {
+    fn from(reason: oxidized::typing_reason::T_) -> Self {
         Self::from_oxidized(reason)
     }
 }
 
-impl<'a> ToOxidized<'a> for BReason {
+impl<'a> From<oxidized_by_ref::typing_reason::Reason<'a>> for BReason {
+    fn from(reason: oxidized_by_ref::typing_reason::Reason<'a>) -> Self {
+        Self::from_oxidized_by_ref(reason)
+    }
+}
+
+impl<'a> ToOxidizedByRef<'a> for BReason {
     type Output = oxidized_by_ref::typing_reason::Reason<'a>;
     // Unused
-    fn to_oxidized(&self, _arena: &'a bumpalo::Bump) -> Self::Output {
+    fn to_oxidized_by_ref(&self, _arena: &'a bumpalo::Bump) -> Self::Output {
         oxidized_by_ref::typing_reason::Reason::NoReason
+    }
+}
+
+impl ToOxidized for BReason {
+    type Output = oxidized::typing_reason::Reason;
+    // Unused
+    fn to_oxidized(self) -> Self::Output {
+        oxidized::typing_reason::Reason::NoReason
     }
 }
 
@@ -305,17 +368,30 @@ impl Reason for NReason {
 
 impl Walkable<NReason> for NReason {}
 
-impl<'a> From<oxidized_by_ref::typing_reason::T_<'a>> for NReason {
-    fn from(reason: oxidized_by_ref::typing_reason::T_<'a>) -> Self {
+impl From<oxidized::typing_reason::T_> for NReason {
+    fn from(reason: oxidized::typing_reason::T_) -> Self {
         Self::from_oxidized(reason)
     }
 }
+impl<'a> From<oxidized_by_ref::typing_reason::T_<'a>> for NReason {
+    fn from(reason: oxidized_by_ref::typing_reason::T_<'a>) -> Self {
+        Self::from_oxidized_by_ref(reason)
+    }
+}
 
-impl<'a> ToOxidized<'a> for NReason {
+impl<'a> ToOxidizedByRef<'a> for NReason {
     type Output = oxidized_by_ref::typing_reason::Reason<'a>;
 
-    fn to_oxidized(&self, _arena: &'a bumpalo::Bump) -> Self::Output {
+    fn to_oxidized_by_ref(&self, _arena: &'a bumpalo::Bump) -> Self::Output {
         oxidized_by_ref::typing_reason::Reason::NoReason
+    }
+}
+
+impl ToOxidized for NReason {
+    type Output = oxidized::typing_reason::Reason;
+
+    fn to_oxidized(self) -> Self::Output {
+        oxidized::typing_reason::Reason::NoReason
     }
 }
 

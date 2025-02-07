@@ -8,7 +8,6 @@
  *)
 
 open Hh_prelude
-open IdentifySymbolService
 open Option.Monad_infix
 open Typing_defs
 module SourceText = Full_fidelity_source_text
@@ -94,7 +93,8 @@ let get_member_def (ctx : Provider_context.t) (x : class_element) =
 
 let get_local_var_def ast name p =
   let (line, char, _) = Pos.info_pos p in
-  let def = List.hd (ServerFindLocals.go_from_ast ~ast ~line ~char) in
+  let pos = File_content.Position.from_one_based line char in
+  let def = List.hd (ServerFindLocals.go_from_ast ~ast pos) in
   Option.map def ~f:(FileOutline.summarize_local name)
 
 (* summarize a class, typedef or record *)
@@ -152,7 +152,7 @@ let go ctx ast result =
   | SO.Property (SO.ClassName c_name, property_name)
   | SO.XhpLiteralAttr (c_name, property_name) ->
     Decl_provider.get_class ctx c_name |> Decl_entry.to_option >>= fun class_ ->
-    let property_name = clean_member_name property_name in
+    let property_name = IdentifySymbolService.clean_member_name property_name in
     begin
       match Cls.get_prop class_ property_name with
       | Some m -> get_member_def ctx (Property, m.ce_origin, property_name)

@@ -8,7 +8,6 @@
  */
 
 /** Module consisting of the special names known to the typechecker */
-
 pub mod classes {
     pub const PARENT: &str = "parent";
 
@@ -387,7 +386,13 @@ pub mod memoize_option {
 
     pub const MAKE_IC_INACCESSSIBLE: &str = "MakeICInaccessible";
 
-    pub static _ALL: &[&str] = &[KEYED_BY_IC, MAKE_IC_INACCESSSIBLE];
+    pub const IC_INACCESSSIBLE_SPECIAL_CASE: &str = "NotKeyedByICAndLeakIC__DO_NOT_USE";
+
+    pub static _ALL: &[&str] = &[
+        KEYED_BY_IC,
+        MAKE_IC_INACCESSSIBLE,
+        IC_INACCESSSIBLE_SPECIAL_CASE,
+    ];
 
     lazy_static! {
         static ref VALID_SET: HashSet<&'static str> = _ALL.iter().copied().collect();
@@ -1172,6 +1177,7 @@ pub mod expression_trees {
     pub const VISIT_PROPERTY_ACCESS: &str = "visitPropertyAccess";
     pub const VISIT_INSTANCE_METHOD: &str = "visitInstanceMethod";
     pub const VISIT_XHP: &str = "visitXhp";
+    pub const VISIT_SHAPE: &str = "visitShape";
     pub const VISIT_KEYED_COLLECTION: &str = "visitKeyedCollection";
     pub const VISIT_OPTIONAL_PARAMETER: &str = "visitOptionalParameter";
     pub const MAKE_KEYED_COLLECTION_TYPE: &str = "__makeType";

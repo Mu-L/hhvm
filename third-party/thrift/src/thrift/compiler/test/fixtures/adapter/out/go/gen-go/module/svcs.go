@@ -26,57 +26,32 @@ type Service interface {
     Func(ctx context.Context, arg1 StringWithAdapter_7208, arg2 string, arg3 *Foo) (MyI32_4873, error)
 }
 
-type ServiceChannelClientInterface interface {
+type ServiceClientInterface interface {
     thrift.ClientInterface
     Service
 }
 
-type ServiceClientInterface interface {
-    thrift.ClientInterface
-    Func(arg1 StringWithAdapter_7208, arg2 string, arg3 *Foo) (MyI32_4873, error)
-}
-
-type ServiceContextClientInterface interface {
-    ServiceClientInterface
-    FuncContext(ctx context.Context, arg1 StringWithAdapter_7208, arg2 string, arg3 *Foo) (MyI32_4873, error)
-}
-
-type ServiceChannelClient struct {
+type ServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ ServiceChannelClientInterface = (*ServiceChannelClient)(nil)
+var _ ServiceClientInterface = (*ServiceClient)(nil)
 
-func NewServiceChannelClient(channel thrift.RequestChannel) *ServiceChannelClient {
-    return &ServiceChannelClient{
+func NewServiceChannelClient(channel thrift.RequestChannel) *ServiceClient {
+    return &ServiceClient{
         ch: channel,
     }
 }
 
-func (c *ServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type ServiceClient struct {
-    chClient *ServiceChannelClient
-}
-// Compile time interface enforcer
-var _ ServiceClientInterface = (*ServiceClient)(nil)
-var _ ServiceContextClientInterface = (*ServiceClient)(nil)
-
 func NewServiceClient(prot thrift.Protocol) *ServiceClient {
-    return &ServiceClient{
-        chClient: NewServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *ServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *ServiceChannelClient) Func(ctx context.Context, arg1 StringWithAdapter_7208, arg2 string, arg3 *Foo) (MyI32_4873, error) {
+func (c *ServiceClient) Func(ctx context.Context, arg1 StringWithAdapter_7208, arg2 string, arg3 *Foo) (MyI32_4873, error) {
     in := &reqServiceFunc{
         Arg1: arg1,
         Arg2: arg2,
@@ -88,14 +63,6 @@ func (c *ServiceChannelClient) Func(ctx context.Context, arg1 StringWithAdapter_
         return 0, err
     }
     return out.GetSuccess(), nil
-}
-
-func (c *ServiceClient) Func(arg1 StringWithAdapter_7208, arg2 string, arg3 *Foo) (MyI32_4873, error) {
-    return c.chClient.Func(context.Background(), arg1, arg2, arg3)
-}
-
-func (c *ServiceClient) FuncContext(ctx context.Context, arg1 StringWithAdapter_7208, arg2 string, arg3 *Foo) (MyI32_4873, error) {
-    return c.chClient.Func(ctx, arg1, arg2, arg3)
 }
 
 
@@ -203,59 +170,32 @@ type AdapterService interface {
     AdaptedTypes(ctx context.Context, arg *HeapAllocated) (*HeapAllocated, error)
 }
 
-type AdapterServiceChannelClientInterface interface {
+type AdapterServiceClientInterface interface {
     thrift.ClientInterface
     AdapterService
 }
 
-type AdapterServiceClientInterface interface {
-    thrift.ClientInterface
-    Count() (*CountingStruct, error)
-    AdaptedTypes(arg *HeapAllocated) (*HeapAllocated, error)
-}
-
-type AdapterServiceContextClientInterface interface {
-    AdapterServiceClientInterface
-    CountContext(ctx context.Context) (*CountingStruct, error)
-    AdaptedTypesContext(ctx context.Context, arg *HeapAllocated) (*HeapAllocated, error)
-}
-
-type AdapterServiceChannelClient struct {
+type AdapterServiceClient struct {
     ch thrift.RequestChannel
 }
 // Compile time interface enforcer
-var _ AdapterServiceChannelClientInterface = (*AdapterServiceChannelClient)(nil)
+var _ AdapterServiceClientInterface = (*AdapterServiceClient)(nil)
 
-func NewAdapterServiceChannelClient(channel thrift.RequestChannel) *AdapterServiceChannelClient {
-    return &AdapterServiceChannelClient{
+func NewAdapterServiceChannelClient(channel thrift.RequestChannel) *AdapterServiceClient {
+    return &AdapterServiceClient{
         ch: channel,
     }
 }
 
-func (c *AdapterServiceChannelClient) Close() error {
-    return c.ch.Close()
-}
-
-type AdapterServiceClient struct {
-    chClient *AdapterServiceChannelClient
-}
-// Compile time interface enforcer
-var _ AdapterServiceClientInterface = (*AdapterServiceClient)(nil)
-var _ AdapterServiceContextClientInterface = (*AdapterServiceClient)(nil)
-
 func NewAdapterServiceClient(prot thrift.Protocol) *AdapterServiceClient {
-    return &AdapterServiceClient{
-        chClient: NewAdapterServiceChannelClient(
-            thrift.NewSerialChannel(prot),
-        ),
-    }
+    return NewAdapterServiceChannelClient(thrift.NewSerialChannel(prot))
 }
 
 func (c *AdapterServiceClient) Close() error {
-    return c.chClient.Close()
+    return c.ch.Close()
 }
 
-func (c *AdapterServiceChannelClient) Count(ctx context.Context) (*CountingStruct, error) {
+func (c *AdapterServiceClient) Count(ctx context.Context) (*CountingStruct, error) {
     in := &reqAdapterServiceCount{
     }
     out := newRespAdapterServiceCount()
@@ -266,15 +206,7 @@ func (c *AdapterServiceChannelClient) Count(ctx context.Context) (*CountingStruc
     return out.GetSuccess(), nil
 }
 
-func (c *AdapterServiceClient) Count() (*CountingStruct, error) {
-    return c.chClient.Count(context.Background())
-}
-
-func (c *AdapterServiceClient) CountContext(ctx context.Context) (*CountingStruct, error) {
-    return c.chClient.Count(ctx)
-}
-
-func (c *AdapterServiceChannelClient) AdaptedTypes(ctx context.Context, arg *HeapAllocated) (*HeapAllocated, error) {
+func (c *AdapterServiceClient) AdaptedTypes(ctx context.Context, arg *HeapAllocated) (*HeapAllocated, error) {
     in := &reqAdapterServiceAdaptedTypes{
         Arg: arg,
     }
@@ -284,14 +216,6 @@ func (c *AdapterServiceChannelClient) AdaptedTypes(ctx context.Context, arg *Hea
         return nil, err
     }
     return out.GetSuccess(), nil
-}
-
-func (c *AdapterServiceClient) AdaptedTypes(arg *HeapAllocated) (*HeapAllocated, error) {
-    return c.chClient.AdaptedTypes(context.Background(), arg)
-}
-
-func (c *AdapterServiceClient) AdaptedTypesContext(ctx context.Context, arg *HeapAllocated) (*HeapAllocated, error) {
-    return c.chClient.AdaptedTypes(ctx, arg)
 }
 
 

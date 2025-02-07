@@ -3,7 +3,7 @@
 // This source code is licensed under the MIT license found in the
 // LICENSE file in the "hack" directory of this source tree.
 //
-// @generated SignedSource<<ccf7bd079161a60edb3090f73504c667>>
+// @generated SignedSource<<d52ed81244e82b9f90919884ca268ddd>>
 //
 // To regenerate this file, run:
 //   hphp/hack/src/oxidized_regen.sh
@@ -315,7 +315,7 @@ pub struct UserAttribute {
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, show)")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, show, map)")]
 #[rust_to_ocaml(prefix = "tp_")]
 #[repr(C)]
 pub struct Tparam {
@@ -342,7 +342,7 @@ pub struct Tparam {
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, show)")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, show, map)")]
 #[repr(C)]
 pub struct WhereConstraint(pub Ty, pub ast_defs::ConstraintKind, pub Ty);
 
@@ -387,7 +387,7 @@ arena_deserializer::impl_deserialize_in_arena!(Enforcement);
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[repr(C, u8)]
 pub enum Capability {
     CapDefaults(pos_or_decl::PosOrDecl),
@@ -411,7 +411,7 @@ pub enum Capability {
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[repr(C)]
 pub struct FunImplicitParams {
     pub capability: Capability,
@@ -432,7 +432,7 @@ pub struct FunImplicitParams {
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[rust_to_ocaml(prefix = "fp_")]
 #[repr(C)]
 pub struct FunParam {
@@ -445,7 +445,7 @@ pub struct FunParam {
     pub def_value: Option<String>,
 }
 
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 pub type FunParams = Vec<FunParam>;
 
 /// The type of a function AND a method.
@@ -464,7 +464,7 @@ pub type FunParams = Vec<FunParam>;
     Serialize,
     ToOcamlRep
 )]
-#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }))")]
+#[rust_to_ocaml(attr = "deriving (eq, hash, (show { with_path = false }), map)")]
 #[rust_to_ocaml(prefix = "ft_")]
 #[repr(C)]
 pub struct FunType {
@@ -754,6 +754,7 @@ pub enum Ty_ {
     ///   Tunion []  is the "nothing" type, with no values
     ///   Tunion [int;float] is the same as num
     ///   Tunion [null;t] is the same as Toption t
+    #[rust_to_ocaml(attr = "transform.explicit")]
     Tunion(Vec<Ty>),
     Tintersection(Vec<Ty>),
     /// Tvec_or_dict (ty1, ty2) => "vec_or_dict<ty1, ty2>"
@@ -966,10 +967,10 @@ pub struct RefinedConstBounds {
     ToOcamlRep
 )]
 #[rust_to_ocaml(and)]
-#[rust_to_ocaml(attr = "deriving hash")]
 #[rust_to_ocaml(prefix = "s_")]
 #[repr(C)]
 pub struct ShapeType {
+    #[rust_to_ocaml(attr = "transform.opaque")]
     pub origin: TypeOrigin,
     pub unknown_value: Ty,
     pub fields: t_shape_map::TShapeMap<ShapeFieldType>,
@@ -1000,7 +1001,6 @@ pub struct ShapeType {
     ToOcamlRep
 )]
 #[rust_to_ocaml(and)]
-#[rust_to_ocaml(attr = "deriving hash")]
 #[rust_to_ocaml(prefix = "t_")]
 #[repr(C)]
 pub struct TupleType {
@@ -1024,7 +1024,7 @@ pub struct TupleType {
     ToOcamlRep
 )]
 #[rust_to_ocaml(and)]
-#[rust_to_ocaml(attr = "deriving hash")]
+#[rust_to_ocaml(attr = "deriving (hash, transform)")]
 #[repr(C, u8)]
 pub enum TupleExtra {
     #[rust_to_ocaml(prefix = "t_")]

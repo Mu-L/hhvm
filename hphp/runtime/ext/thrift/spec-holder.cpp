@@ -70,7 +70,7 @@ Array get_tspec(const Class* cls) {
 
 // Check if the field-spec implies that the field's type-constraint will
 // always be satisfied. We don't need to do type verification if so.
-bool typeSatisfiesConstraint(const TypeConstraint& tc,
+bool typeSatisfiesConstraint(const TypeIntersectionConstraint& tc,
                              TType type,
                              const Array& spec) {
   switch (type) {
@@ -198,7 +198,7 @@ StructSpec compileSpec(const Array& spec, const Class* cls) {
             if (cls->numDeclProperties() < spec.size()) return false;
             auto const& prop = cls->declProperties()[spec.size()];
             if (!s__type.equal(prop.name)) return false;
-            return prop.typeConstraints.main().alwaysPasses(KindOfInt64);
+            return prop.typeConstraints.alwaysPasses(KindOfInt64);
           }();
         }
         if (!*endPropOk) return false;

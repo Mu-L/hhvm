@@ -19,9 +19,11 @@
 #include <thrift/compiler/whisker/detail/overload.h>
 
 #include <cassert>
+#include <iterator>
 #include <ostream>
 #include <sstream>
 #include <type_traits>
+#include <unordered_set>
 
 #include <fmt/core.h>
 #include <fmt/ranges.h>
@@ -144,9 +146,114 @@ class to_string_visitor {
 
 } // namespace
 
+namespace detail {
+bool array_eq(const array& lhs, const array& rhs) {
+  return lhs == rhs;
+}
+bool array_eq(const array& lhs, const native_object::array_like::ptr& rhs) {
+  if (rhs == nullptr) {
+    return false;
+  }
+  std::size_t size = lhs.size();
+  if (size != rhs->size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < size; ++i) {
+    if (lhs[i] != *rhs->at(i)) {
+      return false;
+    }
+  }
+  return true;
+}
+bool array_eq(const native_object::array_like::ptr& lhs, const array& rhs) {
+  return array_eq(rhs, lhs);
+}
+bool array_eq(
+    const native_object::array_like::ptr& lhs,
+    const native_object::array_like::ptr& rhs) {
+  if (lhs == nullptr) {
+    return false;
+  }
+  if (rhs == nullptr) {
+    return false;
+  }
+  std::size_t size = lhs->size();
+  if (size != rhs->size()) {
+    return false;
+  }
+  for (std::size_t i = 0; i < size; ++i) {
+    object::ptr lhs_value = lhs->at(i);
+    object::ptr rhs_value = rhs->at(i);
+    // Within size so it must not be null.
+    assert(lhs_value != nullptr);
+    assert(rhs_value != nullptr);
+    if (*lhs_value != *rhs_value) {
+      return false;
+    }
+  }
+  return true;
+}
+
+bool map_eq(const map& lhs, const map& rhs) {
+  return lhs == rhs;
+}
+bool map_eq(const map& lhs, const native_object::map_like::ptr& rhs) {
+  if (rhs == nullptr) {
+    return false;
+  }
+  auto rhs_keys = rhs->keys();
+  if (!rhs_keys.has_value()) {
+    // Not enumerable
+    return false;
+  }
+  if (lhs.size() != rhs_keys->size()) {
+    return false;
+  }
+
+  for (const auto& [key, lhs_value] : lhs) {
+    if (rhs_keys->find(key) == rhs_keys->end()) {
+      return false;
+    }
+    auto rhs_value = rhs->lookup_property(key);
+    // Key was enumerated so it must not be null.
+    assert(rhs_value != nullptr);
+    if (lhs_value != *rhs_value) {
+      return false;
+    }
+  }
+  return true;
+}
+bool map_eq(const native_object::map_like::ptr& lhs, const map& rhs) {
+  return map_eq(rhs, lhs);
+}
+bool map_eq(
+    const native_object::map_like::ptr& lhs,
+    const native_object::map_like::ptr& rhs) {
+  if (lhs == nullptr || rhs == nullptr) {
+    return false;
+  }
+
+  auto lhs_keys = lhs->keys();
+  auto rhs_keys = rhs->keys();
+  const bool keys_equal =
+      lhs_keys.has_value() && rhs_keys.has_value() && *lhs_keys == *rhs_keys;
+  if (!keys_equal) {
+    return false;
+  }
+  for (const std::string& key : *lhs_keys) {
+    object::ptr lhs_value = lhs->lookup_property(key);
+    object::ptr rhs_value = rhs->lookup_property(key);
+    if (*lhs_value != *rhs_value) {
+      return false;
+    }
+  }
+  return true;
+}
+} // namespace detail
+
 void native_object::map_like::default_print_to(
     std::string_view name,
-    std::vector<std::string> property_names,
+    const std::set<std::string>& property_names,
     tree_printer::scope scope,
     const object_print_options& options) const {
   assert(scope.semantic_depth() <= options.max_depth);
@@ -187,7 +294,13 @@ std::string native_object::describe_type() const {
 }
 
 bool native_object::operator==(const native_object& other) const {
-  return &other == this;
+  if (&other == this) {
+    return true;
+  }
+  if (detail::array_eq(as_array_like(), other.as_array_like())) {
+    return true;
+  }
+  return detail::map_eq(as_map_like(), other.as_map_like());
 }
 
 void native_function::print_to(
@@ -246,6 +359,96 @@ void print_to(
 
 std::ostream& operator<<(std::ostream& out, const object& o) {
   return out << to_string(o);
+}
+
+object make::proxy(const object::ptr& source) {
+  namespace w = whisker::make;
+  return source->visit(
+      [](whisker::i64 value) -> object { return w::i64(value); },
+      [](whisker::f64 value) -> object { return w::f64(value); },
+      [](whisker::string value) -> object {
+        return w::string(std::move(value));
+      },
+      [](whisker::boolean value) -> object { return w::boolean(value); },
+      [](whisker::null) -> object { return w::null; },
+      [&](const whisker::array& value) -> object {
+        class proxy_array final
+            : public whisker::native_object,
+              public whisker::native_object::array_like,
+              public std::enable_shared_from_this<proxy_array> {
+         public:
+          explicit proxy_array(managed_ptr<whisker::array>&& arr)
+              : array_(std::move(arr)) {}
+
+          whisker::native_object::array_like::ptr as_array_like() const final {
+            return shared_from_this();
+          }
+          std::size_t size() const final { return array_->size(); }
+          object::ptr at(std::size_t index) const final {
+            return manage_derived_ref(array_, array_->at(index));
+          }
+
+          void print_to(
+              tree_printer::scope scope,
+              const object_print_options& options) const final {
+            // This matches the builtin behavior of whisker::array
+            default_print_to("array", std::move(scope), options);
+          }
+
+         private:
+          managed_ptr<whisker::array> array_;
+        };
+        return w::make_native_object<proxy_array>(
+            manage_derived_ref(source, value));
+      },
+      [&](const whisker::map& value) -> object {
+        class proxy_map final : public whisker::native_object,
+                                public whisker::native_object::map_like,
+                                public std::enable_shared_from_this<proxy_map> {
+         public:
+          explicit proxy_map(managed_ptr<whisker::map>&& m)
+              : map_(std::move(m)) {}
+
+          whisker::native_object::map_like::ptr as_map_like() const final {
+            return shared_from_this();
+          }
+          object::ptr lookup_property(std::string_view identifier) const final {
+            if (auto property = map_->find(identifier);
+                property != map_->end()) {
+              return manage_derived_ref(map_, property->second);
+            }
+            return nullptr;
+          }
+          std::optional<std::set<std::string>> keys() const final {
+            std::set<std::string> property_names;
+            for (const auto& [key, _] : *map_) {
+              property_names.insert(key);
+            }
+            return property_names;
+          }
+
+          void print_to(
+              tree_printer::scope scope,
+              const object_print_options& options) const final {
+            // This matches the builtin behavior of whisker::map
+            default_print_to("map", *keys(), std::move(scope), options);
+          }
+
+         private:
+          managed_ptr<whisker::map> map_;
+        };
+        return w::make_native_object<proxy_map>(
+            manage_derived_ref(source, value));
+      },
+      [](const whisker::native_object::ptr& value) -> object {
+        return w::native_object(value);
+      },
+      [](const whisker::native_function::ptr& value) -> object {
+        return w::native_function(value);
+      },
+      [](const whisker::native_handle<>& value) -> object {
+        return object(whisker::native_handle<>(value));
+      });
 }
 
 } // namespace whisker

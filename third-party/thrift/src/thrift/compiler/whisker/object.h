@@ -24,6 +24,7 @@
 #include <limits>
 #include <map>
 #include <memory>
+#include <set>
 #include <string>
 #include <string_view>
 #include <typeinfo>
@@ -162,16 +163,16 @@ class native_object {
         std::string_view identifier) const = 0;
 
     /**
-     * Returns an ordered list of finitely enumerable property names of this
+     * Returns an ordered set of finitely enumerable property names of this
      * map-like object.
      *
      * If property names are not enumerable (i.e. dynamically generated), then
      * this returns the empty optional.
      *
-     * For each name returned in this list, lookup_property must not return
+     * For each name returned in this set, lookup_property must not return
      * nullptr.
      */
-    virtual std::optional<std::vector<std::string>> keys() const {
+    virtual std::optional<std::set<std::string>> keys() const {
       return std::nullopt;
     }
 
@@ -187,7 +188,7 @@ class native_object {
      */
     void default_print_to(
         std::string_view name,
-        std::vector<std::string> property_names,
+        const std::set<std::string>& property_names,
         tree_printer::scope,
         const object_print_options&) const;
   };
@@ -290,13 +291,16 @@ class native_object {
   virtual std::string describe_type() const;
 
   /**
-   * Determines if this native_object compares equal to the other object. It is
-   * the implementers's responsibility to ensure that the other object also
-   * compares equal to this one and maintains the commutative property.
+   * Determines if this native_object compares equal to the other object.
    *
-   * The default implementation compares by object identity.
+   * This functions returns true iff:
+   *   - `*this` and `other` are the same object.
+   *   - both objects are native_object::array_like and their corresponding
+   *     elements are equal.
+   *   - both objects are native_object::map_like, they have enumerable keys,
+   *     and all key-value pairs are equal between them.
    */
-  virtual bool operator==(const native_object& other) const;
+  bool operator==(const native_object& other) const;
 };
 
 /**
@@ -463,17 +467,29 @@ class native_handle<void> final : private detail::native_handle_base<void> {
         type_(typeid(T)) {}
 
   using base::ptr;
+
+  /**
+   * Returns either:
+   *   - the exact type of the object pointed-to by this handle, or
+   *   - if the type is polymorphic, then maybe one of its base classes.
+   */
   const std::type_info& type() const noexcept { return type_; }
 
+  /**
+   * Tries to convert this handle to a handle of type T.
+   *
+   * This succeeds iff the contained type_info (as returned by type()) is
+   * exactly T. Notably, the conversion will not handle any kind of
+   * inheritance-based polymorphism.
+   *
+   * If the type does not match, returns std::nullopt.
+   */
   template <typename T>
-  bool is() const noexcept {
-    return type_.get() == typeid(T);
-  }
-
-  template <typename T>
-  native_handle<T> as() const {
-    assert(is<T>());
-    return native_handle<T>(std::static_pointer_cast<const T>(ptr()));
+  std::optional<native_handle<T>> try_as() const noexcept {
+    if (type() == typeid(T)) {
+      return native_handle<T>(std::static_pointer_cast<const T>(ptr()));
+    }
+    return std::nullopt;
   }
 
   /**
@@ -549,6 +565,23 @@ inline bool operator!=(
     const native_handle<T>& lhs, const native_handle<U>& rhs) noexcept {
   return !(lhs == rhs);
 }
+
+namespace detail {
+// Value equality between all arrays. array_like::ptr may be nullptr.
+bool array_eq(const array&, const array&);
+bool array_eq(const array&, const native_object::array_like::ptr&);
+bool array_eq(const native_object::array_like::ptr& lhs, const array&);
+bool array_eq(
+    const native_object::array_like::ptr&,
+    const native_object::array_like::ptr&);
+
+// Value equality between all maps. map_like::ptr may be nullptr.
+bool map_eq(const map&, const map&);
+bool map_eq(const map&, const native_object::map_like::ptr&);
+bool map_eq(const native_object::map_like::ptr& lhs, const map&);
+bool map_eq(
+    const native_object::map_like::ptr&, const native_object::map_like::ptr&);
+} // namespace detail
 
 namespace detail {
 // This only exists to form a kind-of recursive std::variant with the help of
@@ -756,8 +789,19 @@ class object final : private detail::object_base<object> {
 
   friend bool operator==(
       const object& lhs, const native_object::ptr& rhs) noexcept {
-    return lhs.is_native_object() && rhs != nullptr &&
-        *lhs.as_native_object() == *rhs;
+    if (rhs == nullptr) {
+      return false;
+    }
+    if (lhs.is_native_object()) {
+      return *lhs.as_native_object() == *rhs;
+    }
+    if (lhs.is_array()) {
+      return detail::array_eq(lhs.as_array(), rhs->as_array_like());
+    }
+    if (lhs.is_map()) {
+      return detail::map_eq(lhs.as_map(), rhs->as_map_like());
+    }
+    return false;
   }
   friend bool operator==(
       const native_object::ptr& lhs, const object& rhs) noexcept {
@@ -787,14 +831,26 @@ class object final : private detail::object_base<object> {
   }
 
   friend bool operator==(const object& lhs, const array& rhs) noexcept {
-    return lhs.is_array() && lhs.as_array() == rhs;
+    if (lhs.is_array()) {
+      return lhs.as_array() == rhs;
+    }
+    if (lhs.is_native_object()) {
+      return detail::array_eq(lhs.as_native_object()->as_array_like(), rhs);
+    }
+    return false;
   }
   friend bool operator==(const array& lhs, const object& rhs) noexcept {
     return rhs == lhs;
   }
 
   friend bool operator==(const object& lhs, const map& rhs) noexcept {
-    return lhs.is_map() && lhs.as_map() == rhs;
+    if (lhs.is_map()) {
+      return lhs.as_map() == rhs;
+    }
+    if (lhs.is_native_object()) {
+      return detail::map_eq(lhs.as_native_object()->as_map_like(), rhs);
+    }
+    return false;
   }
   friend bool operator==(const map& lhs, const object& rhs) noexcept {
     return rhs == lhs;
@@ -1126,6 +1182,29 @@ template <typename T>
 object native_handle(managed_ptr<T> value) {
   return object(whisker::native_handle<>(std::move(value)));
 }
+
+/**
+ * Creates a "proxy" object that behaves the same as the provided object. This
+ * function is useful, for example, for storing an owning reference to existing
+ * objects in an array or map without deep-copying.
+ *
+ * For primitive types (i64, f64, string, boolean, null), this returns a copy
+ * of the object, and so behaves like a value type.
+ *
+ * For arrays and maps, the returned object uses array_like and map_like
+ * respectively, and so behaves like a reference type.
+ *
+ * For native objects, native functions, and native handles, a copy of the
+ * underlying shared_ptr is stored, meaning that the underlying object is kept
+ * alive at least as long as the returned object.
+ *
+ * The returned object keeps the source object alive, as needed. For primitive
+ * types, ownership of the source is not necessary.
+ *
+ * Postconditions:
+ *   - proxy(object) == *object
+ */
+object proxy(const object::ptr& source);
 
 } // namespace make
 

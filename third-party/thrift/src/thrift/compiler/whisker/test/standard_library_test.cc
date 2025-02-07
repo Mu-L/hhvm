@@ -144,6 +144,100 @@ TEST_F(StandardLibraryTest, array_at) {
   }
 }
 
+TEST_F(StandardLibraryTest, map_items) {
+  {
+    auto result = render(
+        "{{#each (map.items this) as |entry|}}\n"
+        "{{entry.key}}: {{entry.value}}\n"
+        "{{/each}}\n",
+        w::map(
+            {{"foo", w::i64(3)},
+             {"bar", w::i64(4)},
+             {"baz", w::string("qux")}}));
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "bar: 4\n"
+        "baz: qux\n"
+        "foo: 3\n");
+  }
+
+  {
+    auto result = render(
+        "{{#each (map.items this) as |entry|}}\n"
+        "{{entry.key}}: {{entry.value}}\n"
+        "{{#else}}"
+        "No items!\n"
+        "{{/each}}\n",
+        w::map({}));
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(*result, "No items!\n");
+  }
+
+  {
+    auto result = render(
+        "{{#each (map.items this) as |entry|}}\n"
+        "{{entry.key}}:\n"
+        "{{#each (map.items entry.value) as |entry|}}\n"
+        "  {{entry.key}}: {{entry.value}}\n"
+        "{{/each}}\n"
+        "{{/each}}\n",
+        w::map(
+            {{"nested",
+              w::map(
+                  {{"foo", w::i64(3)},
+                   {"bar", w::i64(4)},
+                   {"baz", w::string("qux")}})},
+             {"nested-2",
+              w::map(
+                  {{"a", w::string("a")},
+                   {"b", w::i64(0)},
+                   {"c", w::string("c")}})}}));
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "nested:\n"
+        "  bar: 4\n"
+        "  baz: qux\n"
+        "  foo: 3\n"
+        "nested-2:\n"
+        "  a: a\n"
+        "  b: 0\n"
+        "  c: c\n");
+  }
+
+  {
+    class map_not_enumerable
+        : public native_object,
+          public native_object::map_like,
+          public std::enable_shared_from_this<map_not_enumerable> {
+     public:
+      native_object::map_like::ptr as_map_like() const override {
+        return shared_from_this();
+      }
+
+      object::ptr lookup_property(std::string_view) const override {
+        return nullptr;
+      }
+    };
+
+    auto result = render(
+        "{{#each (map.items this) as |entry|}}\n"
+        "{{entry.key}}: {{entry.value}}\n"
+        "{{/each}}\n",
+        w::make_native_object<map_not_enumerable>());
+    EXPECT_FALSE(result.has_value());
+    EXPECT_THAT(
+        diagnostics(),
+        testing::ElementsAre(diagnostic(
+            diagnostic_level::error,
+            "Function 'map.items' threw an error:\n"
+            "map-like object does not have enumerable properties.",
+            path_to_file,
+            1)));
+  }
+}
+
 TEST_F(StandardLibraryTest, string_len) {
   {
     auto result = render(
@@ -361,6 +455,119 @@ TEST_F(StandardLibraryTest, i64_math) {
         "-10\n"
         "10\n"
         "0\n");
+  }
+}
+
+TEST_F(StandardLibraryTest, object_eq) {
+  strict_printable_types(diagnostic_level::info);
+
+  {
+    auto result = render(
+        "{{ (object.eq? 0 1) }}\n"
+        "{{ (object.eq? 1 1) }}\n"
+        "{{ (object.eq? \"foo\" 1) }}\n"
+        "{{ (object.eq? 1 null) }}\n"
+        "{{ (object.eq? false null) }}\n"
+        "{{ (object.eq? null null) }}\n",
+        w::null);
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "false\n"
+        "true\n"
+        "false\n"
+        "false\n"
+        "false\n"
+        "true\n");
+  }
+
+  {
+    const array a{w::i64(1), w::string("foo"), w::boolean(true)};
+    const map m{{"foo", w::string("bar")}, {"arr", w::array(array(a))}};
+    const auto context = w::map({
+        {"raw_array", w::array(array(a))},
+        {"wrapped_array", w::make_native_object<array_like_native_object>(a)},
+        {"raw_map", w::map(map(m))},
+        {"wrapped_map", w::make_native_object<map_like_native_object>(m)},
+    });
+
+    auto result = render(
+        "{{ (object.eq? raw_array raw_array) }}\n"
+        "{{ (object.eq? raw_map raw_map) }}\n"
+        "{{ (object.eq? \"foo\" raw_array) }}\n"
+        "{{ (object.eq? null raw_map) }}\n"
+        "{{ (object.eq? raw_array raw_map) }}\n",
+        context);
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "true\n"
+        "true\n"
+        "false\n"
+        "false\n"
+        "false\n");
+
+    result = render(
+        "{{ (object.eq? raw_array wrapped_array) }}\n"
+        "{{ (object.eq? wrapped_array raw_array) }}\n"
+        "{{ (object.eq? raw_map wrapped_map) }}\n"
+        "{{ (object.eq? wrapped_map raw_map) }}\n",
+        context);
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "true\n"
+        "true\n"
+        "true\n"
+        "true\n");
+  }
+
+  {
+    const array a1{w::i64(1), w::string("foo"), w::boolean(true)};
+    const array a2{w::i64(1), w::string("bar"), w::boolean(true)};
+    const auto context = w::map({
+        {"a1", w::array(array(a1))},
+        {"wrapped_a1", w::make_native_object<array_like_native_object>(a1)},
+        {"a2", w::array(array(a2))},
+        {"wrapped_a2", w::make_native_object<array_like_native_object>(a2)},
+    });
+    auto result = render(
+        "{{ (object.eq? a1 wrapped_a1) }}\n"
+        "{{ (object.eq? a1 a2) }}\n"
+        "{{ (object.eq? wrapped_a2 a1) }}\n"
+        "{{ (object.eq? wrapped_a2 a2) }}\n",
+        context);
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "true\n"
+        "false\n"
+        "false\n"
+        "true\n");
+  }
+
+  {
+    const map m1{{"foo", w::string("bar")}, {"baz", w::true_}};
+    const map m2{{"foo", w::string("bar")}, {"baz", w::false_}};
+    const auto context = w::map({
+        {"m1", w::map(map(m1))},
+        {"wrapped_m1", w::make_native_object<map_like_native_object>(m1)},
+        {"m2", w::map(map(m2))},
+        {"wrapped_m2", w::make_native_object<map_like_native_object>(m2)},
+    });
+    auto result = render(
+        "{{ (object.eq? m1 wrapped_m1) }}\n"
+        "{{ (object.eq? m1 m2) }}\n"
+        "{{ (object.eq? wrapped_m2 m1) }}\n"
+        "{{ (object.eq? wrapped_m2 m2) }}\n",
+        context);
+    EXPECT_THAT(diagnostics(), testing::IsEmpty());
+    EXPECT_EQ(
+        *result,
+        "true\n"
+        "false\n"
+        "false\n"
+        "true\n");
   }
 }
 

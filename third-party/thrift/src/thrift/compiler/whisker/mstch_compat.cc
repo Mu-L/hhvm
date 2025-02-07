@@ -78,23 +78,6 @@ class mstch_array_proxy final
     default_print_to("mstch::array", std::move(scope), options);
   }
 
-  bool operator==(const native_object& untyped_other) const override {
-    auto* other = dynamic_cast<const mstch_array_proxy*>(&untyped_other);
-    if (other == nullptr) {
-      return false;
-    }
-    const std::size_t sz = size();
-    if (sz != other->size()) {
-      return false;
-    }
-    for (std::size_t i = 0; i < sz; ++i) {
-      if (*at(i) != *other->at(i)) {
-        return false;
-      }
-    }
-    return true;
-  }
-
   mutable mstch_array proxied_;
   mutable std::vector<object> converted_;
 };
@@ -129,11 +112,10 @@ class mstch_map_proxy final
     return nullptr;
   }
 
-  std::optional<std::vector<std::string>> keys() const override {
-    std::vector<std::string> property_names;
-    property_names.reserve(proxied_.size());
+  std::optional<std::set<std::string>> keys() const override {
+    std::set<std::string> property_names;
     for (const auto& [key, _] : proxied_) {
-      property_names.push_back(key);
+      property_names.insert(key);
     }
     return property_names;
   }
@@ -141,24 +123,6 @@ class mstch_map_proxy final
   void print_to(tree_printer::scope scope, const object_print_options& options)
       const override {
     default_print_to("mstch::map", *keys(), std::move(scope), options);
-  }
-
-  bool operator==(const native_object& untyped_other) const override {
-    auto* other = dynamic_cast<const mstch_map_proxy*>(&untyped_other);
-    if (other == nullptr) {
-      return false;
-    }
-    if (proxied_.size() != other->proxied_.size()) {
-      return false;
-    }
-    for (const auto& [key, _] : proxied_) {
-      auto this_value = lookup_property(key);
-      auto other_value = other->lookup_property(key);
-      if (*this_value != *other_value) {
-        return false;
-      }
-    }
-    return true;
   }
 
   mutable mstch_map proxied_;
@@ -197,7 +161,7 @@ class mstch_object_proxy
         [](object::ptr o) -> object::ptr { return o; });
   }
 
-  std::optional<std::vector<std::string>> keys() const override {
+  std::optional<std::set<std::string>> keys() const override {
     return proxied_->property_names();
   }
 
@@ -214,12 +178,6 @@ class mstch_object_proxy
       // have side-effects. So we can only report property names.
       element_scope.open_node().println("...");
     }
-  }
-
-  bool operator==(const native_object& untyped_other) const override {
-    auto* other = dynamic_cast<const mstch_object_proxy*>(&untyped_other);
-    // mstch::object has identity equality
-    return other->proxied_ == proxied_;
   }
 
  private:

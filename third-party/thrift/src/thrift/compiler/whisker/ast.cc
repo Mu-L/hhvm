@@ -42,6 +42,15 @@ std::string to_joined_string(
 
 } // namespace
 
+std::string text::joined() const {
+  std::string result;
+  for (const auto& part : parts) {
+    result += detail::variant_match(
+        part, [](const auto& s) -> std::string_view { return s.value; });
+  }
+  return result;
+}
+
 std::string variable_lookup::chain_string() const {
   return detail::variant_match(
       chain,
@@ -54,14 +63,14 @@ std::string variable_lookup::chain_string() const {
       });
 }
 
-std::string partial_lookup::as_string() const {
+std::string macro_lookup::as_string() const {
   return to_joined_string(
       parts, '/', [](const path_component& component) -> const std::string& {
         return component.value;
       });
 }
 
-std::string partial_apply::path_string() const {
+std::string macro::path_string() const {
   return path.as_string();
 }
 

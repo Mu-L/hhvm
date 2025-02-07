@@ -269,18 +269,16 @@ std::string toString(NamedGroup group) {
       return "secp521r1";
     case NamedGroup::x25519:
       return "x25519";
+    case NamedGroup::x448:
+      return "x448";
     case NamedGroup::SecP256r1MLKEM768:
       return "SecP256r1MLKEM768";
     case fizz::NamedGroup::X25519MLKEM512_FB:
       return "X25519MLKEM512_FB";
     case NamedGroup::X25519MLKEM768:
       return "X25519MLKEM768";
-    case NamedGroup::secp521r1_x25519:
-      return "secp521r1_x25519";
     case NamedGroup::x25519_kyber512:
       return "x25519_kyber512";
-    case NamedGroup::secp256r1_kyber512:
-      return "secp256r1_kyber512";
     case NamedGroup::kyber512:
       return "kyber512";
     case NamedGroup::x25519_kyber768_draft00:
@@ -291,8 +289,6 @@ std::string toString(NamedGroup group) {
       return "x25519_kyber512_experimental";
     case NamedGroup::secp256r1_kyber768_draft00:
       return "secp256r1_kyber768_draft00";
-    case NamedGroup::secp384r1_kyber768:
-      return "secp384r1_kyber768";
   }
   return enumToHex(group);
 }

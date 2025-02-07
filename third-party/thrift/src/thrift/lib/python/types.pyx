@@ -1011,6 +1011,16 @@ cdef class StructOrUnion:
     cdef _fbthrift_get_field_value(self, int16_t index):
         raise NotImplementedError("Not implemented on base StructOrUnion class")
 
+    @staticmethod
+    def from_python(obj: StructOrUnion) -> StructOrUnion:
+        if not isinstance(obj, StructOrUnion):
+            raise TypeError(f'value {obj} expected to be a thrift-python Struct or Union, was actually of type ' f'{type(obj)}')
+        return obj
+
+    @classmethod
+    def _fbthrift_auto_migrate_enabled(cls):
+        return False
+
 def _unpickle_struct(klass, bytes data):
     cdef IOBuf iobuf = IOBuf(data)
     inst = klass.__new__(klass)
@@ -2563,6 +2573,9 @@ class Flag(Enum):
         if type(other) is not cls:
             return NotImplemented
         return cls(self._fbthrift_value_ ^ other._fbthrift_value_)
+
+    def __int__(self):
+        return self.value
 
     def __invert__(self):
         cls = type(self)

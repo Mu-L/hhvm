@@ -41,7 +41,7 @@ use parser_core_types::source_text::SourceText;
 use pos::ConstName;
 use pos::FunName;
 use pos::RelativePathCtx;
-use pos::ToOxidized;
+use pos::ToOxidizedByRef;
 use pos::TypeName;
 use rayon::prelude::*;
 use relative_path::Prefix;
@@ -246,7 +246,7 @@ pub(crate) fn test_decl_compile(hackc_opts: &mut crate::Opts, w: &mut impl Write
         let decl_opts = hackc_opts.decl_opts();
         let filename = RelativePath::make(Prefix::Root, path.clone());
         let arena = bumpalo::Bump::new();
-        let parsed_file = direct_decl_parser::parse_decls_for_bytecode(
+        let parsed_file = direct_decl_parser::parse_decls_for_bytecode_obr(
             &decl_opts,
             filename,
             &source_text,
@@ -337,12 +337,12 @@ impl<'a, R: Reason> DeclProvider<'a> for SingleDeclProvider<'a, R> {
                         shallow_decl_provider.get_type(TypeName::new(symbol))
                     {
                         match type_decl {
-                            shallow_decl_provider::TypeDecl::Class(c) => {
-                                Ok(decl_provider::TypeDecl::Class(c.to_oxidized(self.arena)))
-                            }
-                            shallow_decl_provider::TypeDecl::Typedef(ty) => {
-                                Ok(decl_provider::TypeDecl::Typedef(ty.to_oxidized(self.arena)))
-                            }
+                            shallow_decl_provider::TypeDecl::Class(c) => Ok(
+                                decl_provider::TypeDecl::Class(c.to_oxidized_by_ref(self.arena)),
+                            ),
+                            shallow_decl_provider::TypeDecl::Typedef(ty) => Ok(
+                                decl_provider::TypeDecl::Typedef(ty.to_oxidized_by_ref(self.arena)),
+                            ),
                         }
                     } else {
                         decl
@@ -363,7 +363,7 @@ impl<'a, R: Reason> DeclProvider<'a> for SingleDeclProvider<'a, R> {
                 (Err(Error::NotFound), Some(shallow_decl_provider)) => {
                     if let Ok(Some(fun_decl)) = shallow_decl_provider.get_fun(FunName::new(symbol))
                     {
-                        Ok(fun_decl.to_oxidized(self.arena))
+                        Ok(fun_decl.to_oxidized_by_ref(self.arena))
                     } else {
                         decl
                     }
@@ -384,7 +384,7 @@ impl<'a, R: Reason> DeclProvider<'a> for SingleDeclProvider<'a, R> {
                     if let Ok(Some(const_decl)) =
                         shallow_decl_provider.get_const(ConstName::new(symbol))
                     {
-                        Ok(const_decl.to_oxidized(self.arena))
+                        Ok(const_decl.to_oxidized_by_ref(self.arena))
                     } else {
                         decl
                     }

@@ -518,9 +518,9 @@ The format can be found in hphp/tools/configs/generate_configs.rs
   Describes the active deployment for selecting the set of packages
   Value is only read in repo authoritative or cli mode.
 
-- std::string Eval.PackagesTomlFileName = "PACKAGES.toml", fzn, globaldata|compileroption(PackagesTomlFileName)
+- std::string Eval.PackagesTomlFileName, fzn, globaldata|compileroption(PackagesTomlFileName)
 
-  Name of the packages TOML file to load.
+  Name of the packages TOML file to load.  Defaults to "PACKAGES.toml".
 
 - bool Eval.EnableIntrinsicsExtension = Eval.EnableIntrinsicsExtension, UNKNOWN, globaldata|unitcacheflag|hackc(hhbc, false)
 
@@ -1410,6 +1410,14 @@ The format can be found in hphp/tools/configs/generate_configs.rs
 
   Killswitch for the class<T> type. When false, lowerer and direct decl parser
   erase it to classname<T>.
+
+- bool Hack.Lang.DisallowNonAnnotatedMemoize = false, maxt, repooptionsflag(Parser)|hackc(parser)
+
+  Disallow non annotated <<__Memoize>>. Will throw for such.
+
+- bool Hack.Lang.TreatNonAnnotatedMemoizeAsKBIC = false, maxt, repooptionsflag(Parser)|hackc(parser)
+
+  Treat non annotated <<__Memoize>> as KeyedByIC.
 
 - bool Hack.Lang.StressShallowDeclDeps = false, UNKNOWN, repooptionsflag(Parser)|hackc(hhbc)
 - bool Hack.Lang.StressFoldedDeclDeps = false, UNKNOWN, repooptionsflag(Parser)|hackc(hhbc)

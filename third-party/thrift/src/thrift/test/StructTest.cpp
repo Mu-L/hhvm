@@ -20,8 +20,11 @@
 
 #include <folly/Traits.h>
 #include <folly/portability/GTest.h>
+#include <thrift/lib/cpp2/op/Get.h>
+#include <thrift/lib/cpp2/protocol/Object.h>
 #include <thrift/lib/cpp2/protocol/Serializer.h>
 
+using namespace apache::thrift;
 using namespace apache::thrift::test;
 
 namespace {
@@ -747,5 +750,133 @@ TEST_F(StructTest, RefsWithStringAndContainerTerseWrites) {
 
 TEST_F(StructTest, NotEligibleForConstexpr) {
   [[maybe_unused]] NotEligibleForConstexpr foo;
+}
+
+template <class T>
+protocol::Object serializeToObject(const T& t) {
+  auto buf = CompactSerializer::serialize<folly::IOBufQueue>(t).move();
+  return protocol::parseObject<CompactProtocolReader>(*buf);
+}
+
+template <class Id, class T>
+bool serializedField(const T& t) {
+  return serializeToObject(t).contains(op::get_field_id_v<T, Id>);
+}
+
+TEST_F(StructTest, TerseFields) {
+  TerseFieldsWithCustomDefault terse;
+
+  static_assert(apache::thrift::detail::qualifier::
+                    is_deprecated_terse_writes_with_custom_default_field<
+                        TerseFieldsWithCustomDefault,
+                        type::field_id<4>>::value);
+  // redundant custom default
+  static_assert(!apache::thrift::detail::qualifier::
+                    is_deprecated_terse_writes_with_custom_default_field<
+                        TerseFieldsWithCustomDefault,
+                        type::field_id<19>>::value);
+
+  // Primitive types
+  EXPECT_EQ(terse.bool_field(), true);
+  EXPECT_EQ(terse.byte_field(), 10);
+  EXPECT_EQ(terse.short_field(), 20);
+  EXPECT_EQ(terse.int_field(), 30);
+  EXPECT_EQ(terse.long_field(), 40);
+  EXPECT_EQ(terse.float_field(), 50);
+  EXPECT_EQ(terse.double_field(), 60);
+  EXPECT_EQ(terse.binary_field(), "70");
+  EXPECT_EQ(terse.string_field(), "80");
+
+  // Containers
+  EXPECT_EQ(terse.list_field()->size(), 1);
+  EXPECT_EQ(*terse.list_field()->begin(), 90);
+  EXPECT_EQ(terse.set_field()->size(), 1);
+  EXPECT_EQ(*terse.set_field()->begin(), 100);
+  EXPECT_EQ(terse.map_field()->size(), 1);
+  EXPECT_EQ(terse.map_field()->begin()->first, 110);
+  EXPECT_EQ(terse.map_field()->begin()->second, 10);
+
+  // Structures
+  EXPECT_EQ(terse.struct_field()->int_field(), 42);
+  EXPECT_EQ(terse.exception_field()->int_field(), 42);
+  // Custom default on union is not honored.
+  EXPECT_EQ(terse.union_field()->getType(), terse.union_field()->__EMPTY__);
+
+  // cpp.ref Structures
+  EXPECT_NE(terse.cpp_ref_struct_field(), nullptr);
+  EXPECT_NE(terse.cpp_ref_union_field(), nullptr);
+  // cpp.ref exceptions are nullptr by default
+  EXPECT_EQ(terse.cpp_ref_exception_field(), nullptr);
+
+  // Numeric fields are not serialized if they equal custom default
+  EXPECT_FALSE(serializedField<ident::bool_field>(terse));
+  EXPECT_FALSE(serializedField<ident::byte_field>(terse));
+  EXPECT_FALSE(serializedField<ident::short_field>(terse));
+  EXPECT_FALSE(serializedField<ident::int_field>(terse));
+  EXPECT_FALSE(serializedField<ident::long_field>(terse));
+  EXPECT_FALSE(serializedField<ident::float_field>(terse));
+  EXPECT_FALSE(serializedField<ident::double_field>(terse));
+
+  // string/binary and container fields are serialized if they are not intrinsic
+  // default
+  EXPECT_TRUE(serializedField<ident::string_field>(terse));
+  EXPECT_TRUE(serializedField<ident::binary_field>(terse));
+  EXPECT_TRUE(serializedField<ident::list_field>(terse));
+  EXPECT_TRUE(serializedField<ident::set_field>(terse));
+  EXPECT_TRUE(serializedField<ident::map_field>(terse));
+
+  // Structure fields are always serialized
+  EXPECT_TRUE(serializedField<ident::struct_field>(terse));
+  EXPECT_TRUE(serializedField<ident::union_field>(terse));
+  EXPECT_TRUE(serializedField<ident::exception_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_ref_struct_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_ref_union_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_shared_ref_struct_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_shared_ref_union_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_shared_ref_exception_field>(terse));
+
+  // cpp.ref exceptions are nullptr by default
+  EXPECT_FALSE(serializedField<ident::cpp_ref_exception_field>(terse));
+  terse.cpp_ref_exception_field() = std::make_unique<NestedException>();
+  EXPECT_TRUE(serializedField<ident::cpp_ref_exception_field>(terse));
+
+  // Change `terse` to intrinsic default
+  apache::thrift::clear(terse);
+  terse.cpp_ref_struct_field() = nullptr;
+  terse.cpp_ref_union_field() = nullptr;
+  terse.cpp_ref_exception_field() = nullptr;
+  terse.cpp_shared_ref_struct_field() = nullptr;
+  terse.cpp_shared_ref_union_field() = nullptr;
+  terse.cpp_shared_ref_exception_field() = nullptr;
+
+  // Numeric fields are serialized if they don't equal custom default
+  EXPECT_TRUE(serializedField<ident::bool_field>(terse));
+  EXPECT_TRUE(serializedField<ident::byte_field>(terse));
+  EXPECT_TRUE(serializedField<ident::short_field>(terse));
+  EXPECT_TRUE(serializedField<ident::int_field>(terse));
+  EXPECT_TRUE(serializedField<ident::long_field>(terse));
+  EXPECT_TRUE(serializedField<ident::float_field>(terse));
+  EXPECT_TRUE(serializedField<ident::double_field>(terse));
+
+  // string/binary and container fields are not serialized if they are intrinsic
+  // default
+  EXPECT_FALSE(serializedField<ident::string_field>(terse));
+  EXPECT_FALSE(serializedField<ident::binary_field>(terse));
+  EXPECT_FALSE(serializedField<ident::list_field>(terse));
+  EXPECT_FALSE(serializedField<ident::set_field>(terse));
+  EXPECT_FALSE(serializedField<ident::map_field>(terse));
+
+  // Structure fields are always serialized
+  EXPECT_TRUE(serializedField<ident::struct_field>(terse));
+  EXPECT_TRUE(serializedField<ident::union_field>(terse));
+  EXPECT_TRUE(serializedField<ident::exception_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_shared_ref_struct_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_shared_ref_union_field>(terse));
+  EXPECT_TRUE(serializedField<ident::cpp_shared_ref_exception_field>(terse));
+
+  // @cpp.Ref has special logic that it skips nullptr fields
+  EXPECT_FALSE(serializedField<ident::cpp_ref_struct_field>(terse));
+  EXPECT_FALSE(serializedField<ident::cpp_ref_union_field>(terse));
+  EXPECT_FALSE(serializedField<ident::cpp_ref_exception_field>(terse));
 }
 } // namespace

@@ -13,6 +13,7 @@ final class A {
 type S = shape(
   A::B => int,
   A::C => int,
+  ...
 );
 
 //////////////////////

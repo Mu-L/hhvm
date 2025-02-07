@@ -169,9 +169,6 @@ type t = {
       (** Flag to error on using discarded nullable awaitables *)
   tco_higher_kinded_types: bool;
       (** Controls if higher-kinded types are supported *)
-  tco_report_pos_from_reason: bool;
-      (** If set, then positions derived from reason information are tainted, and primary errors
-         with such positions are flagged *)
   tco_typecheck_sample_rate: float;
       (** Type check this proportion of all files. Default is 1.0.
         DO NOT set to any other value except for testing purposes. *)
@@ -251,6 +248,7 @@ type t = {
       (** Controls behavior of [Provider_utils.respect_but_quarantine_unsaved_changes] *)
   tco_lsp_invalidation: bool;
       (** Controls how [Provicer_utils.respect_but_quarantine_unsaved_changes] invalidates folded decls *)
+  invalidate_all_folded_decls_upon_file_change: bool;
   tco_autocomplete_sort_text: bool;
   tco_extended_reasons: extended_reasons_config option;
       (** Controls whether we retain the full path for reasons or only simple witnesses *)
@@ -336,7 +334,6 @@ val set :
   ?tco_error_php_lambdas:bool ->
   ?tco_disallow_discarded_nullable_awaitables:bool ->
   ?tco_higher_kinded_types:bool ->
-  ?tco_report_pos_from_reason:bool ->
   ?tco_typecheck_sample_rate:float ->
   ?tco_enable_sound_dynamic:bool ->
   ?tco_pessimise_builtins:bool ->
@@ -372,6 +369,7 @@ val set :
   ?tco_log_exhaustivity_check:bool ->
   ?tco_sticky_quarantine:bool ->
   ?tco_lsp_invalidation:bool ->
+  ?invalidate_all_folded_decls_upon_file_change:bool ->
   ?tco_autocomplete_sort_text:bool ->
   ?tco_extended_reasons:extended_reasons_config ->
   ?tco_disable_physical_equality:bool ->
